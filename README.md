@@ -50,6 +50,8 @@ python scripts/fetch_icons.py              # yeni fiyatlı eşyaların ikonları
 ## Bilinen eksikler
 
 - Flask ve charm craft'ı kapsam dışı (kullanıcı kararı): bu eşyalar yapıştırılınca panel desteklenmediklerini söyler. Başka eşyalardaki flask ve charm statları (ör. belt'teki Flask Recovery) diğer statlar gibi ağırlıkları ve çıkma şartlarıyla planlanır.
+- Desecration: oyun verisinde ekipmana gelebilen desecrated modların hepsi seviye 65 ve hiçbiri sceptre'a gelmiyor. Bu yüzden item level 65'in altındaki eşyalarda ve sceptre'larda desecration planlanmıyor; oyunda ne olduğu açık testler (t22, t23).
+- Kurallar mümkün olduğunca oyunun kendi yardım metinlerine dayanıyor (bilgi tabanında `game_keywords`, RePoE `keywords.json`): tek crafted mod, dolu eşyada desecration, fractured kilidi, Sanctify aralığı, Minimum Modifier Level ve Maximum Item Level.
 - Expedition Tablet'in ikonu yok; Exiled Exchange 2 listesinde adresi bulunmuyor. Diğer bütün fiyatlı eşyaların ikonu var.
 - Beyaz bazdan başlayan planlarda yeni baza dönmek (Magic aşamasında iki hedef tutmazsa ya da Rare'de taraf dolunca) çoğu zaman pahalı omen'lerle düzeltmekten çok daha ucuzdur ama çok sayıda baz ister. Baz fiyatı (varsayılan 1 ex) ve eşya başına baz sınırı (varsayılan 100) oyuncunun girdisidir; piyasada o kadar baz bulunmayabilir. Sınırın ötesinde çok daha ucuz bir yol varsa plan bunu söyler.
 - Olasılıklar tahmindir: mod ağırlıkları poe2db'nin topluluk verisi, desecrated modlar eşit ağırlıklı, Catalysing Exaltation çarpanı (varsayılan ×5) tek kaynaklı ve ayarlanabilir.

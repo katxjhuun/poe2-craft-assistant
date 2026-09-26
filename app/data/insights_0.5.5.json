@@ -8,8 +8,8 @@
   "strategyRuns": 46065,
   "trials": 300,
   "maxSteps": 400,
-  "walkSteps": 1124940,
-  "roundTrips": 225071,
+  "walkSteps": 1067207,
+  "roundTrips": 213558,
   "prices": {
    "league": "Forbidden Rites",
    "hourTo": 1790413200,
@@ -23,103 +23,103 @@
   "errors": 0,
   "reanalyzed": "2026-09-26T19:33:17.204Z",
   "flasks": 3,
-  "checksRun": "2026-09-26T17:42:05.748Z"
+  "checksRun": "2026-09-26T23:01:57.491Z"
  },
  "checks": [
   {
    "id": "crash",
-   "n": 1124940,
+   "n": 1067207,
    "fail": 0,
    "examples": []
   },
   {
    "id": "slots",
-   "n": 1124940,
+   "n": 1067207,
    "fail": 0,
    "examples": []
   },
   {
    "id": "crafted",
-   "n": 1124940,
+   "n": 1067207,
    "fail": 0,
    "examples": []
   },
   {
    "id": "desecrated",
-   "n": 1124940,
+   "n": 1067207,
    "fail": 0,
    "examples": []
   },
   {
    "id": "groups",
-   "n": 1124940,
+   "n": 1067207,
    "fail": 0,
    "examples": []
   },
   {
    "id": "ilvl",
-   "n": 1124940,
+   "n": 1067207,
    "fail": 0,
    "examples": []
   },
   {
    "id": "fractured",
-   "n": 1124940,
+   "n": 1067207,
    "fail": 0,
    "examples": []
   },
   {
    "id": "floor",
-   "n": 1124940,
+   "n": 1067207,
    "fail": 0,
    "examples": []
   },
   {
    "id": "effect",
-   "n": 1124940,
+   "n": 1067207,
    "fail": 0,
    "examples": []
   },
   {
    "id": "side",
-   "n": 1124940,
+   "n": 1067207,
    "fail": 0,
    "examples": []
   },
   {
    "id": "lich",
-   "n": 1124940,
+   "n": 1067207,
    "fail": 0,
    "examples": []
   },
   {
    "id": "pool",
-   "n": 1124940,
+   "n": 1067207,
    "fail": 0,
    "examples": []
   },
   {
    "id": "whittle",
-   "n": 1124940,
+   "n": 1067207,
    "fail": 0,
    "examples": []
   },
   {
    "id": "light",
-   "n": 1124940,
+   "n": 1067207,
    "fail": 0,
    "examples": []
   },
   {
    "id": "parse-adv",
-   "n": 225071,
+   "n": 213558,
    "fail": 0,
    "examples": []
   },
   {
    "id": "parse-adv-flagged",
-   "n": 225071,
-   "fail": 222,
+   "n": 213558,
+   "fail": 234,
    "examples": [
     "Permafrost Staff: EssenceSpellSkillLevel2H1 read as GlobalSpellGemsLevelTwoHandWeapon4 (ambiguous), right mod listed as a candidate",
     "Permafrost Staff: EssenceSpellSkillLevel2H1 read as GlobalSpellGemsLevelTwoHandWeapon4 (ambiguous), right mod listed as a candidate",
@@ -128,49 +128,43 @@
   },
   {
    "id": "parse-simple",
-   "n": 225071,
+   "n": 213558,
    "fail": 0,
    "examples": []
   },
   {
    "id": "parse-simple-exact",
-   "n": 225071,
-   "fail": 12732,
+   "n": 213558,
+   "fail": 13814,
    "examples": [
+    "Diamond: P2DB_ElementalDamagePercent_p1 read as AbyssModJewelPrefixElementalDamageAilmentMagnitude (ambiguous), right mod listed as a candidate; P2DB_AilmentEffect_p1 read as AbyssModJewelPrefixElementalDamageAilmentMagnitude (ambiguous), right mod listed as a candidate",
+    "Diamond: P2DB_IncreasedPhysicalDamageReductionRatingPercent_p1 read as AbyssModJewelPrefixMinionDamageArmour (ambiguous), right mod listed as a candidate; P2DB_MinionDamage_p1 read as AbyssModJewelPrefixMinionDamageArmour (ambiguous), right mod listed as a candidate",
     "Emerald: P2DB_LightningDamagePercentage_p1 read as AbyssModJewelPrefixLightningDamageAndPen (ambiguous), right mod listed as a candidate; P2DB_LightningResistancePenetration_p1 read as AbyssModJewelPrefixLightningDamageAndPen (ambiguous), right mod listed as a candidate",
-    "Diamond: P2DB_IncreasedPhysicalDamageReductionRatingPercent_p1 read as AbyssModJewelPrefixAttackDamageArmour (ambiguous), right mod listed as a candidate; P2DB_AttackDamage_p1 read as AbyssModJewelPrefixAttackDamageArmour (ambiguous), right mod listed as a candidate",
-    "Diamond: P2DB_EvasionRatingPercent_p1 read as AbyssModJewelPrefixAttackDamageEvasion (ambiguous), right mod listed as a candidate; P2DB_AttackDamage_p1 read as AbyssModJewelPrefixAttackDamageEvasion (ambiguous), right mod listed as a candidate",
-    "Diamond: P2DB_EnergyShieldPercent_p1 read as AbyssModJewelPrefixMinionDamageEnergyShield (ambiguous), right mod listed as a candidate; P2DB_MinionDamage_p1 read as AbyssModJewelPrefixMinionDamageEnergyShield (ambiguous), right mod listed as a candidate",
-    "Fanatic Bow: LocalAddedPhysicalDamage5 read as LocalAddedPhysicalDamage6, right mod listed as a candidate"
+    "Grand Regalia: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate",
+    "Grand Regalia: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate"
    ]
-  },
-  {
-   "id": "magic-only",
-   "n": 58148,
-   "fail": 0,
-   "examples": []
   }
  ],
  "ops": {
-  "alchemy": 23327,
-  "exalt": 241377,
-  "annul": 210012,
-  "chaos": 409958,
-  "fracture": 29207,
-  "divine": 50616,
-  "bone": 18575,
-  "transmute": 23733,
-  "regal": 6607,
-  "augment": 27519,
-  "essence": 11612,
-  "pessence": 53693,
-  "flux": 18704
+  "alchemy": 25271,
+  "exalt": 253362,
+  "chaos": 399409,
+  "divine": 39137,
+  "annul": 206635,
+  "bone": 10932,
+  "fracture": 16667,
+  "transmute": 18906,
+  "regal": 5588,
+  "augment": 1638,
+  "essence": 10426,
+  "pessence": 59075,
+  "flux": 20161
  },
  "freq": {
-  "tests": 116,
+  "tests": 110,
   "failed": 0,
   "maxZ": 3.94,
-  "families": 3264,
+  "families": 3236,
   "failures": []
  },
  "techniques": [

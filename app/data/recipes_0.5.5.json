@@ -190,7 +190,9 @@
         "Sceptre"
       ],
       "league_scope": [
-        "Runes of Aldur"
+        "Runes of Aldur",
+        "Forbidden Rites",
+        "Standard"
       ],
       "verdict": "plausible",
       "source_tier": "B/C",
@@ -245,7 +247,8 @@
           "label": "poe2wiki Runic Alloy",
           "tier": "B"
         }
-      ]
+      ],
+      "notes": "Alloys also trade on the official Currency Exchange in Forbidden Rites and Standard (checked 27 Sept 2026)."
     },
     {
       "id": "c2a",
@@ -1400,7 +1403,8 @@
       "how": "Paste an Alt+Ctrl+C copy of a few Rare items. The panel compares the game's tier with its own and flags every difference.",
       "claims": [
         "k41"
-      ]
+      ],
+      "note": "A community 0.5.5 reference says Tier 1 is always the highest tier; not yet game text."
     },
     {
       "id": "t2",
@@ -1408,7 +1412,10 @@
       "how": "Hover Greater and Perfect Exalted, Chaos and Regal Orbs in your stash and read 'Minimum Modifier Level'.",
       "claims": [
         "k24"
-      ]
+      ],
+      "status": "confirmed",
+      "note": "Greater Exalted, Chaos and Regal Orbs: 35; Perfect: 50. Such currency cannot be used below that item level either.",
+      "source": "game text: the orbs' \"Minimum Modifier Level\" line (poe2db) and the Minimum Modifier Level keyword"
     },
     {
       "id": "t3",
@@ -1416,7 +1423,8 @@
       "how": "Use a Lesser Essence (or any Perfect Essence) on a cheap Rare that already has an essence mod and note the message.",
       "claims": [
         "!k17"
-      ]
+      ],
+      "note": "Game text: an item can only have one crafted modifier (Crafted Modifiers keyword). Whether a second is blocked or replaces the first is still open."
     },
     {
       "id": "t4",
@@ -1425,7 +1433,10 @@
       "claims": [
         "k26",
         "!k27"
-      ]
+      ],
+      "status": "confirmed",
+      "note": "Gnawed bones show \"Maximum Item Level: 64\".",
+      "source": "game text: Gnawed bones (poe2db) and the Maximum Item Level keyword"
     },
     {
       "id": "t5",
@@ -1443,7 +1454,10 @@
       "how": "Search the official trade site in Forbidden Rites for any Runic Alloy; check whether Expedition offers the Recombinator.",
       "claims": [
         "k33"
-      ]
+      ],
+      "status": "confirmed",
+      "note": "Runic Alloys trade in Forbidden Rites (e.g. Mystic Alloy about 7,300 a day, Runebinder's Alloy about 1,400, 27 Sept 2026).",
+      "source": "official Currency Exchange data of Forbidden Rites"
     },
     {
       "id": "t7",
@@ -1451,7 +1465,10 @@
       "how": "On a cheap Rare, write down every value, apply Omen of Sanctification + Divine Orb, compare.",
       "claims": [
         "k20"
-      ]
+      ],
+      "status": "confirmed",
+      "note": "Each modifier value is multiplied by a random 78% to 122%; most crafting cannot be used afterwards.",
+      "source": "game text: the Sanctified Items keyword"
     },
     {
       "id": "t8",
@@ -1467,19 +1484,28 @@
       "how": "Activate the omen and hover a Chaos Orb over the item: the game highlights the mod it will remove.",
       "claims": [
         "!k12"
-      ]
+      ],
+      "status": "confirmed",
+      "note": "It removes the lowest level modifier, not the lowest tier.",
+      "source": "game text: Omen of Whittling (poe2db)"
     },
     {
       "id": "t10",
       "question": "A bone on a full item removes a random mod first?",
       "how": "Desecrate a cheap Rare with 3 prefixes and 3 suffixes and count the mods afterwards.",
-      "claims": []
+      "claims": [],
+      "status": "confirmed",
+      "note": "If the modifiers are full, a random modifier is also removed.",
+      "source": "game text: the Desecrated Modifiers keyword"
     },
     {
       "id": "t11",
       "question": "Lich mods need item level 65+ and a Preserved or Ancient bone?",
       "how": "Use a lich omen with a Gnawed bone on an item level 64 item, then on a 65+ item with a Preserved bone.",
-      "claims": []
+      "claims": [],
+      "status": "confirmed",
+      "note": "Kurgal, Amanamu and Ulaman modifiers are level 65, and Gnawed bones stop at item level 64: lich modifiers need item level 65+ and a Preserved or Ancient bone.",
+      "source": "game data: modifier levels and the Gnawed bone text"
     },
     {
       "id": "t12",
@@ -1499,7 +1525,8 @@
       "id": "t14",
       "question": "Does the Alt+Ctrl+C copy include mod tags?",
       "how": "Copy an item with Alt+Ctrl+C and paste it into a text editor; look for words after the dash in the { ... } headers.",
-      "claims": []
+      "claims": [],
+      "note": "Exiled Exchange 2 reads real copies with no tag field, so probably no tags."
     },
     {
       "id": "t15",
@@ -1507,19 +1534,28 @@
       "how": "Search the trade site of the current league for a Rare of those classes.",
       "claims": [
         "k40"
-      ]
+      ],
+      "status": "refuted",
+      "note": "Not obtainable in 0.5.x; they are expected with 1.0.",
+      "source": "community sources (Fextralife wiki, official forum); the trade site lists no such bases"
     },
     {
       "id": "t16",
       "question": "Can Astrid's Creativity be obtained in Forbidden Rites?",
       "how": "Check the Verisium Remnant runewords available to you in Forbidden Rites.",
-      "claims": []
+      "claims": [],
+      "status": "confirmed",
+      "note": "Astrid's Creativity trades in Forbidden Rites (about 9,800 a day, 27 Sept 2026).",
+      "source": "official Currency Exchange data of Forbidden Rites"
     },
     {
       "id": "t17",
       "question": "Does a Divine Orb reroll the values of fractured modifiers?",
       "how": "Write down the value of a fractured modifier on a cheap Rare, use a Divine Orb, compare. The planner follows the game text (all modifiers) until this is settled.",
-      "claims": []
+      "claims": [],
+      "status": "refuted",
+      "note": "A Fractured modifier cannot be removed or altered; the planner leaves its values alone.",
+      "source": "game text: the Fractured Modifiers keyword"
     },
     {
       "id": "t18",
@@ -1533,7 +1569,10 @@
       "question": "Can a Fracturing Orb be used on an item that already has a fractured modifier?",
       "how": "Hover a Fracturing Orb over a Rare with a fractured modifier and 4+ modifiers. Found by the self-test: the game text does not say; the planner fractures at most once.",
       "claims": [],
-      "found": "self-test"
+      "found": "self-test",
+      "status": "refuted",
+      "note": "Fracturing Orbs cannot be used on Fractured items.",
+      "source": "game text: Fracturing Orb (poe2db)"
     },
     {
       "id": "t20",
@@ -1541,6 +1580,27 @@
       "how": "Try a Blazing Flux on a cheap item with both Fire and Cold Resistance and note the result. Found by the self-test: two modifiers of one group would result; the planner does not use Flux then.",
       "claims": [],
       "found": "self-test"
+    },
+    {
+      "id": "t21",
+      "question": "Can Orbs of Transmutation, Regal Orbs or Orbs of Alchemy be used on jewels?",
+      "how": "Try an Orb of Transmutation on a Normal jewel, or a Regal Orb on a Magic jewel. The game data gives jewels the same \"cannot upgrade rarity\" flag as flasks and charms, while equipment has it on; the name of that flag is a community guess.",
+      "claims": [],
+      "found": "game data"
+    },
+    {
+      "id": "t22",
+      "question": "What does a Gnawed bone reveal on a Rare of item level 64 or lower?",
+      "how": "Desecrate a cheap Rare of item level 64 or lower with a Gnawed bone and reveal it at the Well of Souls. The game data lists desecrated equipment modifiers only at level 65, so the planner does not plan desecration below it.",
+      "claims": [],
+      "found": "game data"
+    },
+    {
+      "id": "t23",
+      "question": "Can a sceptre be desecrated?",
+      "how": "Try a Preserved Jawbone on a Rare sceptre. No desecrated modifier in the game data can roll on sceptres (none carries a sceptre or weapon tag they have), so the planner does not offer it.",
+      "claims": [],
+      "found": "game data"
     }
   ]
 }

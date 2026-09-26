@@ -261,7 +261,7 @@
     // Flasks and charms are shown but not crafted or planned.
     const flaskOrCharm = /flask|charm/i.test(item.itemClassText || '') || (item.base && /Flask|Charm/.test(ix.kb.bases[item.base].cls));
     if (flaskOrCharm) {
-      item.unsupported = 'Flasks and charms are not supported yet.';
+      item.unsupported = 'Flasks and charms are not supported: the assistant does not craft them.';
       warnings.push({ level: 'warn', msg: item.unsupported + ' The item is shown, but stats and plans are off.' });
     }
     if (!item.base) {
@@ -610,8 +610,7 @@
       if (rec.gen !== gl || !ix.kb.mods[rec.mod] || !ix.kb.mods[rec.mod].txt) continue;
       listed.add(rec.mod);
       const grp = rec.alloy ? 'alloy' : 'essence';
-      const why = rec.alloy && opts.league !== 'Runes of Aldur' ? 'Alloys unverified outside Runes of Aldur' : null;
-      add(rec.mod, null, grp, why, rec.item);
+      add(rec.mod, null, grp, null, rec.item);
     }
 
     if (opts.showImpossible) {
@@ -623,9 +622,7 @@
           if (listed.has(id)) continue;
           const grp = nonNaturalGroup(id);
           if (grp === 'other') continue;
-          let reason = 'base eligibility unverified';
-          if (grp === 'alloy' && opts.league !== 'Runes of Aldur') reason = 'Alloys unverified outside Runes of Aldur';
-          add(id, null, grp, reason);
+          add(id, null, grp, 'base eligibility unverified');
           continue;
         }
         if (seenFam.has(m.fam)) continue;

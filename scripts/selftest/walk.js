@@ -73,6 +73,8 @@ function checkStep(ctx, before, a, r) {
   }
   // what each operator does to the modifier count
   const dn = after.mods.length - before.mods.length;
+  const limB = E.slotLimits({ rarity: before.rarity, slotDelta: ctx.slotDelta });
+  const fullBefore = cnt(before, 'prefix') >= limB.prefix && cnt(before, 'suffix') >= limB.suffix;
   const n = a.greater ? 2 : 1;
   const expect = {
     transmute: () => after.rarity === 'Magic' && after.mods.length <= 1,
@@ -84,9 +86,10 @@ function checkStep(ctx, before, a, r) {
     annul: () => r.added.length === 0 && r.removed.length >= 1 && r.removed.length <= n,
     essence: () => after.rarity === 'Rare' && r.added.length === 1 && r.added[0].crafted,
     pessence: () => r.removed.length === 1 && r.added.length <= 1 && r.added.every((m) => m.crafted),
-    bone: () => r.added.length <= 1 && r.added.every((m) => m.des) && r.removed.length === 0,
+    // game text: desecrating a full item also removes a random modifier
+    bone: () => r.added.length === 1 && r.added[0].des && r.removed.length === (fullBefore ? 1 : 0),
     fracture: () => after.mods.filter((m) => m.frac).length === before.mods.filter((m) => m.frac).length + 1,
-    divine: () => dn === 0 && r.added.length === 0 && after.mods.every((m, i) => m.id === before.mods[i].id),
+    divine: () => dn === 0 && r.added.length === 0 && after.mods.every((m, i) => m.id === before.mods[i].id && (!m.frac || m.v === before.mods[i].v)),
     flux: () => dn === 0 && r.added.length === r.removed.length,
   }[a.op];
   if (expect && !expect()) fail('effect', `${a.op} ${JSON.stringify(a)}: ${before.mods.length} -> ${after.mods.length} mods, +${r.added.length} -${r.removed.length}`);
@@ -105,7 +108,12 @@ function checkStep(ctx, before, a, r) {
     if (r.removed[0].lvl !== low) fail('whittle', `whittling removed level ${r.removed[0].lvl}, lowest was ${low}`);
   }
   if (a.light && r.removed.some((m) => !m.des)) fail('light', 'Omen of Light removed a non-desecrated modifier');
-  if (a.op === 'bone' && a.quality === 'Ancient' && r.added.some((m) => kb.mods[m.id].lvl < 40)) fail('floor', `Ancient bone added ${r.added[0].id} below level 40`);
+  // Ancient bones (Minimum Modifier Level 40): a family with no tier at 40 or above keeps its best tier (game text)
+  if (a.op === 'bone' && a.quality === 'Ancient') for (const m of r.added) {
+    if (kb.mods[m.id].lvl >= 40) continue;
+    const fam = [...ctx.desPool.entries()].filter(([id, pe]) => kb.mods[id].fam === m.fam && pe.side === m.side && kb.mods[id].lvl <= ctx.ilvl);
+    if (fam.some(([id]) => kb.mods[id].lvl >= 40)) fail('floor', `Ancient bone added ${m.id} (level ${kb.mods[m.id].lvl}) below level 40`);
+  }
   return bad;
 }
 

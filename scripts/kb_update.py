@@ -22,7 +22,7 @@ CACHE = os.path.join(ROOT, '.kb_cache')
 CAND_DIR = os.path.join(CACHE, 'candidate')
 CANDIDATE = os.path.join(CAND_DIR, 'poe2_kb_candidate.json')
 REPORTS = os.path.join(ROOT, 'reports')
-SOURCES = ['poe2_mods.json', 'poe2_base_items.json', 'poe2_version.txt', 'poe1_base_items.json', 'items.ndjson', 'stats.ndjson']
+SOURCES = ['poe2_mods.json', 'poe2_base_items.json', 'poe2_version.txt', 'poe2_keywords.json', 'poe1_base_items.json', 'items.ndjson', 'stats.ndjson']
 
 
 def run(cmd, env=None, cwd=ROOT):

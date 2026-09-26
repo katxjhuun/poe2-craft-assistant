@@ -2276,11 +2276,11 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   function baseLimit() { return Math.max(1, parseInt(S.baseLimit, 10) || 100); }
   /** Ring or amulet with catalyst quality (the only items Omen of Catalysing Exaltation works on). */
   function hasCatalyst(it) { return !!(it && (it.itemClass === 'Ring' || it.itemClass === 'Amulet') && it.quality > 0 && P.catalystTag(it.qualityType)); }
-  /** Essences and alloys poe2db lists for this item class; alloys only in Runes of Aldur. */
+  /** Essences and alloys poe2db lists for this item class (alloys trade in every league's Currency Exchange). */
   function itemEssences() {
     const list = (S.essences && S.item && S.essences[S.item.itemClass]) || [];
     const base = S.item && S.ix.kb.bases[S.item.base];
-    return (base ? P.essencesForBase(S.ix, base, list) : list).filter((r) => !r.alloy || ruleName() === 'Runes of Aldur');
+    return (base ? P.essencesForBase(S.ix, base, list) : list);
   }
   /** poe2db weights of the page that matches this base (class + armour attribute), or null. */
   function itemWeights() {
@@ -2440,7 +2440,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (pl.partial > 0.01) notes.push(`${p1(pl.partial)} of runs end with the required goals only (counted in Plan fail).`);
     if (pl.lost > 0.05) notes.push(`<span class="risk">Removes an already finished goal mod at least once in ${p1(pl.lost)} of runs (it is then rolled again).</span>`);
 
-    if (S.plans.unsupported.length) notes.push(`Not planned: ${S.plans.unsupported.map(esc).join(', ')} (no essence or alloy gives it on this item class${ruleName() === 'Runes of Aldur' ? '' : '; alloys only count in Runes of Aldur'}).`);
+    if (S.plans.unsupported.length) notes.push(`Not planned: ${S.plans.unsupported.map(esc).join(', ')} (no essence or alloy gives it on this item class).`);
     if (borrowed()) notes.push(`Costs use ${esc(priceLeague(S.league).name)} prices: ${esc(S.league)} has no Currency Exchange data.`);
     if (pl.missingPrices.length) notes.push(`No price for ${pl.missingPrices.map(esc).join(', ')}; counted as 0.`);
     if (pl.skippedUnpriced && pl.skippedUnpriced.length) notes.push(`Not used: ${pl.skippedUnpriced.map(esc).join(', ')} (no market price, so its cost is unknown). Set your own price in the exchange window to plan with it.`);
@@ -2823,13 +2823,14 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const tests = S.lib.tests || [];
     const status = (t) => (res[t.id] && res[t.id].status) || t.status || 'open';
     const done = tests.filter((t) => status(t) !== 'open').length;
-    return `<p style="margin:0 0 10px">Cheap in-game checks for the open questions. A result updates the claims it covers, the claim log and the guide checker. ${done} of ${tests.length} settled.</p>
+    return `<p style="margin:0 0 10px">Cheap in-game checks for the open questions. Some are already settled by the game's own text or the official exchange data; each says where its answer comes from. A result updates the claims it covers, the claim log and the guide checker. ${done} of ${tests.length} settled.</p>
       <div class="claims">${tests.map((t) => {
         const st = status(t);
         const note = (res[t.id] && res[t.id].note) || (!res[t.id] && t.note) || '';
         return `<div class="trow">
-          <div class="tq"><span class="v ${st === 'confirmed' ? 'verified' : st === 'refuted' ? 'rejected' : 'outdated'}">${st === 'open' ? 'Open' : st === 'confirmed' ? 'Yes' : 'No'}</span><b>${esc(t.question)}</b>${t.found ? ' <span class="badge">found by the self-test</span>' : ''}</div>
+          <div class="tq"><span class="v ${st === 'confirmed' ? 'verified' : st === 'refuted' ? 'rejected' : 'outdated'}">${st === 'open' ? 'Open' : st === 'confirmed' ? 'Yes' : 'No'}</span><b>${esc(t.question)}</b>${t.found ? ` <span class="badge">found ${t.found === 'self-test' ? 'by the self-test' : 'in the ' + esc(t.found)}</span>` : ''}</div>
           <div class="sub">${esc(t.how)}${t.claims.length ? ` Covers claims ${t.claims.map((c) => c.replace('!', 'not ')).join(', ')}.` : ''}</div>
+          ${t.source && !res[t.id] ? `<div class="sub">Answered by ${esc(t.source)}.</div>` : ''}
           <div class="tctl"><select data-tstatus="${esc(t.id)}" aria-label="Result"><option value="open" ${st === 'open' ? 'selected' : ''}>Open</option><option value="confirmed" ${st === 'confirmed' ? 'selected' : ''}>Yes, confirmed</option><option value="refuted" ${st === 'refuted' ? 'selected' : ''}>No, refuted</option></select>
             <input data-tnote="${esc(t.id)}" placeholder="What you saw" value="${esc(note)}" aria-label="Note">
             <button class="btn small" type="button" data-tsave="${esc(t.id)}">Save</button></div>

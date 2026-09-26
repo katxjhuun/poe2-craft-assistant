@@ -324,8 +324,49 @@ test('10.2 lich omens are listed for weapons and jewellery only; armour shows wh
   const boots = P.availableOps(ix, parse('rare-boots-fractured')).find((o) => o.id === 'desecrate');
   assert.ok(!boots.omens.includes('Omen of the Liege'));
   assert.ok(boots.blocked.some((b) => b.name === 'Omen of the Liege' && /weapon or jewellery/.test(b.reason)));
-  const sceptre = P.availableOps(ix, parse('rare-sceptre-adv')).find((o) => o.id === 'desecrate');
-  assert.ok(sceptre.omens.includes('Omen of the Liege'));
+  const wand = P.availableOps(ix, E.parseItem(ix, 'Item Class: Wands\nRarity: Rare\nDoom Song\nAttuned Wand\n--------\nItem Level: 82').item).find((o) => o.id === 'desecrate');
+  assert.ok(wand.omens.includes('Omen of the Liege'));
+  // desecrated equipment modifiers are level 65 in the game data: below item level 65 nothing can roll, lich omens say why
+  const low = P.availableOps(ix, E.parseItem(ix, 'Item Class: Wands\nRarity: Rare\nDoom Song\nAttuned Wand\n--------\nItem Level: 60').item, { all: true }).find((o) => o.id === 'desecrate');
+  assert.ok(!low.ok && /no desecrated modifier/.test(low.reason));
+  assert.ok(!low.omens.includes('Omen of the Liege') && low.blocked.some((b) => b.name === 'Omen of the Liege' && /65/.test(b.reason)));
+  // no desecrated modifier has a sceptre spawn tag in the game data
+  const sceptre = P.availableOps(ix, parse('rare-sceptre-adv'), { all: true }).find((o) => o.id === 'desecrate');
+  assert.ok(!sceptre.ok && /no desecrated modifier/.test(sceptre.reason));
+});
+
+test('game text rules: Minimum Modifier Level gates the item level, Fracturing Orb, full desecration, Divine and fractured values', () => {
+  const W = require('../data/weights_0.5.5.json');
+  const low = E.parseItem(ix, 'Item Class: Wands\nRarity: Normal\nAttuned Wand\n--------\nItem Level: 60').item;
+  const ctx = P.makeContext(ix, low), st = P.toState(ctx, low);
+  assert.match(P.validate(ctx, st, { op: 'transmute', tier: 'perfect' }), /below item level 70/);
+  assert.equal(P.validate(ctx, st, { op: 'transmute', tier: 'greater' }), null);
+  // Fracturing Orb: "Cannot be used on Fractured items"
+  const boots = parse('rare-boots-fractured');
+  const bctx = ctxOf(boots), bst = P.toState(bctx, boots);
+  assert.match(P.validate(bctx, bst, { op: 'fracture' }), /Fractured items/);
+  // desecrating a full item removes a random (non-fractured) modifier and adds the desecrated one
+  const wand = E.parseItem(ix, 'Item Class: Wands\nRarity: Rare\nDoom Song\nAttuned Wand\n--------\nItem Level: 82').item;
+  const wctx = P.makeContext(ix, wand, { weights: W.pages[W.base_page[wand.base]] ? W.pages[W.base_page[wand.base]].weights : null });
+  let full = P.toState(wctx, wand);
+  const rng = P.rngFrom(3);
+  while (full.mods.length < 6) full = P.apply(wctx, full, { op: 'exalt' }, rng).state;
+  full.mods[0].frac = true;
+  assert.equal(P.validate(wctx, full, { op: 'bone', quality: 'Preserved' }), null);
+  for (let i = 0; i < 30; i++) {
+    const r = P.apply(wctx, full, { op: 'bone', quality: 'Preserved' }, rng);
+    assert.equal(r.removed.length, 1);
+    assert.ok(!r.removed[0].frac, 'a fractured modifier is never removed');
+    assert.ok(r.added.length === 1 && r.added[0].des && r.state.mods.length === 6);
+  }
+  // Divine Orb: a fractured value stays, and a fractured near miss is not something a Divine can fix
+  const g = { fam: full.mods[0].fam, des: false, minValue: 1e9 };
+  wctx.needValues = true;
+  const vals = P.toState(wctx, wand);
+  vals.mods = full.mods.map((m) => Object.assign({}, m, { v: 1, hi: 1e10 }));
+  const after = P.apply(wctx, vals, { op: 'divine' }, rng).state;
+  assert.equal(after.mods[0].v, 1);
+  assert.ok(!P.nearMiss(vals.mods[0], g) && P.nearMiss(Object.assign({}, vals.mods[0], { frac: false }), g));
 });
 
 test('7.2 operator rules: chance, quality, infuser, flux, liquid emotions, mirrored and sanctified items', () => {

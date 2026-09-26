@@ -59,7 +59,7 @@ test('recipe library filters by class and league', () => {
   const rs = G.recipesFor(lib, 'Sceptre', 'Forbidden Rites');
   assert.ok(rs.some((r) => r.id === 'c1a'));
   const puppet = rs.find((r) => r.id === 'c1c');
-  assert.equal(puppet.inLeague, false, 'Alloy recipe is Runes of Aldur only');
+  assert.equal(puppet.inLeague, true, 'Alloys trade in Forbidden Rites too');
   assert.ok(rs.findIndex((r) => r.id === 'c1a') < rs.findIndex((r) => r.id === 'c1c'));
   assert.ok(!G.recipesFor(lib, 'Boots', 'Forbidden Rites').some((r) => r.id === 'c1a'));
 });
@@ -156,4 +156,11 @@ test('3.4 outdated data notice reads the version number of a noted knowledge bas
   assert.equal(G.staleNotice(meta, { version: '4.5.5.2' }, sept), '');
   assert.equal(G.staleNotice(meta, { version: '4.5.5.1' }, sept), '');
   assert.match(G.staleNotice(meta, { version: '4.5.6.0' }, sept), /version 4\.5\.6\.0; this knowledge base uses 4\.5\.5\.2, patch 0\.5\.5/);
+});
+
+test('claims about a crafting term show the game help text next to them, without changing the verdict', () => {
+  const out = G.checkClaim(ix, 'A Divine Orb rerolls the values of fractured modifiers too.', lib);
+  assert.ok(out.reasons.some((r) => /^Game text \(Fractured Modifiers\): .*cannot be removed or altered/.test(r)));
+  assert.ok(G.gameTexts(ix, 'Desecrating a full item removes a random modifier').some((r) => /If modifiers are full/.test(r)));
+  assert.deepEqual(G.gameTexts(ix, 'Chaos Orb removes one modifier and adds one'), []);
 });

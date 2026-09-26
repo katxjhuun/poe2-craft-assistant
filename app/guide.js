@@ -23,7 +23,7 @@
     [/catalysts?[^.]{0,40}\b(drop|drops|dropped)\b[^.]{0,30}\b(monsters?|breach)\b/i, 'outdated', 'Since 0.5.0 catalysts come only from the Genesis Tree.'],
     [/recombinator|omen of recombination/i, 'outdated', 'The Recombinator was disabled in 0.5.0 and not reopened in 0.5.5.'],
     [/artificer'?s orb[^.]{0,60}\b(any|all|every)\b[^.]{0,20}\b(equipment|item|gear|jewell?ery)/i, 'rejected', "Game text: Artificer's Orb works on martial weapons, wands, staves and armour only."],
-    [/\balloys?\b[^.]{0,60}\b(forbidden rites)\b/i, 'rejected', 'Runic Alloys are exclusive to Runes of Aldur (poe2wiki); medium confidence.'],
+    [/\balloys?\b[^.]{0,80}\b(exclusive|only)\b[^.]{0,40}\brunes of aldur\b/i, 'rejected', 'Runic Alloys also trade on the official Currency Exchange in Forbidden Rites and Standard (checked 27 Sept 2026).'],
     [/sanctif\w*[^.]{0,60}\b(reroll|re-roll|randomi[sz]e)s?\b[^.]{0,20}\bvalues?\b/i, 'rejected', 'Since 0.5 Sanctify multiplies the current values instead of randomising them.'],
     [/\b(sword|axe|dagger|flail)s?\b[^.]{0,40}\b(drop|drops|available)\b[^.]{0,30}0\.5\.5/i, 'rejected', 'Swords, axes and daggers are not intended to drop in 0.5.5; they are expected with 1.0.'],
     [/omen of corruption/i, 'outdated', 'Omen of Corruption cannot be obtained since 0.5.0.'],
@@ -61,6 +61,18 @@
    * Check one claim. lib = recipes JSON ({claims}). opts = { guidePatch }.
    * Returns { claim, verdict, reasons: [], match: claimLogEntry|null }.
    */
+  /** Game help texts (kb.game_keywords) shown next to a claim that talks about their term; they inform, not judge. */
+  const GAME_TEXT = [
+    ['Fracture', /\bfractur/i], ['Abyssalify', /\bdesecrat|\bbones?\b/i], ['Sanctified', /\bsanctif/i],
+    ['Crafted', /\bcrafted\b|\bessences?\b|\balloys?\b/i], ['BetterCurrencyMinimumLevel', /minimum modifier level|\bfloors?\b|\b(greater|perfect) (exalted|chaos|regal|orb)/i],
+    ['CurrencyMaximumItemLevel', /\bgnawed\b|maximum item level/i], ['ItemRarity', /\b(three|3) (prefix|suffix)|\bup to (six|6)\b|\bmagic items? (can )?(have|hold)/i],
+    ['Corrupted', /\bcorrupt/i], ['Catalyst', /\bcatalys/i],
+  ];
+  function gameTexts(ix, claim) {
+    const kw = (ix && ix.kb && ix.kb.game_keywords) || {};
+    return GAME_TEXT.filter(([k, re]) => kw[k] && re.test(claim)).slice(0, 2).map(([k]) => `Game text (${kw[k].term}): ${kw[k].text.replace(/\s*\n+\s*/g, ' ')}`);
+  }
+
   function checkClaim(ix, claim, lib, opts) {
     opts = opts || {};
     const reasons = [];
@@ -81,6 +93,8 @@
       if (/desecrated/i.test(why) && /putrefaction/i.test(claim)) continue; // Putrefaction items are the exception
       reasons.push(why); worse(v);
     }
+    // 4b. the game's own help text on the terms the claim uses (no verdict: the player compares)
+    reasons.push(...gameTexts(ix, claim));
     // 5. version
     const p = patchOf(claim) || opts.guidePatch || null;
     if (p != null && p < 0.5) { reasons.push(`Written for patch ${p}; before the 0.5 crafted/desecrated rules.`); worse('outdated'); }
@@ -255,5 +269,5 @@
   }
 
   return { RULES, RULE_LEAGUES, splitClaims, checkClaim, checkGuide, recipesFor, similarity, patchOf, effectiveLibrary, sourceTier, sourceKey, sourceLabel, hostOf, logEntries, leagueRules,
-    newerVersion, staleNotice };
+    newerVersion, staleNotice, gameTexts };
 });

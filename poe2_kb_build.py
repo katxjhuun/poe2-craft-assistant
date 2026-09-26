@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """PoE2 Craft Assistant - knowledge base builder (v1, 2026-09-24).
 Rebuilds poe2_kb_<patch>.json from:
-  - RePoE fork PoE2 export (github.com/repoe-fork/poe2)       -> mods, bases, currency descriptions
+  - RePoE fork PoE2 export (github.com/repoe-fork/poe2)       -> mods, bases, currency descriptions, the game's own
+                                                                   keyword help texts (crafting rules as game text)
   - RePoE fork PoE1 export (repoe-fork.github.io root = PoE1)  -> ONLY used to build the PoE1 blacklist
   - Exiled Exchange 2 data (github.com/Kvan7/Exiled-Exchange-2) -> trade-style stat index + trade item list
 Run after every PoE2 patch (e.g. 1.0) and diff the output. Check each source repo's license first.
@@ -14,6 +15,7 @@ SRC = {
  'poe2_mods.json': 'https://raw.githubusercontent.com/repoe-fork/poe2/master/data/mods.json',
  'poe2_base_items.json': 'https://raw.githubusercontent.com/repoe-fork/poe2/master/data/base_items.json',
  'poe2_version.txt': 'https://raw.githubusercontent.com/repoe-fork/poe2/master/version.txt',
+ 'poe2_keywords.json': 'https://raw.githubusercontent.com/repoe-fork/poe2/master/data/keywords.json',
  'poe1_base_items.json': 'https://raw.githubusercontent.com/repoe-fork/repoe-fork.github.io/master/data/base_items.json',
  'items.ndjson': 'https://raw.githubusercontent.com/Kvan7/Exiled-Exchange-2/master/renderer/public/data/en/items.ndjson',
  'stats.ndjson': 'https://raw.githubusercontent.com/Kvan7/Exiled-Exchange-2/master/renderer/public/data/en/stats.ndjson',
@@ -75,7 +77,7 @@ for meta,v in bases.items():
     if v.get('item_class')=='Claw': continue
     if (n,v['item_class']) in seen: continue
     seen.add((n,v['item_class']))
-    imp=[clean(mods[i]['text']) if i in mods else i for i in (v.get('implicits') or [])]
+    imp=[x for x in (clean(mods[i]['text']) if i in mods else i for i in (v.get('implicits') or [])) if x]
     B[n]={'cls':v['item_class'],'lvl':v.get('drop_level'),'tags':tags,'imp':imp,'tl':1 if n in trade_names else 0}
     if v['item_class'] in UNCONF: B[n]['unconfirmed_class']=1
 # ---- pools per tag signature (natural item-domain mods only)
@@ -139,14 +141,17 @@ kb['item_descriptions']={n:_clean((bases[k].get('properties') or {}).get('descri
 kb['meta']['rules'].append('item_descriptions = in-game description text from game data (numeric floors like Greater/Perfect min modifier level are NOT in this text).')
 G='game_text'; P='patch_note_quote'; M2='multi_secondary'; S1='single_secondary'
 rules=[
- {'id':'R_RARITY_SLOTS','rule':'Normal: 0 explicit; Magic: max 1 prefix + 1 suffix; Rare: max 3 prefix + 3 suffix','conf':M2},
+ {'id':'R_RARITY_SLOTS','rule':'Normal: 0 explicit; Magic: max 1 prefix + 1 suffix; Rare: max 3 prefix + 3 suffix','conf':G,'source':'keyword ItemRarity'},
  {'id':'R_ILVL_GATE','rule':'A mod tier can roll only if mod.lvl <= item level','conf':M2},
  {'id':'R_MOD_GROUP','rule':'Only one mod per modifier group on an item; guaranteed-mod currency fails instead of duplicating','conf':M2},
- {'id':'R_ONE_CRAFTED','rule':'0.5+: max 1 crafted modifier per item (Essence, Perfect/special Essence, Runic Alloy, some Runic Ward enchants share this slot)','conf':P,'patch':'0.5.0'},
- {'id':'R_ONE_DESECRATED','rule':'0.5+: max 1 Desecrated modifier per item; Desecrated mods do NOT count as crafted','conf':P,'patch':'0.5.0'},
- {'id':'R_FRACTURED_LOCK','rule':'Fractured mod cannot be removed or changed by Chaos/Annulment/etc.','conf':M2},
+ {'id':'R_ONE_CRAFTED','rule':'0.5+: max 1 crafted modifier per item (Essence, Perfect/special Essence, Runic Alloy, some Runic Ward enchants share this slot)','conf':G,'patch':'0.5.0','source':'keyword Crafted'},
+ {'id':'R_ONE_DESECRATED','rule':'0.5+: max 1 Desecrated modifier per item (items with Desecrated modifiers cannot be Desecrated again); Desecrated mods do NOT count as crafted','conf':G,'patch':'0.5.0','source':'keyword Abyssalify'},
+ {'id':'R_DESECRATE_FULL','rule':'Desecrating adds an Unrevealed Desecrated modifier; if the modifiers are full, a random modifier is also removed','conf':G,'source':'keyword Abyssalify'},
+ {'id':'R_FRACTURED_LOCK','rule':'A Fractured modifier is locked permanently: it cannot be removed or altered (a Divine Orb leaves its values; a Fracturing Orb cannot be used on Fractured items)','conf':G,'source':'keyword Fracture; Fracturing Orb text'},
+ {'id':'R_MIN_MOD_LEVEL','rule':'Currency with a Minimum Modifier Level adds random modifiers of at least that level, except a modifier type that would be excluded entirely (it keeps its best tier); it cannot be used on items with an item level below that level','conf':G,'source':'keyword BetterCurrencyMinimumLevel'},
+ {'id':'R_MAX_ITEM_LEVEL','rule':'Currency with a Maximum Item Level (Gnawed bones: 64) cannot be used on items above that level','conf':G,'source':'keyword CurrencyMaximumItemLevel'},
  {'id':'R_CORRUPTED_LOCK','rule':'Corrupted items cannot be modified except by currencies that explicitly target corrupted items (Architect\'s Orb, Orbs of Sacrifice, Vaal Cultivation Orb, ...)','conf':G},
- {'id':'R_SANCTIFIED_LOCK','rule':'Sanctified items: most crafting no longer possible (verify per currency in game)','conf':S1},
+ {'id':'R_SANCTIFIED_LOCK','rule':'Sanctifying multiplies each modifier value by a random 78% to 122%; most methods of crafting and modification cannot be used on Sanctified items','conf':G,'source':'keyword Sanctified'},
  {'id':'R_VALUE_MULT_05','rule':'0.5+: Sanctify and the Vaal value-randomise outcome multiply each mod value from its CURRENT value (Divine to max first)','conf':M2,'patch':'0.5.0'},
  {'id':'R_WEIGHTS','rule':'Real roll weights are not in client data (spawn weight 0/1). Use community-estimated weights and label outputs as estimates','conf':M2},
 ]
@@ -159,17 +164,17 @@ ops=[
  op('exalt',['Exalted Orb','Greater Exalted Orb','Perfect Exalted Orb'],input='Rare with open slot',effect='+1 random mod',min_mod_level={'Greater':35,'Perfect':50},conf=G,floor_conf=M2,omens=['Omen of Sinistral Exaltation (prefix only)','Omen of Dextral Exaltation (suffix only)','Omen of Greater Exaltation (adds 2 mods)','Omen of Catalysing Exaltation (consumes catalyst quality to raise chance of matching mod type)']),
  op('chaos',['Chaos Orb','Greater Chaos Orb','Perfect Chaos Orb'],input='Rare',effect='remove 1 random mod + add 1 random mod (NOT a full reroll like PoE1)',min_mod_level={'Greater':35,'Perfect':50},conf=G,floor_conf=M2,omens=['Omen of Sinistral Erasure (removes prefix only)','Omen of Dextral Erasure (removes suffix only)','Omen of Whittling (removes lowest level mod; always hover-check in game)']),
  op('annul','Orb of Annulment',input='item with removable mods',effect='remove 1 random mod',conf=G,omens=['Omen of Sinistral Annulment','Omen of Dextral Annulment','Omen of Greater Annulment (removes 2)','Omen of Light (removes only the Desecrated mod)']),
- op('divine','Divine Orb',input='item with mods',effect='randomise numeric values of mods',conf=G,omens=['Omen of the Blessed (implicits only)','Omen of Sanctification (Rare -> Sanctify; value multiplier range ~78-122% is single-source)']),
+ op('divine','Divine Orb',input='item with mods',effect='randomise numeric values of mods',conf=G,omens=['Omen of the Blessed (implicits only)','Omen of Sanctification (Rare -> Sanctify: each value x random 78-122%, R_SANCTIFIED_LOCK)']),
  op('chance','Orb of Chance',input='Normal',effect='-> random Unique of same class OR destroyed',conf=G,omens=['Omen of Chance (no destroy)','Omen of the Ancients (guaranteed Unique of same class)']),
  op('vaal','Vaal Orb',input='any non-corrupted',effect='unpredictable modification + Corrupted',conf=G,note='Omen of Corruption is legacy/unobtainable since 0.5.0'),
- op('fracture','Fracturing Orb',input='Rare with >=4 mods',effect='fracture (lock) 1 random mod',conf=G),
+ op('fracture','Fracturing Orb',input='Rare with >=4 mods and no Fractured modifier',effect='fracture (lock) 1 random mod',conf=G),
  op('hinekora','Hinekora\'s Lock',input='item',effect='foresee result of next currency; any modification removes the foresight',conf=G),
  op('mirror','Mirror of Kalandra',input='item',effect='create mirrored copy',conf=G),
  op('artificer','Artificer\'s Orb',input='martial weapon, wand, staff or armour',effect='+1 augment socket',conf=G),
  op('essence_upgrade','Lesser/normal/Greater Essence of X',input='Magic',effect='-> Rare + guaranteed mod (counts as the 1 crafted mod)',conf=G,rule_refs=['R_ONE_CRAFTED']),
  op('essence_replace','Perfect Essence of X + special essences (Abyss, Breach, Horror, Insanity, Delirium, Hysteria)',input='Rare',effect='remove 1 random mod + add guaranteed mod',conf=G,omens=['Omen of Sinistral Crystallisation (removes prefix only)','Omen of Dextral Crystallisation (removes suffix only)'],note='Essence of the Abyss adds "Bears the Mark of the Abyssal Lord", replaced on next desecration'),
- op('alloy','13 Runic Alloys',input='Rare',effect='remove 1 random mod + add alloy-exclusive guaranteed mod (counts as crafted)',conf=G,league_scope='Runes of Aldur (per community codex; verify in current league)',scope_conf=S1),
- op('desecrate','Bones: Jawbone (Rare weapon/quiver), Rib (Rare armour), Collarbone (Rare amulet/ring/belt), Altered Collarbone (+chance of otherworldly mods), Cranium (Rare jewel), Vertebrae (Rare waystone)',input='Rare',effect='adds 1 unrevealed Desecrated mod; reveal at Well of Souls = choose 1 of 3',conf=G,quality_rules={'Gnawed':'item level <= 64 (community)','Preserved':'any','Ancient':'min modifier level 40 (community)'},quality_conf=S1,omens=['Omen of Sinistral/Dextral Necromancy (side)','Omen of the Blackblooded (Kurgal) / Liege (Amanamu) / Sovereign (Ulaman) - weapon or jewellery only','Omen of Abyssal Echoes (reroll the options once)','Omen of Putrefaction (replace all mods with up to 6 unrevealed + corrupt; conflicts with 0.5 one-desecrated cap -> verify)'],rule_refs=['R_ONE_DESECRATED']),
+ op('alloy','13 Runic Alloys',input='Rare',effect='remove 1 random mod + add alloy-exclusive guaranteed mod (counts as crafted)',conf=G,league_scope='Forbidden Rites, Runes of Aldur and Standard: traded on the official Currency Exchange in each (checked 27 Sept 2026)',scope_conf='official_data'),
+ op('desecrate','Bones: Jawbone (Rare weapon/quiver), Rib (Rare armour), Collarbone (Rare amulet/ring/belt), Altered Collarbone (+chance of otherworldly mods), Cranium (Rare jewel), Vertebrae (Rare waystone)',input='Rare',effect='adds 1 unrevealed Desecrated mod; reveal at Well of Souls = choose 1 of 3',conf=G,quality_rules={'Gnawed':'Maximum Item Level 64','Preserved':'any','Ancient':'Minimum Modifier Level 40'},quality_conf=G,full_item='a random modifier is also removed (R_DESECRATE_FULL)',omens=['Omen of Sinistral/Dextral Necromancy (side)','Omen of the Blackblooded (Kurgal) / Liege (Amanamu) / Sovereign (Ulaman) - weapon or jewellery only','Omen of Abyssal Echoes (reroll the options once)','Omen of Putrefaction (replace all mods with up to 6 unrevealed + corrupt; conflicts with 0.5 one-desecrated cap -> verify)'],rule_refs=['R_ONE_DESECRATED']),
  op('catalyst','Catalysts (Flesh=Life, Neural=Mana, Carapace=Armour/Evasion/ES, Uul-Netol\'s=Physical, Xoph\'s=Fire, Tul\'s=Cold, Esh\'s=Lightning, Chayula\'s=Chaos, Reaver=Attack, Sibilant=Caster, Skittering=Speed, Adaptive=Attribute, Necrotic=Minion); Refined = same for jewels',input='ring/amulet (Refined: jewel)',effect='adds quality enhancing that mod type; replaces other quality types',conf=G,note='0.5: catalysts obtained only via Genesis Tree (multi secondary)'),
  op('quality','Blacksmith\'s Whetstone (martial weapon), Armourer\'s Scrap (armour), Arcanist\'s Etcher (wand/staff/sceptre), Glassblower\'s Bauble (flask)',input='item',effect='+quality',conf=G),
  op('infuser','Vaal Arcanist\'s/Armourer\'s/Blacksmith\'s/Catalysing Infuser',input='wand/staff/sceptre | armour | martial weapon | ring/amulet',effect='quality above max by up to 10%, chance to Corrupt',conf=G),
@@ -184,6 +189,12 @@ legacy=[{'name':'Omen of Homogenising Exaltation / Coronation','status':'drops d
         {'name':'Omen of Recombination','status':'removed in 0.5.0','conf':M2},
         {'name':'Recombinator (Expedition)','status':'disabled in Runes of Aldur; status in 0.5.5 / Forbidden Rites unverified','conf':S1}]
 kb['crafting_rules']=rules; kb['crafting_ops']=ops; kb['legacy_or_disabled']=legacy
+_kw = json.load(open(get('poe2_keywords.json'), encoding='utf-8'))
+KEYWORDS = ['ItemRarity','Rarity','Crafted','Fracture','Abyssalify','UnstableDesecration','Sanctified','Corrupted','Mirrored',
+            'BetterCurrencyMinimumLevel','CurrencyMaximumItemLevel','Essence','Omen','Catalyst','Quality','MaximumQuality',
+            'Augment','Ancient','SocketBound','Rune','Jewel','BasicJewel','Historic','Jewellery']
+kb['game_keywords'] = {k: {'term': _kw[k]['term'], 'text': clean(_kw[k]['definition']).replace('\r', '')} for k in KEYWORDS if k in _kw}
+kb['meta']['rules'].append('game_keywords = the game\'s own help texts for crafting terms (RePoE keywords.json); crafting_rules cite them as source.')
 kb['meta']['rules'].append('crafting_rules / crafting_ops: conf = game_text (datamined in-game description) > patch_note_quote > multi_secondary > single_secondary (verify in game).')
 
 json.dump(kb,open(OUT,'w',encoding='utf-8'),ensure_ascii=False,separators=(',',':'))

@@ -216,6 +216,18 @@
     return out;
   }
 
+  /**
+   * Sides where a bone can place its desecrated modifier: a desecrated modifier of this bone (floor, lich omen) can roll
+   * there, and the side has room, or the item is full and the side has a modifier the desecration may remove.
+   */
+  function desSides(ctx, st, a) {
+    const floor = a.quality === 'Ancient' ? 40 : 0;
+    const full = open(ctx, st, 'prefix') + open(ctx, st, 'suffix') === 0;
+    const taken = groupsOf(st);
+    return (a.side ? [a.side] : SIDES).filter((s) => (full ? st.mods.some((m) => removable(m) && m.side === s) : open(ctx, st, s) > 0)
+      && desPoolFor(ctx, s, floor, a.lich || null).some((e) => !e.grp.some((g) => taken.has(g))));
+  }
+
   function desPoolFor(ctx, side, floor, lich) {
     const key = side + '|' + floor + '|' + (lich || '');
     if (ctx._des.has(key)) return ctx._des.get(key);
@@ -223,10 +235,16 @@
     for (const [id, pe] of ctx.desPool) {
       if (pe.side !== side) continue;
       const m = ctx.kb.mods[id];
-      if (m.lvl > ctx.ilvl || m.lvl < floor) continue;
+      if (m.lvl > ctx.ilvl) continue;
       if (lich && E.lichOf(m) !== lich) continue;
       out.push({ id, fam: m.fam, grp: m.grp, lvl: m.lvl, tier: pe.tier, side, w: 1, des: true, lich: E.lichOf(m) });
     }
+    // Game text (Minimum Modifier Level): a family with no tier at the floor keeps its best tier instead of dropping out.
+    const best = new Map();
+    for (const e of out) if (!best.has(e.fam) || e.lvl > best.get(e.fam).lvl) best.set(e.fam, e);
+    const kept = out.filter((e) => e.lvl >= floor || (best.get(e.fam) === e && best.get(e.fam).lvl < floor));
+    out.length = 0;
+    out.push(...kept);
     ctx._des.set(key, out);
     return out;
   }
@@ -294,6 +312,10 @@
     if (st.sanctified) return 'Sanctified items cannot be crafted further.';
     const hasCrafted = st.mods.some((m) => m.crafted);
     const hasDes = st.mods.some((m) => m.des);
+    // Game text (keyword "Minimum Modifier Level"): currency with a Minimum Modifier Level cannot be used on items with
+    // an item level below it.
+    const minLvl = a.op === 'bone' ? (a.quality === 'Ancient' ? 40 : 0) : a.tier && a.tier !== 'base' && ORB[a.op] ? floorFor(ctx, a.op, a.tier) : 0;
+    if (minLvl > ctx.ilvl) return `${a.op === 'bone' ? 'Ancient bones' : ORB[a.op][a.tier === 'greater' ? 1 : 2]} cannot be used on items below item level ${minLvl} (Minimum Modifier Level ${minLvl}).`;
     switch (a.op) {
       case 'transmute':
         return R === 'Normal' ? null : 'Orb of Transmutation needs a Normal item.';
@@ -329,14 +351,17 @@
         if (hasDes) return 'Only one Desecrated modifier per item (0.5+). Remove it first with Omen of Light + Orb of Annulment.';
         if (a.quality === 'Gnawed' && ctx.ilvl > 64) return 'Gnawed bones only work on item level 64 or lower.';
         if (a.lich && !(WEAPON.includes(ctx.cls) || JEWELLERY.includes(ctx.cls))) return `${OMEN.lich[a.lich]} only works on weapon or jewellery desecration.`;
-        const room = a.side ? open(ctx, st, a.side) : open(ctx, st, 'prefix') + open(ctx, st, 'suffix');
-        if (room < 1) return 'Keep an open affix before desecrating (a full item may lose a random mod; unverified).';
+        // Game text: if modifiers are full, a random modifier is also removed.
+        const full = open(ctx, st, 'prefix') + open(ctx, st, 'suffix') === 0;
+        if (full && !st.mods.some((m) => removable(m) && (!a.side || m.side === a.side))) return 'The item is full and no modifier there can be removed.';
+        if (!full && a.side && open(ctx, st, a.side) < 1) return `No room: the item already has ${count(st, a.side)} ${a.side}es.`;
+        if (!desSides(ctx, st, a).length) return `The game data has no desecrated modifier that can roll here${a.lich ? ' with this lich omen' : ''} (desecrated equipment modifiers are level 65).`;
         return null;
       }
       case 'fracture':
         if (R !== 'Rare') return 'Fracturing Orb needs a Rare item.';
         if (st.mods.length < 4) return 'Fracturing Orb needs at least 4 modifiers.';
-        return st.mods.some((m) => !m.frac) ? null : 'Every modifier is already fractured.';
+        return st.mods.some((m) => m.frac) ? 'Fracturing Orb cannot be used on Fractured items.' : null;
       case 'divine':
         if (R !== 'Magic' && R !== 'Rare' && R !== 'Unique') return 'Divine Orb needs an item with modifiers.';
         return st.mods.some((m) => m.id) ? null : 'Divine Orb needs a modifier with values.';
@@ -566,6 +591,12 @@
       }
       case 'bone': {
         const floor = a.quality === 'Ancient' ? 40 : 0;
+        if (open(ctx, st, 'prefix') + open(ctx, st, 'suffix') === 0) {
+          // The game text does not say which side loses the mod: take it from a side that can hold a desecrated mod.
+          const fit = desSides(ctx, st, a);
+          const r = removeRandom(st, (m) => removable(m) && fit.includes(m.side), rng);
+          if (r) removed.push(r);
+        }
         const sides = openSides(ctx, st, a.side);
         const draw = () => {
           const pool = [];
@@ -610,8 +641,8 @@
         break;
       }
       case 'divine':
-        // Game text: randomises the numeric values of modifiers on an item (fractured ones included; see test t17).
-        for (const m of st.mods) { const r = m.id && rangeOf(ctx, m.id); if (r) { m.v = rollValue(r, rng); m.hi = r[1]; } }
+        // Game text: randomises the numeric values of modifiers; a Fractured Modifier cannot be removed or altered.
+        for (const m of st.mods) { const r = m.id && !m.frac && rangeOf(ctx, m.id); if (r) { m.v = rollValue(r, rng); m.hi = r[1]; } }
         break;
       case 'flux': {
         // Every resistance mod of the other two elements becomes the same tier of the target element.
@@ -718,9 +749,9 @@
     const want = tier === undefined ? g.tier : tier;
     return !want || !!(m.tier && m.tier <= want);
   }
-  /** Right mod, value too low, but its tier can roll the value: a Divine Orb can fix it. */
+  /** Right mod, value too low, but its tier can roll the value: a Divine Orb can fix it (not a fractured one). */
   function nearMiss(m, g) {
-    return g.minValue != null && m.fam === g.fam && !!m.des === g.des && m.v != null && m.v < g.minValue && m.hi != null && m.hi >= g.minValue;
+    return g.minValue != null && !m.frac && m.fam === g.fam && !!m.des === g.des && m.v != null && m.v < g.minValue && m.hi != null && m.hi >= g.minValue;
   }
   function goalMet(st, g) { return st.mods.some((m) => meets(m, g, g.eff)); }
   function useful(m, goals) { return m.lock || goals.some((g) => meets(m, g, g.eff) || nearMiss(m, g)); }
@@ -1594,18 +1625,22 @@
     if (ctx.bone) {
       const bone = ctx.bone, bones = [], blocked = [];
       if (ctx.ilvl <= 64) bones.push('Gnawed ' + bone); else blocked.push({ name: 'Gnawed ' + bone, reason: 'item level 64 or lower only' });
-      bones.push('Preserved ' + bone, 'Ancient ' + bone);
+      bones.push('Preserved ' + bone);
+      // game text: Minimum Modifier Level 40, and such currency cannot be used below that item level
+      if (ctx.ilvl >= 40) bones.push('Ancient ' + bone); else blocked.push({ name: 'Ancient ' + bone, reason: 'item level 40 or higher only' });
       if (bone === 'Collarbone') bones.push('Altered Collarbone');
       const omens = [OMEN.necro.prefix, OMEN.necro.suffix, OMEN.echoes, 'Omen of Putrefaction'];
       const lich = [OMEN.lich.Kurgal, OMEN.lich.Amanamu, OMEN.lich.Ulaman];
-      if (WEAPON.includes(cls) || JEWELLERY.includes(cls)) omens.push(...lich);
-      else lich.forEach((n) => blocked.push({ name: n, reason: 'weapon or jewellery desecration only' }));
+      // lich modifiers are level 65 (game data), so they cannot roll below item level 65
+      if (!(WEAPON.includes(cls) || JEWELLERY.includes(cls))) lich.forEach((n) => blocked.push({ name: n, reason: 'weapon or jewellery desecration only' }));
+      else if (ctx.ilvl < 65) lich.forEach((n) => blocked.push({ name: n, reason: 'lich modifiers need item level 65 or higher' }));
+      else omens.push(...lich);
       add('desecrate', 'Desecrate: hidden mod, pick 1 of 3', { op: 'bone', quality: 'Preserved' }, { cur: bones, omens, blocked, planned: true });
     }
     add('fracture', 'Lock one mod', { op: 'fracture' }, { cur: ['Fracturing Orb'], planned: true });
     if (cls === 'Jewel') add('catalyst', 'Add catalyst quality', { op: 'catalyst', refined: true }, { cat: 'Catalysts', match: { include: '^Refined' }, label: 'Refined catalysts' });
     else if (cls === 'Ring' || cls === 'Amulet') add('catalyst', 'Add catalyst quality', { op: 'catalyst' }, { cat: 'Catalysts', match: { include: 'Catalyst$', exclude: '^Refined' }, label: 'Catalysts' });
-    const alloyWhy = R !== 'Rare' ? 'Runic Alloys need a Rare item.' : opts.league && opts.league !== 'Runes of Aldur' ? 'Runic Alloys are in Runes of Aldur only.' : { op: 'alloy' };
+    const alloyWhy = R !== 'Rare' ? 'Runic Alloys need a Rare item.' : { op: 'alloy' };
     add('alloy', 'Swap a mod for an alloy mod', alloyWhy, { cat: 'Verisium', match: { include: 'Alloy' }, label: 'Runic Alloys', planned: true });
     if (cls === 'Jewel') {
       const ancient = /^Time-Lost/.test(item.base);
