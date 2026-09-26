@@ -119,6 +119,18 @@ class PriceLayer(unittest.TestCase):
         self.assertEqual(got, len(calls))                            # what was fetched is kept
         self.assertEqual(len(calls), 2)                              # then no new download starts
 
+    def test_a_proxy_that_blocks_the_site_stops_at_once(self):
+        calls = []
+
+        def urlopen(req, timeout=0):
+            calls.append(req.full_url)
+            raise urllib.error.URLError('Tunnel connection failed: 403 Forbidden')
+        with mock.patch.object(fp.urllib.request, 'urlopen', urlopen), mock.patch.object(fp.time, 'sleep', lambda s: None):
+            with self.assertRaises(fp.NetworkBlocked) as cm:
+                fp.update_cache()
+        self.assertEqual(len(calls), 1)                                # no retries, no other hours
+        self.assertIn('web.poecdn.com', str(cm.exception))
+
     def test_rate_limit_waits_and_client_errors_are_not_retried(self):
         body = json.dumps(hour(self.h0, [])).encode()
         seq = [urllib.error.HTTPError('u', 429, 'slow down', {'Retry-After': '1'}, None), io.BytesIO(body)]

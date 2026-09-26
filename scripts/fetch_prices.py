@@ -98,6 +98,10 @@ def rate_wait(headers):
     return wait
 
 
+class NetworkBlocked(RuntimeError):
+    """The network refuses the site outright (no point in retrying)."""
+
+
 def fetch(hour_id):
     req = urllib.request.Request(URL.format(hour_id), headers={
         'User-Agent': UA, 'Accept': 'application/json', 'Accept-Encoding': 'identity'})
@@ -120,6 +124,10 @@ def fetch(hour_id):
                 continue
             raise  # never retry other 4xx/5xx: repeated invalid requests get the client restricted
         except (TimeoutError, urllib.error.URLError, ConnectionError, http.client.IncompleteRead) as e:
+            if 'Tunnel connection failed' in str(e):
+                # a proxy that refuses the site (a cloud environment's network allowlist): retrying cannot help
+                raise NetworkBlocked(f'the network blocks {urllib.parse.urlsplit(URL).hostname} ({e}); allow '
+                                     'web.poecdn.com, api.exiledexchange2.dev and poe2db.tw in the network settings') from e
             # The CDN occasionally stalls mid-body; a fresh connection usually completes in ~2s.
             print(f'hour {hour_id}: network stall ({e}), retry {attempt + 1}/3', file=sys.stderr)
             time.sleep(3)
