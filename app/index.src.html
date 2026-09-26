@@ -2787,7 +2787,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const [g, st] = String(key).split(' · ');
     return `${SITUATION[g] || g}${st ? ', from a ' + (START[st] || st) : ''}`;
   }
-  const VERDICT = { pro: ['pro', 'Helps'], con: ['con', 'Hurts'], 'trade-off': ['trade', 'Trade-off'], mixed: ['mixed', 'Depends'], 'no effect': ['none', 'No effect'], 'too little data': ['none', 'Too little data'] };
+  const VERDICT = { pro: ['pro', 'Helps'], con: ['con', 'Hurts'], 'trade-off': ['trade', 'Trade-off'], mixed: ['mixed', 'Depends'], same: ['none', 'About the same'], 'no effect': ['none', 'No effect'], 'too little data': ['none', 'Too little data'] };
   const AFTER = { confirmed: ['verified', 'Confirmed'], improvable: ['plausible', 'Cheaper route found'], weak: ['rejected', 'Slow to finish'], 'not simulated': ['outdated', 'Not simulated'] };
   function selftestHtml() {
     const x = S.insights;

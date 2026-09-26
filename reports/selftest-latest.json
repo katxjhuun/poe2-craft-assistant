@@ -21,6 +21,7 @@
   "seconds": 698,
   "skipped": [],
   "errors": 0,
+  "reanalyzed": "2026-09-26T19:33:17.204Z",
   "flasks": 3,
   "checksRun": "2026-09-26T17:42:05.748Z"
  },
@@ -247,7 +248,7 @@
    "label": "Omen of Greater Exaltation (two mods at once)",
    "scenarios": 20,
    "comparisons": 40,
-   "verdict": "mixed",
+   "verdict": "same",
    "cheaper": 0,
    "costlier": 0,
    "likelier": 0,

@@ -265,6 +265,7 @@ function techniques(mined) {
     if (cheaper >= 0.66 && dp >= -0.02) verdict = 'pro';
     else if (costlier >= 0.66 && dp <= 0.02) verdict = 'con';
     else if (costlier >= 0.5 && likelier >= 0.3) verdict = 'trade-off';
+    else if (Math.max(cheaper, costlier, likelier, lessLikely) < 0.1) verdict = 'same'; // it changed results, but barely
     if (withRatio.length < 30) verdict = 'too little data'; // a handful of comparisons is not evidence
     const group = (key) => {
       const g = {};
@@ -398,7 +399,7 @@ function printSummary(now) {
     console.log(`  ${c.id.padEnd(20)} ${String(c.n).padStart(8)}  ${res}`);
   }
   console.log(`  ${'frequencies'.padEnd(20)} ${String(now.freq.tests).padStart(8)}  ${now.freq.failed ? 'FAIL ' + now.freq.failed : 'ok'} (${now.freq.families} families, largest deviation ${now.freq.maxZ} sd, limit 4.5)`);
-  console.log('\nTECHNIQUES (pro = cheaper per success, con = costs more, mixed = depends)');
+  console.log('\nTECHNIQUES (pro = cheaper per success, con = costs more, mixed = depends, same = barely changed results)');
   for (const t of now.techniques) console.log(`  ${t.verdict.padEnd(15)} ${t.label}: ${t.text}`);
   console.log('\nRECIPES: library verdict -> simulation');
   for (const r of now.recipes) console.log(`  ${r.id.padEnd(5)} ${String(r.before).padEnd(9)} -> ${r.after.padEnd(13)} ${r.note}`);
@@ -426,7 +427,15 @@ function printSummary(now) {
     if (ai >= 0) rep.sincePrevious = diffPrevious(JSON.parse(fs.readFileSync(args[ai + 1], 'utf8')), rep);
     fs.writeFileSync(file, JSON.stringify(Object.assign({}, rep, { mined })));
     if (args.includes('--publish')) {
-      fs.writeFileSync(path.join(ROOT, 'reports', 'selftest-latest.json'), JSON.stringify(rep, null, 1));
+      // rule checks rerun after this run (--checks-only) are newer than the ones saved with it: keep them
+      const latestFile = path.join(ROOT, 'reports', 'selftest-latest.json');
+      const cur = fs.existsSync(latestFile) ? JSON.parse(fs.readFileSync(latestFile, 'utf8')) : null;
+      if (cur && cur.meta.date === rep.meta.date) {
+        // the same run: its published meta may carry later fixes (labels) and rule-check counts
+        rep.meta = Object.assign({}, rep.meta, cur.meta, { reanalyzed: rep.meta.reanalyzed });
+        if (cur.meta.checksRun) Object.assign(rep, { checks: cur.checks, ops: cur.ops, freq: cur.freq });
+      }
+      fs.writeFileSync(latestFile, JSON.stringify(rep, null, 1));
       fs.writeFileSync(path.join(ROOT, 'app', 'data', 'insights_0.5.5.json'), JSON.stringify(rep, null, 1));
     }
     printSummary(rep);
