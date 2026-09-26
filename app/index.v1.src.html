@@ -1,0 +1,779 @@
+<meta charset="utf-8">
+<title>PoE2 Craft Assistant</title>
+<meta name="description" content="Path of Exile 2 (0.5.5) craft paneli: item çözümleme, tier ve hedef stat seçimi.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Spectral+SC:wght@500;600&display=swap">
+<style>
+:root {
+  color-scheme: dark;
+  --bg: #1E1812;
+  --surface: #2A2219;
+  --surface-2: #33291E;
+  --inset: #17120D;
+  --line: #4A3D2C;
+  --line-soft: #3A2F22;
+  --text: #D8CBB0;
+  --muted: #9C8E74;
+  --faint: #6F6451;
+  --action: #C98B3A;
+  --action-ink: #1E1812;
+  --r-normal: #C8C8C8;
+  --r-magic: #8888FF;
+  --r-rare: #FFFF77;
+  --r-unique: #AF6025;
+  --fractured: #B89B5E;
+  --desecrated: #5FB39A;
+  --crafted: #9CC4E4;
+  --corrupted: #D64545;
+  --mod-blue: #8FA7FF;
+  --t1: #E7C66B;
+  --ok: #7FB069;
+  --warn: #D9A441;
+  --err: #D66A5A;
+  --font-display: "Spectral SC", "Cormorant SC", Georgia, "Times New Roman", serif;
+  --font-ui: "Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --radius: 4px;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); }
+body {
+  margin: 0; color: var(--text); font: 15px/1.45 var(--font-ui);
+  padding-inline: 16px; padding-block: 0 40px;
+}
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 14px; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--action); outline-offset: 2px; }
+.muted { color: var(--muted); }
+.num { font-variant-numeric: tabular-nums; }
+.label { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h2 { font: 600 17px/1.2 var(--font-display); letter-spacing: .04em; margin: 0; color: var(--text); text-wrap: balance; }
+
+/* top strip */
+.strip {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 20;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px;
+  padding: 10px 0; background: var(--bg); border-bottom: 1px solid var(--line-soft);
+}
+.brand { font: 600 18px/1 var(--font-display); letter-spacing: .06em; color: var(--text); margin-right: auto; }
+.brand small { font-family: var(--font-ui);  font: 400 12px var(--font-ui); letter-spacing: 0; color: var(--muted); margin-left: 8px; }
+.strip label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.strip select, .strip input {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 8px; color: var(--text);
+}
+.pill { font-size: 12px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 9px; color: var(--muted); white-space: nowrap; }
+.band { border: 1px solid var(--warn); color: var(--warn); border-radius: var(--radius); padding: 8px 12px; font-size: 13.5px; }
+
+/* paste */
+.paste {
+  display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: stretch;
+}
+.paste textarea {
+  width: 100%; min-height: 64px; max-height: 240px; resize: vertical; background: var(--inset);
+  border: 1px dashed var(--line); border-radius: var(--radius); padding: 10px 12px; color: var(--text);
+  font: 13px/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+.paste textarea.drag { border-color: var(--action); }
+.paste-actions { display: flex; flex-direction: column; gap: 8px; }
+.btn {
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 7px 12px; cursor: pointer; white-space: nowrap;
+}
+.btn:hover { border-color: var(--action); }
+.btn.primary { background: var(--action); color: var(--action-ink); border-color: var(--action); font-weight: 700; }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.samples { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; }
+.chip-btn { background: none; border: 1px solid var(--line-soft); border-radius: 999px; padding: 2px 10px; cursor: pointer; color: var(--muted); font-size: 12.5px; }
+.chip-btn:hover, .chip-btn[aria-pressed="true"] { color: var(--text); border-color: var(--action); }
+
+/* preview row */
+.preview-row { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.panel { background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 14px; }
+.panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+
+/* tooltip — the one bold element */
+.tip {
+  background: linear-gradient(180deg, #0F0C09 0%, #15110C 100%);
+  border: 1px solid #5A4630; outline: 1px solid #0B0906; outline-offset: -4px;
+  border-radius: 2px; text-align: center; overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,.45);
+}
+.tip-head { padding: 10px 14px 9px; border-bottom: 1px solid #5A4630; background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(0,0,0,0)); }
+.tip-name { font: 600 20px/1.15 var(--font-display); letter-spacing: .03em; }
+.tip-base { font: 500 16px/1.2 var(--font-display); letter-spacing: .03em; }
+.rar-Normal { color: var(--r-normal); } .rar-Magic { color: var(--r-magic); } .rar-Rare { color: var(--r-rare); } .rar-Unique { color: var(--r-unique); }
+.tip-body { padding: 8px 16px 14px; font-size: 14px; }
+.tip-sep { height: 1px; margin: 8px auto; width: 70%; background: linear-gradient(90deg, transparent, #7A5F3E, transparent); }
+.tip-prop { color: #8F8778; } .tip-prop b { color: #E4DCCB; font-weight: 400; }
+.tip-mod { position: relative; color: var(--mod-blue); padding: 1px 34px; line-height: 1.4; }
+.tip-mod .tb { position: absolute; left: 0; top: 2px; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.tip-mod .tb.t1 { color: var(--t1); }
+.tip-mod .fl { position: absolute; right: 0; top: 2px; font-size: 10.5px; letter-spacing: .05em; }
+.tip-mod.fractured { color: var(--fractured); }
+.tip-mod.desecrated { color: var(--desecrated); }
+.tip-mod.crafted { color: var(--crafted); }
+.tip-mod.unmatched { color: var(--muted); font-style: italic; }
+.tip-mod.implicit { color: var(--mod-blue); }
+.tip-mod.added { animation: bloom 1.4s ease-out; }
+.tip-mod.removed { color: var(--faint); text-decoration: line-through; opacity: .6; }
+.tip-mod.ghost { color: var(--faint); font-style: italic; }
+@keyframes bloom { from { background: rgba(201,139,58,.35); } to { background: transparent; } }
+.tip-status { color: var(--corrupted); font-weight: 700; letter-spacing: .06em; }
+.tip-status.plain { color: var(--muted); font-weight: 400; }
+.tip-foot { display: flex; justify-content: space-between; padding: 6px 12px; border-top: 1px solid #3A2D1E; font-size: 12px; color: var(--faint); }
+.tip-empty { padding: 36px 20px; color: var(--muted); font-size: 14px; }
+
+.side-stack { display: grid; gap: 14px; }
+.shot { display: flex; gap: 12px; align-items: flex-start; }
+.shot img { width: 120px; max-width: 100%; border: 1px solid var(--line); border-radius: 2px; }
+.warnings { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13.5px; }
+.warnings li { display: grid; grid-template-columns: 58px 1fr; gap: 8px; align-items: baseline; }
+.lvl { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; border-radius: 3px; padding: 1px 0; text-align: center; border: 1px solid; }
+.lvl.error { color: var(--err); border-color: var(--err); }
+.lvl.warn { color: var(--warn); border-color: var(--warn); }
+.lvl.info { color: var(--muted); border-color: var(--line); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.seg button { background: none; border: 0; padding: 4px 10px; cursor: pointer; color: var(--muted); font-size: 13px; }
+.seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--text); }
+.meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px 14px; font-size: 13px; }
+.meta-grid div span { display: block; }
+
+/* affix grid + price */
+.work { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; align-items: start; }
+.grid-tools { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 13px; }
+.grid-tools label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.side-title { margin: 12px 0 6px; display: flex; align-items: baseline; gap: 10px; }
+.side-title .label { color: var(--text); }
+.rows { display: grid; gap: 6px; }
+.row {
+  display: grid; grid-template-columns: 74px minmax(0, 1fr) 18px minmax(0, 1.15fr) auto; gap: 8px; align-items: center;
+  background: var(--inset); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 7px 8px; position: relative;
+}
+.row.done { border-color: var(--ok); }
+.slot-name { font-size: 11.5px; letter-spacing: .07em; color: var(--muted); }
+.cur { display: flex; gap: 6px; align-items: baseline; min-width: 0; font-size: 13.5px; }
+.cur .txt { color: var(--mod-blue); overflow-wrap: anywhere; }
+.cur .txt.empty { color: var(--faint); font-style: italic; }
+.tier { font-size: 11px; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
+.tier.t1 { color: var(--t1); border-color: #7A6531; }
+.flag { font-size: 10.5px; border-radius: 3px; padding: 0 4px; flex: none; border: 1px solid; }
+.flag.F { color: var(--fractured); border-color: var(--fractured); }
+.flag.D { color: var(--desecrated); border-color: var(--desecrated); }
+.flag.C { color: var(--crafted); border-color: var(--crafted); }
+.arrow { color: var(--faint); text-align: center; }
+.target { display: grid; gap: 5px; min-width: 0; }
+.combo { position: relative; }
+.combo input {
+  width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 5px 8px; font-size: 13.5px;
+}
+.combo input::placeholder { color: var(--faint); }
+.combo input.set { border-color: #6D5433; color: var(--r-rare); }
+.target-opts { display: flex; gap: 6px; flex-wrap: wrap; font-size: 12.5px; }
+.target-opts select { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px 4px; max-width: 100%; }
+.req { background: none; border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; cursor: pointer; font-size: 12px; color: var(--muted); }
+.req[aria-pressed="true"] { color: var(--action); border-color: var(--action); }
+.lock { background: none; border: 1px solid var(--line); border-radius: var(--radius); width: 32px; height: 30px; cursor: pointer; color: var(--faint); display: grid; place-items: center; }
+.lock[aria-pressed="true"] { color: var(--fractured); border-color: var(--fractured); }
+.lock[disabled] { cursor: default; opacity: .9; }
+.lock svg { width: 15px; height: 15px; }
+.dd {
+  position: absolute; z-index: 30; left: 0; right: 0; top: calc(100% + 3px); max-height: 340px; overflow: auto;
+  background: #120E0A; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 12px 28px rgba(0,0,0,.55); padding: 4px 0; min-width: 260px;
+}
+.dd-group { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 7px 10px 3px; position: sticky; top: -4px; background: #120E0A; }
+.dd-opt { padding: 5px 10px; cursor: pointer; font-size: 13.5px; display: grid; gap: 1px; }
+.dd-opt small { color: var(--muted); font-size: 11.5px; }
+.dd-opt.bad { color: var(--faint); }
+.dd-opt.bad small { color: var(--faint); }
+.dd-opt[aria-selected="true"] { background: var(--surface-2); }
+.dd-empty { padding: 10px; color: var(--muted); font-size: 13px; }
+.target-note { font-size: 12px; color: var(--muted); }
+.target-note.ok { color: var(--ok); }
+
+.price { display: grid; gap: 12px; }
+.price dl { margin: 0; display: grid; gap: 10px; }
+.price dt { font-size: 12px; color: var(--muted); }
+.price dd { margin: 0; font-size: 20px; font-variant-numeric: tabular-nums; }
+.price dd small { font-size: 12px; color: var(--muted); display: block; }
+.badge { font-size: 11px; border: 1px solid var(--line); border-radius: 3px; padding: 0 5px; color: var(--muted); vertical-align: middle; }
+.price input { width: 100%; background: var(--inset); border: 1px solid var(--line); border-radius: var(--radius); padding: 5px 8px; }
+.recipe { background: var(--inset); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 8px; font: 12px/1.45 ui-monospace, Consolas, monospace; white-space: pre-wrap; max-height: 180px; overflow: auto; margin: 0; }
+
+.plans .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.plans .tabs button { background: var(--inset); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 6px 14px; color: var(--faint); cursor: not-allowed; }
+.phase-note { font-size: 13.5px; color: var(--muted); margin: 10px 0 0; max-width: 72ch; }
+.goal-list { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13.5px; }
+.goal-list li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+
+.history { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.hist-item { flex: none; background: var(--inset); border: 1px solid var(--line-soft); border-radius: var(--radius); padding: 6px 10px; cursor: pointer; text-align: left; font-size: 12.5px; max-width: 220px; }
+.hist-item[aria-current="true"] { border-color: var(--action); }
+.hist-item b { display: block; font: 600 13px var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.cands { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+.cands select { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); font-size: 12.5px; max-width: 100%; }
+
+footer { font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line-soft); padding-top: 12px; display: grid; gap: 4px; }
+.loading { padding: 40px 0; text-align: center; color: var(--muted); }
+
+@media (max-width: 900px) {
+  .preview-row, .work { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .paste { grid-template-columns: 1fr; }
+  .paste-actions { flex-direction: row; flex-wrap: wrap; }
+  .row { grid-template-columns: 1fr auto; }
+  .row .slot-name { grid-column: 1 / -1; }
+  .row .arrow { display: none; }
+  .row .target { grid-column: 1 / -1; }
+  .row .cur { grid-column: 1; }
+  .row .lock { grid-column: 2; grid-row: 2; }
+  .dd { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tip-mod.added { animation: none; background: rgba(201,139,58,.18); }
+}
+</style>
+
+<div class="wrap">
+  <header class="strip">
+    <div class="brand" lang="en">PoE2 Craft Assistant<small>F1 önizleme</small></div>
+    <label for="league">Lig
+      <select id="league">
+        <option>Forbidden Rites</option>
+        <option>Runes of Aldur</option>
+        <option>Standard</option>
+      </select>
+    </label>
+    <span class="pill num" id="dataPill">Veri 0.5.5 · 4.5.5.2</span>
+    <span class="pill" id="pricePill">Fiyat verisi yok</span>
+  </header>
+
+  <div class="band" id="staleBand" hidden>PoE2 1.0 çıktı; bu bilgi bankası 0.5.5 verisi. Veri yeniden üretilene kadar tier ve kurallar eski olabilir.</div>
+
+  <section class="paste" aria-label="Item girişi">
+    <textarea id="pasteBox" spellcheck="false" placeholder="Item'ı yapıştır (Alt+Ctrl+C metni ya da ekran görüntüsü). Advanced Mod Descriptions açıkken Alt+Ctrl+C prefix/suffix ve tier bilgisini de verir."></textarea>
+    <div class="paste-actions">
+      <button class="btn primary" id="parseBtn" type="button">Item'ı çözümle</button>
+      <button class="btn" id="clearBtn" type="button">Temizle</button>
+    </div>
+    <div class="samples" style="grid-column: 1 / -1">
+      <span class="muted">Örnek item (sentetik):</span>
+      <span id="sampleBtns" class="samples"></span>
+    </div>
+  </section>
+
+  <div id="app"><div class="loading">Bilgi bankası yükleniyor (3,7 MB)…</div></div>
+
+  <footer>
+    <div>This product isn't affiliated with or endorsed by Grinding Gear Games in any way.</div>
+    <div>Veri: RePoE PoE2 export (4.5.5.2) ve Exiled Exchange 2 stat listesi. Mod ağırlıkları oyun verisinde yok; olasılıklar tahmin olarak gösterilir. Kişisel kullanım içindir.</div>
+  </footer>
+</div>
+
+<script>
+/*__ENGINE__*/
+</script>
+<script>
+/*__SAMPLES__*/
+</script>
+<script>
+(function () {
+  'use strict';
+  const E = window.PoE2Engine;
+  const SAMPLES = window.PoE2Samples;
+  const $ = (s, r = document) => r.querySelector(s);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem('poe2ca.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+    set(k, v) { try { localStorage.setItem('poe2ca.' + k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } },
+  };
+
+  const LOCK_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>';
+  const OPEN_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1" fill="currentColor" opacity=".55"/><path d="M5 7V5a3 3 0 0 1 5.6-1.5" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>';
+
+  const GROUP_LABEL = {
+    prefix: 'Explicit prefix', suffix: 'Explicit suffix', desecrated: 'Desecrated',
+    essence: 'Essence / Crafted', genesis: 'Genesis Tree', alloy: 'Alloy',
+  };
+  const GROUP_ORDER = ['prefix', 'suffix', 'desecrated', 'essence', 'genesis', 'alloy'];
+
+  const TEMPLATES = [
+    { id: 'minion-sceptre', label: 'Minion sceptre', cls: ['Sceptre'], stats: [
+      { label: '+# to Level of all Minion Skills', minTier: 1, required: true },
+      { label: 'Minions have #% increased maximum Life', minTier: 2, required: false } ] },
+    { id: 'minion-amulet', label: 'Minion amulet', cls: ['Amulet'], stats: [
+      { label: '+# to Level of all Minion Skills', minTier: 1, required: true },
+      { label: '+# to Spirit', minTier: 2, required: false } ] },
+    { id: 'minion-helmet', label: 'Minion helmet', cls: ['Helmet'], stats: [
+      { label: '+# to Level of all Minion Skills', minTier: 1, required: true },
+      { label: '+# to maximum Life', minTier: 3, required: false } ] },
+    { id: 'ms-boots', label: 'MS + res boots', cls: ['Boots'], stats: [
+      { label: '#% increased Movement Speed', minTier: 2, required: true },
+      { label: '+#% to Fire Resistance', minTier: 3, required: false },
+      { label: '+#% to Cold Resistance', minTier: 3, required: false } ] },
+  ];
+
+  const S = {
+    ix: null, item: null, prev: null, warnings: [], text: '',
+    targets: {}, locks: {}, showImpossible: false, view: 'after',
+    league: store.get('league', 'Forbidden Rites'), history: [], histIdx: -1,
+    shot: null, open: null, observed: store.get('observed', ''), recent: store.get('recent', []),
+    choice: {}, // modIdx -> chosen candidate id
+  };
+
+  // ------------------------------------------------------------ boot
+  $('#league').value = S.league;
+  $('#league').addEventListener('change', (e) => { S.league = e.target.value; store.set('league', S.league); render(); });
+  if (new Date() >= new Date('2026-12-11T00:00:00Z')) $('#staleBand').hidden = false;
+
+  $('#sampleBtns').innerHTML = SAMPLES.map((s) => `<button class="chip-btn" type="button" data-sample="${esc(s.id)}">${esc(s.label)}</button>`).join('');
+  $('#sampleBtns').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-sample]'); if (!b) return;
+    const s = SAMPLES.find((x) => x.id === b.dataset.sample);
+    $('#pasteBox').value = s.text; S.shot = null; ingest(s.text, 'örnek: ' + s.label);
+  });
+  $('#parseBtn').addEventListener('click', () => ingest($('#pasteBox').value, 'yapıştırma'));
+  $('#clearBtn').addEventListener('click', () => { $('#pasteBox').value = ''; $('#pasteBox').focus(); });
+
+  const box = $('#pasteBox');
+  box.addEventListener('paste', (e) => {
+    const items = [...(e.clipboardData && e.clipboardData.items || [])];
+    const img = items.find((i) => i.type.startsWith('image/'));
+    if (img) { e.preventDefault(); readImage(img.getAsFile()); return; }
+    setTimeout(() => ingest(box.value, 'yapıştırma'), 0);
+  });
+  box.addEventListener('dragover', (e) => { e.preventDefault(); box.classList.add('drag'); });
+  box.addEventListener('dragleave', () => box.classList.remove('drag'));
+  box.addEventListener('drop', (e) => {
+    box.classList.remove('drag');
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) { e.preventDefault(); readImage(f); }
+  });
+
+  function readImage(file) {
+    if (!file) return;
+    const r = new FileReader();
+    r.onload = () => { S.shot = r.result; render(); };
+    r.readAsDataURL(file);
+  }
+
+  fetch('data/poe2_kb_0.5.5.json')
+    .then((r) => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then((kb) => {
+      S.ix = E.buildIndex(kb);
+      const c = kb.meta.counts;
+      $('#dataPill').textContent = `Veri 0.5.5 · ${c.bases.toLocaleString('tr-TR')} base · ${c.mods.toLocaleString('tr-TR')} mod`;
+      const last = store.get('lastText', null);
+      const text = last || SAMPLES[0].text;
+      box.value = text;
+      ingest(text, last ? 'son item' : 'örnek: ' + SAMPLES[0].label, { keepTargets: true });
+      if (!last && !Object.keys(S.targets).length) applyTemplate('minion-sceptre');
+    })
+    .catch((err) => {
+      $('#app').innerHTML = `<div class="panel">Bilgi bankası yüklenemedi (${esc(err.message)}). Sayfayı yenile; sorun sürerse artifact'ın <code>data/poe2_kb_0.5.5.json</code> dosyasıyla birlikte yayımlandığını kontrol et.</div>`;
+    });
+
+  // ------------------------------------------------------------ ingest
+  function ingest(text, src, opts) {
+    if (!S.ix || !text.trim()) return;
+    const r = E.parseItem(S.ix, text);
+    if (!r.item) { S.warnings = r.warnings; S.item = null; render(); return; }
+    const sameBase = S.item && S.item.base === r.item.base;
+    S.prev = sameBase ? S.item : null;
+    S.item = r.item; S.warnings = r.warnings; S.parseWarnings = r.parseWarnings; S.text = text; S.choice = {};
+    if (!sameBase && !(opts && opts.keepTargets)) { S.targets = {}; S.locks = {}; }
+    if (opts && opts.keepTargets) { S.targets = store.get('targets', {}); S.locks = store.get('locks', {}); }
+    S.view = 'after';
+    S.history = S.history.slice(0, S.histIdx + 1);
+    S.history.push({ text, item: r.item, at: new Date(), src });
+    S.histIdx = S.history.length - 1;
+    store.set('lastText', text);
+    render();
+  }
+
+  // ------------------------------------------------------------ helpers
+  const tierCls = (t) => (t === 1 ? 'tier t1' : 'tier');
+  function limits() { return S.item ? E.slotLimits(S.item) : { prefix: 3, suffix: 3 }; }
+  function sideMods(item, side) { return item.mods.map((m, i) => ({ m, i })).filter((x) => x.m.slot === side); }
+  function modKey(m) { return m.modId || m.text; }
+  function keyFor(side, n) { return side + '-' + n; }
+  function modAt(side, n) { const l = sideMods(S.item, side); return l[n] ? l[n].m : null; }
+
+  function flagsHtml(m) {
+    return (m.fractured ? '<span class="flag F" title="Fractured">F</span>' : '') +
+      (m.desecrated ? '<span class="flag D" title="Desecrated">D</span>' : '') +
+      (m.crafted ? '<span class="flag C" title="Crafted">C</span>' : '');
+  }
+
+  // ------------------------------------------------------------ render
+  function render() {
+    if (!S.ix) return;
+    const app = $('#app');
+    const openKey = S.open && S.open.key;
+    app.innerHTML = `
+      <div class="preview-row">
+        <div>${tooltipHtml()}</div>
+        <div class="side-stack">${reportHtml()}</div>
+      </div>
+      ${S.item ? `<div class="work">
+        <section class="panel" aria-label="Affix ızgarası">${gridHtml()}</section>
+        <aside class="panel price" aria-label="Fiyat">${priceHtml()}</aside>
+      </div>
+      <section class="panel plans" aria-label="Planlar">${plansHtml()}</section>` : ''}
+      ${S.history.length ? `<section class="panel" aria-label="Geçmiş"><div class="panel-head"><h2>Geçmiş</h2><span class="muted" style="font-size:13px">Bir duruma tıklayınca item o haline döner.</span></div><div class="history">${historyHtml()}</div></section>` : ''}
+    `;
+    if (openKey) { const inp = document.getElementById('combo-' + openKey); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); drawDropdown(); } }
+  }
+
+  function tooltipHtml() {
+    const it = S.item;
+    if (!it) return `<div class="tip"><div class="tip-empty">Item yok. Oyunda item'ın üzerindeyken Alt+Ctrl+C'ye bas ve yukarıya yapıştır.</div></div>`;
+    const b = S.ix.kb.bases[it.base] || { imp: [] };
+    const view = S.view === 'before' && S.prev ? S.prev : it;
+    const other = S.view === 'before' ? it : S.prev;
+    const otherKeys = new Set(other ? other.mods.map(modKey) : []);
+    const viewKeys = new Set(view.mods.map(modKey));
+    const props = [];
+    props.push(`<div class="tip-prop">${esc(it.itemClass || it.itemClassText || '')}</div>`);
+    if (view.quality) props.push(`<div class="tip-prop">Quality${view.qualityType ? ' (' + esc(view.qualityType) + ')' : ''}: <b>+${view.quality}%</b></div>`);
+    if (view.sockets && view.sockets.length) props.push(`<div class="tip-prop">Sockets: <b>${esc(view.sockets.join(' '))}</b></div>`);
+    props.push(`<div class="tip-prop num">Item Level: <b>${view.ilvl == null ? '?' : view.ilvl}</b></div>`);
+
+    const implicits = view.implicits.map((m) => `<div class="tip-mod implicit">${esc(m.text)}</div>`).join('');
+    const runes = view.runes.map((r) => `<div class="tip-mod" style="color:var(--crafted)">${esc(r.text)}</div>`).join('');
+    const order = [...view.mods].sort((a, b) => (a.slot === 'prefix' ? 0 : a.slot === 'suffix' ? 1 : 2) - (b.slot === 'prefix' ? 0 : b.slot === 'suffix' ? 1 : 2));
+    const modsHtml = order.map((m) => {
+      const cls = ['tip-mod'];
+      if (m.fractured) cls.push('fractured'); else if (m.desecrated) cls.push('desecrated'); else if (m.crafted) cls.push('crafted');
+      if (!m.modId && !m.unrevealed) cls.push('unmatched');
+      if (S.view === 'after' && S.prev && !otherKeys.has(modKey(m))) cls.push('added');
+      const tier = m.tier ? `<span class="tb ${m.tier === 1 ? 't1' : ''}">${m.slot === 'prefix' ? 'P' : m.slot === 'suffix' ? 'S' : ''}·T${m.tier}</span>` : `<span class="tb">${m.slot === 'prefix' ? 'P' : m.slot === 'suffix' ? 'S' : ''}</span>`;
+      const fl = m.fractured ? '<span class="fl" style="color:var(--fractured)">FRAC</span>' : m.desecrated ? '<span class="fl" style="color:var(--desecrated)">DESC</span>' : m.crafted ? '<span class="fl" style="color:var(--crafted)">CRFT</span>' : '';
+      return `<div class="${cls.join(' ')}" title="${esc(modTitle(m))}">${tier}${esc(m.text).replace(/\n/g, '<br>')}${fl}</div>`;
+    }).join('');
+    const removed = S.view === 'after' && S.prev ? S.prev.mods.filter((m) => !viewKeys.has(modKey(m))).map((m) => `<div class="tip-mod removed">${esc(m.text).replace(/\n/g, '<br>')}</div>`).join('') : '';
+    const ghosts = ghostRowsHtml(view);
+    const status = [view.flags.corrupted ? '<div class="tip-status">Corrupted</div>' : '', view.flags.sanctified ? '<div class="tip-status" style="color:var(--t1)">Sanctified</div>' : '', view.flags.mirrored ? '<div class="tip-status plain">Mirrored</div>' : '', view.flags.unidentified ? '<div class="tip-status" style="color:var(--err)">Unidentified</div>' : ''].join('');
+    const lim = E.slotLimits(view);
+    const pc = view.mods.filter((m) => m.slot === 'prefix').length, sc = view.mods.filter((m) => m.slot === 'suffix').length;
+    return `<div class="tip" lang="en" aria-label="Item önizlemesi">
+      <div class="tip-head">
+        ${it.name ? `<div class="tip-name rar-${esc(it.rarity)}">${esc(view.name || it.name)}</div>` : ''}
+        <div class="${it.name ? 'tip-base' : 'tip-name'} rar-${esc(view.rarity)}">${esc(it.base || '?')}</div>
+      </div>
+      <div class="tip-body">
+        ${props.join('')}
+        ${implicits || runes ? '<div class="tip-sep"></div>' + implicits + runes : ''}
+        <div class="tip-sep"></div>
+        ${modsHtml || '<div class="tip-mod ghost">Explicit mod yok</div>'}${removed}${ghosts}
+        ${status ? '<div class="tip-sep"></div>' + status : ''}
+      </div>
+      <div class="tip-foot num"><span>${esc(view.rarity)}</span><span>Prefix ${pc}/${lim.prefix} · Suffix ${sc}/${lim.suffix}</span><span>${view.source === 'adv_copy' ? 'Alt+Ctrl+C' : 'Ctrl+C'}</span></div>
+    </div>`;
+  }
+
+  function modTitle(m) {
+    if (m.unrevealed) return 'Gizli Desecrated mod: Well of Souls\'ta 3 seçenekten biri seçilir.';
+    if (!m.modId) return 'Bilgi bankasında eşleşme yok; doğrulanmadı.';
+    const mod = S.ix.kb.mods[m.modId];
+    return `${m.modId} · mod seviyesi ${mod.lvl} · güven ${Math.round(m.confidence * 100)}%` + (m.gameTier ? ` · oyun T${m.gameTier}` : '');
+  }
+
+  function ghostRowsHtml(view) {
+    // Show chosen targets on empty slots as ghost lines ("hedef").
+    if (S.view !== 'after') return '';
+    const out = [];
+    for (const [k, t] of Object.entries(S.targets)) {
+      if (!t || !t.fam) continue;
+      const [side, n] = k.split('-');
+      if (modAt(side, +n)) continue;
+      out.push(`<div class="tip-mod ghost">hedef: ${esc(t.label)}${t.minTier ? ' (T' + t.minTier + '+)' : ''}</div>`);
+    }
+    return out.join('');
+  }
+
+  function reportHtml() {
+    const it = S.item;
+    const w = S.warnings;
+    const order = { error: 0, warn: 1, info: 2 };
+    const list = [...w].sort((a, b) => order[a.level] - order[b.level]);
+    const shot = S.shot ? `<div class="panel"><div class="panel-head"><h2>Ekran görüntüsü</h2></div><div class="shot"><img src="${S.shot}" alt="Yapıştırılan ekran görüntüsü"><p class="muted" style="margin:0;font-size:13.5px">Görüntüden okuma F5'te gelecek. Şimdilik aynı item'ı oyunda Alt+Ctrl+C ile kopyalayıp metin olarak yapıştır; görüntü burada karşılaştırma için kalır.</p></div></div>` : '';
+    const beforeAfter = S.prev ? `<div class="seg" role="group" aria-label="Önce / Sonra"><button type="button" data-view="before" aria-pressed="${S.view === 'before'}">Önce</button><button type="button" data-view="after" aria-pressed="${S.view === 'after'}">Sonra</button></div>` : '';
+    const summary = it ? `<div class="meta-grid">
+      <div><span class="label">Base</span><span>${esc(it.base || '?')}</span></div>
+      <div><span class="label">Sınıf</span><span>${esc(it.itemClass || '?')}</span></div>
+      <div><span class="label">Item level</span><span class="num">${it.ilvl == null ? '?' : it.ilvl}</span></div>
+      <div><span class="label">Kaynak</span><span>${it.source === 'adv_copy' ? 'Alt+Ctrl+C' : 'Ctrl+C (düşük güven)'}</span></div>
+    </div>` : '';
+    const ambiguous = it ? it.mods.map((m, i) => ({ m, i })).filter((x) => x.m.ambiguous || (x.m.candidates && x.m.candidates.length > 1 && it.source === 'ctrl_c')) : [];
+    const candHtml = ambiguous.length ? `<div class="cands">${ambiguous.map(({ m, i }) => `<div>"${esc(m.text)}": <select data-cand="${i}" aria-label="Aday seç">${m.candidates.map((c) => `<option value="${esc(c.id)}" ${c.id === m.modId ? 'selected' : ''}>${esc(c.side)} · ${c.tier ? 'T' + c.tier : 'havuz dışı'} · ${esc(c.id)}</option>`).join('')}</select></div>`).join('')}</div>` : '';
+    return `${shot}<div class="panel">
+      <div class="panel-head"><h2>Çözümleme</h2>${beforeAfter}</div>
+      ${summary}
+      ${list.length ? `<ul class="warnings" style="margin-top:12px">${list.map((x) => `<li><span class="lvl ${x.level}">${x.level === 'error' ? 'hata' : x.level === 'warn' ? 'uyarı' : 'not'}</span><span>${esc(x.msg)}</span></li>`).join('')}</ul>` : '<p class="muted" style="margin:12px 0 0;font-size:13.5px">Kurallarla çelişen bir şey bulunmadı.</p>'}
+      ${candHtml}
+    </div>`;
+  }
+
+  function gridHtml() {
+    const it = S.item;
+    const lim = limits();
+    const tpl = TEMPLATES.filter((t) => t.cls.includes(it.itemClass));
+    let html = `<div class="panel-head"><h2>Affix'ler ve hedefler</h2>
+      <div class="grid-tools">
+        <label for="showImp"><input type="checkbox" id="showImp" ${S.showImpossible ? 'checked' : ''}> İmkânsızları da göster</label>
+        ${tpl.length ? `<span class="muted">Şablon:</span>${tpl.map((t) => `<button class="chip-btn" type="button" data-tpl="${t.id}">${esc(t.label)}</button>`).join('')}` : ''}
+        <button class="chip-btn" type="button" id="clearTargets">Hedefleri temizle</button>
+      </div></div>`;
+    if (it.rarity === 'Unique') html += '<p class="phase-note">Unique item: explicit modlar sabittir; hedef seçimi Rare ve Magic item içindir.</p>';
+    for (const side of ['prefix', 'suffix']) {
+      const n = Math.max(lim[side], sideMods(it, side).length);
+      html += `<div class="side-title"><span class="label">${side === 'prefix' ? 'Prefix' : 'Suffix'}</span><span class="muted num" style="font-size:12.5px">${sideMods(it, side).length}/${lim[side]} dolu</span></div><div class="rows">`;
+      if (!n) html += `<div class="muted" style="font-size:13px">${it.rarity === 'Normal' ? 'Normal item explicit mod taşımaz. Transmutation, Alchemy ya da Essence ile başla.' : 'Bu item bu tarafta mod taşıyamaz.'}</div>`;
+      for (let i = 0; i < n; i++) html += rowHtml(side, i);
+      html += '</div>';
+    }
+    return html;
+  }
+
+  function rowHtml(side, i) {
+    const key = keyFor(side, i);
+    const m = modAt(side, i);
+    const t = S.targets[key];
+    const locked = m && (m.fractured || S.locks[key]);
+    const cur = m
+      ? `<span class="${m.tier ? tierCls(m.tier) : 'tier'}">${m.tier ? 'T' + m.tier : '—'}</span>${flagsHtml(m)}<span class="txt" style="${m.desecrated ? 'color:var(--desecrated)' : m.fractured ? 'color:var(--fractured)' : m.crafted ? 'color:var(--crafted)' : ''}">${esc(m.text).replace(/\n/g, ' / ')}</span>`
+      : '<span class="txt empty">(boş)</span>';
+    const fam = t && t.fam ? currentOptions(side, key).find((o) => o.key === t.key) : null;
+    let tierSel = '';
+    let note = '';
+    if (t && t.fam) {
+      const tiers = fam ? fam.tiers : [];
+      tierSel = `<select data-tier="${key}" aria-label="En az tier">${tiers.map((x) => `<option value="${x.tier || ''}" ${x.tier === t.minTier ? 'selected' : ''} ${x.ok ? '' : 'disabled'}>${x.tier ? 'T' + x.tier + '+' : '—'} · ${esc(x.txt.replace(/\n/g, ' / '))} · lvl ${x.lvl}${x.ok ? '' : ' · ' + esc(x.reason)}</option>`).join('')}</select>`;
+      const met = m && m.fam === t.fam && m.tier && (!t.minTier || m.tier <= t.minTier);
+      if (met) note = '<span class="target-note ok">Hedef karşılandı</span>';
+      else if (fam && !fam.ok) note = `<span class="target-note" style="color:var(--err)">${esc(fam.reason || 'bu item\'da çıkamaz')}</span>`;
+    }
+    const placeholder = m ? '→ yerine gelecek stat' : 'Hedef stat';
+    return `<div class="row ${note.includes('ok') ? 'done' : ''}">
+      <span class="slot-name">${side === 'prefix' ? 'PREFIX' : 'SUFFIX'} ${i + 1}</span>
+      <span class="cur">${cur}</span>
+      <span class="arrow" aria-hidden="true">${m ? '→' : ''}</span>
+      <div class="target">
+        <div class="combo">
+          <input id="combo-${key}" class="${t && t.fam ? 'set' : ''}" data-combo="${key}" data-side="${side}" autocomplete="off" role="combobox" aria-expanded="${S.open && S.open.key === key}" aria-controls="dd-${key}" aria-label="${side} ${i + 1} hedef stat" placeholder="${placeholder}" value="${esc(S.open && S.open.key === key ? S.open.query : (t && t.label) || '')}">
+          <div class="dd" id="dd-${key}" role="listbox" hidden></div>
+        </div>
+        ${t && t.fam ? `<div class="target-opts">${tierSel}<button type="button" class="req" data-req="${key}" aria-pressed="${t.required}">${t.required ? 'Zorunlu' : 'Olsa iyi'}</button><button type="button" class="req" data-untarget="${key}">Kaldır</button>${note}</div>` : ''}
+      </div>
+      ${m ? `<button type="button" class="lock" data-lock="${key}" aria-pressed="${!!locked}" ${m.fractured ? 'disabled title="Fractured mod: silinemez, otomatik kilitli"' : 'title="Koru: planlayıcı bu modu silmeye çalışmaz"'} aria-label="Koru">${locked ? LOCK_SVG : OPEN_SVG}</button>` : '<span></span>'}
+    </div>`;
+  }
+
+  const optCache = new Map();
+  function currentOptions(side, key) {
+    const m = modAt(side, +key.split('-')[1]);
+    const ck = [S.histIdx, side, m ? m.modId : '', S.showImpossible, S.league, JSON.stringify(S.choice)].join('|');
+    if (!optCache.has(ck)) {
+      if (optCache.size > 40) optCache.clear();
+      optCache.set(ck, E.pickerOptions(S.ix, S.item, { side, showImpossible: S.showImpossible, league: S.league, exclude: m ? m.modId : null }));
+    }
+    return optCache.get(ck);
+  }
+
+  function priceHtml() {
+    const recipe = tradeRecipe();
+    return `<h2>Fiyat</h2>
+      <dl>
+        <div><dt>Tahmini değer <span class="badge">düşük güven</span></dt><dd class="num">${S.observed ? esc(S.observed) + ' Ex' : '—'}<small>${S.observed ? 'Resmi trade sitesinde senin gözlediğin fiyat.' : 'Rare item için resmi anlık fiyat yok. Karşılaştırma tarifini trade sitesinde uygula, gördüğün fiyatı aşağıya gir.'}</small></dd></div>
+        <div><dt>Harcanan <span class="badge">kesin</span></dt><dd class="num">0 Ex<small>Adım koşucu F2'de; kullanılan currency × o anki fiyat.</small></dd></div>
+        <div><dt>Hedefe kalan <span class="badge">beklenen</span></dt><dd class="num">—<small>Plan motoru F2'de, fiyatlar F3'te.</small></dd></div>
+      </dl>
+      <label for="observed" class="label">Gözlediğin fiyat (Exalted)</label>
+      <input id="observed" inputmode="decimal" placeholder="ör. 45" value="${esc(S.observed)}">
+      <div class="panel-head" style="margin:4px 0 0"><span class="label">Resmi trade'de karşılaştır</span><button type="button" class="btn" id="copyRecipe" style="padding:3px 10px;font-size:12.5px">Tarifi kopyala</button></div>
+      <pre class="recipe" id="recipe">${esc(recipe)}</pre>
+      <p class="muted" style="font-size:12px;margin:0">Kaynak: yok · Currency Exchange bağlantısı F3'te. Trade sitesine otomatik istek atılmaz.</p>`;
+  }
+
+  function tradeRecipe() {
+    const it = S.item;
+    const lines = [`${it.base}${it.ilvl ? ' · ilvl ≥ ' + it.ilvl : ''} · ${it.rarity}`];
+    for (const m of it.mods) {
+      if (!m.modId) continue;
+      for (const [k, ln] of m.text.split('\n').entries()) {
+        const st = S.ix.statByNorm.get(E.normalize(ln));
+        const v = E.lineValues(ln);
+        const kind = m.fractured ? 'fractured' : m.desecrated ? 'desecrated' : m.crafted ? 'crafted' : 'explicit';
+        const id = st && st.ids && (st.ids[kind] || st.ids.explicit);
+        lines.push(`${st ? st.r : E.template(ln)}  min ${v.length ? v[0] : '-'}${id ? '  [' + id[0] + ']' : ''}${k ? '' : ''}`);
+      }
+    }
+    return lines.join('\n');
+  }
+
+  function plansHtml() {
+    const goals = Object.entries(S.targets).filter(([, t]) => t && t.fam);
+    return `<div class="panel-head"><h2>Planlar</h2></div>
+      <div class="tabs" role="tablist"><button type="button" disabled>Ucuz</button><button type="button" disabled>Orta</button><button type="button" disabled>Pahalı</button></div>
+      ${goals.length ? `<ul class="goal-list">${goals.map(([k, t]) => { const [side, n] = k.split('-'); const m = modAt(side, +n); return `<li><span class="tier ${t.minTier === 1 ? 't1' : ''}">${t.minTier ? 'T' + t.minTier + '+' : 'T?'}</span><span>${esc(t.label)}</span><span class="muted">${side} ${+n + 1}${m ? ' · yerine: ' + esc(m.text.split('\n')[0]) : ''} · ${t.required ? 'zorunlu' : 'olsa iyi'}</span></li>`; }).join('')}</ul>` : ''}
+      <p class="phase-note">Ucuz / Orta / Pahalı yollar F2'de kural motoru ve Monte Carlo simülatörüyle gelecek. Hedefler şimdiden kaydediliyor; planlayıcı kilitli ve fractured modlara dokunmayacak.</p>`;
+  }
+
+  function historyHtml() {
+    return S.history.map((h, i) => `<button type="button" class="hist-item" data-hist="${i}" aria-current="${i === S.histIdx}"><b lang="en" class="rar-${esc(h.item.rarity)}">${esc(h.item.name || h.item.base)}</b><span class="muted num">${h.at.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })} · ${esc(h.src)} · ${h.item.mods.length} mod</span></button>`).join('');
+  }
+
+  // ------------------------------------------------------------ dropdown
+  function drawDropdown() {
+    if (!S.open) return;
+    const { key, side, query } = S.open;
+    const dd = document.getElementById('dd-' + key);
+    if (!dd) return;
+    const opts = currentOptions(side, key);
+    let list;
+    if (!query.trim()) {
+      const recent = S.recent.map((r) => opts.find((o) => o.key === r)).filter(Boolean);
+      const rest = opts.filter((o) => !recent.includes(o)).sort((a, b) => (b.ok - a.ok) || GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group) || a.label.localeCompare(b.label));
+      list = [...recent.map((o) => ({ ...o, _recent: true })), ...rest].slice(0, 120);
+    } else list = E.searchOptions(opts, query, 60);
+    S.open.list = list;
+    if (S.open.active >= list.length) S.open.active = list.length - 1;
+    if (!list.length) { dd.innerHTML = `<div class="dd-empty">"${esc(query)}" için ${S.showImpossible ? '' : 'bu base ve item level\'da mümkün '}stat yok.${S.showImpossible ? '' : ' "İmkânsızları da göster" ile diğerlerini görebilirsin.'}</div>`; dd.hidden = false; return; }
+    let html = '', lastGroup = null;
+    list.forEach((o, i) => {
+      const g = o._recent ? 'Son kullanılanlar' : GROUP_LABEL[o.group];
+      if (g !== lastGroup) { html += `<div class="dd-group">${esc(g)}</div>`; lastGroup = g; }
+      const okTiers = o.tiers.filter((t) => t.ok);
+      const best = okTiers[0] || o.tiers[0];
+      const sub = o.ok
+        ? `${okTiers.length} tier uygun · en iyi T${best.tier || '?'}: ${esc(best.txt.replace(/\n/g, ' / '))} (lvl ${best.lvl})${o.lich ? ' · ' + o.lich : ''}${o.group === 'essence' || o.group === 'genesis' ? ' · base uygunluğu doğrulanmadı' : ''}`
+        : esc(o.reason || '');
+      html += `<div class="dd-opt ${o.ok ? '' : 'bad'}" role="option" id="opt-${key}-${i}" data-opt="${i}" aria-selected="${i === S.open.active}"><span>${esc(o.label.replace(/\n/g, ' / '))}</span><small>${sub}</small></div>`;
+    });
+    dd.innerHTML = html;
+    dd.hidden = false;
+    const act = document.getElementById(`opt-${key}-${S.open.active}`);
+    if (act) act.scrollIntoView({ block: 'nearest' });
+  }
+
+  function choose(o) {
+    const key = S.open.key;
+    if (!o.ok) return; // impossible options are informational
+    const best = o.tiers.find((t) => t.ok);
+    S.targets[key] = { key: o.key, fam: o.fam, group: o.group, label: o.label, minTier: best ? best.tier : null, required: true };
+    S.recent = [o.key, ...S.recent.filter((r) => r !== o.key)].slice(0, 6);
+    store.set('recent', S.recent);
+    saveTargets();
+    S.open = null;
+    render();
+  }
+
+  function saveTargets() { store.set('targets', S.targets); store.set('locks', S.locks); }
+
+  // ------------------------------------------------------------ events
+  const appEl = $('#app');
+  appEl.addEventListener('focusin', (e) => {
+    const inp = e.target.closest('[data-combo]');
+    if (!inp || (S.open && S.open.key === inp.dataset.combo)) return;
+    S.open = { key: inp.dataset.combo, side: inp.dataset.side, query: '', active: 0 };
+    inp.value = '';
+    inp.setAttribute('aria-expanded', 'true');
+    drawDropdown();
+  });
+  appEl.addEventListener('input', (e) => {
+    const inp = e.target.closest('[data-combo]');
+    if (inp && S.open) { S.open.query = inp.value; S.open.active = 0; drawDropdown(); return; }
+    if (e.target.id === 'observed') { S.observed = e.target.value.trim(); store.set('observed', S.observed); }
+  });
+  appEl.addEventListener('change', (e) => {
+    if (e.target.id === 'observed') { render(); return; }
+    if (e.target.id === 'showImp') { S.showImpossible = e.target.checked; render(); return; }
+    const tk = e.target.dataset.tier;
+    if (tk) { S.targets[tk].minTier = +e.target.value || null; saveTargets(); render(); return; }
+    const ci = e.target.dataset.cand;
+    if (ci != null) { applyCandidate(+ci, e.target.value); }
+  });
+  appEl.addEventListener('keydown', (e) => {
+    const inp = e.target.closest('[data-combo]');
+    if (!inp || !S.open) return;
+    const n = (S.open.list || []).length;
+    if (e.key === 'ArrowDown') { e.preventDefault(); S.open.active = Math.min(n - 1, S.open.active + 1); drawDropdown(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); S.open.active = Math.max(0, S.open.active - 1); drawDropdown(); }
+    else if (e.key === 'Enter') { e.preventDefault(); const o = S.open.list && S.open.list[S.open.active]; if (o) choose(o); }
+    else if (e.key === 'Escape') { S.open = null; render(); }
+  });
+  appEl.addEventListener('mousedown', (e) => {
+    const opt = e.target.closest('[data-opt]');
+    if (opt && S.open) { e.preventDefault(); choose(S.open.list[+opt.dataset.opt]); }
+  });
+  appEl.addEventListener('focusout', (e) => {
+    if (!e.target.closest('[data-combo]')) return;
+    setTimeout(() => {
+      if (S.open && !(document.activeElement && document.activeElement.closest && document.activeElement.closest('.combo'))) { S.open = null; render(); }
+    }, 120);
+  });
+  appEl.addEventListener('click', (e) => {
+    const t = e.target.closest('button');
+    if (!t) return;
+    if (t.dataset.view) { S.view = t.dataset.view; render(); return; }
+    if (t.dataset.lock) { S.locks[t.dataset.lock] = !S.locks[t.dataset.lock]; saveTargets(); render(); return; }
+    if (t.dataset.req) { const x = S.targets[t.dataset.req]; x.required = !x.required; saveTargets(); render(); return; }
+    if (t.dataset.untarget) { delete S.targets[t.dataset.untarget]; saveTargets(); render(); return; }
+    if (t.dataset.tpl) { applyTemplate(t.dataset.tpl); return; }
+    if (t.id === 'clearTargets') { S.targets = {}; saveTargets(); render(); return; }
+    if (t.dataset.hist != null) {
+      const h = S.history[+t.dataset.hist];
+      S.prev = S.item; S.item = h.item; S.histIdx = +t.dataset.hist; S.text = h.text;
+      const pr = E.parseItem(S.ix, h.text); S.warnings = pr.warnings; S.parseWarnings = pr.parseWarnings; box.value = h.text; store.set('lastText', h.text); render(); return;
+    }
+    if (t.id === 'copyRecipe') {
+      const txt = $('#recipe').textContent;
+      const done = () => { t.textContent = 'Kopyalandı'; setTimeout(() => { t.textContent = 'Tarifi kopyala'; }, 1600); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, () => selectRecipe());
+      else selectRecipe();
+    }
+  });
+  function selectRecipe() { const r = document.createRange(); r.selectNodeContents($('#recipe')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+
+  function applyCandidate(i, id) {
+    const m = S.item.mods[i];
+    const c = m.candidates.find((x) => x.id === id);
+    if (!c) return;
+    const mod = S.ix.kb.mods[id];
+    Object.assign(m, { modId: id, fam: mod.fam, slot: c.side, tier: c.tier, lvl: mod.lvl, ambiguous: false, confidence: 0.95, inPool: c.inPool });
+    S.choice[i] = id;
+    S.warnings = E.validateItem(S.ix, S.item, (S.parseWarnings || []).slice());
+    render();
+  }
+
+  function applyTemplate(id) {
+    const tpl = TEMPLATES.find((t) => t.id === id);
+    const lim = limits();
+    const missing = [];
+    for (const st of tpl.stats) {
+      const fam = E.resolveTemplateTarget(S.ix, S.item, st.label);
+      if (!fam) { missing.push(st.label); continue; }
+      const side = fam.side;
+      const already = Object.values(S.targets).some((t) => t && t.fam === fam.fam);
+      const present = S.item.mods.find((m) => m.fam === fam.fam);
+      let slot = null;
+      if (present) {
+        const idx = sideMods(S.item, side).findIndex((x) => x.m === present);
+        slot = keyFor(side, idx);
+      } else {
+        for (let i = 0; i < lim[side]; i++) { const k = keyFor(side, i); if (!modAt(side, i) && !S.targets[k]) { slot = k; break; } }
+        if (!slot) for (let i = 0; i < lim[side]; i++) { const k = keyFor(side, i); const m = modAt(side, i); if (m && !m.fractured && !S.locks[k] && !S.targets[k]) { slot = k; break; } }
+      }
+      if (!slot || already) continue;
+      const t = fam.tiers.find((x) => x.tier === st.minTier && x.ok) || fam.tiers.find((x) => x.ok);
+      S.targets[slot] = { key: fam.key, fam: fam.fam, group: fam.group, label: fam.label, minTier: t ? t.tier : st.minTier, required: st.required };
+    }
+    if (missing.length) S.warnings = [...S.warnings.filter((w) => !/Şablon/.test(w.msg)), { level: 'warn', msg: `Şablon: ${missing.join(', ')} bu base'de çıkmıyor.` }];
+    saveTargets();
+    render();
+  }
+})();
+</script>

@@ -1,0 +1,1546 @@
+{
+  "meta": {
+    "patch": "0.5.5",
+    "compiled": "2026-09-25",
+    "from": [
+      "poe2_bilgi_bankasi_0.5.5.md (section 10)",
+      "compass recipe audit (sections a-f)"
+    ],
+    "verdicts": {
+      "verified": "Matches game text or an official patch note, or two independent A/B sources.",
+      "plausible": "Consistent with the rules but rests on one secondary source or needs an in-game test.",
+      "outdated": "Was true before 0.5 or only works in a legacy league.",
+      "rejected": "Contradicts game text or the 0.5 rules, or comes from PoE1."
+    }
+  },
+  "recipes": [
+    {
+      "id": "c1a",
+      "title": "Minion sceptre: hunt the minion level suffix",
+      "classes": [
+        "Sceptre"
+      ],
+      "league_scope": [
+        "Forbidden Rites",
+        "Runes of Aldur",
+        "Standard"
+      ],
+      "verdict": "plausible",
+      "source_tier": "A/B",
+      "min_ilvl": 78,
+      "crafted_slot_use": "optional",
+      "desecrated_slot_use": "last step",
+      "target": [
+        {
+          "stat": "+# to Level of all Minion Skills",
+          "minTier": 1,
+          "required": true
+        },
+        {
+          "stat": "Minions have #% increased maximum Life",
+          "minTier": 2,
+          "required": false
+        }
+      ],
+      "steps": [
+        {
+          "text": "Use Greater Orb of Transmutation on a white sceptre (item level 78+). The floor of 44 leaves only +3 and +4 of the minion level family.",
+          "names": [
+            "Greater Orb of Transmutation"
+          ]
+        },
+        {
+          "text": "If the minion level suffix did not appear, start again on a new base. No PoE2 orb rerolls a Magic item cheaply.",
+          "names": []
+        },
+        {
+          "text": "Add a prefix with Orb of Augmentation (Spirit or minion damage).",
+          "names": [
+            "Orb of Augmentation",
+            "Greater Orb of Augmentation"
+          ]
+        },
+        {
+          "text": "Make it Rare with Regal Orb, or with a Greater Essence (fills the crafted slot).",
+          "names": [
+            "Regal Orb",
+            "Omen of Sinistral Coronation"
+          ]
+        },
+        {
+          "text": "Fill prefixes with Omen of Sinistral Exaltation + Exalted Orb.",
+          "names": [
+            "Omen of Sinistral Exaltation",
+            "Exalted Orb"
+          ]
+        }
+      ],
+      "checkpoints": [
+        "Keep going only if step 1 gave +4 (or +3 on a budget).",
+        "If the prefix from step 3 is poor, decide to sell or continue before Regal.",
+        "With two good prefixes and minion level, move to the desecration loop."
+      ],
+      "risks": [
+        "Greater and Perfect Transmutation/Augmentation are much rarer since 0.5, so each base is expensive.",
+        "Real roll weights are unknown."
+      ],
+      "sources": [
+        {
+          "label": "Official 0.5.0 patch notes (floor 44)",
+          "url": "https://www.pathofexile.com/forum/view-thread/3932540",
+          "tier": "A"
+        },
+        {
+          "label": "poe2wiki (Perfect floor 70, family rule)",
+          "tier": "B"
+        },
+        {
+          "label": "Maxroll minion guides",
+          "tier": "B"
+        }
+      ]
+    },
+    {
+      "id": "c1b",
+      "title": "Minion sceptre: fracture and finish",
+      "classes": [
+        "Sceptre"
+      ],
+      "league_scope": [
+        "Forbidden Rites",
+        "Runes of Aldur",
+        "Standard"
+      ],
+      "verdict": "plausible",
+      "source_tier": "A/C",
+      "min_ilvl": 78,
+      "crafted_slot_use": "optional",
+      "desecrated_slot_use": "last step",
+      "target": [
+        {
+          "stat": "+# to Level of all Minion Skills",
+          "minTier": 2,
+          "required": true
+        }
+      ],
+      "steps": [
+        {
+          "text": "Start from a Rare sceptre with +3 or +4 minion levels and at least 4 mods.",
+          "names": []
+        },
+        {
+          "text": "Use Fracturing Orb. If the minion level mod is not the one fractured, the recipe ends for this item.",
+          "names": [
+            "Fracturing Orb"
+          ]
+        },
+        {
+          "text": "Replace bad suffixes with Omen of Dextral Erasure + Chaos Orb, bad prefixes with Omen of Sinistral Erasure. Omen of Whittling is cheaper when the junk mod has the lowest mod level.",
+          "names": [
+            "Omen of Dextral Erasure",
+            "Omen of Sinistral Erasure",
+            "Omen of Whittling",
+            "Chaos Orb"
+          ]
+        },
+        {
+          "text": "Fill open slots with Omen of Sinistral/Dextral Exaltation + Greater Exalted Orb.",
+          "names": [
+            "Omen of Sinistral Exaltation",
+            "Omen of Dextral Exaltation",
+            "Greater Exalted Orb"
+          ]
+        },
+        {
+          "text": "If the crafted slot is free, add a Perfect Essence; pick the side it removes from with Omen of Sinistral/Dextral Crystallisation.",
+          "names": [
+            "Omen of Sinistral Crystallisation",
+            "Omen of Dextral Crystallisation"
+          ]
+        },
+        {
+          "text": "Finish with the desecration loop.",
+          "names": [
+            "Preserved Jawbone"
+          ]
+        }
+      ],
+      "checkpoints": [
+        "If fracture misses, sell the item.",
+        "In the Chaos step aim for T1 Spirit or critical chance."
+      ],
+      "risks": [
+        "Fracturing Orbs need the matching Atlas passive specialisation (0.5)."
+      ],
+      "sources": [
+        {
+          "label": "Official 0.5.0 patch notes",
+          "tier": "A"
+        },
+        {
+          "label": "POE2FUN minion sceptre guide (steps 1-3)",
+          "tier": "C"
+        }
+      ]
+    },
+    {
+      "id": "c1c",
+      "title": "Puppet Master sceptre (Adaptive + Runebinder's Alloy)",
+      "classes": [
+        "Sceptre"
+      ],
+      "league_scope": [
+        "Runes of Aldur"
+      ],
+      "verdict": "plausible",
+      "source_tier": "B/C",
+      "min_ilvl": 78,
+      "crafted_slot_use": "two (needs Astrid's Creativity)",
+      "desecrated_slot_use": "last step",
+      "target": [
+        {
+          "stat": "+# to Level of all Minion Skills",
+          "minTier": 1,
+          "required": true
+        }
+      ],
+      "steps": [
+        {
+          "text": "Fractured +4 minion level, Chaos Orb for T1 Spirit or crit, side-omen Exalt.",
+          "names": [
+            "Chaos Orb",
+            "Omen of Sinistral Exaltation",
+            "Exalted Orb"
+          ]
+        },
+        {
+          "text": "Crystallisation omen + Adaptive Alloy, socket Astrid's Creativity, second Exalt.",
+          "names": [
+            "Omen of Sinistral Crystallisation",
+            "Adaptive Alloy"
+          ]
+        },
+        {
+          "text": "Crystallisation omen + The Runebinder's Alloy, then Greater/Perfect Exalted Orb and a Jawbone.",
+          "names": [
+            "The Runebinder's Alloy",
+            "Perfect Exalted Orb",
+            "Preserved Jawbone"
+          ]
+        }
+      ],
+      "checkpoints": [
+        "A second Alloy is only possible with Astrid's Creativity (one crafted mod rule)."
+      ],
+      "risks": [
+        "Alloys are exclusive to Runes of Aldur (poe2wiki); not usable in Forbidden Rites.",
+        "Crystallisation working on Alloys comes from a single C source."
+      ],
+      "sources": [
+        {
+          "label": "POE2FUN 0.5.0 Puppet Sceptre",
+          "tier": "C"
+        },
+        {
+          "label": "poe2wiki Runic Alloy",
+          "tier": "B"
+        }
+      ]
+    },
+    {
+      "id": "c2a",
+      "title": "Caster wand or staff: +level spell prefix",
+      "classes": [
+        "Wand",
+        "Staff"
+      ],
+      "league_scope": [
+        "Forbidden Rites",
+        "Runes of Aldur",
+        "Standard"
+      ],
+      "verdict": "plausible",
+      "source_tier": "C",
+      "min_ilvl": 81,
+      "crafted_slot_use": "essence",
+      "desecrated_slot_use": "optional",
+      "target": [
+        {
+          "stat": "+# to Level of all Spell Skills",
+          "minTier": 2,
+          "required": true
+        }
+      ],
+      "steps": [
+        {
+          "text": "Orb of Transmutation / Greater Orb of Transmutation on a white wand or staff; look for the +level prefix.",
+          "names": [
+            "Greater Orb of Transmutation"
+          ]
+        },
+        {
+          "text": "Orb of Augmentation for a cast speed style suffix.",
+          "names": [
+            "Orb of Augmentation"
+          ]
+        },
+        {
+          "text": "Greater Essence of Sorcery or Alacrity to make it Rare (check the side on the essence tooltip).",
+          "names": [
+            "Greater Essence of Sorcery",
+            "Greater Essence of Alacrity"
+          ]
+        },
+        {
+          "text": "Side omen + Exalted Orb.",
+          "names": [
+            "Omen of Sinistral Exaltation",
+            "Exalted Orb"
+          ]
+        }
+      ],
+      "checkpoints": [
+        "Without the +level prefix, drop the base."
+      ],
+      "risks": [
+        "Perfect Essence of Sorcery giving spell levels is unconfirmed; check the tooltip."
+      ],
+      "sources": [
+        {
+          "label": "Community crafting codex",
+          "tier": "C"
+        }
+      ]
+    },
+    {
+      "id": "c3",
+      "title": "Energy shield helmet with minion levels",
+      "classes": [
+        "Helmet"
+      ],
+      "league_scope": [
+        "Forbidden Rites",
+        "Runes of Aldur",
+        "Standard"
+      ],
+      "verdict": "plausible",
+      "source_tier": "B",
+      "min_ilvl": 41,
+      "crafted_slot_use": "essence",
+      "desecrated_slot_use": "last step",
+      "target": [
+        {
+          "stat": "+# to Level of all Minion Skills",
+          "minTier": 1,
+          "required": true
+        },
+        {
+          "stat": "+# to maximum Energy Shield",
+          "minTier": 3,
+          "required": false
+        }
+      ],
+      "steps": [
+        {
+          "text": "Int or hybrid energy shield helmet; Transmutation/Augmentation for minion levels and an energy shield mod.",
+          "names": [
+            "Orb of Transmutation",
+            "Orb of Augmentation"
+          ]
+        },
+        {
+          "text": "Greater Essence of Enhancement to make it Rare (crafted slot).",
+          "names": [
+            "Greater Essence of Enhancement"
+          ]
+        },
+        {
+          "text": "Side omen + Exalted Orb.",
+          "names": [
+            "Omen of Sinistral Exaltation",
+            "Omen of Dextral Exaltation",
+            "Exalted Orb"
+          ]
+        },
+        {
+          "text": "Desecrate with a Rib. Lich omens do not work on armour.",
+          "names": [
+            "Preserved Rib",
+            "Omen of Sinistral Necromancy",
+            "Omen of Dextral Necromancy"
+          ]
+        }
+      ],
+      "checkpoints": [],
+      "risks": [],
+      "sources": [
+        {
+          "label": "Maxroll minion guides",
+          "tier": "B"
+        },
+        {
+          "label": "Omen game text",
+          "tier": "A"
+        }
+      ]
+    },
+    {
+      "id": "c4a",
+      "title": "Minion jewellery: Necrotic Catalyst + Catalysing Exaltation",
+      "classes": [
+        "Ring",
+        "Amulet"
+      ],
+      "league_scope": [
+        "Forbidden Rites",
+        "Runes of Aldur",
+        "Standard"
+      ],
+      "verdict": "plausible",
+      "source_tier": "A/B",
+      "min_ilvl": 1,
+      "crafted_slot_use": "no",
+      "desecrated_slot_use": "optional",
+      "target": [
+        {
+          "stat": "+# to Level of all Minion Skills",
+          "minTier": 1,
+          "required": true
+        }
+      ],
+      "steps": [
+        {
+          "text": "Prepare a Rare ring or amulet with minion mods and at least one open slot.",
+          "names": []
+        },
+        {
+          "text": "Apply Necrotic Catalyst until quality is full (a different catalyst replaces it).",
+          "names": [
+            "Necrotic Catalyst"
+          ]
+        },
+        {
+          "text": "Omen of Catalysing Exaltation + Exalted Orb: consumes the quality and favours minion mods.",
+          "names": [
+            "Omen of Catalysing Exaltation",
+            "Exalted Orb",
+            "Greater Exalted Orb"
+          ]
+        },
+        {
+          "text": "Reapply the catalyst before each further slam.",
+          "names": [
+            "Necrotic Catalyst"
+          ]
+        }
+      ],
+      "checkpoints": [
+        "Combine with Sinistral/Dextral Exaltation when one side is full (listed as compatible, test it)."
+      ],
+      "risks": [
+        "The size of the chance increase is not published.",
+        "Catalysts only come from the Genesis Tree since 0.5."
+      ],
+      "sources": [
+        {
+          "label": "0.5.2 patch notes (Necrotic Catalyst)",
+          "tier": "A"
+        },
+        {
+          "label": "Omen game text",
+          "tier": "A"
+        }
+      ]
+    },
+    {
+      "id": "c4c",
+      "title": "Absent/Portent amulet: fractured-suffix desecration loop",
+      "classes": [
+        "Amulet"
+      ],
+      "league_scope": [
+        "Forbidden Rites",
+        "Runes of Aldur",
+        "Standard"
+      ],
+      "verdict": "plausible",
+      "source_tier": "D (lead only)",
+      "min_ilvl": 65,
+      "crafted_slot_use": "avoid",
+      "desecrated_slot_use": "the loop",
+      "target": [],
+      "steps": [
+        {
+          "text": "Leave exactly two mods on the target side: one fractured, one to be replaced. The base costs one prefix or suffix slot.",
+          "names": []
+        },
+        {
+          "text": "Omen of Dextral Necromancy + Preserved Collarbone.",
+          "names": [
+            "Omen of Dextral Necromancy",
+            "Preserved Collarbone"
+          ]
+        },
+        {
+          "text": "Reveal with Omen of Abyssal Echoes; jewellery can use Liege/Sovereign/Blackblooded for a lich pool.",
+          "names": [
+            "Omen of Abyssal Echoes",
+            "Omen of the Liege",
+            "Omen of the Sovereign",
+            "Omen of the Blackblooded"
+          ]
+        },
+        {
+          "text": "On a miss, Omen of Light + Orb of Annulment removes only the Desecrated mod; repeat.",
+          "names": [
+            "Omen of Light",
+            "Orb of Annulment"
+          ]
+        }
+      ],
+      "checkpoints": [],
+      "risks": [
+        "A crafted mod already on the item can break the setup."
+      ],
+      "sources": [
+        {
+          "label": "EZG (currency seller, lead only)",
+          "tier": "D"
+        },
+        {
+          "label": "Official 0.5.0 base description",
+          "tier": "A"
+        }
+      ]
+    },
+    {
+      "id": "c5",
+      "title": "Genesis Tree ring or belt with minion/caster weights",
+      "classes": [
+        "Ring",
+        "Belt",
+        "Amulet"
+      ],
+      "league_scope": [
+        "Forbidden Rites",
+        "Runes of Aldur",
+        "Standard"
+      ],
+      "verdict": "plausible",
+      "source_tier": "A/C",
+      "min_ilvl": 1,
+      "crafted_slot_use": "Genesis mod",
+      "desecrated_slot_use": "optional",
+      "target": [],
+      "steps": [
+        {
+          "text": "Collect Hiveblood and Wombgifts (Banded = belt, Signet = ring, Ornate = amulet).",
+          "names": []
+        },
+        {
+          "text": "Take nodes that raise minion mod weight and higher tier ratings; spend Hiveblood.",
+          "names": []
+        },
+        {
+          "text": "Finish with the catalyst recipe or the desecration loop.",
+          "names": [
+            "Omen of Catalysing Exaltation"
+          ]
+        }
+      ],
+      "checkpoints": [
+        "\"Increased weight\" nodes shift chances; they do not guarantee."
+      ],
+      "risks": [
+        "Branch point limits are unconfirmed."
+      ],
+      "sources": [
+        {
+          "label": "Official 0.5.0 patch notes",
+          "tier": "A"
+        }
+      ]
+    },
+    {
+      "id": "c6a",
+      "title": "Movement speed boots with resistances",
+      "classes": [
+        "Boots"
+      ],
+      "league_scope": [
+        "Forbidden Rites",
+        "Runes of Aldur",
+        "Standard"
+      ],
+      "verdict": "plausible",
+      "source_tier": "C",
+      "min_ilvl": 75,
+      "crafted_slot_use": "resistance essence",
+      "desecrated_slot_use": "optional",
+      "target": [
+        {
+          "stat": "#% increased Movement Speed",
+          "minTier": 2,
+          "required": true
+        },
+        {
+          "stat": "+#% to Fire Resistance",
+          "minTier": 3,
+          "required": false
+        },
+        {
+          "stat": "+#% to Cold Resistance",
+          "minTier": 3,
+          "required": false
+        }
+      ],
+      "steps": [
+        {
+          "text": "Item level 75-80 boots; Transmutation or Greater Transmutation for movement speed.",
+          "names": [
+            "Orb of Transmutation",
+            "Greater Orb of Transmutation"
+          ]
+        },
+        {
+          "text": "Orb of Augmentation for a life or energy shield mod.",
+          "names": [
+            "Orb of Augmentation"
+          ]
+        },
+        {
+          "text": "Greater Essence of Insulation/Thawing/Grounding makes it Rare with a resistance.",
+          "names": [
+            "Greater Essence of Insulation",
+            "Greater Essence of Thawing",
+            "Greater Essence of Grounding"
+          ]
+        },
+        {
+          "text": "Omen of Dextral Exaltation + Exalted Orb for a second resistance.",
+          "names": [
+            "Omen of Dextral Exaltation",
+            "Exalted Orb"
+          ]
+        }
+      ],
+      "checkpoints": [
+        "No movement speed: drop the base."
+      ],
+      "risks": [],
+      "sources": [
+        {
+          "label": "Community crafting codex",
+          "tier": "C"
+        }
+      ]
+    },
+    {
+      "id": "c7",
+      "title": "Body armour with life or energy shield",
+      "classes": [
+        "Body Armour"
+      ],
+      "league_scope": [
+        "Forbidden Rites",
+        "Runes of Aldur",
+        "Standard"
+      ],
+      "verdict": "plausible",
+      "source_tier": "C",
+      "min_ilvl": 1,
+      "crafted_slot_use": "essence",
+      "desecrated_slot_use": "yes",
+      "target": [
+        {
+          "stat": "+# to maximum Life",
+          "minTier": 2,
+          "required": true
+        }
+      ],
+      "steps": [
+        {
+          "text": "Greater Essence of the Body (life) or of Enhancement on a Magic base with a good defence prefix.",
+          "names": [
+            "Greater Essence of the Body",
+            "Greater Essence of Enhancement"
+          ]
+        },
+        {
+          "text": "Omen of Greater Exaltation + Exalted Orb (adds two mods).",
+          "names": [
+            "Omen of Greater Exaltation",
+            "Exalted Orb"
+          ]
+        },
+        {
+          "text": "Clean the bad side with Omen of Sinistral/Dextral Annulment.",
+          "names": [
+            "Omen of Sinistral Annulment",
+            "Omen of Dextral Annulment",
+            "Orb of Annulment"
+          ]
+        },
+        {
+          "text": "Rib + Necromancy omen.",
+          "names": [
+            "Preserved Rib",
+            "Omen of Sinistral Necromancy"
+          ]
+        }
+      ],
+      "checkpoints": [],
+      "risks": [
+        "Essence of the Body fails if the item already has a maximum life mod (mod group rule)."
+      ],
+      "sources": [
+        {
+          "label": "Community crafting codex",
+          "tier": "C"
+        }
+      ]
+    },
+    {
+      "id": "c8",
+      "title": "Desecration loop (Omen of Light + Abyssal Echoes)",
+      "classes": [
+        "*"
+      ],
+      "league_scope": [
+        "Forbidden Rites",
+        "Runes of Aldur",
+        "Standard"
+      ],
+      "verdict": "verified",
+      "source_tier": "A",
+      "min_ilvl": 1,
+      "crafted_slot_use": "no",
+      "desecrated_slot_use": "the loop",
+      "target": [],
+      "steps": [
+        {
+          "text": "Rare item with a free Desecrated slot. Jawbone for weapons and quivers, Rib for armour, Collarbone for jewellery, Cranium for jewels.",
+          "names": [
+            "Preserved Jawbone",
+            "Preserved Rib",
+            "Preserved Collarbone",
+            "Preserved Cranium"
+          ]
+        },
+        {
+          "text": "Gnawed only on item level 64 or lower; Ancient raises the floor to mod level 40.",
+          "names": [
+            "Ancient Jawbone",
+            "Ancient Rib",
+            "Ancient Collarbone"
+          ]
+        },
+        {
+          "text": "Omen of Sinistral/Dextral Necromancy picks the side; weapons and jewellery can add a lich omen.",
+          "names": [
+            "Omen of Sinistral Necromancy",
+            "Omen of Dextral Necromancy"
+          ]
+        },
+        {
+          "text": "Reveal at the Well of Souls; reroll the three options once with Omen of Abyssal Echoes.",
+          "names": [
+            "Omen of Abyssal Echoes"
+          ]
+        },
+        {
+          "text": "On a miss, Omen of Light + Orb of Annulment and go again.",
+          "names": [
+            "Omen of Light",
+            "Orb of Annulment"
+          ]
+        }
+      ],
+      "checkpoints": [
+        "Re-price the item after the second Omen of Light."
+      ],
+      "risks": [
+        "A full item may lose a random mod to the bone (unverified); keep a slot open on the target side."
+      ],
+      "sources": [
+        {
+          "label": "Omen and bone game text",
+          "tier": "A"
+        }
+      ]
+    },
+    {
+      "id": "c9",
+      "title": "Perfect Essence + Crystallisation targeted swap",
+      "classes": [
+        "*"
+      ],
+      "league_scope": [
+        "Forbidden Rites",
+        "Runes of Aldur",
+        "Standard"
+      ],
+      "verdict": "verified",
+      "source_tier": "A",
+      "min_ilvl": 1,
+      "crafted_slot_use": "yes",
+      "desecrated_slot_use": "no",
+      "target": [],
+      "steps": [
+        {
+          "text": "Crafted slot must be free. Omen of Sinistral Crystallisation removes a prefix, Dextral a suffix; then the Perfect Essence adds its mod.",
+          "names": [
+            "Omen of Sinistral Crystallisation",
+            "Omen of Dextral Crystallisation"
+          ]
+        },
+        {
+          "text": "Fracture the mods you keep first; with one sacrificial mod on that side the removal is certain.",
+          "names": [
+            "Fracturing Orb"
+          ]
+        }
+      ],
+      "checkpoints": [],
+      "risks": [
+        "Perfect Essence of Battle is +3 (two-hand/crossbow) and +2 (one-hand/bow) in 0.5; older +5/+3 guides are outdated."
+      ],
+      "sources": [
+        {
+          "label": "Essence and omen game text",
+          "tier": "A"
+        }
+      ]
+    },
+    {
+      "id": "c10",
+      "title": "Fracture + side omen isolation",
+      "classes": [
+        "*"
+      ],
+      "league_scope": [
+        "Forbidden Rites",
+        "Runes of Aldur",
+        "Standard"
+      ],
+      "verdict": "verified",
+      "source_tier": "A",
+      "min_ilvl": 1,
+      "crafted_slot_use": "no",
+      "desecrated_slot_use": "no",
+      "target": [],
+      "steps": [
+        {
+          "text": "Fracturing Orb on a Rare with 4+ mods to lock the best mod.",
+          "names": [
+            "Fracturing Orb"
+          ]
+        },
+        {
+          "text": "With one replaceable mod left on a side, Omen of Sinistral/Dextral Erasure + Chaos Orb changes only that mod. Chaos Orb removes one mod and adds one; it never rerolls the whole item.",
+          "names": [
+            "Omen of Sinistral Erasure",
+            "Omen of Dextral Erasure",
+            "Chaos Orb"
+          ]
+        },
+        {
+          "text": "Or clear the slot with Omen of Sinistral/Dextral Annulment and refill with Omen of Sinistral/Dextral Exaltation.",
+          "names": [
+            "Omen of Sinistral Annulment",
+            "Omen of Dextral Annulment",
+            "Omen of Sinistral Exaltation",
+            "Omen of Dextral Exaltation"
+          ]
+        }
+      ],
+      "checkpoints": [],
+      "risks": [],
+      "sources": [
+        {
+          "label": "Chaos Orb and omen game text",
+          "tier": "A"
+        }
+      ]
+    },
+    {
+      "id": "c11",
+      "title": "Jewel: liquid emotions and refined catalysts",
+      "classes": [
+        "Jewel"
+      ],
+      "league_scope": [
+        "Forbidden Rites",
+        "Runes of Aldur",
+        "Standard"
+      ],
+      "verdict": "verified",
+      "source_tier": "A",
+      "min_ilvl": 1,
+      "crafted_slot_use": "unknown",
+      "desecrated_slot_use": "yes",
+      "target": [],
+      "steps": [
+        {
+          "text": "A liquid emotion on a Rare jewel replaces a random mod with one from its set.",
+          "names": [
+            "Liquid Despair"
+          ]
+        },
+        {
+          "text": "Refined catalysts add jewel quality (Refined Necrotic for minions).",
+          "names": [
+            "Refined Necrotic Catalyst"
+          ]
+        },
+        {
+          "text": "Desecrate with a Cranium.",
+          "names": [
+            "Preserved Cranium"
+          ]
+        }
+      ],
+      "checkpoints": [],
+      "risks": [
+        "Whether liquid emotions use the crafted slot is unknown."
+      ],
+      "sources": [
+        {
+          "label": "Official 0.5.0 patch notes",
+          "tier": "A"
+        }
+      ]
+    },
+    {
+      "id": "c12",
+      "title": "Finish: Sanctify or Vaal",
+      "classes": [
+        "*"
+      ],
+      "league_scope": [
+        "Forbidden Rites",
+        "Runes of Aldur",
+        "Standard"
+      ],
+      "verdict": "verified",
+      "source_tier": "A",
+      "min_ilvl": 1,
+      "crafted_slot_use": "no",
+      "desecrated_slot_use": "no",
+      "target": [],
+      "steps": [
+        {
+          "text": "Divine Orb first: Sanctify and Vaal multiply the current values (0.5).",
+          "names": [
+            "Divine Orb"
+          ]
+        },
+        {
+          "text": "Omen of Sanctification + Divine Orb sanctifies the item and locks it.",
+          "names": [
+            "Omen of Sanctification",
+            "Divine Orb"
+          ]
+        },
+        {
+          "text": "Vaal: an Infuser needs 20% quality, then Vaal Orb. Omen of Corruption is gone, so the result is pure chance.",
+          "names": [
+            "Vaal Orb"
+          ]
+        }
+      ],
+      "checkpoints": [
+        "Do not sanctify if the item would be unacceptable with every value at the low end."
+      ],
+      "risks": [
+        "The Sanctify multiplier range (78-122%) is single-source."
+      ],
+      "sources": [
+        {
+          "label": "Official 0.5.0 patch notes",
+          "tier": "A"
+        }
+      ]
+    },
+    {
+      "id": "c13a",
+      "title": "Homogenising Exaltation/Coronation recipes",
+      "classes": [
+        "*"
+      ],
+      "league_scope": [
+        "Standard"
+      ],
+      "verdict": "outdated",
+      "source_tier": "B/C",
+      "min_ilvl": 1,
+      "crafted_slot_use": "-",
+      "desecrated_slot_use": "-",
+      "target": [],
+      "steps": [],
+      "checkpoints": [],
+      "risks": [
+        "These omens stopped dropping in 0.4; only old Standard copies exist."
+      ],
+      "sources": [
+        {
+          "label": "Official 0.5.0 patch notes",
+          "tier": "A"
+        }
+      ]
+    },
+    {
+      "id": "c13b",
+      "title": "Controlled Vaal with Omen of Corruption",
+      "classes": [
+        "*"
+      ],
+      "league_scope": [
+        "Standard"
+      ],
+      "verdict": "outdated",
+      "source_tier": "A",
+      "min_ilvl": 1,
+      "crafted_slot_use": "-",
+      "desecrated_slot_use": "-",
+      "target": [],
+      "steps": [],
+      "checkpoints": [],
+      "risks": [
+        "Omen of Corruption cannot be obtained since 0.5.0."
+      ],
+      "sources": [
+        {
+          "label": "Official 0.5.0 patch notes",
+          "tier": "A"
+        }
+      ]
+    },
+    {
+      "id": "c13c",
+      "title": "Recombinator recipes",
+      "classes": [
+        "*"
+      ],
+      "league_scope": [],
+      "verdict": "outdated",
+      "source_tier": "A",
+      "min_ilvl": 1,
+      "crafted_slot_use": "-",
+      "desecrated_slot_use": "-",
+      "target": [],
+      "steps": [],
+      "checkpoints": [],
+      "risks": [
+        "The Recombinator was disabled in 0.5.0 and not reopened in 0.5.5; Omen of Recombination was removed."
+      ],
+      "sources": [
+        {
+          "label": "Official 0.5.0 patch notes",
+          "tier": "A"
+        }
+      ]
+    },
+    {
+      "id": "c13d",
+      "title": "Double Perfect Essence items",
+      "classes": [
+        "*"
+      ],
+      "league_scope": [],
+      "verdict": "rejected",
+      "source_tier": "C",
+      "min_ilvl": 1,
+      "crafted_slot_use": "-",
+      "desecrated_slot_use": "-",
+      "target": [],
+      "steps": [],
+      "checkpoints": [],
+      "risks": [
+        "Impossible under the 0.5 one-crafted rule."
+      ],
+      "sources": [
+        {
+          "label": "Official 0.5.0 patch notes",
+          "tier": "A"
+        }
+      ]
+    },
+    {
+      "id": "c14",
+      "title": "Omen of Putrefaction: all mods Desecrated, then corrupted",
+      "classes": [
+        "*"
+      ],
+      "league_scope": [
+        "Forbidden Rites",
+        "Runes of Aldur",
+        "Standard"
+      ],
+      "verdict": "verified",
+      "source_tier": "A + in-game item",
+      "min_ilvl": 1,
+      "crafted_slot_use": "-",
+      "desecrated_slot_use": "all slots",
+      "target": [],
+      "steps": [
+        {
+          "text": "Activate Omen of Putrefaction and desecrate with the matching bone: every modifier becomes an unrevealed Desecrated modifier (up to six) and the item is corrupted.",
+          "names": [
+            "Omen of Putrefaction",
+            "Preserved Collarbone"
+          ]
+        },
+        {
+          "text": "Reveal each modifier at the Well of Souls. The item cannot be changed with normal currency afterwards.",
+          "names": []
+        }
+      ],
+      "checkpoints": [
+        "Only do this on a base worth gambling; the result is final."
+      ],
+      "risks": [
+        "Irreversible: corrupts the item.",
+        "Outcome quality is pure chance."
+      ],
+      "sources": [
+        {
+          "label": "Omen game text",
+          "tier": "A"
+        },
+        {
+          "label": "User's in-game item (Vortex Barrier, Tasalian Focus)",
+          "tier": "A"
+        }
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "id": "k1",
+      "claim": "Chaos Orb rerolls all modifiers on a rare item",
+      "verdict": "rejected",
+      "reason": "PoE1 behaviour. PoE2 game text: removes one modifier and adds one."
+    },
+    {
+      "id": "k2",
+      "claim": "Use a Screaming Essence of Anger",
+      "verdict": "rejected",
+      "reason": "PoE1 essence naming. PoE2 uses Lesser / normal / Greater / Perfect Essence of X."
+    },
+    {
+      "id": "k3",
+      "claim": "Do alt-aug or alt-regal loops",
+      "verdict": "rejected",
+      "reason": "There is no Orb of Alteration in PoE2."
+    },
+    {
+      "id": "k4",
+      "claim": "Orb of Alchemy only works on Normal items",
+      "verdict": "rejected",
+      "reason": "Game text: Normal or Magic items."
+    },
+    {
+      "id": "k5",
+      "claim": "Uul-Netol's Catalyst boosts attack modifiers",
+      "verdict": "rejected",
+      "reason": "Game text: Physical. Reaver Catalyst is Attack."
+    },
+    {
+      "id": "k6",
+      "claim": "Artificer's Orb adds a socket to any equipment",
+      "verdict": "rejected",
+      "reason": "Game text: martial weapons, wands, staves and armour only."
+    },
+    {
+      "id": "k7",
+      "claim": "Chaos Shards combine into a Chaos Orb",
+      "verdict": "plausible",
+      "reason": "Only Transmutation, Regal, Chance, Artificer's and Raven-Touched shards are on the PoE2 trade list."
+    },
+    {
+      "id": "k8",
+      "claim": "Greater Exalted Orb requires item level 35",
+      "verdict": "rejected",
+      "reason": "35 is a minimum modifier level, not an item level requirement."
+    },
+    {
+      "id": "k9",
+      "claim": "Omen of the Blackblooded, Liege and Sovereign guarantee Kurgal, Amanamu and Ulaman mods on weapon or jewellery desecration",
+      "verdict": "verified",
+      "reason": "Game text; weapon and jewellery only."
+    },
+    {
+      "id": "k10",
+      "claim": "An item can have only one crafted modifier and one desecrated modifier",
+      "verdict": "verified",
+      "reason": "Official 0.5.0 patch note and several independent sources."
+    },
+    {
+      "id": "k11",
+      "claim": "Omen of Putrefaction creates an item with six desecrated modifiers",
+      "verdict": "verified",
+      "reason": "Game text, and an in-game item from Forbidden Rites (a corrupted focus with six Desecrated mods, user screenshot, September 2026). The one-Desecrated cap does not apply to Putrefaction items."
+    },
+    {
+      "id": "k12",
+      "claim": "Omen of Whittling removes the lowest tier modifier",
+      "verdict": "rejected",
+      "reason": "Game text: lowest level modifier. Hover-check it every time."
+    },
+    {
+      "id": "k13",
+      "claim": "Exact percentage chances for crafting outcomes",
+      "verdict": "plausible",
+      "reason": "Roll weights are not in the game client; percentages are estimates from third-party weights."
+    },
+    {
+      "id": "k14",
+      "claim": "Use Omen of Homogenising Exaltation for level crafts",
+      "verdict": "outdated",
+      "reason": "Stopped dropping in 0.4; Standard only."
+    },
+    {
+      "id": "k15",
+      "claim": "Use the Recombinator to merge items",
+      "verdict": "outdated",
+      "reason": "Disabled in 0.5.0 and not reopened in 0.5.5."
+    },
+    {
+      "id": "k16",
+      "claim": "Vaal Infusers require 20% quality",
+      "verdict": "verified",
+      "reason": "Official 0.5.0 patch note: all Infusers can only be used on items at or above 20% quality."
+    },
+    {
+      "id": "k17",
+      "claim": "A second essence overwrites the first crafted modifier",
+      "verdict": "rejected",
+      "reason": "A June 2026 in-game report shows it is blocked: this item already has a crafted modifier."
+    },
+    {
+      "id": "k18",
+      "claim": "Vaal Orb can turn a Unique into a random Rare",
+      "verdict": "plausible",
+      "reason": "Game text only says unpredictable change."
+    },
+    {
+      "id": "k19",
+      "claim": "Catalysing Exaltation gives about five times the chance at 20% quality",
+      "verdict": "plausible",
+      "reason": "No rate in game text; keep it as an adjustable estimate."
+    },
+    {
+      "id": "k20",
+      "claim": "Sanctify multiplies values by 78 to 122 percent",
+      "verdict": "plausible",
+      "reason": "Single secondary source; another says 80-120."
+    },
+    {
+      "id": "k21",
+      "claim": "Greater Orb of Transmutation and Augmentation have minimum modifier level 44",
+      "verdict": "verified",
+      "reason": "Official 0.5.0 patch note and poe2wiki (was 55 before 0.5)."
+    },
+    {
+      "id": "k22",
+      "claim": "All Greater orbs went from 55 to 44",
+      "verdict": "rejected",
+      "reason": "The change only applies to Transmutation and Augmentation."
+    },
+    {
+      "id": "k23",
+      "claim": "Perfect Orb of Transmutation has minimum modifier level 70",
+      "verdict": "verified",
+      "reason": "poe2wiki item text and community codex."
+    },
+    {
+      "id": "k24",
+      "claim": "Greater and Perfect Regal, Chaos and Exalted Orbs have floors 35 and 50",
+      "verdict": "plausible",
+      "reason": "Only community sources; check the tooltip."
+    },
+    {
+      "id": "k25",
+      "claim": "If a floor removes a whole mod family the best legal tier can still roll",
+      "verdict": "verified",
+      "reason": "poe2wiki rule: at least one tier of each mod stays eligible, respecting item level."
+    },
+    {
+      "id": "k26",
+      "claim": "Gnawed bones work on items of item level 64 or below",
+      "verdict": "verified",
+      "reason": "Game text: can only be used on items of item level 64 or below."
+    },
+    {
+      "id": "k27",
+      "claim": "Gnawed bones cap desecrated mods at mod level 64",
+      "verdict": "rejected",
+      "reason": "The limit is on item level, not mod level."
+    },
+    {
+      "id": "k28",
+      "claim": "Ancient bones apply minimum modifier level 40",
+      "verdict": "verified",
+      "reason": "Item text: Minimum Modifier Level 40."
+    },
+    {
+      "id": "k29",
+      "claim": "Omen of Light makes Orb of Annulment remove only the desecrated modifier",
+      "verdict": "verified",
+      "reason": "Game text."
+    },
+    {
+      "id": "k30",
+      "claim": "Catalysts drop from Breach monsters",
+      "verdict": "outdated",
+      "reason": "Since 0.5.0 catalysts only come from the Genesis Tree."
+    },
+    {
+      "id": "k31",
+      "claim": "Sanctify and Vaal value changes multiply the current value",
+      "verdict": "verified",
+      "reason": "Official 0.5.0 patch note."
+    },
+    {
+      "id": "k32",
+      "claim": "Omen of Corruption controls Vaal outcomes",
+      "verdict": "outdated",
+      "reason": "Unobtainable since 0.5.0."
+    },
+    {
+      "id": "k33",
+      "claim": "Runic Alloys can be used in Forbidden Rites",
+      "verdict": "rejected",
+      "reason": "poe2wiki: exclusive to Runes of Aldur; not mentioned in 0.5.5 notes. Medium confidence."
+    },
+    {
+      "id": "k34",
+      "claim": "Alloys replace the old Entities and Recombination Tools",
+      "verdict": "rejected",
+      "reason": "There is no Entities system in PoE2."
+    },
+    {
+      "id": "k35",
+      "claim": "Finish your rare with orbs and fossils first",
+      "verdict": "rejected",
+      "reason": "Fossils are PoE1."
+    },
+    {
+      "id": "k36",
+      "claim": "A Magic item can have up to three modifiers",
+      "verdict": "rejected",
+      "reason": "Magic items hold at most one prefix and one suffix."
+    },
+    {
+      "id": "k37",
+      "claim": "Omen of Catalysing Exaltation consumes catalyst quality to raise the chance of the matching mod type",
+      "verdict": "verified",
+      "reason": "Game text; the size of the increase is unknown."
+    },
+    {
+      "id": "k38",
+      "claim": "Necrotic Catalyst boosts minion modifiers on rings and amulets",
+      "verdict": "verified",
+      "reason": "0.5.2 patch note."
+    },
+    {
+      "id": "k39",
+      "claim": "Liquid emotions replace a random jewel modifier like a Greater Essence",
+      "verdict": "verified",
+      "reason": "Official 0.5.0 patch note."
+    },
+    {
+      "id": "k40",
+      "claim": "Sword, axe and dagger bases drop in 0.5.5",
+      "verdict": "rejected",
+      "reason": "0.5.5 fixed unique swords, axes and daggers dropping by mistake; they are expected with 1.0."
+    },
+    {
+      "id": "k41",
+      "claim": "Tier 1 in Advanced Mod Descriptions is the best tier",
+      "verdict": "plausible",
+      "reason": "poe2db lists T1 as the top tier; no official definition found."
+    },
+    {
+      "id": "k42",
+      "claim": "Omen of Sinistral Exaltation makes Exalted Orb add only a prefix",
+      "verdict": "verified",
+      "reason": "Game text."
+    },
+    {
+      "id": "k43",
+      "claim": "Omen of Dextral Erasure makes Chaos Orb remove only a suffix",
+      "verdict": "verified",
+      "reason": "Game text."
+    },
+    {
+      "id": "k44",
+      "claim": "Omen of Greater Exaltation makes Exalted Orb add two modifiers",
+      "verdict": "verified",
+      "reason": "Game text."
+    },
+    {
+      "id": "k45",
+      "claim": "Fractured modifiers cannot be removed or changed",
+      "verdict": "verified",
+      "reason": "Several independent sources."
+    },
+    {
+      "id": "k46",
+      "claim": "Corrupted items only accept corrupted-item currency",
+      "verdict": "verified",
+      "reason": "Game text: Architect's Orb, Orbs of Sacrifice, Vaal Cultivation Orb."
+    }
+  ],
+  "tests": [
+    {
+      "id": "t1",
+      "question": "Is Tier 1 in Advanced Mod Descriptions the best tier?",
+      "how": "Paste an Alt+Ctrl+C copy of a few Rare items. The panel compares the game's tier with its own and flags every difference.",
+      "claims": [
+        "k41"
+      ]
+    },
+    {
+      "id": "t2",
+      "question": "Greater and Perfect Regal, Chaos and Exalted Orbs: are the minimum modifier levels 35 and 50?",
+      "how": "Hover Greater and Perfect Exalted, Chaos and Regal Orbs in your stash and read 'Minimum Modifier Level'.",
+      "claims": [
+        "k24"
+      ]
+    },
+    {
+      "id": "t3",
+      "question": "A second crafted modifier is blocked (not overwritten)?",
+      "how": "Use a Lesser Essence (or any Perfect Essence) on a cheap Rare that already has an essence mod and note the message.",
+      "claims": [
+        "!k17"
+      ]
+    },
+    {
+      "id": "t4",
+      "question": "Gnawed bones only work on item level 64 or lower?",
+      "how": "Try a Gnawed bone on any Rare of item level 65 or more.",
+      "claims": [
+        "k26",
+        "!k27"
+      ]
+    },
+    {
+      "id": "t5",
+      "question": "Omen of Putrefaction in 0.5.5: all mods desecrated, item corrupted?",
+      "how": "Look at a Putrefaction item.",
+      "claims": [
+        "k11"
+      ],
+      "status": "confirmed",
+      "note": "Your corrupted Tasalian Focus (Vortex Barrier) has six Desecrated mods (September 2026)."
+    },
+    {
+      "id": "t6",
+      "question": "Can Runic Alloys be found or used in Forbidden Rites?",
+      "how": "Search the official trade site in Forbidden Rites for any Runic Alloy; check whether Expedition offers the Recombinator.",
+      "claims": [
+        "k33"
+      ]
+    },
+    {
+      "id": "t7",
+      "question": "Sanctify multiplier range (78-122%?)",
+      "how": "On a cheap Rare, write down every value, apply Omen of Sanctification + Divine Orb, compare.",
+      "claims": [
+        "k20"
+      ]
+    },
+    {
+      "id": "t8",
+      "question": "How big is the Omen of Catalysing Exaltation boost?",
+      "how": "With full catalyst quality, slam ten times with and ten times without the omen on similar items and count matching mods.",
+      "claims": [
+        "k19"
+      ]
+    },
+    {
+      "id": "t9",
+      "question": "Omen of Whittling removes the lowest level mod (not the lowest tier)?",
+      "how": "Activate the omen and hover a Chaos Orb over the item: the game highlights the mod it will remove.",
+      "claims": [
+        "!k12"
+      ]
+    },
+    {
+      "id": "t10",
+      "question": "A bone on a full item removes a random mod first?",
+      "how": "Desecrate a cheap Rare with 3 prefixes and 3 suffixes and count the mods afterwards.",
+      "claims": []
+    },
+    {
+      "id": "t11",
+      "question": "Lich mods need item level 65+ and a Preserved or Ancient bone?",
+      "how": "Use a lich omen with a Gnawed bone on an item level 64 item, then on a 65+ item with a Preserved bone.",
+      "claims": []
+    },
+    {
+      "id": "t12",
+      "question": "Omen of Catalysing Exaltation works together with a side exaltation omen?",
+      "how": "Activate both omens, then use an Exalted Orb; check that both effects applied.",
+      "claims": []
+    },
+    {
+      "id": "t13",
+      "question": "Direction of lowest_ratio and highest_ratio in the Currency Exchange data",
+      "how": "Resolved from the hourly data.",
+      "claims": [],
+      "status": "confirmed",
+      "note": "Both fields hold paired amounts {A: x, B: y}; the price of A in B is y/x. lowest/highest are that hour's price range (checked on the 25 September data)."
+    },
+    {
+      "id": "t14",
+      "question": "Does the Alt+Ctrl+C copy include mod tags?",
+      "how": "Copy an item with Alt+Ctrl+C and paste it into a text editor; look for words after the dash in the { ... } headers.",
+      "claims": []
+    },
+    {
+      "id": "t15",
+      "question": "Do sword, axe, dagger or flail bases drop in 0.5.5?",
+      "how": "Search the trade site of the current league for a Rare of those classes.",
+      "claims": [
+        "k40"
+      ]
+    },
+    {
+      "id": "t16",
+      "question": "Can Astrid's Creativity be obtained in Forbidden Rites?",
+      "how": "Check the Verisium Remnant runewords available to you in Forbidden Rites.",
+      "claims": []
+    },
+    {
+      "id": "t17",
+      "question": "Does a Divine Orb reroll the values of fractured modifiers?",
+      "how": "Write down the value of a fractured modifier on a cheap Rare, use a Divine Orb, compare. The planner follows the game text (all modifiers) until this is settled.",
+      "claims": []
+    },
+    {
+      "id": "t18",
+      "question": "Do essences check item level (for example a level 72 essence modifier on an item level 64 item)?",
+      "how": "Use a Greater or Perfect Essence whose modifier level is above the item level of a cheap item and see whether the game allows it. Found by the self-test: the data does not say.",
+      "claims": [],
+      "found": "self-test"
+    },
+    {
+      "id": "t19",
+      "question": "Can a Fracturing Orb be used on an item that already has a fractured modifier?",
+      "how": "Hover a Fracturing Orb over a Rare with a fractured modifier and 4+ modifiers. Found by the self-test: the game text does not say; the planner fractures at most once.",
+      "claims": [],
+      "found": "self-test"
+    },
+    {
+      "id": "t20",
+      "question": "What does a Flux do when the item already has a resistance of the target element (for example Blazing Flux on an item with Fire and Cold Resistance)?",
+      "how": "Try a Blazing Flux on a cheap item with both Fire and Cold Resistance and note the result. Found by the self-test: two modifiers of one group would result; the planner does not use Flux then.",
+      "claims": [],
+      "found": "self-test"
+    }
+  ]
+}

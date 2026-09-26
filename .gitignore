@@ -1,0 +1,17 @@
+# Downloads and caches the scripts re-create (.kb_cache holds ~200 MB of game data, price hours and icons)
+.kb_cache/
+
+# Self-test output: the full runs are ~20 MB each; keep the markdown reports and the latest summary
+reports/*.json
+reports/*.log
+!reports/selftest-latest.json
+
+# Build output (node app/build.js); the artifact is published from it
+app/dist/
+
+# Local settings and editor/OS files
+.claude/settings.local.json
+__pycache__/
+*.pyc
+Thumbs.db
+.DS_Store
