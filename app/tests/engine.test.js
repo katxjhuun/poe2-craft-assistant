@@ -245,8 +245,23 @@ test('Putrefaction: several desecrated mods on a corrupted item are allowed', ()
   assert.ok(nc.warnings.some((w) => /R_ONE_DESECRATED/.test(w.msg)));
 });
 
-test('flasks and charms are marked not supported', () => {
-  const r = E.parseItem(ix, ['Item Class: Charms', 'Rarity: Magic', 'Thawing Charm of the Owl', '--------', 'Item Level: 70', '--------', '+20 to Intelligence'].join('\n'));
-  assert.ok(r.item && r.item.unsupported);
-  assert.ok(!r.warnings.some((w) => w.level === 'error'));
+test('flasks and charms: flask-domain mods, in-game class names, no gear mods', () => {
+  const flask = E.parseItem(ix, SAMPLES.find((s) => s.id === 'magic-flask').text);
+  assert.ok(!flask.item.unsupported);
+  assert.equal(flask.item.itemClass, 'Life Flask');
+  assert.deepEqual(flask.item.mods.map((m) => [m.slot, m.modId, m.tier, m.inPool]),
+    [['prefix', 'FlaskIncreasedRecoveryOnLowLife4', 2, true], ['suffix', 'FlaskChargesAddedIncreasePercent6', 1, true]]);
+  assert.deepEqual(flask.warnings, []);
+  const charm = E.parseItem(ix, ['Item Class: Charms', 'Rarity: Magic', "Examiner's Thawing Charm", '--------', 'Item Level: 70', '--------', '28% increased Duration'].join('\n'));
+  assert.equal(charm.item.itemClass, 'Charm');
+  assert.equal(charm.item.mods[0].modId, 'CharmIncreasedDuration3');
+  assert.ok(!charm.warnings.some((w) => /class/.test(w.msg)), 'the text class "Charms" matches the knowledge base');
+  // pools keep the domains apart: flask mods never reach gear, gear mods never reach flasks
+  const poolIds = (base) => [...E.poolFor(ix, kb.bases[base].sig).keys()];
+  assert.ok(poolIds('Ultimate Life Flask').every((id) => kb.mods[id].dom === 'f'));
+  assert.ok(poolIds('Rattling Sceptre').every((id) => kb.mods[id].dom !== 'f'));
+  assert.equal(E.desecratedPoolFor(ix, 'Thawing Charm').size, 0);
+  // a Rare flask is flagged by the single-source rule
+  const rare = E.parseItem(ix, SAMPLES.find((s) => s.id === 'magic-flask').text.replace('Rarity: Magic', 'Rarity: Rare'));
+  assert.ok(rare.warnings.some((w) => /R_FLASK_MAGIC/.test(w.msg)));
 });

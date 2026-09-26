@@ -46,7 +46,9 @@ python scripts/kb_update.py build          # yeni bilgi tabanı adayı, sonra ch
 
 ## Bilinen eksikler
 
-- Flask ve charm craft'ı desteklenmiyor; panel bunu söylüyor.
+- Flask ve charm craft'ı destekleniyor ama iki sınırı var:
+  - Normal veya Magic kalırlar (kural R_FLASK_MAGIC). Bu kural tek bir topluluk kaynağına dayanıyor; panel "verify in game" diyor.
+  - poe2db flask ve charm için ağırlık yayınlamıyor, bu yüzden şanslar eşit ağırlıkla hesaplanıyor.
 - Soul core, gem ve fragment ikonları yer tutucu; indirmeleri ayrıca onay gerektiriyor.
 - Olasılıklar tahmindir: mod ağırlıkları poe2db'nin topluluk verisi, desecrated modlar eşit ağırlıklı, Catalysing Exaltation çarpanı (varsayılan ×5) tek kaynaklı ve ayarlanabilir.
 - Rare item değeri yalnızca kullanıcının kaydettiği fiyatlardan tahmin edilir; resmi fiyat geçmişi yok ve trade sitesine otomatik istek yasak (ToS 7i).

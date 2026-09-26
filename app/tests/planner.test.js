@@ -452,3 +452,28 @@ test('an omen without a price is left out of the plan instead of counting as fre
   const priced = await P.buildPlans({ ix, item, targets, locks: {}, priceOf: () => 5, trials: 400, screenTrials: 80, beamBudgetMs: 0 });
   assert.deepEqual(priced.profiles.balanced.skippedUnpriced, []);
 });
+
+test('flasks and charms stay Magic: only Magic currency, one prefix and one suffix goal', async () => {
+  const item = E.parseItem(ix, 'Item Class: Life Flasks\nRarity: Normal\nUltimate Life Flask\n--------\nItem Level: 84').item;
+  const ctx = P.makeContext(ix, item);
+  const st = P.toState(ctx, item);
+  assert.ok(ctx.magicOnly);
+  const magic = Object.assign({}, st, { rarity: 'Magic' });
+  for (const op of ['regal', 'alchemy', 'exalt', 'chaos', 'essence', 'fracture']) assert.match(P.validate(ctx, magic, { op }) || '', /R_FLASK_MAGIC/, op);
+  assert.equal(P.validate(ctx, st, { op: 'transmute' }), null);
+  const ops = P.availableOps(ix, item, { all: true });
+  assert.ok(ops.find((o) => o.id === 'quality').cur.includes("Glassblower's Bauble"));
+  assert.ok(!ops.find((o) => o.id === 'regal').ok);
+  const targets = {
+    'prefix-0': { fam: 'FlaskIncreasedRecoverySpeed', group: 'prefix', minTier: 1, required: true, label: 'recovery rate' },
+    'suffix-0': { fam: 'FlaskIncreasedChargesAdded', group: 'suffix', minTier: 1, required: true, label: 'charges gained' },
+  };
+  const out = await P.buildPlans({ ix, item, targets, locks: {}, priceOf: () => 1, trials: 600, screenTrials: 120, beamBudgetMs: 0 });
+  const bal = out.profiles.balanced;
+  assert.ok(bal.p > 0.5, 'the Magic loop reaches the goals');
+  const used = new Set(bal.steps.map((s) => s.action.op));
+  assert.ok([...used].every((op) => ['transmute', 'augment', 'annul', 'newbase', 'divine'].includes(op)), [...used].join());
+  const two = await P.buildPlans({ ix, item, targets: { 'prefix-0': targets['prefix-0'], 'prefix-1': { fam: 'FlaskIncreasedRecoveryAmount', group: 'prefix', minTier: 3, required: true, label: 'amount' } },
+    locks: {}, priceOf: () => 1, trials: 200, screenTrials: 40, beamBudgetMs: 0 });
+  assert.match(two.profiles.balanced.impossible.join(' '), /only 1 prefix/);
+});

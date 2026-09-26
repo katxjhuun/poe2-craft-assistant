@@ -32,7 +32,7 @@ PAGES = {
     'Talismans': 'Talisman', 'Quivers': 'Quiver', 'Foci': 'Focus', 'Bucklers': 'Buckler',
     'One_Hand_Swords': 'One Hand Sword', 'Two_Hand_Swords': 'Two Hand Sword', 'One_Hand_Axes': 'One Hand Axe',
     'Two_Hand_Axes': 'Two Hand Axe', 'Daggers': 'Dagger', 'Flails': 'Flail',
-    'Amulets': 'Amulet', 'Rings': 'Ring', 'Belts': 'Belt', 'Life_Flasks': 'LifeFlask', 'Mana_Flasks': 'ManaFlask',
+    'Amulets': 'Amulet', 'Rings': 'Ring', 'Belts': 'Belt', 'Life_Flasks': 'Life Flask', 'Mana_Flasks': 'Mana Flask', 'Charms': 'Charm',
     'Ruby': 'Jewel', 'Emerald': 'Jewel', 'Sapphire': 'Jewel', 'Diamond': 'Jewel',
     'Time-Lost_Ruby': 'Jewel', 'Time-Lost_Emerald': 'Jewel', 'Time-Lost_Sapphire': 'Jewel', 'Time-Lost_Diamond': 'Jewel',
 }
@@ -93,10 +93,9 @@ def main():
     kb = json.load(open(KB, encoding='utf-8'))
     index = defaultdict(list)
     for mid, m in kb['mods'].items():
-        if m['dom'] != 'i':
+        if m['dom'] not in ('i', 'f'):   # natural item mods and flask/charm mods
             continue
         index[(m['gen'], frozenset(m['grp']), m['lvl'])].append(mid)
-    # flask and charm pages are not matched on purpose: those classes are not supported
 
     per_page = {}
     essences = defaultdict(dict)
@@ -141,6 +140,14 @@ def main():
                 essences[cls][item + '|' + code] = rec
         print(f'  {page}: {len(obj.get("normal", []))} mods, {len(obj.get("essence", [])) + len(obj.get("perfect_essence", []))} essence/alloy rows')
 
+    # A page that publishes no weights (every DropChance 0: flasks and charms) is no weight source. Its bases stay on
+    # equal weights, which the page labels as an estimate.
+    no_weights = sorted(p for p, v in per_page.items() if v['weights'] and not any(v['weights'].values()))
+    for p in no_weights:
+        del per_page[p]
+    if no_weights:
+        print('  no published weights (equal weights):', ', '.join(no_weights))
+
     # base -> page: armour types by their attribute tag, jewels by name, everything else by class
     page_of_cls = defaultdict(list)
     for page, cls in PAGES.items():
@@ -163,7 +170,7 @@ def main():
         'meta': {
             'source': 'poe2db.tw item-class modifier pages (DropChance)', 'source_url': 'https://poe2db.tw/us/Modifiers',
             'fetched': datetime.now(timezone.utc).strftime('%Y-%m-%d'), 'patch': '0.5.5', 'pages': pages_ok,
-            'matched': matched, 'unmatched': len(unmatched), 'bases_mapped': len(base_page),
+            'matched': matched, 'unmatched': len(unmatched), 'bases_mapped': len(base_page), 'pages_without_weights': no_weights,
             'note': 'Community weights, not official. Desecrated mods have no published weights and stay equal.',
         },
         'pages': per_page,

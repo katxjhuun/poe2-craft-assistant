@@ -42,7 +42,11 @@ def clean(t):
 nm=lambda i: i.get('name') or i.get('refName')
 trade_names=set(nm(i) for i in ee_items if i.get('namespace')=='ITEM')
 UNCONF={'One Hand Sword','Two Hand Sword','One Hand Axe','Two Hand Axe','Dagger','Flail'}
-GEAR={'Body Armour','Helmet','Gloves','Boots','Shield','Buckler','Focus','One Hand Mace','Two Hand Mace','Warstaff','Spear','Bow','Crossbow','Talisman','Ring','Amulet','Belt','One Hand Sword','Two Hand Sword','Dagger','One Hand Axe','Two Hand Axe','Flail','Staff','Wand','Sceptre','Quiver','Jewel','Claw','Charm','LifeFlask','ManaFlask'}
+GEAR={'Body Armour','Helmet','Gloves','Boots','Shield','Buckler','Focus','One Hand Mace','Two Hand Mace','Warstaff','Spear','Bow','Crossbow','Talisman','Ring','Amulet','Belt','One Hand Sword','Two Hand Sword','Dagger','One Hand Axe','Two Hand Axe','Flail','Staff','Wand','Sceptre','Quiver','Jewel','Claw','Charm','LifeFlask','ManaFlask','UtilityFlask'}
+# Flasks and charms roll only the "flask" domain; gear never rolls it. Many flask mods are weighted on the "default"
+# tag, so pools must keep the domains apart. The export's class names become the in-game ones ("Item Class: Charms").
+CLASS_NAME={'LifeFlask':'Life Flask','ManaFlask':'Mana Flask','UtilityFlask':'Charm'}
+FLASKS={'Life Flask','Mana Flask','Charm'}
 # ---- mods
 M={}
 # Natural jewel mods are in the export's "misc" domain (game data 4.5.5.2: 364 mods, e.g. JewelAccuracy), but the
@@ -56,14 +60,14 @@ for k,m in mods.items():
     if g not in ('prefix','suffix'): continue
     sw=[[s['tag'],s['weight']] for s in (m.get('spawn_weights') or [])]
     # Only the "desecrated" domain is desecrated; every other kept domain holds natural mods.
-    if dom=='item' or dom in JEWEL_DOMAINS: pass
+    if dom=='item' or dom in JEWEL_DOMAINS or dom=='flask': pass
     elif dom=='desecrated':
         pos=[t for t,w in sw if w>0]
         if not pos or set(pos)<= {'map'}: continue
     else: continue
     M[k]={'fam':m.get('type'),'gen':g[0],'lvl':m.get('required_level'),'txt':clean(m.get('text')),
           'st':[[s['id'],s.get('min'),s.get('max')] for s in (m.get('stats') or [])],
-          'mt':m.get('implicit_tags') or [],'grp':m.get('groups') or [],'sw':sw,'dom':'d' if dom=='desecrated' else 'i'}
+          'mt':m.get('implicit_tags') or [],'grp':m.get('groups') or [],'sw':sw,'dom':'d' if dom=='desecrated' else 'f' if dom=='flask' else 'i'}
     if m.get('is_essence_only'): M[k]['eo']=1
 # ---- bases (trade-listed only, no DNT)
 B={}; seen=set()
@@ -76,9 +80,9 @@ for meta,v in bases.items():
     if (n,v['item_class']) in seen: continue
     seen.add((n,v['item_class']))
     imp=[clean(mods[i]['text']) if i in mods else i for i in (v.get('implicits') or [])]
-    B[n]={'cls':v['item_class'],'lvl':v.get('drop_level'),'tags':tags,'imp':imp,'tl':1 if n in trade_names else 0}
+    B[n]={'cls':CLASS_NAME.get(v['item_class'],v['item_class']),'lvl':v.get('drop_level'),'tags':tags,'imp':imp,'tl':1 if n in trade_names else 0}
     if v['item_class'] in UNCONF: B[n]['unconfirmed_class']=1
-# ---- pools per tag signature (natural item-domain mods only)
+# ---- pools per tag signature (natural mods of the base's domain: item mods for gear, flask mods for flasks/charms)
 def weight_for(tags, sw):
     ts=set(tags)
     for t,w in sw:
@@ -86,12 +90,14 @@ def weight_for(tags, sw):
     return 0
 sigs={}; pools={}
 nat=[(k,m) for k,m in M.items() if m['dom']=='i']
+nat_flask=[(k,m) for k,m in M.items() if m['dom']=='f']
 for n,b in B.items():
     key=tuple(sorted(b['tags']))
     if key not in sigs:
         sid='S%d'%len(sigs); sigs[key]=sid
-        pref=[k for k,m in nat if m['gen']=='p' and weight_for(b['tags'],m['sw'])>0]
-        suf=[k for k,m in nat if m['gen']=='s' and weight_for(b['tags'],m['sw'])>0]
+        src=nat_flask if b['cls'] in FLASKS else nat
+        pref=[k for k,m in src if m['gen']=='p' and weight_for(b['tags'],m['sw'])>0]
+        suf=[k for k,m in src if m['gen']=='s' and weight_for(b['tags'],m['sw'])>0]
         def tiers(ids):
             fam=collections.defaultdict(list)
             for i in ids: fam[M[i]['fam']].append(i)
@@ -117,12 +123,12 @@ kb={'meta':{'game':'Path of Exile 2','game_data_version':GAME_VERSION,'patch':'0
            'spawn weights in PoE2 client data are only 0/1 (eligibility), NOT real roll weights. Probabilities need community-estimated weights; label them as estimates.',
            'Eligibility rule: walk mod.sw in order; the first tag the base has decides (w>0 eligible, 0 blocked).',
            'Tier numbers in pools are computed per base: T1 = highest mod level within the family on that base (community convention). Verify against in-game Alt view.',
-           'dom:i = normal item mod, dom:d = desecrated (Abyss) mod; eo = essence-only.',
+           'dom:i = normal item mod, dom:d = desecrated (Abyss) mod, dom:f = flask/charm mod (only Life Flask, Mana Flask and Charm bases roll it); eo = essence-only.',
            'Mods whose sw is only [default,0] are not naturally rollable (essence/alloy/Genesis Tree/other source).'],
   'counts':{}},
  'bases':B,'tag_signatures':{v:list(k) for k,v in sigs.items()},'pools':pools,'mods':M,'stat_index':SI,'currency_roster':roster,
  'poe1_only_blacklist':{'crafting_like':bl['poe1_only_crafting_like'],'all_currency':bl['poe1_only_currency']}}
-kb['meta']['counts']={'bases':len(B),'mods':len(M),'natural_item_mods':len(nat),'desecrated_mods':sum(1 for m in M.values() if m['dom']=='d'),'tag_signatures':len(sigs),'stat_index':len(SI),'currencies':len(roster.get('Currency',[])),'omens':len(roster.get('Omen',[])),'poe1_blacklist':len(bl['poe1_only_currency'])}
+kb['meta']['counts']={'bases':len(B),'mods':len(M),'natural_item_mods':len(nat),'flask_mods':len(nat_flask),'desecrated_mods':sum(1 for m in M.values() if m['dom']=='d'),'tag_signatures':len(sigs),'stat_index':len(SI),'currencies':len(roster.get('Currency',[])),'omens':len(roster.get('Omen',[])),'poe1_blacklist':len(bl['poe1_only_currency'])}
 
 
 
@@ -147,6 +153,7 @@ rules=[
  {'id':'R_FRACTURED_LOCK','rule':'Fractured mod cannot be removed or changed by Chaos/Annulment/etc.','conf':M2},
  {'id':'R_CORRUPTED_LOCK','rule':'Corrupted items cannot be modified except by currencies that explicitly target corrupted items (Architect\'s Orb, Orbs of Sacrifice, Vaal Cultivation Orb, ...)','conf':G},
  {'id':'R_SANCTIFIED_LOCK','rule':'Sanctified items: most crafting no longer possible (verify per currency in game)','conf':S1},
+ {'id':'R_FLASK_MAGIC','rule':'Flasks and charms can only be Normal or Magic (max 1 prefix + 1 suffix): Regal Orb, Orb of Alchemy, Exalted and Chaos Orbs, essences, bones and the Fracturing Orb do not apply to them','conf':S1},
  {'id':'R_VALUE_MULT_05','rule':'0.5+: Sanctify and the Vaal value-randomise outcome multiply each mod value from its CURRENT value (Divine to max first)','conf':M2,'patch':'0.5.0'},
  {'id':'R_WEIGHTS','rule':'Real roll weights are not in client data (spawn weight 0/1). Use community-estimated weights and label outputs as estimates','conf':M2},
 ]
