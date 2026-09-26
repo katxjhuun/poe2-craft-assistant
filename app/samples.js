@@ -51,28 +51,6 @@
       ].join('\n'),
     },
     {
-      id: 'magic-flask',
-      label: 'Magic life flask · Alt+Ctrl+C',
-      text: [
-        'Item Class: Life Flasks',
-        'Rarity: Magic',
-        'Careful Ultimate Life Flask of the Eternal',
-        '--------',
-        'Recovers 920 Life over 3 Seconds',
-        'Consumes 10 of 75 Charges on use',
-        'Currently has 75 Charges',
-        '--------',
-        'Requires: Level 60',
-        '--------',
-        'Item Level: 84',
-        '--------',
-        '{ Prefix Modifier "Careful" (Tier: 2) }',
-        '85(81-90)% more Recovery if used while on Low Life',
-        '{ Suffix Modifier "of the Eternal" (Tier: 1) }',
-        '65(63-70)% increased Charges gained',
-      ].join('\n'),
-    },
-    {
       id: 'rare-boots-fractured',
       label: 'Rare boots · fractured',
       text: [

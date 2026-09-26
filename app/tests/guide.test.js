@@ -149,3 +149,11 @@ test('3.4 outdated data notice: newer game data from the price job, else PoE2 1.
   assert.equal(G.staleNotice(Object.assign({}, meta, { patch: '1.0.0 (launch)', game_data_version: '4.6.0.1' }), null, dec), '');
   assert.equal(G.staleNotice(null, { version: '9.9.9.9' }, dec), '');                  // before the knowledge base loads
 });
+
+test('3.4 outdated data notice reads the version number of a noted knowledge base version', () => {
+  const meta = { game_data_version: '4.5.5.2 (client data ~ patch 0.5.5)', patch: '0.5.5 (Forbidden Rites event league)' };
+  const sept = new Date('2026-09-26T12:00:00Z');
+  assert.equal(G.staleNotice(meta, { version: '4.5.5.2' }, sept), '');
+  assert.equal(G.staleNotice(meta, { version: '4.5.5.1' }, sept), '');
+  assert.match(G.staleNotice(meta, { version: '4.5.6.0' }, sept), /version 4\.5\.6\.0; this knowledge base uses 4\.5\.5\.2, patch 0\.5\.5/);
+});

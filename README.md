@@ -49,9 +49,7 @@ python scripts/fetch_icons.py              # yeni fiyatlı eşyaların ikonları
 
 ## Bilinen eksikler
 
-- Flask ve charm craft'ı destekleniyor ama iki sınırı var:
-  - Normal veya Magic kalırlar (kural R_FLASK_MAGIC). Bu kural tek bir topluluk kaynağına dayanıyor; panel "verify in game" diyor.
-  - poe2db flask ve charm için ağırlık yayınlamıyor, bu yüzden şanslar eşit ağırlıkla hesaplanıyor.
+- Flask ve charm craft'ı kapsam dışı (kullanıcı kararı): bu eşyalar yapıştırılınca panel desteklenmediklerini söyler. Başka eşyalardaki flask ve charm statları (ör. belt'teki Flask Recovery) diğer statlar gibi ağırlıkları ve çıkma şartlarıyla planlanır.
 - Expedition Tablet'in ikonu yok; Exiled Exchange 2 listesinde adresi bulunmuyor. Diğer bütün fiyatlı eşyaların ikonu var.
 - Beyaz bazdan başlayan planlarda yeni baza dönmek (Magic aşamasında iki hedef tutmazsa ya da Rare'de taraf dolunca) çoğu zaman pahalı omen'lerle düzeltmekten çok daha ucuzdur ama çok sayıda baz ister. Baz fiyatı (varsayılan 1 ex) ve eşya başına baz sınırı (varsayılan 100) oyuncunun girdisidir; piyasada o kadar baz bulunmayabilir. Sınırın ötesinde çok daha ucuz bir yol varsa plan bunu söyler.
 - Olasılıklar tahmindir: mod ağırlıkları poe2db'nin topluluk verisi, desecrated modlar eşit ağırlıklı, Catalysing Exaltation çarpanı (varsayılan ×5) tek kaynaklı ve ayarlanabilir.

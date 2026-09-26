@@ -241,7 +241,8 @@
    */
   function staleNotice(kbMeta, gameData, now) {
     if (!kbMeta) return '';
-    const have = kbMeta.game_data_version;
+    // the knowledge base may note its version as "4.5.5.2 (client data ~ patch 0.5.5)": compare the number only
+    const have = (String(kbMeta.game_data_version || '').match(/^\d+(\.\d+)+/) || [])[0];
     const patch = String(kbMeta.patch || '').split(' ')[0] || '?';
     const next = gameData && /^\d+(\.\d+)+$/.test(gameData.version || '') ? gameData.version : null;
     if (have && next && newerVersion(next, have)) {

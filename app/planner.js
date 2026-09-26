@@ -38,9 +38,6 @@
     'One Hand Sword', 'Two Hand Sword', 'One Hand Axe', 'Two Hand Axe', 'Dagger', 'Flail'];
   const ARMOUR = ['Body Armour', 'Helmet', 'Gloves', 'Boots', 'Shield', 'Buckler', 'Focus'];
   const JEWELLERY = ['Ring', 'Amulet', 'Belt'];
-  // Flasks and charms stay Normal or Magic (rule R_FLASK_MAGIC, single source): only these operators apply to them.
-  const FLASKS = ['Life Flask', 'Mana Flask', 'Charm'];
-  const FLASK_OPS = new Set(['transmute', 'augment', 'annul', 'divine', 'vaal', 'chance', 'hinekora', 'quality', 'newbase', 'mirror']);
   function boneFor(cls) {
     if (WEAPON.includes(cls)) return 'Jawbone';
     if (ARMOUR.includes(cls)) return 'Rib';
@@ -164,7 +161,6 @@
       _side: new Map(), _des: new Map(), imputed: new Set(),
       essences: essencesForBase(ix, base, opts.essences || []),
       catalystMult: opts.catalystMult > 0 ? +opts.catalystMult : CATALYST_DEFAULT,
-      magicOnly: FLASKS.includes(base.cls),
     };
     return ctx;
   }
@@ -296,7 +292,6 @@
     if (st.mirrored) return 'Mirrored items cannot be modified.';
     if (st.corrupted) return 'Corrupted items only accept corrupted-item currency (Architect\'s Orb, Orbs of Sacrifice, Vaal Cultivation Orb).';
     if (st.sanctified) return 'Sanctified items cannot be crafted further.';
-    if (ctx.magicOnly && !FLASK_OPS.has(a.op)) return 'Flasks and charms stay Normal or Magic, so this currency does not apply to them (rule R_FLASK_MAGIC, single source; verify in game).';
     const hasCrafted = st.mods.some((m) => m.crafted);
     const hasDes = st.mods.some((m) => m.des);
     switch (a.op) {
@@ -411,8 +406,7 @@
       : WEAPON.includes(cls) ? "Yaomac's Orb of Sacrifice" : cls === 'Jewel' ? "Yugul's Orb of Sacrifice" : null;
   }
   function qualityCurrencyFor(cls) {
-    return ARMOUR.includes(cls) ? "Armourer's Scrap" : CASTER.includes(cls) ? "Arcanist's Etcher" : MARTIAL.includes(cls) ? "Blacksmith's Whetstone"
-      : FLASKS.includes(cls) ? "Glassblower's Bauble" : null;
+    return ARMOUR.includes(cls) ? "Armourer's Scrap" : CASTER.includes(cls) ? "Arcanist's Etcher" : MARTIAL.includes(cls) ? "Blacksmith's Whetstone" : null;
   }
   function infuserFor(cls) {
     return ARMOUR.includes(cls) ? "Vaal Armourer's Infuser" : CASTER.includes(cls) ? "Vaal Arcanist's Infuser" : MARTIAL.includes(cls) ? "Vaal Blacksmith's Infuser"
@@ -806,24 +800,8 @@
         ? left.map((g) => ({ g, r: essenceOptions(ctx, g, 'magic').find((r) => !ctx.kb.mods[r.mod].grp.some((x) => taken.has(x))) })).find((x) => x.r)
         : null;
       if (R === 'Normal') {
-        if (params.start === 'alchemy' && !magicEss && !ctx.magicOnly) return { op: 'alchemy', side: params.sideOmens ? lean : null };
+        if (params.start === 'alchemy' && !magicEss) return { op: 'alchemy', side: params.sideOmens ? lean : null };
         return { op: 'transmute', tier: params.magicTier || params.tier };
-      }
-      if (R === 'Magic' && ctx.magicOnly) {
-        // Flasks and charms stay Magic: add with Augmentation, clear a wrong mod with Annulment (aimed with a side
-        // omen when it is alone on its side), start over on a new base when nothing on the item helps.
-        if (left.every((x) => st.mods.some((m) => nearMiss(m, x)))) return { op: 'divine' };
-        const keep = st.mods.filter((m) => useful(m, goals) || m.frac);
-        if (st.mods.length < 2 && open(ctx, st, 'prefix') + open(ctx, st, 'suffix') > 0) {
-          if (!keep.length && params.restart && st.mods.length === 1) return { op: 'newbase' };
-          return { op: 'augment', tier: params.magicTier || params.tier };
-        }
-        const junk = st.mods.filter((m) => !keep.includes(m) && removable(m));
-        if (!junk.length) return { fail: 'a Magic item has no room for the goals' };
-        if (!keep.length && params.restart) return { op: 'newbase' };
-        const side = junk[0].side;
-        const aimed = params.sideOmens && st.mods.filter((m) => m.side === side).length === 1;
-        return { op: 'annul', side: aimed ? side : null };
       }
       if (R === 'Magic') {
         // An essence turns the Magic item Rare with a guaranteed goal mod; keep a useful first mod for it.
@@ -1075,7 +1053,7 @@
         if (opts.budget && cost + c > opts.budget) { fail = 'over budget'; kind = 'budget'; break; }
         cost += c; steps++;
         if (a.op === 'newbase') bases++;
-        const magicStage = a.op === 'newbase' || st.rarity === 'Normal' || (st.rarity === 'Magic' && !ctx.magicOnly);
+        const magicStage = a.op === 'newbase' || st.rarity === 'Normal' || st.rarity === 'Magic';
         if (magicStage) early++;
         const k = actionKey(a, ctx);
         book(k, a, 1, steps, 0);
@@ -1245,8 +1223,8 @@
    * the profile's transmute strategies, start over instead of paying for removals on the Rare item (slamOnly), with or
    * without keeping only Magic items that carry the goals (pair). They trade cheap orbs and many bases for costly omens.
    */
-  function withRestarts(st, ctx, grid) {
-    if (st.rarity === 'Rare' || ctx.magicOnly) return grid;
+  function withRestarts(st, grid) {
+    if (st.rarity === 'Rare') return grid;
     const seen = new Set(), extra = [];
     for (const p of grid) {
       if (p.start !== 'transmute' || !p.restart) continue;
@@ -1322,17 +1300,13 @@
     if (st.corrupted || st.sanctified) { out.blocked = st.corrupted ? 'Corrupted' : 'Sanctified'; return out; }
     if (!goals.length) { out.empty = true; return out; }
     const names = Object.keys(PROFILES);
-    const grids = names.map((n) => withRestarts(st, ctx, PROFILES[n].grid().filter((p) => (st.rarity === 'Normal' || p.start === 'transmute' || !p.start) && !(ctx.magicOnly && p.start === 'alchemy'))));
+    const grids = names.map((n) => withRestarts(st, PROFILES[n].grid().filter((p) => st.rarity === 'Normal' || p.start === 'transmute' || !p.start)));
     const total = grids.reduce((a, g) => a + g.length, 0) + names.length;
     let done = 0;
     for (let i = 0; i < names.length; i++) {
       const prof = PROFILES[names[i]];
       const pg = prof.goals(goals);
       const infeasible = pg.map((g) => ({ g, why: goalFeasible(ctx, st, g) })).filter((x) => x.why);
-      if (ctx.magicOnly) for (const side of ['prefix', 'suffix']) {
-        const on = pg.filter((g) => g.side === side);
-        if (on.length > 1) infeasible.push({ g: on[1], why: `a flask or charm holds only 1 ${side} (it stays Magic); keep one ${side} goal` });
-      }
       if (!pg.length) { out.profiles[names[i]] = { label: prof.label, none: 'No required goals. Mark at least one target as Required.' }; done += grids[i].length + 1; continue; }
       if (infeasible.length) { out.profiles[names[i]] = { label: prof.label, impossible: infeasible.map((x) => `${x.g.label}: ${x.why}`) }; done += grids[i].length + 1; continue; }
       const sc = makeScreen(ctx, st, pg, input);
@@ -1661,7 +1635,7 @@
 
   return {
     ORB, OMEN, TIERS, boneFor, actionNames, makeContext, toState, validate, apply, rngFrom, sidePool, desPoolFor,
-    goalsFromTargets, goalMet, meets, nearMiss, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES, FLASKS,
+    goalsFromTargets, goalMet, meets, nearMiss, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
     availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, essencesForBase, CATALYST_DEFAULT,
     expandStrategy, recipeParams, relevantKeys, SPACE, improvePlan,
   };

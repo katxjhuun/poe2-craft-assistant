@@ -106,7 +106,6 @@ function checkStep(ctx, before, a, r) {
   }
   if (a.light && r.removed.some((m) => !m.des)) fail('light', 'Omen of Light removed a non-desecrated modifier');
   if (a.op === 'bone' && a.quality === 'Ancient' && r.added.some((m) => kb.mods[m.id].lvl < 40)) fail('floor', `Ancient bone added ${r.added[0].id} below level 40`);
-  if (ctx.magicOnly && !['Normal', 'Magic'].includes(after.rarity)) fail('magic-only', `${a.op} made a ${ctx.cls} ${after.rarity}`);
   return bad;
 }
 
@@ -167,7 +166,6 @@ function walkBase(base, opts) {
     // a Rare with catalyst quality sometimes, so the catalysing omen is exercised on rings and amulets
     if ((cls === 'Ring' || cls === 'Amulet') && r() < 0.5) { white.quality = 20; white.qualityType = 'Life Modifiers'; }
     const ctx = P.makeContext(ix, white, { weights: weightsFor(base), essences: essencesFor(cls), catalystMult: 3 });
-    const ids = ctx.magicOnly ? ALL.concat('magic-only') : ALL;
     let st = P.toState(ctx, white);
     for (let s = 0; s < opts.steps; s++) {
       const A = candidates(ctx, st, r);
@@ -178,7 +176,7 @@ function walkBase(base, opts) {
       note('crash', true);
       res.ops[a.op] = (res.ops[a.op] || 0) + 1;
       const bad = checkStep(ctx, st, a, out);
-      for (const id of ids) { const b = bad.find((x) => x.id === id); note(id, !b, b ? b.msg : ''); }
+      for (const id of ALL) { const b = bad.find((x) => x.id === id); note(id, !b, b ? b.msg : ''); }
       st = out.state;
       res.steps++;
       if (s % 5 === 4) {
@@ -205,9 +203,8 @@ function walkBase(base, opts) {
 
 /**
  * Roll frequencies against the weights: many Exalted Orbs (base and Perfect) on one Rare state with 2 mods.
- * Flasks and charms stay Magic, so for them it is Augmentation Orbs on a Magic item with 1 mod.
  * Expected share of each family = its weight / total weight of what can roll (sides, groups, floor).
- * Returns { base, op, tests: [{tier, fams, maxZ, fail}] } (fail = families outside 4.5 standard deviations).
+ * Returns { base, tests: [{tier, fams, maxZ, fail}] } (fail = families outside 4.5 standard deviations).
  */
 function frequencyTest(base, seed, n) {
   const { ix, kb } = load();
@@ -215,18 +212,14 @@ function frequencyTest(base, seed, n) {
   const cls = kb.bases[base].cls;
   const item = E.parseItem(ix, renderItem({ base, cls, rarity: 'Normal', ilvl: 82, mods: [] }, r, 'adv').text).item;
   const ctx = P.makeContext(ix, item, { weights: weightsFor(base) });
-  const op = ctx.magicOnly ? 'augment' : 'exalt';
   let st = P.toState(ctx, item);
   st = P.apply(ctx, st, { op: 'transmute' }, r).state;
-  if (!ctx.magicOnly) st = P.apply(ctx, st, { op: 'regal' }, r).state;
-  const out = { base, op, tests: [] };
-  const lim = E.slotLimits({ rarity: st.rarity, slotDelta: ctx.slotDelta });
+  st = P.apply(ctx, st, { op: 'regal' }, r).state;
+  const out = { base, tests: [] };
   for (const tier of ['base', 'perfect']) {
-    const f = tier === 'base' ? 0 : ctx.floors[op].Perfect;
+    const f = tier === 'base' ? 0 : ctx.floors.exalt.Perfect;
     const taken = new Set(groupsOf(st));
-    // Augmentation has no side omen: it rolls on whichever side has room
-    const sides = ctx.magicOnly ? ['prefix', 'suffix'].filter((s) => st.mods.filter((m) => m.side === s).length < lim[s])
-      : ['prefix', 'suffix'].filter((s) => P.validate(ctx, st, { op: 'exalt', side: s }) === null);
+    const sides = ['prefix', 'suffix'].filter((s) => P.validate(ctx, st, { op: 'exalt', side: s }) === null);
     const exp = new Map();
     let total = 0;
     for (const s of sides) for (const e of P.sidePool(ctx, s, f)) {
@@ -235,7 +228,7 @@ function frequencyTest(base, seed, n) {
     }
     const obs = new Map();
     for (let i = 0; i < n; i++) {
-      const a = P.apply(ctx, st, { op, tier }, r);
+      const a = P.apply(ctx, st, { op: 'exalt', tier }, r);
       for (const m of a.added) obs.set(m.fam + '|' + m.side, (obs.get(m.fam + '|' + m.side) || 0) + 1);
     }
     let maxZ = 0, fails = 0, fams = 0;

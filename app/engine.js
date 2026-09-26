@@ -127,7 +127,6 @@
     const tags = new Set(base ? base.tags : []);
     const byFam = new Map();
     for (const [id, m] of Object.entries(ix.kb.mods)) {
-      if (base && FLASK_CLASSES.has(base.cls)) break; // no bone desecrates a flask or charm
       if (m.dom !== 'd' || !swEligible(m, tags)) continue;
       if (!byFam.has(m.fam)) byFam.set(m.fam, []);
       byFam.get(m.fam).push(id);
@@ -146,7 +145,7 @@
     const set = new Set(tags);
     const ids = (ix.famMods.get(fam) || []).filter((id) => {
       const m = ix.kb.mods[id];
-      return (m.dom === 'i' || m.dom === 'f') && swEligible(m, set);
+      return m.dom === 'i' && swEligible(m, set);
     });
     ids.sort((a, b) => ix.kb.mods[b].lvl - ix.kb.mods[a].lvl);
     return ids.map((id, i) => ({ id, tier: i + 1, lvl: ix.kb.mods[id].lvl, txt: ix.kb.mods[id].txt }));
@@ -166,7 +165,7 @@
 
   const CLASS_ALIASES = {
     Staves: 'Staff', Foci: 'Focus', Quarterstaves: 'Warstaff', 'Body Armours': 'Body Armour',
-    Gloves: 'Gloves', Boots: 'Boots',
+    Gloves: 'Gloves', Boots: 'Boots', 'Life Flasks': 'LifeFlask', 'Mana Flasks': 'ManaFlask',
   };
   function singularClass(c) {
     if (!c) return null;
@@ -259,8 +258,14 @@
     item.base = resolveBase(ix, nameLines);
     if (item.rarity === 'Rare' || item.rarity === 'Unique') item.name = nameLines.length > 1 ? nameLines[0] : null;
     else if (item.rarity === 'Magic') item.name = nameLines[0] || null;
+    // Flasks and charms are shown but not crafted or planned.
+    const flaskOrCharm = /flask|charm/i.test(item.itemClassText || '') || (item.base && /Flask|Charm/.test(ix.kb.bases[item.base].cls));
+    if (flaskOrCharm) {
+      item.unsupported = 'Flasks and charms are not supported yet.';
+      warnings.push({ level: 'warn', msg: item.unsupported + ' The item is shown, but stats and plans are off.' });
+    }
     if (!item.base) {
-      warnings.push({ level: 'error', msg: `Unknown base ("${nameLines.join(' / ')}"). It is not in the 0.5.5 knowledge base; it may be from another patch or unreleased.` });
+      if (!flaskOrCharm) warnings.push({ level: 'error', msg: `Unknown base ("${nameLines.join(' / ')}"). It is not in the 0.5.5 knowledge base; it may be from another patch or unreleased.` });
     } else {
       const b = ix.kb.bases[item.base];
       item.itemClass = b.cls;
@@ -510,7 +515,7 @@
   }
 
   function isNonNatural(m) {
-    return (m.dom === 'i' || m.dom === 'f') && m.sw.every(([, w]) => w === 0);
+    return m.dom === 'i' && m.sw.every(([, w]) => w === 0);
   }
 
   // ---------------------------------------------------------------- validation
@@ -522,9 +527,6 @@
       suffix: Math.max(0, base + (item.rarity === 'Rare' ? item.slotDelta.suffix : 0)),
     };
   }
-
-  /** Classes that roll flask-domain mods and stay Normal or Magic (rule R_FLASK_MAGIC, single source). */
-  const FLASK_CLASSES = new Set(['Life Flask', 'Mana Flask', 'Charm']);
 
   function validateItem(ix, item, warnings) {
     if (!item) return warnings;
@@ -553,7 +555,6 @@
     }
     if (item.flags.corrupted) warnings.push({ level: 'info', msg: "Corrupted: only corrupted-item currency applies (Architect's Orb, Orbs of Sacrifice, Vaal Cultivation Orb)." });
     if (item.flags.sanctified) warnings.push({ level: 'info', msg: 'Sanctified: most crafting is locked (single source, verify in game).' });
-    if (FLASK_CLASSES.has(item.itemClass) && item.rarity === 'Rare') warnings.push({ level: 'warn', msg: 'Flasks and charms are expected to stay Normal or Magic (rule R_FLASK_MAGIC, single source; verify in game).' });
     if (item.source === 'ctrl_c') warnings.push({ level: 'info', msg: "Plain Ctrl+C copy: sides and tiers were inferred. Turn on Advanced Mod Descriptions in game and use Alt+Ctrl+C for exact data." });
     return warnings;
   }
@@ -806,6 +807,6 @@
     cleanLine, normalize, template, templateRanges, lineValues, valuesFit,
     buildIndex, poolFor, desecratedPoolFor, swEligible, familyTiersByTags, applyFloor,
     parseItem, validateItem, slotLimits, pickerOptions, searchOptions, searchScore, resolveTemplateTarget,
-    leakScan, legacyScan, explanationProblems, lichOf, diffItems, FLASK_CLASSES,
+    leakScan, legacyScan, explanationProblems, lichOf, diffItems,
   };
 });
