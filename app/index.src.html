@@ -2303,6 +2303,12 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       default: return '';
     }
   }
+  /** A rule the knowledge base has from a single secondary source gets a yellow "verify in game" badge (master prompt 3.2). */
+  function ruleConfBadge(ruleId) {
+    const r = ((S.ix && S.ix.kb.crafting_rules) || []).find((x) => x.id === ruleId);
+    return r && r.conf === 'single_secondary'
+      ? ` <span class="badge verify" title="${esc(r.rule)}. This rule comes from a single community source.">Verify in game</span>` : '';
+  }
   function ruleBadges(pl) {
     const ops = new Set(pl.steps.map((s) => s.action.op));
     const tiers = new Set(pl.steps.map((s) => s.action.tier).filter((t) => t && t !== 'base'));
@@ -2496,7 +2502,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       html += `<div class="eval ${v.verdict}"><b>${v.verdict === 'expected' ? 'On plan' : v.verdict === 'acceptable' ? 'No hit yet' : 'Off plan'}</b> · ${esc(v.names.join(' + '))} · ${money(v.cost)}${a && bv ? ` · value ${signed(a.value - bv.value)}` : ''}${v.notes.length ? `<div class="sub">${v.notes.map(esc).join(' ')}</div>` : ''}</div>`;
     }
     if (S.planState === 'error') html += `<div class="plan-card bad-note">The planner stopped: ${esc(S.planError || 'unknown error')}.</div>`;
-    else if (S.plans && S.plans.blocked) html += `<div class="plan-card">${esc(S.plans.blocked)} items cannot be crafted with normal currency.</div>`;
+    else if (S.plans && S.plans.blocked) html += `<div class="plan-card">${esc(S.plans.blocked)} items cannot be crafted with normal currency.${ruleConfBadge(S.plans.blocked === 'Sanctified' ? 'R_SANCTIFIED_LOCK' : 'R_CORRUPTED_LOCK')}</div>`;
     else if (S.plans && S.plans.empty) html += '<div class="plan-card sub">Pick target stats on the right (or a template) and the three plans appear here.</div>';
     else if (S.plans) html += `<div id="planCard" role="tabpanel" aria-labelledby="ptab-${S.planTab}">${planCard(S.plans.profiles[S.planTab])}</div>`;
     else html += '<div class="plan-card sub">Preparing plans…</div>';
