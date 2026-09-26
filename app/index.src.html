@@ -2776,7 +2776,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const x = S.insights;
     if (!x) return '<p class="sub">No self-test results in this version. Run <code>node scripts/selftest/run.js</code> and rebuild.</p>';
     const m = x.meta;
-    const when = new Date(m.date).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const stamp = (d) => new Date(d).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const when = stamp(m.date);
     const fmtR = (r) => (r == null ? '—' : '×' + (r >= 10 ? Math.round(r) : r.toFixed(2)));
     const checks = x.checks.map((c) => {
       const expected = c.id === 'parse-simple-exact' || c.id === 'parse-adv-flagged';
@@ -2802,7 +2803,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const since = x.sincePrevious;
     const gaps = (S.lib.tests || []).filter((t) => t.found === 'self-test');
     return `<p style="margin:0 0 6px">The self-test drives the simulator through ${m.walkSteps.toLocaleString('en-US')} random currency uses, reads ${m.roundTrips.toLocaleString('en-US')} generated items back as pasted text, and compares ${m.strategyRuns.toLocaleString('en-US')} strategy runs on ${m.scenarios} craft scenarios (${m.bases} bases, ${m.trials} runs each).${m.flasks ? ` The rule checks also cover ${m.flasks} flask and charm bases.` : ''}</p>
-      <p class="sub" style="margin:0">Run ${esc(when)} with ${esc(m.prices.league)} prices${m.prices.feed ? ` from the ${esc(m.prices.feed)}` : ''} and poe2db weights (${esc(m.weights || '')}), ${m.seconds} s on ${m.workers} threads. It checks that the simulator follows the data and the rules; it cannot prove how the game behaves. The in-game tests do that.</p>
+      <p class="sub" style="margin:0">Run ${esc(when)}${m.checksRun ? ` (rule checks again ${esc(stamp(m.checksRun))})` : ''} with ${esc(m.prices.league)} prices${m.prices.feed ? ` from the ${esc(m.prices.feed)}` : ''} and poe2db weights (${esc(m.weights || '')}), ${m.seconds} s on ${m.workers} threads. It checks that the simulator follows the data and the rules; it cannot prove how the game behaves. The in-game tests do that.</p>
       <div class="st-sec"><h3>Rules and parser: right or wrong</h3><div class="st-wrap"><table class="st-table"><tr><th>Check</th><th class="num hide-sm">Steps</th><th class="num">Result</th></tr>${checks}
         <tr><td>Roll frequencies match the weights<div class="sub">${x.freq.families} families on ${x.freq.tests} tests; largest deviation ${x.freq.maxZ} standard deviations (limit 4.5)</div></td><td class="num hide-sm">${x.freq.tests}</td><td class="num">${x.freq.failed ? `<span class="bad-note">${x.freq.failed} failed</span>` : '<span class="ok-note">passed</span>'}</td></tr></table></div></div>
       ${gaps.length ? `<div class="st-sec"><h3>Open questions the self-test found</h3><ul class="rsmall" style="padding-left:18px">${gaps.map((t) => `<li>${esc(t.question)} <button class="linkish" type="button" data-libtab-go="tests">In-game tests</button></li>`).join('')}</ul></div>` : ''}
