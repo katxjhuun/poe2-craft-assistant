@@ -929,7 +929,11 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   // in a Web Worker, so even a tampered package could only hand back data: it never reaches this page, its database or
   // Claude. The page uses the feed when it is newer than the database copy or the bundled snapshot.
   const FEED_PKG = 'poe2-craft-assistant-prices';
-  const FEED_URLS = ['https://cdn.jsdelivr.net/npm/' + FEED_PKG + '@latest/prices.js', 'https://unpkg.com/' + FEED_PKG + '@latest/prices.js'];
+  // jsDelivr lets browsers keep @latest for 7 days; an hourly query keeps a browser at most an hour behind
+  const feedUrls = () => {
+    const h = '?h=' + Math.floor(Date.now() / 3600000);
+    return ['https://cdn.jsdelivr.net/npm/' + FEED_PKG + '@latest/prices.js' + h, 'https://unpkg.com/' + FEED_PKG + '@latest/prices.js' + h];
+  };
   const FEED_WORKER = [
     'self.onmessage = (e) => {',
     '  let feed = null, error = null;',
@@ -953,7 +957,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
         worker = new Worker(url);
         worker.onmessage = (e) => finish(validFeed(e.data && e.data.feed));
         worker.onerror = () => finish(null);
-        worker.postMessage(FEED_URLS);
+        worker.postMessage(feedUrls());
         setTimeout(() => finish(null), 30000);
       } catch (e) { finish(null); }
     });

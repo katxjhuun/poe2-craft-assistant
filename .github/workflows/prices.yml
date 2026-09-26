@@ -47,11 +47,24 @@ jobs:
         run: python scripts/build_price_package.py
 
       - name: Publish to npm
+        id: publish
         working-directory: npm/prices
         run: |
           npm install -g npm@latest
           npm publish --access public
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
 
-      # jsDelivr keeps @latest for a while; ask it to look again
+      # jsDelivr keeps @latest for up to 12 hours. The registry takes a few minutes to list a new version, and a purge
+      # before that caches the old one again, so wait until the registry shows the new version, then purge.
       - name: Refresh the jsDelivr copy
-        run: curl -fsS "https://purge.jsdelivr.net/npm/poe2-craft-assistant-prices@latest/prices.js" || true
+        env:
+          VERSION: ${{ steps.publish.outputs.version }}
+        run: |
+          latest=""
+          for i in $(seq 1 40); do
+            latest=$(curl -fsS "https://registry.npmjs.org/poe2-craft-assistant-prices/latest?t=$(date +%s)" | python3 -c "import json,sys; print(json.load(sys.stdin)['version'])" || true)
+            [ "$latest" = "$VERSION" ] && break
+            sleep 15
+          done
+          echo "registry latest: $latest, published: $VERSION"
+          curl -fsS "https://purge.jsdelivr.net/npm/poe2-craft-assistant-prices@latest/prices.js" || true
