@@ -2755,6 +2755,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     fractured: 'Fractured modifiers are never removed or changed', floor: 'Greater and Perfect minimum modifier levels',
     effect: 'Each currency adds and removes what its game text says', side: 'Side omens keep to their side', lich: 'Lich omens give their lich\'s modifiers',
     pool: 'Added modifiers can spawn on the base', whittle: 'Whittling removes the lowest level modifier', light: 'Omen of Light removes only the desecrated modifier',
+    'magic-only': 'Flasks and charms stay Normal or Magic',
     'parse-adv': 'Alt+Ctrl+C text reads back exactly', 'parse-adv-flagged': 'Alt+Ctrl+C text needs no "Pick"', 'parse-simple': 'Ctrl+C text reads back (family, side, markers)', 'parse-simple-exact': 'Ctrl+C text reads back the exact tier',
   };
   const SITUATION = {
@@ -2800,7 +2801,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     }).join('');
     const since = x.sincePrevious;
     const gaps = (S.lib.tests || []).filter((t) => t.found === 'self-test');
-    return `<p style="margin:0 0 6px">The self-test drives the simulator through ${m.walkSteps.toLocaleString('en-US')} random currency uses, reads ${m.roundTrips.toLocaleString('en-US')} generated items back as pasted text, and compares ${m.strategyRuns.toLocaleString('en-US')} strategy runs on ${m.scenarios} craft scenarios (${m.bases} bases, ${m.trials} runs each).</p>
+    return `<p style="margin:0 0 6px">The self-test drives the simulator through ${m.walkSteps.toLocaleString('en-US')} random currency uses, reads ${m.roundTrips.toLocaleString('en-US')} generated items back as pasted text, and compares ${m.strategyRuns.toLocaleString('en-US')} strategy runs on ${m.scenarios} craft scenarios (${m.bases} bases, ${m.trials} runs each).${m.flasks ? ` The rule checks also cover ${m.flasks} flask and charm bases.` : ''}</p>
       <p class="sub" style="margin:0">Run ${esc(when)} with ${esc(m.prices.league)} prices${m.prices.feed ? ` from the ${esc(m.prices.feed)}` : ''} and poe2db weights (${esc(m.weights || '')}), ${m.seconds} s on ${m.workers} threads. It checks that the simulator follows the data and the rules; it cannot prove how the game behaves. The in-game tests do that.</p>
       <div class="st-sec"><h3>Rules and parser: right or wrong</h3><div class="st-wrap"><table class="st-table"><tr><th>Check</th><th class="num hide-sm">Steps</th><th class="num">Result</th></tr>${checks}
         <tr><td>Roll frequencies match the weights<div class="sub">${x.freq.families} families on ${x.freq.tests} tests; largest deviation ${x.freq.maxZ} standard deviations (limit 4.5)</div></td><td class="num hide-sm">${x.freq.tests}</td><td class="num">${x.freq.failed ? `<span class="bad-note">${x.freq.failed} failed</span>` : '<span class="ok-note">passed</span>'}</td></tr></table></div></div>

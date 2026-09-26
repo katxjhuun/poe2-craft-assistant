@@ -124,5 +124,19 @@ function testBases() {
   }
   return [...byKey.values()].sort();
 }
+/**
+ * Flasks and charms for the rule checks: the highest drop level base of each class. They stay Magic, so the
+ * strategy mining (Rare crafting techniques) leaves them out.
+ */
+function flaskBases() {
+  const { kb } = load();
+  const best = new Map();
+  for (const [name, b] of Object.entries(kb.bases)) {
+    if (!P.FLASKS.includes(b.cls) || !b.tl || b.unconfirmed_class) continue;
+    const cur = best.get(b.cls);
+    if (!cur || b.lvl > kb.bases[cur].lvl) best.set(b.cls, name);
+  }
+  return [...best.values()].sort();
+}
 
-module.exports = { ROOT, E, P, load, weightsFor, essencesFor, classText, rng, roll, rollText, renderItem, testBases };
+module.exports = { ROOT, E, P, load, weightsFor, essencesFor, classText, rng, roll, rollText, renderItem, testBases, flaskBases };

@@ -31,7 +31,7 @@ if (!isMainThread) {
   return;
 }
 
-const { E, P, ROOT, load, weightsFor, essencesFor, renderItem, rng, testBases } = require('./lib.js');
+const { E, P, ROOT, load, weightsFor, essencesFor, renderItem, rng, testBases, flaskBases } = require('./lib.js');
 const args = process.argv.slice(2);
 const QUICK = args.includes('--quick');
 const WORKERS = +(args[args.indexOf('--workers') + 1] || 0) || Math.max(2, Math.min(30, os.cpus().length - 2));
@@ -434,11 +434,13 @@ function printSummary(now) {
   }
   let bases = testBases();
   if (QUICK) bases = bases.filter((b, i) => i % Math.ceil(bases.length / CFG.bases) === 0);
-  console.log(`self-test: ${bases.length} bases, ${WORKERS} workers${QUICK ? ' (quick)' : ''}; prices to ${snap.meta && snap.meta.hourTo ? new Date(snap.meta.hourTo * 1000).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '?'} from ${snap.source}`);
+  const flasks = flaskBases(); // rule checks only: they stay Magic, the strategy mining compares Rare techniques
+  console.log(`self-test: ${bases.length} bases + ${flasks.length} flasks/charms, ${WORKERS} workers${QUICK ? ' (quick)' : ''}; prices to ${snap.meta && snap.meta.hourTo ? new Date(snap.meta.hourTo * 1000).toISOString().slice(0, 16).replace('T', ' ') + ' UTC' : '?'} from ${snap.source}`);
 
   // 1. rule checks
-  const walkTasks = bases.map((base, i) => ({ id: 'w' + i, type: 'walk', base, opts: { walks: CFG.walks, steps: CFG.steps, seed: 1000 + i } }));
-  const freqTasks = bases.map((base, i) => ({ id: 'f' + i, type: 'freq', base, seed: 2000 + i, n: CFG.freqN }));
+  const checked = bases.concat(flasks);
+  const walkTasks = checked.map((base, i) => ({ id: 'w' + i, type: 'walk', base, opts: { walks: CFG.walks, steps: CFG.steps, seed: 1000 + i } }));
+  const freqTasks = checked.map((base, i) => ({ id: 'f' + i, type: 'freq', base, seed: 2000 + i, n: CFG.freqN }));
   const walks = [], freqs = [], errors = [];
   console.log('1/3 rule checks');
   await runPool(walkTasks.concat(freqTasks), (m) => { if (m.res.error) errors.push(m.res); else (m.type === 'walk' ? walks : freqs).push(m.res); });
@@ -458,7 +460,7 @@ function printSummary(now) {
     const latest = path.join(ROOT, 'reports', 'selftest-latest.json');
     const rep = JSON.parse(fs.readFileSync(latest, 'utf8'));
     Object.assign(rep, { checks: Object.values(checks), ops, freq });
-    Object.assign(rep.meta, { walkSteps: walks.reduce((a, w) => a + w.steps, 0), roundTrips: walks.reduce((a, w) => a + w.trips, 0), checksRun: new Date().toISOString() });
+    Object.assign(rep.meta, { walkSteps: walks.reduce((a, w) => a + w.steps, 0), roundTrips: walks.reduce((a, w) => a + w.trips, 0), flasks: flasks.length, checksRun: new Date().toISOString() });
     fs.writeFileSync(latest, JSON.stringify(rep, null, 1));
     fs.writeFileSync(path.join(ROOT, 'app', 'data', 'insights_0.5.5.json'), JSON.stringify(rep, null, 1));
     printSummary(rep);
@@ -479,7 +481,7 @@ function printSummary(now) {
   const main = mined.filter((x) => x.group !== 'recipe' && x.results.length);
   const now = {
     meta: {
-      date: new Date().toISOString(), quick: QUICK, bases: bases.length, scenarios: main.length, recipeScenarios: rs.out.length,
+      date: new Date().toISOString(), quick: QUICK, bases: bases.length, flasks: flasks.length, scenarios: main.length, recipeScenarios: rs.out.length,
       strategyRuns: mined.reduce((a, x) => a + x.results.length, 0), trials: CFG.trials, maxSteps: CFG.maxSteps,
       walkSteps: walks.reduce((a, w) => a + w.steps, 0), roundTrips: walks.reduce((a, w) => a + w.trips, 0),
       prices: { league: 'Forbidden Rites', hourTo: league.hourTo || (snap.meta && snap.meta.hourTo), source: snap.source, feed: league.source || null },
