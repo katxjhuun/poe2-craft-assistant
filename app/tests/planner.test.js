@@ -477,3 +477,46 @@ test('flasks and charms stay Magic: only Magic currency, one prefix and one suff
     locks: {}, priceOf: () => 1, trials: 200, screenTrials: 40, beamBudgetMs: 0 });
   assert.match(two.profiles.balanced.impossible.join(' '), /only 1 prefix/);
 });
+
+test('white base: starting over (pair, slamOnly) beats paying for removals, and counts the bases a finished item takes', () => {
+  const W = require('../data/weights_0.5.5.json');
+  const item = E.parseItem(ix, 'Item Class: Sceptres\nRarity: Normal\nRattling Sceptre\n--------\nItem Level: 82').item;
+  const ctx = P.makeContext(ix, item, { weights: W.pages[W.base_page[item.base]].weights });
+  const st = P.toState(ctx, item);
+  const target = (stat, tier) => { const f = E.resolveTemplateTarget(ix, item, stat); return { fam: f.fam, group: f.group, minTier: tier, required: true, label: f.label }; };
+  const { goals } = P.goalsFromTargets(ctx, { 'suffix-0': target('+# to Level of all Minion Skills', 2), 'prefix-0': target('#% increased Spirit', 3) });
+  goals.forEach((g) => { g.eff = g.tier; });
+  const price = { 'Greater Orb of Transmutation': 0.5, 'Greater Orb of Augmentation': 6, 'Greater Regal Orb': 4, 'Greater Exalted Orb': 5.5, 'Greater Chaos Orb': 190,
+    'Omen of Sinistral Exaltation': 38, 'Omen of Dextral Exaltation': 8, 'Omen of Sinistral Erasure': 7200, 'Omen of Dextral Erasure': 5000 };
+  const opts = { trials: 400, seed: 11, priceOf: (n) => (price[n] != null ? price[n] : null), baseCost: 1, maxSteps: 600 };
+  const base = { tier: 'greater', sideOmens: true, removal: 'erasure', start: 'transmute', restart: true };
+  const fix = P.simulate(ctx, st, goals, Object.assign({}, base), opts);
+  const restart = P.simulate(ctx, st, goals, Object.assign({}, base, { pair: true, slamOnly: true }), opts);
+  assert.ok(restart.p > 0.5, 'the restart loop finishes');
+  assert.ok(restart.costPerSuccess < 0.5 * fix.costPerSuccess, `restarting ${Math.round(restart.costPerSuccess)} vs fixing ${Math.round(fix.costPerSuccess)}`);
+  assert.ok(restart.meanBases > 1 && restart.basesPerSuccess >= restart.meanBases, 'bases per finished item are counted');
+  // Steps are listed by first use: the Transmutation of the first base comes first, the Augmentation after it
+  // (one goal per side, so a Magic item with both finishes the plan).
+  const at = (op) => restart.steps.findIndex((s) => s.action.op === op);
+  assert.equal(at('transmute'), 0);
+  assert.ok(at('augment') > at('transmute'));
+  // The fast restart loop (drawn from the keep table) and the use-by-use loop (forced by a budget) agree.
+  const slow = P.simulate(ctx, st, goals, Object.assign({}, base, { pair: true, slamOnly: true }), Object.assign({}, opts, { budget: 1e12 }));
+  assert.ok(Math.abs(slow.p - restart.p) < 0.1, `p ${slow.p} vs ${restart.p}`);
+  const ratio = slow.costPerSuccess / restart.costPerSuccess;
+  assert.ok(ratio > 0.6 && ratio < 1.6, `cost per success ratio ${ratio}`);
+});
+
+test('profiles keep to the player\'s white-base limit and a success floor', () => {
+  const r = (p, cps, bases, limit) => ({ p, costPerSuccess: cps, basesPerSuccess: bases, baseLimit: limit });
+  for (const k of ['cheap', 'balanced', 'premium']) {
+    const score = P.PROFILES[k].score;
+    // over the limit ranks after anything within it, however cheap
+    assert.ok(score(r(0.9, 1e6, 10, 100)) < score(r(0.99, 10, 5000, 100)), k);
+    // no limit: the cheap restart route may win
+    if (k !== 'premium') assert.ok(score(r(0.99, 10, 5000, null)) < score(r(0.9, 1e6, 10, null)), k);
+  }
+  // a plan that usually fails is a last resort for Cheap (floor 20%) and Balanced (floor 50%)
+  assert.ok(P.PROFILES.cheap.score(r(0.25, 5000, 1, null)) < P.PROFILES.cheap.score(r(0.05, 100, 1, null)));
+  assert.ok(P.PROFILES.balanced.score(r(0.6, 5000, 1, null)) < P.PROFILES.balanced.score(r(0.3, 100, 1, null)));
+});

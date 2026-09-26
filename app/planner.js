@@ -765,6 +765,11 @@
    *  removal: 'chaos'|'erasure'|'whittle'|'annul'
    *  start: 'alchemy'|'transmute'  from a Normal item
    *  restart: bool     Magic chain: a miss on the first mod means a new base
+   *  pair: bool        with restart: the Magic item must carry a goal mod on each side that has goals before it turns
+   *                    Rare; an Augmentation that misses such a side means a new base (cheap orbs instead of costly
+   *                    removals on the Rare item later)
+   *  slamOnly: bool    with restart: on the Rare item, fill the open slots and start over on a new base when a goal's
+   *                    side is full of unwanted mods, instead of paying for removals that may hit a finished goal
    *  bone: 'Gnawed'|'Preserved'|'Ancient', echoes: bool, lich: bool
    *  essence: bool     use an essence when one guarantees an unmet goal (and the crafted slot is free)
    */
@@ -828,6 +833,10 @@
         }
         const anyHit = st.mods.some((m) => useful(m, goals));
         if (params.start === 'transmute' && params.restart && st.mods.length === 1 && !anyHit && !st.mods[0].frac) return { op: 'newbase' };
+        if (params.pair && params.restart && st.mods.length === 2) {
+          const junk = st.mods.find((m) => !useful(m, goals) && !m.frac);
+          if (junk && left.some((x) => x.side === junk.side && !x.des && !x.essenceOnly)) return { op: 'newbase' };
+        }
         if (open(ctx, st, 'prefix') + open(ctx, st, 'suffix') > 0 && st.mods.length < 2) return { op: 'augment', tier: params.magicTier || params.tier };
         return { op: 'regal', tier: params.magicTier || params.tier, side: params.sideOmens ? lean : null };
       }
@@ -880,6 +889,7 @@
         const catalyse = !!(params.catalyse && st.catQ > 0 && st.catTag && famHasTag(ctx, g.fam, st.catTag));
         return { op: 'exalt', tier: params.exaltTier || params.tier, side: params.sideOmens ? g.side : null, greater: two, catalyse };
       }
+      if (params.slamOnly && params.restart && !g.des && !st.mods.some((m) => m.frac || m.lock)) return { op: 'newbase' };
       return removal(st, g.side, desJunk);
     };
 
@@ -936,6 +946,10 @@
    *   dead end   the item can no longer reach the goals (a kept or fractured mod blocks it, a rule stops the next step)
    *   budget     the next step would pass the budget
    *   unfinished still going after maxSteps uses (reported apart; with 600 uses this is rare)
+   * White and Magic items restart on fresh bases with cheap orbs, which can take thousands of uses: those uses (new
+   * base, Transmutation, Augmentation, Alchemy, Regal on a Normal or Magic item) count against maxMagicSteps (default
+   * 30,000) instead, so a cheap long loop is not mistaken for a failure. The result counts the white bases a finished
+   * item takes (basesPerSuccess), so the profiles can keep to the player's limit (opts.baseLimit).
    */
   function createRun(ctx, st0, goals, params, opts) {
     if (goals.some((g) => g.minValue != null)) ctx.needValues = true;
@@ -945,6 +959,8 @@
     const next = opts.priceOf ? (st) => withoutUnpriced(policy(st), (n) => opts.priceOf(n) != null, skipped) : policy;
     const pick = pickFor(goals, ctx);
     const maxSteps = opts.maxSteps || 600;
+    const maxMagicSteps = opts.maxMagicSteps || 30000;
+    const baseLimit = opts.baseLimit > 0 ? opts.baseLimit : null;
     const costCache = new Map();
     const missing = new Set();
     const costOf = (a) => {
@@ -960,29 +976,116 @@
     };
     const required = goals.filter((g) => g.required);
     const acc = { n: 0, succ: 0, partial: 0, lost: 0, stepsSum: 0, costs: [], fails: new Map(), uses: new Map(), order: new Map(), hits: new Map(),
-      out: { dead: 0, budget: 0, unfinished: 0 }, doneAt: [] };
+      out: { dead: 0, budget: 0, unfinished: 0 }, doneAt: [], basesSum: 0 };
     const metCount = (s) => { let n = 0; for (const g of goals) if (goalMet(s, g)) n++; return n; };
+    // Steps are listed by where they first come in a run (averaged), so restart loops do not scramble the order.
+    let seen = null;
+    const book = (k, a, n, first, hits) => {
+      if (!n) return;
+      acc.uses.set(k, (acc.uses.get(k) || 0) + n);
+      let o = acc.order.get(k);
+      if (!o) acc.order.set(k, (o = { sum: 0, n: 0, action: a }));
+      if (!seen.has(k)) { seen.add(k); o.sum += first; o.n++; }
+      if (hits) acc.hits.set(k, (acc.hits.get(k) || 0) + hits);
+    };
+    const NEWBASE = { op: 'newbase' };
+    const keepTables = new Map();
+    /**
+     * Which first mods of a Transmutation on this white base the strategy keeps, by weight: {q, kept, junk}, where q is
+     * the chance a Transmutation is kept and kept/junk are the two weighted lists of pool entries. Built once per action.
+     */
+    function keepTable(white, a) {
+      const k = actionKey(a, ctx);
+      if (keepTables.has(k)) return keepTables.get(k);
+      const probe = cloneState(white);
+      probe.rarity = 'Magic';
+      const floor = floorFor(ctx, 'transmute', a.tier || 'base');
+      const kept = { list: [], ws: [], total: 0 }, junk = { list: [], ws: [], total: 0 };
+      for (const side of openSides(ctx, probe)) for (const e of sidePool(ctx, side, floor)) {
+        const s1 = cloneState(probe);
+        addRolled(ctx, s1, e, null, null);
+        const into = next(s1).op === 'newbase' ? junk : kept;
+        into.list.push(e); into.ws.push(e.w); into.total += e.w;
+      }
+      const all = kept.total + junk.total;
+      const tab = all > 0 ? { q: kept.total / all, kept, junk } : null;
+      keepTables.set(k, tab);
+      return tab;
+    }
+    /**
+     * A white base that the strategy throws away whenever its first mod does not help: transmute it, and while the
+     * policy asks for a new base, pay for one and transmute again. The same uses and outcomes as the general loop, booked
+     * in bulk, because such loops can run thousands of times per run. run: {cost, steps, early}, updated in place.
+     */
+    function restartLoop(run, white, a) {
+      const kT = actionKey(a, ctx), kB = actionKey(NEWBASE, ctx), cT = costOf(a), cB = costOf(NEWBASE);
+      const tab = !opts.budget && !ctx.needValues ? keepTable(white, a) : null;
+      if (tab) {
+        // Draw the number of Transmutations until one is kept (geometric), then the kept mod by weight.
+        const room = Math.ceil((maxMagicSteps - run.early + 1) / 2); // Transmutations before the Magic-stage limit
+        let n = tab.q >= 1 ? 1 : tab.q <= 0 ? Infinity : 1 + Math.floor(Math.log(1 - rng()) / Math.log(1 - tab.q));
+        const stop = n > room ? 'limit' : null;
+        if (stop) n = room;
+        const pool = stop ? tab.junk : tab.kept;
+        let r = rng() * pool.total, e = pool.list[pool.list.length - 1];
+        for (let i = 0; i < pool.list.length; i++) { r -= pool.ws[i]; if (r <= 0) { e = pool.list[i]; break; } }
+        const kept = cloneState(white);
+        kept.rarity = 'Magic';
+        if (e) addRolled(ctx, kept, e, null, rng);
+        const s0 = run.steps;
+        run.cost += n * cT + (n - 1) * cB; run.steps += 2 * n - 1; run.early += 2 * n - 1; run.bases += n - 1;
+        book(kT, a, n, s0 + 1, !stop && metCount(kept) > 0 ? 1 : 0);
+        book(kB, NEWBASE, n - 1, s0 + 2, 0);
+        return { kept, stop };
+      }
+      let tries = 0, bases = 0, firstT = 0, firstB = 0, kept = null, stop = null;
+      for (;;) {
+        if (opts.budget && run.cost + cT > opts.budget) { stop = 'budget'; break; }
+        run.cost += cT; run.steps++; run.early++; tries++; if (!firstT) firstT = run.steps;
+        const r = apply(ctx, white, a, rng, pick);
+        const b = next(r.state);
+        if (b.op !== 'newbase') { kept = r.state; break; }
+        if (run.early >= maxMagicSteps) { kept = r.state; stop = 'limit'; break; }
+        if (opts.budget && run.cost + cB > opts.budget) { kept = r.state; stop = 'budget'; break; }
+        run.cost += cB; run.steps++; run.early++; run.bases++; bases++; if (!firstB) firstB = run.steps;
+      }
+      book(kT, a, tries, firstT, kept && metCount(kept) > 0 ? 1 : 0);
+      book(kB, NEWBASE, bases, firstB, 0);
+      return { kept, stop };
+    }
     function one() {
-      let st = st0, cost = 0, steps = 0, fail = null, kind = null, lostGoal = false;
+      let st = st0, cost = 0, steps = 0, early = 0, bases = 0, fail = null, kind = null, lostGoal = false;
+      seen = new Set();
       for (;;) {
         const a = next(st);
         if (a.done) break;
         if (a.fail) { fail = a.fail; kind = 'dead'; break; }
         const err = validate(ctx, st, a);
         if (err) { fail = err; kind = 'dead'; break; }
+        if (a.op === 'transmute' && st.rarity === 'Normal' && params.restart) {
+          const run = { cost, steps, early, bases };
+          const { kept, stop } = restartLoop(run, st, a);
+          cost = run.cost; steps = run.steps; early = run.early; bases = run.bases;
+          if (kept) st = kept;
+          if (stop === 'budget') { fail = 'over budget'; kind = 'budget'; break; }
+          if (stop === 'limit') { fail = `no fitting Magic item within ${maxMagicSteps} uses`; kind = 'unfinished'; break; }
+          continue;
+        }
         const c = costOf(a);
         if (opts.budget && cost + c > opts.budget) { fail = 'over budget'; kind = 'budget'; break; }
         cost += c; steps++;
+        if (a.op === 'newbase') bases++;
+        const magicStage = a.op === 'newbase' || st.rarity === 'Normal' || (st.rarity === 'Magic' && !ctx.magicOnly);
+        if (magicStage) early++;
         const k = actionKey(a, ctx);
-        acc.uses.set(k, (acc.uses.get(k) || 0) + 1);
-        const o = acc.order.get(k);
-        if (!o) acc.order.set(k, { sum: steps, n: 1, action: a }); else { o.sum += steps; o.n++; }
+        book(k, a, 1, steps, 0);
         const before = metCount(st);
         const r = apply(ctx, st, a, rng, pick);
         if (r.removed.some((m) => goals.some((g) => meets(m, g, g.eff)))) lostGoal = true;
         st = r.state;
         if (metCount(st) > before) acc.hits.set(k, (acc.hits.get(k) || 0) + 1);
-        if (steps >= maxSteps && !goals.every((g) => goalMet(st, g))) { fail = `not finished within ${maxSteps} uses`; kind = 'unfinished'; break; }
+        if (steps - early >= maxSteps && !goals.every((g) => goalMet(st, g))) { fail = `not finished within ${maxSteps} uses`; kind = 'unfinished'; break; }
+        if (early >= maxMagicSteps && !goals.every((g) => goalMet(st, g))) { fail = `no fitting Magic item within ${maxMagicSteps} uses`; kind = 'unfinished'; break; }
       }
       if (kind) acc.out[kind]++;
       const ok = !fail && goals.every((g) => goalMet(st, g));
@@ -991,6 +1094,7 @@
       if (fail) acc.fails.set(fail, (acc.fails.get(fail) || 0) + 1);
       if (lostGoal) acc.lost++;
       acc.stepsSum += steps;
+      acc.basesSum += bases;
       acc.costs.push(cost);
       acc.n++;
     }
@@ -1011,6 +1115,7 @@
         return {
           params, trials: N, p, pLow: Math.max(0, p - 1.96 * se), pHigh: Math.min(1, p + 1.96 * se), maxSteps,
           pFail: 1 - p, failDead: acc.out.dead / N, failBudget: acc.out.budget / N, unfinished: acc.out.unfinished / N,
+          meanBases: acc.basesSum / N, basesPerSuccess: p > 0 ? acc.basesSum / N / p : Infinity, baseLimit,
           // P(all goals reached within n uses) from the same runs, so per-use and whole-plan chances line up
           finishWithin: [1, 3, 5, 10, 25, 50, 100, 250, 600].map((n) => ({ n, p: acc.doneAt.filter((x) => x <= n).length / N })),
           partial: acc.partial / N, lost: acc.lost / N, meanCost: mean, p10: q(0.1), p50: q(0.5), p90: q(0.9),
@@ -1047,20 +1152,24 @@
 
   // ---------------------------------------------------------------- profiles
 
+  /** Does the plan keep to the player's limit of white bases per finished item? */
+  const fits = (r) => !(r.baseLimit > 0 && r.basesPerSuccess > r.baseLimit);
   const PROFILES = {
     cheap: {
       label: 'Cheap',
       goals: (gs) => gs.filter((g) => g.required).map((g) => Object.assign({}, g, { eff: g.tier ? Math.max(g.tier, 3) : null })),
       grid: () => cross({ tier: ['base', 'greater'], sideOmens: [false, true], greaterExalt: [false], removal: ['chaos', 'erasure', 'annul'],
         start: ['alchemy', 'transmute'], restart: [true], bone: ['Preserved'], echoes: [false], lich: [false], essence: [false, true] }),
-      score: (r) => r.costPerSuccess,
+      // cheapest per success among strategies that succeed at least one run in five (else the most likely one)
+      score: (r) => (!fits(r) ? 1e16 + r.basesPerSuccess : r.p >= 0.2 ? r.costPerSuccess : 1e15 * (2 - r.p)),
     },
     balanced: {
       label: 'Balanced',
       goals: (gs) => gs.map((g) => Object.assign({}, g, { eff: !g.tier ? null : g.required ? (g.tier === 1 ? 2 : g.tier) : Math.max(g.tier, 3) })),
       grid: () => cross({ tier: ['greater', 'perfect'], sideOmens: [true], greaterExalt: [false, true], removal: ['chaos', 'erasure', 'whittle', 'annul'],
         start: ['transmute', 'alchemy'], restart: [true], bone: ['Preserved'], echoes: [true], lich: [true], essence: [false, true] }),
-      score: (r) => r.costPerSuccess * (1 + 0.6 * (1 - r.p)),
+      // cost per success, weighed by the chance to finish; strategies that fail more often than not only as a last resort
+      score: (r) => (!fits(r) ? 1e16 + r.basesPerSuccess : r.p >= 0.5 ? r.costPerSuccess * (1 + 0.6 * (1 - r.p)) : 1e15 * (2 - r.p)),
     },
     premium: {
       label: 'Premium',
@@ -1069,7 +1178,7 @@
         start: ['transmute'], restart: [true], bone: ['Ancient', 'Preserved'], echoes: [true], lich: [true], essence: [false, true] }),
       // Highest success first, but a 10x cost must buy at least 5 points of success; near-certain (98%+) strategies
       // compare on cost alone.
-      score: (r) => -(Math.min(r.p, 0.98) - 0.05 * Math.log10(1 + r.costPerSuccess)),
+      score: (r) => (!fits(r) ? 10 + r.basesPerSuccess / 1e9 : -(Math.min(r.p, 0.98) - 0.05 * Math.log10(1 + r.costPerSuccess))),
     },
   };
 
@@ -1091,7 +1200,7 @@
   /** The strategy settings the beam search moves along, one at a time. */
   const SPACE = {
     exaltTier: TIERS, chaosTier: TIERS, magicTier: TIERS, sideOmens: [false, true], greaterExalt: [false, true],
-    removal: ['chaos', 'erasure', 'whittle', 'annul'], start: ['transmute', 'alchemy'], restart: [true, false],
+    removal: ['chaos', 'erasure', 'whittle', 'annul'], start: ['transmute', 'alchemy'], restart: [true, false], pair: [false, true], slamOnly: [false, true],
     essence: [false, true], fracture: [false, true], catalyse: [false, true], flux: [true, false],
     bone: ['Gnawed', 'Preserved', 'Ancient'], echoes: [false, true], lich: [false, true],
   };
@@ -1100,14 +1209,14 @@
   function expandStrategy(p) {
     const t = p.tier || 'base';
     const out = Object.assign({ exaltTier: t, chaosTier: t, magicTier: t, sideOmens: false, greaterExalt: false, removal: 'chaos', start: 'transmute',
-      restart: true, essence: false, fracture: false, catalyse: false, flux: true, bone: 'Preserved', echoes: false, lich: false }, p);
+      restart: true, pair: false, slamOnly: false, essence: false, fracture: false, catalyse: false, flux: true, bone: 'Preserved', echoes: false, lich: false }, p);
     delete out.tier;
     return out;
   }
   /** Settings that can change the result on this item and these goals. */
   function relevantKeys(st, goals) {
-    const keys = ['exaltTier', 'chaosTier', 'sideOmens', 'greaterExalt', 'removal', 'flux'];
-    if (st.rarity !== 'Rare') keys.push('magicTier', 'start', 'restart');
+    const keys = st.rarity !== 'Rare' ? ['slamOnly', 'pair', 'magicTier', 'start', 'restart'] : [];
+    keys.push('exaltTier', 'chaosTier', 'sideOmens', 'greaterExalt', 'removal', 'flux');
     if (goals.some((g) => (g.ess || []).length)) keys.push('essence');
     if (goals.length >= 2) keys.push('fracture');
     if (st.catTag && st.catQ > 0) keys.push('catalyse');
@@ -1131,13 +1240,45 @@
     return f;
   }
 
+  /**
+   * From a white or Magic item, the restart strategies too: for each orb tier, essence and side-omen choice of
+   * the profile's transmute strategies, start over instead of paying for removals on the Rare item (slamOnly), with or
+   * without keeping only Magic items that carry the goals (pair). They trade cheap orbs and many bases for costly omens.
+   */
+  function withRestarts(st, ctx, grid) {
+    if (st.rarity === 'Rare' || ctx.magicOnly) return grid;
+    const seen = new Set(), extra = [];
+    for (const p of grid) {
+      if (p.start !== 'transmute' || !p.restart) continue;
+      const k = [p.tier, p.essence, p.sideOmens].join('|');
+      if (seen.has(k)) continue;
+      seen.add(k);
+      for (const v of [{ pair: true, slamOnly: true }, { slamOnly: true }]) extra.push(Object.assign({}, p, v));
+    }
+    return grid.concat(extra);
+  }
+
+  /**
+   * A route past the player's white-base limit that costs less than half per finished item and meets the profile's
+   * success floor; of those, the one that needs the fewest bases (the smallest step up). {bases, cps, p} from the
+   * screening runs, so approximate; null when there is none.
+   */
+  function moreBasesHint(prof, candidates, plan) {
+    const ok = (r) => r && r.p > 0 && !fits(r) && r.costPerSuccess < 0.5 * plan.costPerSuccess && prof.score(Object.assign({}, r, { baseLimit: null })) < 1e15;
+    let alt = null;
+    for (const r of candidates) if (ok(r) && (!alt || r.basesPerSuccess < alt.basesPerSuccess)) alt = r;
+    const old = plan.moreBases && { costPerSuccess: plan.moreBases.cps, basesPerSuccess: plan.moreBases.bases, p: plan.moreBases.p, baseLimit: plan.baseLimit };
+    if (old && ok(old) && (!alt || old.basesPerSuccess < alt.basesPerSuccess)) alt = old;
+    return alt ? { bases: Math.ceil(alt.basesPerSuccess), cps: alt.costPerSuccess, p: alt.p } : null;
+  }
+
   /** Screening runs of one profile: every candidate simulated once, identical ones (on this item) shared. */
   function makeScreen(ctx, st, pg, input) {
     const keys = relevantKeys(st, pg);
     const sigOf = (p) => JSON.stringify(keys.map((k) => p[k]));
     const evaluated = new Map();
     const opts = { trials: input.screenTrials || 200, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, cancelled: input.cancelled,
-      maxSteps: 250, timeBudgetMs: 400, minTrials: 60 };
+      baseLimit: input.baseLimit, maxSteps: 250, timeBudgetMs: 400, minTrials: 60 };
     async function screen(p, from) {
       const full = expandStrategy(p);
       const sig = sigOf(full);
@@ -1181,7 +1322,7 @@
     if (st.corrupted || st.sanctified) { out.blocked = st.corrupted ? 'Corrupted' : 'Sanctified'; return out; }
     if (!goals.length) { out.empty = true; return out; }
     const names = Object.keys(PROFILES);
-    const grids = names.map((n) => PROFILES[n].grid().filter((p) => (st.rarity === 'Normal' || p.start === 'transmute' || !p.start) && !(ctx.magicOnly && p.start === 'alchemy')));
+    const grids = names.map((n) => withRestarts(st, ctx, PROFILES[n].grid().filter((p) => (st.rarity === 'Normal' || p.start === 'transmute' || !p.start) && !(ctx.magicOnly && p.start === 'alchemy'))));
     const total = grids.reduce((a, g) => a + g.length, 0) + names.length;
     let done = 0;
     for (let i = 0; i < names.length; i++) {
@@ -1209,14 +1350,14 @@
       const ranked = [...sc.evaluated.values()].filter((r) => r.p > 0).sort((a, b) => prof.score(a) - prof.score(b));
       const best = found || ranked[0] || null;
       if (!best) {
-        const r = simulate(ctx, st, pg, expandStrategy(grids[i][0]), { trials: 400, seed: 3, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget });
+        const r = simulate(ctx, st, pg, expandStrategy(grids[i][0]), { trials: 400, seed: 3, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, baseLimit: input.baseLimit });
         out.profiles[names[i]] = { label: prof.label, noSuccess: true, fails: r.fails };
         done++;
         continue;
       }
       const final = await simulateAsync(ctx, st, pg, best.params, {
         trials: input.trials || 4000, seed: 99, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, cancelled: input.cancelled,
-        timeBudgetMs: input.timeBudgetMs || 2500, minTrials: Math.min(input.trials || 4000, 800),
+        baseLimit: input.baseLimit, timeBudgetMs: input.timeBudgetMs || 2500, minTrials: Math.min(input.trials || 4000, 800),
         onSlice: (f) => input.onProgress && input.onProgress((done + f) / total),
       });
       final.label = prof.label;
@@ -1226,6 +1367,7 @@
       final.from = best.from;
       final.seeds = ranked.slice(0, BEAM_WIDTH).map((r) => ({ params: r.params, from: r.from }));
       final.search = { candidates: sc.evaluated.size, beamDepth: depth, recipes: (input.recipes || []).length, searched: budget > 0 };
+      final.moreBases = moreBasesHint(prof, sc.evaluated.values(), final);
       out.profiles[names[i]] = final;
       done++;
       if (input.onProgress) input.onProgress(done / total);
@@ -1247,14 +1389,16 @@
     for (const s0 of plan.seeds) await sc.screen(s0.params, s0.from);
     const { best, depth } = await beamSearch(sc, prof, input.beamBudgetMs == null ? 2500 : input.beamBudgetMs, onProgress);
     const search = { candidates: sc.evaluated.size + (plan.search ? plan.search.candidates : 0), beamDepth: depth, recipes: plan.search ? plan.search.recipes : 0, searched: true };
-    if (!best || sc.sigOf(best.params) === sc.sigOf(plan.params)) return Object.assign({}, plan, { search });
+    if (!best || sc.sigOf(best.params) === sc.sigOf(plan.params)) return Object.assign({}, plan, { search, moreBases: moreBasesHint(prof, sc.evaluated.values(), plan) });
     const final = await simulateAsync(ctx, st, plan.goals, best.params, {
       trials: input.trials || 4000, seed: 99, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, cancelled: input.cancelled,
-      timeBudgetMs: input.timeBudgetMs || 2500, minTrials: Math.min(input.trials || 4000, 800),
+      baseLimit: input.baseLimit, timeBudgetMs: input.timeBudgetMs || 2500, minTrials: Math.min(input.trials || 4000, 800),
     });
     // keep the search's pick only when the full run agrees it is better
-    if (prof.score(final) >= prof.score(plan)) return Object.assign({}, plan, { search });
-    return Object.assign(final, { label: plan.label, profile: plan.profile, goals: plan.goals, dropped: plan.dropped, from: best.from, seeds: plan.seeds, search });
+    if (prof.score(final) >= prof.score(plan)) return Object.assign({}, plan, { search, moreBases: moreBasesHint(prof, sc.evaluated.values(), plan) });
+    Object.assign(final, { label: plan.label, profile: plan.profile, goals: plan.goals, dropped: plan.dropped, from: best.from, seeds: plan.seeds, search, moreBases: plan.moreBases });
+    final.moreBases = moreBasesHint(prof, sc.evaluated.values(), final);
+    return final;
   }
 
   /** Re-run a finished plan with more trials (same strategy, goals and seed family). */
@@ -1263,9 +1407,12 @@
     const st = toState(ctx, input.item, input.locks);
     const r = await simulateAsync(ctx, st, plan.goals, plan.params, {
       trials: trials || 20000, seed: 1234, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, onSlice: onProgress, cancelled: input.cancelled,
+      baseLimit: input.baseLimit,
       timeBudgetMs: input.refineBudgetMs || 6000, minTrials: Math.min(3000, trials || 20000),
     });
-    return Object.assign(r, { label: plan.label, profile: plan.profile, goals: plan.goals, dropped: plan.dropped, from: plan.from, seeds: plan.seeds, search: plan.search });
+    Object.assign(r, { label: plan.label, profile: plan.profile, goals: plan.goals, dropped: plan.dropped, from: plan.from, seeds: plan.seeds, search: plan.search, moreBases: plan.moreBases });
+    r.moreBases = moreBasesHint(PROFILES[plan.profile] || PROFILES.balanced, [], r);
+    return r;
   }
 
   /**

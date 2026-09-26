@@ -196,6 +196,7 @@ details.notes[open] summary { margin-bottom: 6px; }
 .modtxt { font: 16px/1.3 var(--f-game); color: var(--g-magic); min-width: 0; overflow-wrap: anywhere; flex: 1; }
 .modtxt.fractured { color: var(--g-fractured); } .modtxt.crafted { color: var(--g-crafted); } .modtxt.desecrated { color: var(--g-magic); }
 .modtxt.empty { color: var(--faint); font-style: italic; }
+.modtxt .opens { font-style: normal; font-size: 12px; }
 .tchip { flex: none; min-width: 30px; text-align: center; font: 600 12.5px/1.6 var(--f-ui); border: 1px solid var(--line-2); border-radius: 4px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .tchip.t1 { color: #E7C66B; border-color: #6E5B2E; }
 .tchip.t2, .tchip.t3 { color: var(--text); }
@@ -720,7 +721,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     ex: { q: '', cat: 'All', sort: 'vol', sel: DIV, qty: 1 }, db: null, unsubLeague: null, pricesState: 'loading',
     overrides: store.get('overrides', {}), nameBySid: {},
     plans: null, planTab: store.get('planTab', 'balanced'), planState: 'idle', planProgress: 0,
-    budget: store.get('budget', ''), baseCost: store.get('baseCost', '1'), spent: store.get('spent', []),
+    budget: store.get('budget', ''), baseCost: store.get('baseCost', '1'), baseLimit: store.get('baseLimit', '100'), spent: store.get('spent', []),
     lastEval: null, pendingStep: null, opsOpen: false, buyPrice: store.get('buyPrice', ''), preview: store.get('preview', false), ack: {}, catMult: store.get('catMult', null), priceSource: store.get('priceSource', 'ee2'), myLeagues: [].concat(store.get('myLeagues', []) || []).filter((l) => l && typeof l.name === 'string' && l.name), simRuns: store.get('simRuns', 20000),
     sample: null, explain: {},
   };
@@ -1159,8 +1160,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const sameBase = S.item && S.item.base === r.item.base;
     S.prev = sameBase ? S.item : null;
     S.compare = false;
+    const before = S.item;
     S.item = r.item; S.warnings = r.warnings; S.parseWarnings = r.parseWarnings; S.text = text;
     if (!sameBase && !(opts && opts.keep)) { S.targets = {}; S.locks = {}; saveTargets(); }
+    else if (sameBase) followMods(before, r.item);
     S.history = S.history.slice(0, S.histIdx + 1);
     let value = null;
     try { const est = r.item.unsupported ? null : valueOf(r.item, r.item.itemClass); value = est ? Math.round(est.value * 10) / 10 : null; } catch (e) { value = null; }
@@ -1407,6 +1410,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const b = e.target.closest('[data-hist]'); if (!b) return;
     const i = +b.dataset.hist, h = S.history[i];
     S.prev = S.item && S.item.base === h.item.base ? S.item : null;
+    if (S.prev) followMods(S.prev, h.item);
     S.item = h.item; S.histIdx = i; S.text = h.text;
     const pr = E.parseItem(S.ix, h.text); S.warnings = pr.warnings; S.parseWarnings = pr.parseWarnings;
     store.set('lastText', h.text);
@@ -1442,6 +1446,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const last = S.history.pop();
     if (last.step) { const i = S.spent.lastIndexOf(last.step); if (i >= 0) S.spent.splice(i, 1); store.set('spent', S.spent); }
     const h = S.history[S.history.length - 1];
+    if (S.item && S.item.base === h.item.base) followMods(S.item, h.item);
     S.histIdx = S.history.length - 1; S.item = h.item; S.text = h.text; S.prev = null; S.lastEval = null;
     const pr = E.parseItem(S.ix, h.text); S.warnings = pr.warnings; S.parseWarnings = pr.parseWarnings;
     store.set('lastText', h.text);
@@ -1470,6 +1475,55 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   const modKey = (m) => m.modId || m.text;
   function sideMods(item, side) { return item.mods.filter((m) => m.slot === side); }
   function modAt(side, n) { return S.item ? sideMods(S.item, side)[n] || null : null; }
+  /**
+   * Slots the item can reach by crafting, so a white or Magic base shows every target row: Rare limits, or Magic ones
+   * for flasks and charms (they stay Magic). Items that cannot change any more keep their current limits.
+   */
+  function craftLimits(it) {
+    const f = it.flags || {};
+    if (it.rarity === 'Unique' || f.corrupted || f.sanctified || f.mirrored) return E.slotLimits(it);
+    return E.slotLimits({ rarity: E.FLASK_CLASSES.has(it.itemClass) ? 'Magic' : 'Rare', slotDelta: it.slotDelta || { prefix: 0, suffix: 0 } });
+  }
+  /**
+   * A new state of the same item: rows follow the order of the pasted text, which changes as mods come and go, so move
+   * each lock and target to the row of its mod. A lock follows its mod (and goes with it); a met target sits on the row
+   * of the mod that meets it; an open target keeps its row when that is free, else takes an empty row, else a row whose
+   * mod is not kept.
+   */
+  function followMods(before, after) {
+    const locks = {}, targets = {};
+    for (const side of ['prefix', 'suffix']) {
+      const was = sideMods(before, side), now = sideMods(after, side);
+      const moved = new Set();
+      for (const [key, on] of Object.entries(S.locks)) {
+        if (!on || !key.startsWith(side + '-')) continue;
+        const m = was[+key.split('-')[1]];
+        const j = m ? now.findIndex((x, k) => !moved.has(k) && (m.modId ? x.modId === m.modId : x.text === m.text)) : -1;
+        if (j >= 0) { moved.add(j); locks[side + '-' + j] = true; }
+      }
+      const cap = Math.max(craftLimits(after)[side], now.length);
+      const rows = new Map();
+      const open = [];
+      const mine = Object.entries(S.targets).filter(([k, t]) => t && k.startsWith(side + '-')).sort((a, b) => (b[1].required ? 1 : 0) - (a[1].required ? 1 : 0));
+      for (const [k, t] of mine) {
+        const j = now.findIndex((m, i) => !rows.has(i) && targetMet(m, t));
+        if (j >= 0) rows.set(j, t); else open.push([k, t]);
+      }
+      const free = (i) => i < cap && !rows.has(i);
+      const kept = (i) => !!(now[i] && (now[i].fractured || locks[side + '-' + i]));
+      for (const [k, t] of open) {
+        const old = +k.split('-')[1];
+        let j = free(old) && !kept(old) ? old : -1;
+        for (let i = 0; i < cap && j < 0; i++) if (free(i) && !now[i]) j = i;
+        for (let i = 0; i < cap && j < 0; i++) if (free(i) && !kept(i)) j = i;
+        for (let i = 0; i < cap && j < 0; i++) if (free(i)) j = i;
+        if (j >= 0) rows.set(j, t);
+      }
+      for (const [j, t] of rows) targets[side + '-' + j] = t;
+    }
+    S.targets = targets; S.locks = locks;
+    saveTargets();
+  }
   function modState(m) { return m.fractured ? 'fractured' : m.desecrated ? 'desecrated' : m.crafted ? 'crafted' : ''; }
 
   // ------------------------------------------------------------ tooltip (in-game look)
@@ -1932,7 +1986,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     projCache = it && !it.unsupported && obsState.ready ? projected() : null;
     if (!it) { el.innerHTML = '<h2>Stats</h2>'; return; }
     if (it.unsupported) { el.innerHTML = `<div class="panel-head"><h2>Stats</h2></div><p class="sub">${esc(it.unsupported)}</p>`; return; }
-    const lim = E.slotLimits(it);
+    const lim = E.slotLimits(it), cap = craftLimits(it);
     const tpl = TEMPLATES.filter((t) => t.cls.includes(it.itemClass));
     const mine = (S.userTemplates || []).filter((t) => t.cls === it.itemClass);
     const hasTargets = Object.values(S.targets).some((t) => t && t.fam);
@@ -1946,11 +2000,15 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (S.tplMode === 'save') html += `<div class="tctl" style="margin:-4px 0 12px"><input id="tplName" placeholder="Template name" maxlength="60" value="${esc(S.tplName || '')}" aria-label="Template name"><button class="btn small" type="button" id="tplSaveBtn">Save</button><button class="linkish" type="button" id="tplCancel">Cancel</button></div>`;
     if (S.tplMode === 'delete') html += `<div class="tctl" style="margin:-4px 0 12px">${mine.map((t) => `<button class="btn small" type="button" data-tpldel="${esc(t.id)}">Delete ${esc(t.label)}</button>`).join('')}<button class="linkish" type="button" id="tplCancel">Done</button></div>`;
     if (it.rarity === 'Unique') html += '<p class="sub">Unique modifiers are fixed; targets apply to Magic and Rare items.</p>';
+    else if (it.rarity === 'Normal' && cap.prefix + cap.suffix > 0) html += `<p class="sub">White base: choose up to ${cap.prefix} prefix and ${cap.suffix} suffix targets, and the plans craft them from this base.</p>`;
     for (const side of ['prefix', 'suffix']) {
-      const n = Math.max(lim[side], sideMods(it, side).length);
-      html += `<div class="side"><div class="side-head"><b>${side === 'prefix' ? 'Prefixes' : 'Suffixes'}</b><span class="sub num">${sideMods(it, side).length} / ${lim[side]}</span></div>`;
-      if (!n) html += `<div class="sub">${it.rarity === 'Normal' ? 'Normal items have no explicit modifiers yet.' : 'No slots on this side.'}</div>`;
-      for (let i = 0; i < n; i++) html += rowHtml(side, i);
+      const have = sideMods(it, side).length;
+      const n = Math.max(cap[side], have);
+      const holds = cap[side] > lim[side] ? ` title="${esc(`${it.rarity} items hold ${lim[side]} now; the plans can make it ${cap[side] > 1 ? 'Rare' : 'Magic'} (${cap[side]}).`)}"` : '';
+      html += `<div class="side"><div class="side-head"><b>${side === 'prefix' ? 'Prefixes' : 'Suffixes'}</b><span class="sub num"${holds}>${have} / ${cap[side]}</span></div>`;
+      if (!n) html += '<div class="sub">No slots on this side.</div>';
+      // rows past what the item holds now open when it becomes Magic (the first) or Rare (the rest)
+      for (let i = 0; i < n; i++) html += rowHtml(side, i, i >= lim[side] ? (i < 1 ? 'Magic' : 'Rare') : null);
       html += '</div>';
     }
     el.innerHTML = html;
@@ -1960,7 +2018,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     }
   }
 
-  function rowHtml(side, i) {
+  function rowHtml(side, i, opensAt) {
     const key = side + '-' + i;
     const m = modAt(side, i);
     const t = S.targets[key];
@@ -1968,7 +2026,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const cur = m
       ? `<span class="tchip ${m.tier ? 't' + Math.min(m.tier, 3) : ''}">${m.tier ? 'T' + m.tier : '–'}</span><span class="modtxt ${modState(m)}">${esc(m.text).replace(/\n/g, ' / ')}</span>
          <button type="button" class="icon-btn lock" data-lock="${key}" aria-pressed="${!!locked}" ${m.fractured ? 'disabled title="Fractured: cannot be removed"' : 'title="Keep: the planner will not remove this mod"'} aria-label="Keep this mod">${locked ? LOCK : UNLOCK}</button>`
-      : `<span class="tchip">–</span><span class="modtxt empty">Empty ${side}</span>`;
+      : `<span class="tchip">–</span><span class="modtxt empty">Empty ${side}${opensAt ? ` <span class="opens">· opens when ${opensAt}</span>` : ''}</span>`;
     let opts = '';
     let done = false;
     if (t && t.fam) {
@@ -2134,7 +2192,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   function applyStats(stats) {
     if (!S.item) return [];
     const missing = [];
-    const lim = E.slotLimits(S.item);
+    const lim = craftLimits(S.item);
     for (const st of stats) {
       const fam = E.resolveTemplateTarget(S.ix, S.item, st.label || st.stat);
       if (!fam) { missing.push(st.label || st.stat); continue; }
@@ -2199,7 +2257,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     return {
       ix: S.ix, item: S.item, targets: S.targets, locks: S.locks,
       priceOf: priceEx,
-      baseCost: parseFloat(S.baseCost) || 0, budget: parseFloat(S.budget) || 0, weights: itemWeights(), essences: itemEssences(), catalystMult: catMult(), recipes: recipeCandidates(),
+      baseCost: parseFloat(S.baseCost) || 0, budget: parseFloat(S.budget) || 0, baseLimit: baseLimit(), weights: itemWeights(), essences: itemEssences(), catalystMult: catMult(), recipes: recipeCandidates(),
     };
   }
   /** Library recipes for this item class and league whose goals overlap the targets, as strategy settings (7.4a). */
@@ -2214,6 +2272,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       .map((r) => ({ id: r.id, title: r.title, params: P.recipeParams(r) })).filter((x) => Object.keys(x.params).length);
   }
   function catMult() { return +S.catMult >= 1 ? +S.catMult : P.CATALYST_DEFAULT; }
+  /** White bases the player will use for one finished item (plans that start over keep to it). */
+  function baseLimit() { return Math.max(1, parseInt(S.baseLimit, 10) || 100); }
   /** Ring or amulet with catalyst quality (the only items Omen of Catalysing Exaltation works on). */
   function hasCatalyst(it) { return !!(it && (it.itemClass === 'Ring' || it.itemClass === 'Amulet') && it.quality > 0 && P.catalystTag(it.qualityType)); }
   /** Essences and alloys poe2db lists for this item class; alloys only in Runes of Aldur. */
@@ -2299,15 +2359,16 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   function namesHtml(names) {
     return names.map((n) => (n === 'New base' ? '' : icon(S.sidByName[n], n, 'sm'))).join('') + `<span>${esc(names.join(' + '))}</span>`;
   }
-  function stepHelp(a) {
+  function stepHelp(a, params) {
     switch (a.op) {
-      case 'newbase': return 'The first mod missed. Start again on a fresh white base.';
+      case 'newbase': return 'A mod missed the goals and fixing it would cost more: start again on a fresh white base.';
       case 'transmute': return 'Makes the item Magic with one random mod.';
       case 'augment': return 'Adds a mod to the open side of the Magic item.';
       case 'regal': return a.side ? `Makes the item Rare and adds a ${a.side}.` : 'Makes the item Rare and adds a random mod.';
       case 'alchemy': return a.side ? `Makes the item Rare with 4 mods, as many ${a.side}es as possible.` : 'Makes the item Rare with 4 random mods.';
       case 'exalt': return (a.side ? `Adds ${a.greater ? 'two ' + a.side + 'es' : 'a ' + a.side}.` : `Adds ${a.greater ? 'two random mods' : 'a random mod'}.`)
-        + (a.catalyse ? ` Omen of Catalysing Exaltation uses up the catalyst quality to favour ${S.item && S.item.qualityType ? S.item.qualityType : 'matching modifiers'}.` : '') + ' A miss fills the slot, so the next step clears it.';
+        + (a.catalyse ? ` Omen of Catalysing Exaltation uses up the catalyst quality to favour ${S.item && S.item.qualityType ? S.item.qualityType : 'matching modifiers'}.` : '')
+        + (params && params.slamOnly ? ' A miss fills the slot; once the side is full, the plan starts over on a new base instead of paying to clear it.' : ' A miss fills the slot, so the next step clears it.');
       case 'chaos': return a.whittle ? 'Removes the lowest-level mod and adds a random one. Check which mod is highlighted in game before using it.'
         : a.side ? `Removes a random ${a.side} (fractured mods are safe) and adds a random mod.` : 'Removes one random mod and adds a random mod. It can hit a mod you want.';
       case 'annul': return a.light ? 'Removes only the Desecrated mod.' : a.side ? `Removes a random ${a.side}.` : 'Removes one random mod.';
@@ -2347,11 +2408,14 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   /** Plain-language split of the fail chance. */
   function failLine(pl) {
     const parts = [];
-    const dead = (pl.fails || []).filter((f) => f.reason !== 'over budget' && !/^not finished/.test(f.reason));
+    const long = /^(not finished|no fitting Magic item)/;
+    const dead = (pl.fails || []).filter((f) => f.reason !== 'over budget' && !long.test(f.reason));
     if (pl.failDead > 0) parts.push(`dead end ${p1(pl.failDead)}${dead.length ? ` (${esc(dead[0].reason)})` : ''}`);
     if (pl.failBudget > 0) parts.push(`over your budget ${p1(pl.failBudget)}`);
-    if (pl.unfinished > 0) parts.push(`not finished within ${pl.maxSteps || 600} uses ${p1(pl.unfinished)}`);
-    const uses = `About ${pl.meanSteps < 10 ? pl.meanSteps.toFixed(1) : Math.round(pl.meanSteps)} uses per run.`;
+    const unf = (pl.fails || []).find((f) => long.test(f.reason));
+    if (pl.unfinished > 0) parts.push(`${esc(unf ? unf.reason : `not finished within ${pl.maxSteps || 600} uses`)} ${p1(pl.unfinished)}`);
+    let uses = `About ${pl.meanSteps < 10 ? pl.meanSteps.toFixed(1) : Math.round(pl.meanSteps)} uses per run.`;
+    if (pl.meanBases >= 0.5 && isFinite(pl.basesPerSuccess)) uses += ` Takes about ${fmtShort(pl.basesPerSuccess)} white bases per finished item.`;
     return (parts.length ? `Plan fail = ${parts.join(' + ')}. ` : 'No run hit a dead end. ') + uses;
   }
   /** How the per-use chance adds up: chance to be done within n uses, from the same runs as Plan success. */
@@ -2387,6 +2451,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (buy > 0) notes.push(buy < pl.meanCost
       ? `<span class="risk">Buying a finished item (${fmtShort(buy)} ex) is cheaper than this plan's expected cost.</span>`
       : `Crafting is expected to cost less than buying (${fmtShort(buy)} ex).`);
+    if (pl.moreBases) {
+      const n = pl.moreBases.bases;
+      notes.push(`With about ${fmtShort(n)} white bases per item, starting over instead of fixing mods would cost about ${fmtShort(pl.moreBases.cps)} ex per finished item (a first estimate). <button class="linkish" type="button" data-bases="${Math.ceil(n * 1.15)}">Plan with ${fmtShort(Math.ceil(n * 1.15))} bases</button>`);
+    }
     if (pl.goals.some((g) => !g.required)) notes.push('Checkpoint: when the required goals are met, price the item before chasing the nice-to-have ones.');
     if (pl.from && pl.from.recipe) notes.push(`Route from the recipe <b>${esc(pl.from.title)}</b>${pl.search && pl.search.searched ? ', tuned by the search' : ''}.`);
     else if (pl.from && pl.from.search) notes.push('Route found by the search: it changed one setting at a time from the best strategies until nothing improved.');
@@ -2399,7 +2467,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
           : '<button class="btn primary" type="button" id="appliedBtn">I applied this</button>'}</div>
          ${IRREVERSIBLE[nx.op] ? `<div class="irrev"><b>Cannot be undone.</b> ${esc(IRREVERSIBLE[nx.op])}${S.ack[ackKey(nx)] ? ' You reviewed this step.' : ' Review it before you use it in game.'}</div>` : ''}
          ${nextChanceHtml(pl, nx)}
-         <div class="st-help">${esc(stepHelp(nx))}</div>${nx.error ? `<div class="bad-note">${esc(nx.error)}</div>` : ''}`;
+         <div class="st-help">${esc(stepHelp(nx, pl.params))}</div>${nx.error ? `<div class="bad-note">${esc(nx.error)}</div>` : ''}`;
     return `<div class="plan-card">
       <div class="metrics">
         <div><span class="mk" title="Share of simulated runs that reach every goal of this plan, repeating the steps as needed">Plan success</span><b class="up">${successFail(pl.p).s}</b></div>
@@ -2412,7 +2480,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       ${notes.length ? `<ul class="pnotes">${notes.map((n) => `<li>${n}</li>`).join('')}</ul>` : ''}
       <ol class="steps">${pl.steps.map((s) => `<li><div class="st-names">${namesHtml(s.names)}</div>
         <div class="st-meta">${s.hit > 0 ? `<span class="hit" title="Average over all simulated uses of this step: share that completed a goal">${p1(s.hit)} per use</span>` : ''}<span class="num">×${s.avg < 10 ? s.avg.toFixed(1) : Math.round(s.avg)}</span>${s.names[0] === 'New base' ? '' : money(s.cost)}</div>
-        <div class="st-help">${esc(stepHelp(s.action))}</div></li>`).join('')}</ol>
+        <div class="st-help">${esc(stepHelp(s.action, pl.params))}</div></li>`).join('')}</ol>
       <div class="next"><span class="mk">Next step on your item</span>${nextHtml}</div>
       <div class="rules">${ruleBadges(pl)}</div>
       ${explainHtml()}
@@ -2458,8 +2526,9 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       item: { base: S.item.base, rarity: S.item.rarity, itemLevel: S.item.ilvl, mods: S.item.mods.map((m) => ({ side: m.slot, text: m.text, tier: m.tier, fractured: m.fractured, desecrated: m.desecrated })) },
       profile: pl.label,
       goals: pl.goals.map((g) => (g.minValue != null ? { stat: g.label, side: g.side, atLeastValue: g.minValue, required: g.required } : { stat: g.label, side: g.side, tierOrBetter: g.eff, required: g.required })),
-      steps: pl.steps.map((st) => ({ use: st.names.join(' + '), averageUsesPerRun: +st.avg.toFixed(1), what: stepHelp(st.action) })),
+      steps: pl.steps.map((st) => ({ use: st.names.join(' + '), averageUsesPerRun: +st.avg.toFixed(1), what: stepHelp(st.action, pl.params) })),
       successChance: pct(pl.p), expectedCostExalted: Math.round(pl.meanCost), chanceToLoseAFinishedGoal: pct(pl.lost),
+      whiteBasesPerFinishedItem: pl.meanBases >= 0.5 && isFinite(pl.basesPerSuccess) ? Math.round(pl.basesPerSuccess) : undefined,
       rules: ['Chaos Orb removes one random modifier and adds one; it never rerolls the whole item.', 'Items hold at most 1 crafted and 1 desecrated modifier.', 'Mod weights are unknown, so chances are estimates.'],
     };
     return 'You explain Path of Exile 2 (patch 0.5.5) crafting plans. Write 4 to 6 short, plain English sentences for a player: why the steps come in this order, what to watch for, and the main risk. '
@@ -2510,7 +2579,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       <label for="planBudget">Budget <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBudget" inputmode="decimal" placeholder="none" value="${esc(S.budget)}"></span></label>
       <label for="planBuy" title="Price of a finished item with your goals, seen on the official trade site">Buy instead <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBuy" inputmode="decimal" placeholder="price" value="${esc(S.buyPrice)}"></span></label>
       ${hasCatalyst(it) ? `<label for="planCat" title="How much Omen of Catalysing Exaltation raises the chance of ${esc(it.qualityType)} at 20% quality. The game gives no number. The default 5 comes from a single community source (guide log); set your own estimate, or settle in-game test t8.">Catalyst boost <span class="price-in">×<input id="planCat" inputmode="decimal" value="${esc(catMult())}"></span></label>` : ''}
-      ${it.rarity !== 'Rare' ? `<label for="planBase">White base <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBase" inputmode="decimal" value="${esc(S.baseCost)}"></span></label>` : ''}
+      ${it.rarity !== 'Rare' ? `<label for="planBase" title="Price of one white base of this type">White base <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBase" inputmode="decimal" value="${esc(S.baseCost)}"></span></label>
+      <label for="planBases" title="White bases you will use for one finished item. Starting over on a fresh base is often far cheaper than fixing a wrong mod, but each try takes a base.">Bases per item <span class="price-in"><input id="planBases" inputmode="numeric" value="${esc(S.baseLimit)}"></span></label>` : ''}
     </div>`;
     if (S.planState === 'running' || S.planState === 'searching' || S.planState === 'refining') html += `<div class="progress"><span id="planProgress" style="width:${Math.round(S.planProgress * 100)}%"></span></div>`;
     if (S.lastEval) {
@@ -2559,6 +2629,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const b = e.target.closest('button, [data-browse]'); if (!b) return;
     if (b.dataset.browse) { S.ex.cat = b.dataset.browse; S.ex.q = ''; openExchange(); return; }
     if (b.dataset.ptab) { S.planTab = b.dataset.ptab; store.set('planTab', S.planTab); renderPlan(); renderPrice(); if (S.preview) renderItem(); return; }
+    if (b.dataset.bases) { S.baseLimit = b.dataset.bases; store.set('baseLimit', S.baseLimit); schedulePlans(); return; }
     if (b.id === 'explainBtn') { explainPlan(); return; }
     if (b.id === 'libBtn') { openLib(); return; }
     if (b.id === 'appliedBtn' || b.id === 'reviewBtn') {
@@ -2620,6 +2691,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   planEl.addEventListener('change', (e) => {
     if (e.target.id === 'planBudget') { S.budget = e.target.value.trim(); store.set('budget', S.budget); schedulePlans(); }
     if (e.target.id === 'planBase') { S.baseCost = e.target.value.trim(); store.set('baseCost', S.baseCost); schedulePlans(); }
+    if (e.target.id === 'planBases') { S.baseLimit = e.target.value.trim(); store.set('baseLimit', S.baseLimit); schedulePlans(); }
     if (e.target.id === 'planRuns') { S.simRuns = +e.target.value || 20000; store.set('simRuns', S.simRuns); schedulePlans(); return; }
     if (e.target.id === 'planCat') { const v = parseFloat(String(e.target.value).replace(',', '.')); S.catMult = v >= 1 ? v : null; store.set('catMult', S.catMult); previewMemo.clear(); schedulePlans(); renderPlan(); }
     if (e.target.id === 'planBuy') { S.buyPrice = e.target.value.trim(); store.set('buyPrice', S.buyPrice); renderPlan(); }
