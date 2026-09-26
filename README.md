@@ -20,6 +20,7 @@ This product isn't affiliated with or endorsed by Grinding Gear Games in any way
 | `app/tests/` | JS testleri (kabul testleri 10.1–10.5 dahil) |
 | `scripts/fetch_prices.py` | Resmi Currency Exchange özeti + Exiled Exchange 2 (poe.ninja) fiyatları |
 | `scripts/build_price_package.py` | Fiyat belgelerinden npm paketi |
+| `scripts/fetch_icons.py`, `build_icons.py` | Fiyatlı eşyaların ikonları (web.poecdn.com, adresler Exiled Exchange 2 listesinden) ve paketi |
 | `scripts/kb_update.py`, `kb_diff.py` | Bilgi tabanı güncelleme hattı (build / check / approve) |
 | `scripts/selftest/` | Ağır self-test: rastgele yürüyüşler, strateji madenciliği, tarif karşılaştırması |
 | `.github/workflows/prices.yml` | Fiyat işi (3 saatte bir) |
@@ -33,6 +34,7 @@ python -m unittest discover -s scripts/tests
 python scripts/fetch_prices.py             # fiyatları yerelde günceller (.kb_cache/out)
 node scripts/selftest/run.js               # self-test (~10 dk); --quick kısa sürüm
 python scripts/kb_update.py build          # yeni bilgi tabanı adayı, sonra check / approve
+python scripts/fetch_icons.py              # yeni fiyatlı eşyaların ikonları, sonra scripts/build_icons.py
 ```
 
 `.kb_cache/` (indirilen oyun verisi, fiyat saatleri, ikonlar) ve `app/dist/` depoya girmez.
@@ -49,7 +51,7 @@ python scripts/kb_update.py build          # yeni bilgi tabanı adayı, sonra ch
 - Flask ve charm craft'ı destekleniyor ama iki sınırı var:
   - Normal veya Magic kalırlar (kural R_FLASK_MAGIC). Bu kural tek bir topluluk kaynağına dayanıyor; panel "verify in game" diyor.
   - poe2db flask ve charm için ağırlık yayınlamıyor, bu yüzden şanslar eşit ağırlıkla hesaplanıyor.
-- Soul core, gem ve fragment ikonları yer tutucu; indirmeleri ayrıca onay gerektiriyor.
+- Expedition Tablet'in ikonu yok; Exiled Exchange 2 listesinde adresi bulunmuyor. Diğer bütün fiyatlı eşyaların ikonu var.
 - Olasılıklar tahmindir: mod ağırlıkları poe2db'nin topluluk verisi, desecrated modlar eşit ağırlıklı, Catalysing Exaltation çarpanı (varsayılan ×5) tek kaynaklı ve ayarlanabilir.
 - Rare item değeri yalnızca kullanıcının kaydettiği fiyatlardan tahmin edilir; resmi fiyat geçmişi yok ve trade sitesine otomatik istek yasak (ToS 7i).
 - Unique fiyatları poe.ninja'dan gelir; ilan sayısı olmadığı için nadir unique'lerde gerçek satıştan uzak olabilir.
