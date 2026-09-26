@@ -1,0 +1,57 @@
+# PoE2 prices: every three hours fetch the official Currency Exchange digest and the Exiled Exchange 2 feed, then
+# publish the documents as the npm package poe2-craft-assistant-prices. The PoE2 Craft Assistant page loads its
+# prices.js from jsDelivr (or unpkg). npm trusted publishing (OIDC) authenticates the publish: no token is stored.
+name: PoE2 prices
+
+on:
+  schedule:
+    - cron: '20 */3 * * *'   # UTC; GitHub may start scheduled runs some minutes late
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write            # npm trusted publishing
+
+concurrency:
+  group: prices
+  cancel-in-progress: false
+
+jobs:
+  prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      # the hours downloaded by earlier runs, so a run only fetches the new ones
+      - name: Restore price hours
+        uses: actions/cache@v4
+        with:
+          path: .kb_cache/cx
+          key: cx-${{ github.run_id }}
+          restore-keys: cx-
+
+      - name: Fetch prices
+        run: python scripts/fetch_prices.py --budget 600
+
+      - name: Build the npm package
+        run: python scripts/build_price_package.py
+
+      - name: Publish to npm
+        working-directory: npm/prices
+        run: |
+          npm install -g npm@latest
+          npm publish --access public
+
+      # jsDelivr keeps @latest for a while; ask it to look again
+      - name: Refresh the jsDelivr copy
+        run: curl -fsS "https://purge.jsdelivr.net/npm/poe2-craft-assistant-prices@latest/prices.js" || true

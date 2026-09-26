@@ -8,6 +8,8 @@ reports/*.log
 
 # Build output (node app/build.js); the artifact is published from it
 app/dist/
+# The price package scripts/build_price_package.py writes (the GitHub Actions job publishes it to npm)
+npm/
 
 # Local settings and editor/OS files
 .claude/settings.local.json

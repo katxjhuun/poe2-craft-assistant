@@ -904,6 +904,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   async function connectPrices() {
     await null; // let the rest of the page script initialise first
     renderLeagueSelect();
+    loadFeed().then(useFeed);
     let db = null;
     try { db = window.claude && window.claude.use ? await window.claude.use('db') : null; } catch (e) { db = null; }
     if (!db) { loadSnapshot(); connectObservations(); connectShared(); return; }
@@ -912,22 +913,80 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     connectShared();
     connectUser();
     db.doc('prices/meta').onSnapshot((snap) => {
-      S.meta = snap.exists ? snap.data() : null;
+      const m = snap.exists ? snap.data() : null;
+      if (S.feed && (!m || (m.updatedAt || '') <= S.feed.meta.updatedAt)) return; // the price feed is newer
+      S.meta = m;
       if (!S.meta) { loadSnapshot(); return; }
+      S.feed = null;
       S.snapshot = null;
       renderLeagueSelect();
       subscribeLeague();
-    }, () => loadSnapshot());
+    }, () => { if (!S.feed) loadSnapshot(); });
+  }
+  // ============================================================ price feed (GitHub Actions -> npm -> jsDelivr / unpkg)
+  // A GitHub Actions job (.github/workflows/prices.yml) runs scripts/fetch_prices.py every three hours and publishes the
+  // documents as an npm package; the page may load scripts from these CDNs but not fetch other sites. The script runs
+  // in a Web Worker, so even a tampered package could only hand back data: it never reaches this page, its database or
+  // Claude. The page uses the feed when it is newer than the database copy or the bundled snapshot.
+  const FEED_PKG = 'poe2-craft-assistant-prices';
+  const FEED_URLS = ['https://cdn.jsdelivr.net/npm/' + FEED_PKG + '@latest/prices.js', 'https://unpkg.com/' + FEED_PKG + '@latest/prices.js'];
+  const FEED_WORKER = [
+    'self.onmessage = (e) => {',
+    '  let feed = null, error = null;',
+    '  for (const u of e.data) {',
+    '    try { importScripts(u); feed = self.POE2_PRICE_FEED || null; if (feed) break; } catch (x) { error = String(x); }',
+    '  }',
+    '  postMessage({ feed, error });',
+    '};',
+  ].join('\n');
+  function loadFeed() {
+    return new Promise((resolve) => {
+      let worker = null, done = false, url = null;
+      const finish = (feed) => {
+        if (done) return;
+        done = true;
+        try { if (worker) worker.terminate(); if (url) URL.revokeObjectURL(url); } catch (e) { /* already gone */ }
+        resolve(feed);
+      };
+      try {
+        url = URL.createObjectURL(new Blob([FEED_WORKER], { type: 'text/javascript' }));
+        worker = new Worker(url);
+        worker.onmessage = (e) => finish(validFeed(e.data && e.data.feed));
+        worker.onerror = () => finish(null);
+        worker.postMessage(FEED_URLS);
+        setTimeout(() => finish(null), 30000);
+      } catch (e) { finish(null); }
+    });
+  }
+  /** A well-formed feed only: meta with a league list and an update time, and documents that carry items. */
+  function validFeed(f) {
+    if (!f || typeof f !== 'object' || !f.meta || !Array.isArray(f.meta.leagues) || !f.meta.leagues.length) return null;
+    if (typeof f.meta.updatedAt !== 'string' || !f.leagues || typeof f.leagues !== 'object') return null;
+    for (const [id, doc] of Object.entries(f.leagues)) if (!doc || typeof doc !== 'object' || !doc.items || typeof doc.items !== 'object') delete f.leagues[id];
+    return Object.keys(f.leagues).length ? f : null;
+  }
+  function useFeed(feed) {
+    if (!feed) return;
+    if (S.meta && !S.snapshot && (S.meta.updatedAt || '') >= feed.meta.updatedAt) return; // the database copy is newer
+    if (S.snapshot && S.snapshot !== feed && (S.snapshot.meta.updatedAt || '') > feed.meta.updatedAt) return;
+    S.feed = feed;
+    if (S.unsubLeague) { S.unsubLeague(); S.unsubLeague = null; }
+    subscribedSlug = null;
+    S.snapshot = feed; S.meta = feed.meta;
+    if (!S.league || !leagueDoc(S.league)) S.league = S.meta.leagues[0].name;
+    renderLeagueSelect();
+    useSnapshotLeague();
   }
   /** Bundled copy of the last published prices, used when the live database is not available. */
   function loadSnapshot() {
     fetch('data/prices-snapshot.json').then((r) => (r.ok ? r.json() : null)).then((snap) => {
       if (!snap) throw new Error('no snapshot');
+      if (S.feed && (snap.meta.updatedAt || '') <= S.feed.meta.updatedAt) return; // the price feed is newer
       S.snapshot = snap; S.meta = snap.meta;
       if (!S.league || !leagueDoc(S.league)) S.league = S.meta.leagues[0].name;
       renderLeagueSelect();
       useSnapshotLeague();
-    }).catch(() => { S.pricesState = 'off'; renderTicker(); renderPlan(); renderPrice(); });
+    }).catch(() => { if (S.feed) return; S.pricesState = 'off'; renderTicker(); renderPlan(); renderPrice(); });
   }
   function useSnapshotLeague() {
     S.prices = S.snapshot.leagues[leagueDoc(S.league)] || S.snapshot.leagues[leagueSlug(S.league)] || null;
