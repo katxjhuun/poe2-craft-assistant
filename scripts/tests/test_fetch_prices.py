@@ -103,6 +103,22 @@ class PriceLayer(unittest.TestCase):
         self.assertEqual(got, len(first_pass) - 1)                      # everything but the unpublished hour
         self.assertFalse(os.path.exists(os.path.join(fp.CX_DIR, f'{now_hour - 3600}.json')))
 
+    def test_time_budget_stops_new_downloads(self):
+        clock = [time.time()]
+
+        def fake_time():
+            clock[0] += 30                                           # every look at the clock costs 30 s
+            return clock[0]
+        calls = []
+
+        def fake_fetch(hid):
+            calls.append(hid)
+            return hour(hid, [market(DIV, EX, 10, 5000)])
+        with mock.patch.object(fp, 'fetch', fake_fetch), mock.patch.object(fp.time, 'sleep', lambda s: None),                 mock.patch.object(fp.time, 'time', fake_time):
+            got = fp.update_cache(budget=100)
+        self.assertEqual(got, len(calls))                            # what was fetched is kept
+        self.assertEqual(len(calls), 2)                              # then no new download starts
+
     def test_rate_limit_waits_and_client_errors_are_not_retried(self):
         body = json.dumps(hour(self.h0, [])).encode()
         seq = [urllib.error.HTTPError('u', 429, 'slow down', {'Retry-After': '1'}, None), io.BytesIO(body)]

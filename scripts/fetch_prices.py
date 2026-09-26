@@ -382,17 +382,24 @@ def cached_ids():
     return sorted(int(f[:-5]) for f in os.listdir(CX_DIR) if f.endswith('.json') and f[:-5].isdigit())
 
 
-def update_cache():
+def update_cache(budget=None):
     """Download the hours of the last HOURS that are not on disk yet, newest first, so one stalled hour does not hold
     up the rest (a run that starts with an empty cache, like the cloud job, needs all of them); hours that failed get
-    one more try at the end. An hour the digest has not published yet (404 or no markets) is left for the next run."""
+    one more try at the end. An hour the digest has not published yet (404 or no markets) is left for the next run.
+    budget: stop starting new downloads after this many seconds and build with the hours on disk (the cloud job runs
+    the whole update inside one 10-minute command)."""
+    t0 = time.time()
     now_hour = int(time.time()) // 3600 * 3600
     have = set(cached_ids())
     todo = [h for h in range(now_hour - 3600, now_hour - HOURS * 3600 - 1, -3600) if h not in have]
-    fetched = 0
+    fetched, out_of_time = 0, False
     for attempt in range(2):
         failed = []
-        for hid in todo:
+        for i, hid in enumerate(todo):
+            if budget and time.time() - t0 > budget:
+                print(f'time budget of {budget}s reached: {len(todo) - i + len(failed)} hour(s) left out', file=sys.stderr)
+                out_of_time = True
+                break
             try:
                 data = fetch(hid)
             except urllib.error.HTTPError as e:
@@ -406,7 +413,7 @@ def update_cache():
                     json.dump(data, f)
                 fetched += 1
             time.sleep(1.5)
-        if not failed:
+        if out_of_time or not failed:
             break
         print(f'{len(failed)} hour(s) stalled; trying them once more', file=sys.stderr)
         todo = failed
@@ -627,7 +634,7 @@ def _publish(staging, final):
                 pass
 
 
-def refresh(offline=False, crosscheck_report=False):
+def refresh(offline=False, crosscheck_report=False, budget=None):
     """One price update: new hours of the official digest, the league documents, the Exiled Exchange 2 layer and the
     poe2db fallback, built in a staging folder and then moved into .kb_cache/out. Used by the command line and by the
     local price server (scripts/prices_mcp.py). Returns meta, or None when another update holds the lock."""
@@ -641,7 +648,7 @@ def refresh(offline=False, crosscheck_report=False):
         shutil.rmtree(staging, ignore_errors=True)
         os.makedirs(staging)
         OUT_DIR = staging
-        got = 0 if offline else update_cache()
+        got = 0 if offline else update_cache(budget)
         meta = build()
 
         span = f"{datetime.fromtimestamp(meta['hourFrom'], timezone.utc):%Y-%m-%d %H:%M} - {datetime.fromtimestamp(meta['hourTo'], timezone.utc):%Y-%m-%d %H:%M} UTC"
@@ -704,5 +711,6 @@ if __name__ == '__main__':
         sys.stdout.reconfigure(encoding='utf-8')
     except Exception:
         pass
-    if refresh(offline='--offline' in sys.argv, crosscheck_report='--crosscheck' in sys.argv) is None:
+    budget = int(sys.argv[sys.argv.index('--budget') + 1]) if '--budget' in sys.argv else None
+    if refresh(offline='--offline' in sys.argv, crosscheck_report='--crosscheck' in sys.argv, budget=budget) is None:
         sys.exit(2)
