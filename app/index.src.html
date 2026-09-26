@@ -531,7 +531,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     </button>
     <label class="league" for="league"><select id="league" aria-label="League"></select></label>
   </header>
-  <div class="band" id="staleBand" hidden>PoE2 1.0 is out. This knowledge base is patch 0.5.5 data; tiers and rules may be outdated until it is rebuilt.</div>
+  <div class="band" id="staleBand" role="status" hidden></div>
 
   <main class="board" id="board">
     <section class="panel plan" id="planPanel" aria-label="Craft plan"></section>
@@ -792,7 +792,6 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
 
   // ============================================================ boot
   document.documentElement.lang = 'en';
-  if (new Date() >= new Date('2026-12-11T00:00:00Z')) $('#staleBand').hidden = false;
   $('#exampleBtns').innerHTML = SAMPLES.map((s) => `<button class="chip" type="button" data-sample="${esc(s.id)}">${esc(s.label)}</button>`).join('');
 
   Promise.all([
@@ -819,6 +818,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (!restoreSession(sess)) ingest(last || SAMPLES[0].text, last ? 'Last item' : 'Example', { keep: true });
     if (!sess && !last && !Object.keys(S.targets).length) applyTemplate('minion-sceptre');
     kbReadyResolve();
+    renderStaleBand();
     renderAll();
     schedulePlans();
   }).catch((err) => {
@@ -904,7 +904,11 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   async function connectPrices() {
     await null; // let the rest of the page script initialise first
     renderLeagueSelect();
-    loadFeed().then(useFeed);
+    loadFeed().then((feed) => {
+      S.gameData = (feed && feed.meta.gameData) || null; // informative even when the database has newer prices
+      renderStaleBand();
+      useFeed(feed);
+    });
     let db = null;
     try { db = window.claude && window.claude.use ? await window.claude.use('db') : null; } catch (e) { db = null; }
     if (!db) { loadSnapshot(); connectObservations(); connectShared(); return; }
@@ -923,6 +927,16 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       subscribeLeague();
     }, () => { if (!S.feed) loadSnapshot(); });
   }
+  // ============================================================ "data may be outdated" band (master prompt 3.4)
+  // The price job records the version of the newest RePoE PoE2 export (meta.gameData); G.staleNotice compares it with
+  // the knowledge base's own version and falls back to PoE2 1.0's planned date.
+  function renderStaleBand() {
+    const band = $('#staleBand');
+    const text = G.staleNotice(S.ix ? S.ix.kb.meta : null, S.gameData, new Date());
+    band.textContent = text;
+    band.hidden = !text;
+  }
+
   // ============================================================ price feed (GitHub Actions -> npm -> jsDelivr / unpkg)
   // A GitHub Actions job (.github/workflows/prices.yml) runs scripts/fetch_prices.py every three hours and publishes the
   // documents as an npm package; the page may load scripts from these CDNs but not fetch other sites. The script runs

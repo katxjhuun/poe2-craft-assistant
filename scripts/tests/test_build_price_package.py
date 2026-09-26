@@ -34,6 +34,42 @@ class PricePackage(unittest.TestCase):
             self.assertEqual((package['name'], package['version'], package['main']), (bp.NAME, version, 'prices.js'))
             self.assertIn('prices.js', package['files'])
 
+    def test_package_carries_the_game_data_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out, pkg = os.path.join(tmp, 'out'), os.path.join(tmp, 'pkg')
+            os.makedirs(out)
+            json.dump({'updatedAt': '2026-09-26T12:03:28Z', 'docs': ['forbidden-rites'], 'leagues': [{'name': 'Forbidden Rites', 'slug': 'forbidden-rites'}]},
+                      open(os.path.join(out, 'meta.json'), 'w'))
+            json.dump({'items': {}}, open(os.path.join(out, 'league-forbidden-rites.json'), 'w'))
+            bp.build_package(out, pkg, '4.5.6.0')
+            feed = json.load(open(os.path.join(pkg, 'prices.json'), encoding='utf-8'))
+            self.assertEqual(feed['meta']['gameData'], {'version': '4.5.6.0', 'source': bp.GAME_VERSION_SOURCE})
+
+    def test_game_data_version_reads_only_a_version(self):
+        class Reply:
+            def __init__(self, body): self.body = body
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self, n=-1): return self.body[:n] if n > 0 else self.body
+
+        def serve(body):
+            def urlopen(req, timeout=None):
+                if isinstance(body, Exception):
+                    raise body
+                return Reply(body)
+            return urlopen
+
+        real = bp.urllib.request.urlopen
+        try:
+            bp.urllib.request.urlopen = serve(b'4.5.5.2\n')
+            self.assertEqual(bp.game_data_version(), '4.5.5.2')
+            bp.urllib.request.urlopen = serve(b'<!DOCTYPE html><title>404</title>')     # an error page is not a version
+            self.assertIsNone(bp.game_data_version())
+            bp.urllib.request.urlopen = serve(bp.urllib.error.URLError('offline'))
+            self.assertIsNone(bp.game_data_version())
+        finally:
+            bp.urllib.request.urlopen = real
+
 
 if __name__ == '__main__':
     unittest.main()

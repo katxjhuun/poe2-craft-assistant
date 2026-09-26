@@ -45,6 +45,7 @@ python scripts/fetch_icons.py              # yeni fiyatlı eşyaların ikonları
 2. Belgeler `poe2-craft-assistant-prices` npm paketine yayınlanır (npm trusted publishing, saklı anahtar yok). İş akışı npm yeni sürümü listeleyince jsDelivr önbelleğini temizler.
 3. Sayfa paketi jsDelivr'dan (olmazsa unpkg) saatlik bir ekle, ayrı bir Web Worker içinde yükler ve yalnızca veriyi alır. Artifact sayfası başka sitelere istek atamaz, yalnızca bu CDN'lerden script yükleyebilir.
 4. Paket yüklenemezse sayfa artifact veritabanındaki son kopyayı ya da sayfayla gelen `prices-snapshot.json` dosyasını kullanır.
+5. Paket, bilgi tabanının kaynağı olan RePoE PoE2 dışa aktarımının güncel oyun verisi sürümünü de taşır (`meta.gameData`). Bu sürüm bilgi tabanınınkinden yeniyse sayfada "veri eski olabilir" bandı çıkar; bilgi tabanı `scripts/kb_update.py` ile yeniden üretilince kaybolur.
 
 ## Bilinen eksikler
 
@@ -58,5 +59,5 @@ python scripts/fetch_icons.py              # yeni fiyatlı eşyaların ikonları
 - Ctrl+C (basit) metninde tier yoktur; aynı metne uyan hibrit ve yerel/genel modlar seçim için işaretlenir.
 - Standard ligde EE2 ile resmi özet arasındaki fark koruma sınırına yakın; lig kaynağı çalışmadan çalışmaya değişebilir.
 - Fiyat paketi npm'de herkese açık; npm veri dağıtımı için tasarlanmadı.
-- Veri 0.5.5'e kilitli. PoE2 1.0 (11 Aralık 2026) sonrası bilgi tabanı yeniden üretilene kadar sayfada uyarı bandı çıkar.
+- Veri 0.5.5'e kilitli. Yeni oyun verisi çıkınca (fiyat işi haber verir; bu bilgi yoksa PoE2 1.0'ın planlanan tarihi 11 Aralık 2026'dan itibaren) sayfada uyarı bandı çıkar. Bilgi tabanını yeniden üretmek elle yapılır: `kb_update.py build`, `check`, `approve`, sonra yayın.
 - Self-test simülatörün veriye ve kurallara uyduğunu doğrular, oyunun davranışını değil; tartışmalı mekanikler oyun içi testlerle (t1–t20) kapanır.

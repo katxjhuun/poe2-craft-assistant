@@ -135,3 +135,17 @@ test('8.1 league rules: HC, SSF and private copies follow their parent league; t
   const rs = G.recipesFor(lib, 'Sceptre', G.leagueRules('HC Forbidden Rites'));
   assert.ok(rs.some((r) => r.inLeague));
 });
+
+test('3.4 outdated data notice: newer game data from the price job, else PoE2 1.0 date', () => {
+  const meta = kb.meta;                                                   // game_data_version 4.5.5.2, patch 0.5.5
+  const sept = new Date('2026-09-26T12:00:00Z'), dec = new Date('2026-12-12T12:00:00Z');
+  assert.ok(G.newerVersion('4.5.10.0', '4.5.9.3') && !G.newerVersion('4.5.5.2', '4.5.5.2') && !G.newerVersion('4.5.5.1', '4.5.5.2'));
+  assert.equal(G.staleNotice(meta, null, sept), '');
+  assert.equal(G.staleNotice(meta, { version: meta.game_data_version }, sept), '');
+  assert.equal(G.staleNotice(meta, { version: '4.5.5.1' }, sept), '');                 // older export: nothing new
+  assert.equal(G.staleNotice(meta, { version: '<html>' }, sept), '');
+  assert.match(G.staleNotice(meta, { version: '4.5.6.0' }, sept), /version 4\.5\.6\.0; this knowledge base uses 4\.5\.5\.2, patch 0\.5\.5/);
+  assert.match(G.staleNotice(meta, null, dec), /PoE2 1\.0 was due/);
+  assert.equal(G.staleNotice(Object.assign({}, meta, { patch: '1.0.0 (launch)', game_data_version: '4.6.0.1' }), null, dec), '');
+  assert.equal(G.staleNotice(null, { version: '9.9.9.9' }, dec), '');                  // before the knowledge base loads
+});

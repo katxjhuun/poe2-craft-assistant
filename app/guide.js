@@ -224,5 +224,35 @@
     return RULE_LEAGUES.find((r) => n.includes(r.toLowerCase())) || null;
   }
 
-  return { RULES, RULE_LEAGUES, splitClaims, checkClaim, checkGuide, recipesFor, similarity, patchOf, effectiveLibrary, sourceTier, sourceKey, sourceLabel, hostOf, logEntries, leagueRules };
+  /** Is dotted version a newer than b ("4.5.10.0" > "4.5.9.3")? */
+  function newerVersion(a, b) {
+    const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
+    for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+      const d = (pa[i] || 0) - (pb[i] || 0);
+      if (d) return d > 0;
+    }
+    return false;
+  }
+  const RELEASE_1_0 = Date.parse('2026-12-11T00:00:00Z');
+  /**
+   * The "data may be outdated" notice (master prompt 3.4), or '' when none applies. kbMeta: the knowledge base's meta;
+   * gameData: {version} of the newest RePoE PoE2 export, which the price job records (null when unknown). A newer
+   * version means a patch changed the game files; without that record the notice starts on PoE2 1.0's planned date.
+   */
+  function staleNotice(kbMeta, gameData, now) {
+    if (!kbMeta) return '';
+    const have = kbMeta.game_data_version;
+    const patch = String(kbMeta.patch || '').split(' ')[0] || '?';
+    const next = gameData && /^\d+(\.\d+)+$/.test(gameData.version || '') ? gameData.version : null;
+    if (have && next && newerVersion(next, have)) {
+      return `New game data is out (version ${next}; this knowledge base uses ${have}, patch ${patch}). Tiers and rules may be outdated until it is rebuilt.`;
+    }
+    if (+(now || new Date()) >= RELEASE_1_0 && /^0\./.test(patch)) {
+      return `PoE2 1.0 was due on 11 December 2026. This knowledge base is patch ${patch} data; tiers and rules may be outdated until it is rebuilt.`;
+    }
+    return '';
+  }
+
+  return { RULES, RULE_LEAGUES, splitClaims, checkClaim, checkGuide, recipesFor, similarity, patchOf, effectiveLibrary, sourceTier, sourceKey, sourceLabel, hostOf, logEntries, leagueRules,
+    newerVersion, staleNotice };
 });

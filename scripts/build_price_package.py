@@ -9,15 +9,26 @@ same shape as the page's bundled prices-snapshot.json), prices.json holds the sa
 meta.updatedAt, so every price update is a new version. The GitHub Actions workflow .github/workflows/prices.yml
 publishes it; the page loads prices.js from jsDelivr (or unpkg) inside a Web Worker, since the artifact may load
 scripts from those CDNs but cannot fetch other sites.
+
+The package also carries the game data version of the newest RePoE PoE2 export, the source of the knowledge base
+(meta.gameData). When it is newer than the knowledge base's own version, the page shows that its data may be outdated
+(master prompt 3.4) until the knowledge base is rebuilt with scripts/kb_update.py.
 """
+import http.client
 import json
 import os
+import re
 import sys
+import urllib.error
+import urllib.request
 from datetime import datetime
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NAME = 'poe2-craft-assistant-prices'
 REPO = 'https://github.com/katxjhuun/poe2-craft-assistant'
+GAME_VERSION_URL = 'https://raw.githubusercontent.com/repoe-fork/poe2/master/version.txt'  # as in poe2_kb_build.py
+GAME_VERSION_SOURCE = 'RePoE PoE2 export (github.com/repoe-fork/poe2)'
+UA = 'poe2craftassist/0.2 (personal tool; price package)'
 
 README = """# {name}
 
@@ -36,9 +47,23 @@ def version_of(updated_at):
     return f'1.{t:%Y%m%d}.{int(t.strftime("%H%M%S"))}'
 
 
-def build_package(out_dir, pkg_dir):
-    """Write the package; returns its version."""
+def game_data_version():
+    """Version of the newest RePoE PoE2 export, like 4.5.5.2, or None when it cannot be read."""
+    req = urllib.request.Request(GAME_VERSION_URL, headers={'User-Agent': UA, 'Accept-Encoding': 'identity'})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as r:
+            text = r.read(64).decode('utf-8', 'replace').strip()
+    except (OSError, http.client.HTTPException) as e:  # URLError, HTTPError and timeouts are OSErrors
+        print(f'game data version not read ({e})', file=sys.stderr)
+        return None
+    return text if re.fullmatch(r'\d+(\.\d+){1,4}', text) else None
+
+
+def build_package(out_dir, pkg_dir, game_data=None):
+    """Write the package; returns its version. game_data: the newest game data version (game_data_version())."""
     meta = json.load(open(os.path.join(out_dir, 'meta.json'), encoding='utf-8'))
+    if game_data:
+        meta['gameData'] = {'version': game_data, 'source': GAME_VERSION_SOURCE}
     docs = meta.get('docs') or [l['slug'] for l in meta['leagues']]
     feed = {'meta': meta, 'leagues': {d: json.load(open(os.path.join(out_dir, f'league-{d}.json'), encoding='utf-8')) for d in docs}}
     version = version_of(meta['updatedAt'])
@@ -70,4 +95,5 @@ def build_package(out_dir, pkg_dir):
 if __name__ == '__main__':
     out_dir = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, '.kb_cache', 'out')
     pkg_dir = sys.argv[2] if len(sys.argv) > 2 else os.path.join(ROOT, 'npm', 'prices')
-    print(NAME, build_package(out_dir, pkg_dir), '->', pkg_dir)
+    game = game_data_version()
+    print(NAME, build_package(out_dir, pkg_dir, game), '->', pkg_dir, '| game data', game or 'unknown')
