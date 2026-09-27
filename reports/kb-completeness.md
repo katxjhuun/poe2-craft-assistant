@@ -46,6 +46,12 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 
 ## Log
 
+- 27 Sept 2026: t27 from the player's trade searches: wands never carry two elements' spell modifiers (0 results for three
+  pairs, the check pair found), so natural rolls follow the adds_tags rule. Two staves do carry such pairs, each with something
+  normal rolling cannot make: a fractured Cold spell level suffix (Ghoul Beam), and Fire lines on a Gelid Staff whose own base
+  tags forbid them, shown without a tier (Mind Roar). The route (Recombinator? Expedition is core again in 0.5.5) and whether
+  a fractured mod still stops others are test t30. The four items are parser fixtures.
+
 - 27 Sept 2026: two trade jewels from the player (Blight Joy, Loath Ornament) read cleanly: with a Potent Liquid Contempt
   allowance mod a jewel holds 4 regular mods + the crafted one (3 + 2 or 2 + 3). They showed a real bug: poe2db's jewel
   families are mod groups, so different stats shared one family (Damage with Maces/Quarterstaves/Spears; 9 families) and

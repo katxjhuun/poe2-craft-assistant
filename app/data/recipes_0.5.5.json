@@ -1629,7 +1629,10 @@
       "question": "Does one element's spell modifier keep another element's off wands and staves?",
       "how": "On the trade site (Forbidden Rites, item category Wand, then Staff), search each pair; the game data says the first three find nothing. 1) \"#% increased Fire Damage\" with \"+# to Level of all Cold Spell Skills\". 2) \"#% increased Cold Damage\" with \"#% increased Flammability Magnitude\". 3) \"+# to Level of all Lightning Spell Skills\" with \"#% increased Freeze Buildup\". Check: \"#% increased Fire Damage\" with \"+# to Level of all Fire Spell Skills\" should find items. The stopping is one-way in places: an Ignite (Flammability) suffix does not stop \"+# to Level of all Physical Spell Skills\", but that suffix stops Ignite.",
       "claims": [],
-      "found": "game data"
+      "found": "game data",
+      "status": "confirmed",
+      "note": "Your trade searches (27 Sept 2026): wands 0 results for the three pairs, the check pair found (Brimstone Cry). Staves: the Cold/Lightning pair 0; two staves carry a pair, each with something outside normal rolling: Ghoul Beam has the Cold spell levels fractured, and on Mind Roar (a Gelid Staff, whose own tags keep Fire spell modifiers off) the Fire lines show no tier, so they did not roll there. Natural rolls keep to the rule.",
+      "source": "your trade searches and items (Brimstone Cry, Eagle Roar, Ghoul Beam, Mind Roar); game data adds_tags and base tags"
     },
     {
       "id": "t28",
@@ -1648,6 +1651,12 @@
       "status": "confirmed",
       "note": "Grasping Mail takes every catalyst that works on rings and amulets and rolls like a ring.",
       "source": "your in-game report (27 Sept 2026); its implicits say \"Can roll Ring Modifiers\" and \"Catalysts can be applied to this item\""
+    },
+    {
+      "id": "t30",
+      "question": "Which route puts two spell modifiers of different elements on one staff (Ghoul Beam, Mind Roar), and does a fractured modifier still keep other elements off?",
+      "how": "Tell in which league the two staves are listed. Mind Roar has Fire lines a Gelid Staff cannot roll (no tier shown): a route that ignores the base, such as the Recombinator, if Expedition brought it back in 0.5.5 (Expedition is core content again in Standard and Forbidden Rites). To test the fracture part: on a wand with a fractured \"+# to Level of all Cold Spell Skills\", use Exalted Orbs with Omen of Sinistral Exaltation and see whether \"#% increased Fire Damage\" ever comes.",
+      "claims": []
     }
   ]
 }

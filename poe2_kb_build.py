@@ -224,7 +224,7 @@ ops=[
 legacy=[{'name':'Omen of Homogenising Exaltation / Coronation','status':'drops disabled since 0.4 (Standard legacy)','conf':M2},
         {'name':'Omen of Corruption','status':'unobtainable since 0.5.0 (legacy)','conf':M2},
         {'name':'Omen of Recombination','status':'removed in 0.5.0','conf':M2},
-        {'name':'Recombinator (Expedition)','status':'disabled in Runes of Aldur; status in 0.5.5 / Forbidden Rites unverified','conf':S1}]
+        {'name':'Recombinator (Expedition)','status':'disabled in Runes of Aldur (0.5.0); 0.5.5 made Expedition core again in Standard and Forbidden Rites, the Recombinator itself unverified; trade staves carry pairs that normal rolls cannot make (test t30)','conf':S1}]
 kb['crafting_rules']=rules; kb['crafting_ops']=ops; kb['legacy_or_disabled']=legacy
 # ---- essences that give one of several mods (EssenceMods rows without a fixed Mod: OutcomeMods, OutcomeModWeights).
 # Table rows refer to BaseItemTypes and Mods by row number; RePoE's base_items.json and mods.json keep that order.

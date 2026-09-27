@@ -283,3 +283,17 @@ test('real jewels with a "+1 Prefix/Suffix Modifier allowed" mod: 4 regular mods
   assert.ok(mace && kb.mods[staff.modId].fam !== mace[1].fam && kb.mods[staff.modId].grp.some((g) => mace[1].grp.includes(g)));
 });
 
+test('trade wands and staves from test t27 read cleanly; mods a base cannot roll are flagged, tiers match the game', () => {
+  const ITEMS = require('./fixtures/spell-weapons.js');
+  for (const it of ITEMS) {
+    const r = E.parseItem(ix, it.text);
+    assert.ok(r.item.mods.every((m) => m.modId), it.id + ' every line matched');
+    assert.ok(!r.warnings.some((w) => w.level === 'error'), it.id + ' ' + JSON.stringify(r.warnings));
+    for (const m of r.item.mods) if (m.gameTier) assert.equal(m.tier, m.gameTier, `${it.id}: ${m.text}`);
+    // a Gelid Staff's own tags keep Fire spell modifiers off; the game shows those two lines without a tier
+    const out = r.item.mods.filter((m) => !m.inPool && !m.desecrated && !m.crafted).map((m) => m.text);
+    assert.deepEqual(out, it.id === 'mind-roar' ? ['95% increased Flammability Magnitude', '+7 to Level of all Fire Spell Skills'] : [], it.id);
+  }
+  assert.ok(kb.bases['Gelid Staff'].tags.includes('no_fire_spell_mods'));
+});
+
