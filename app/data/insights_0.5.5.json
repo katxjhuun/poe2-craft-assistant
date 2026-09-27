@@ -1,6 +1,6 @@
 {
  "meta": {
-  "date": "2026-09-27T09:37:27.969Z",
+  "date": "2026-09-27T19:26:14.472Z",
   "quick": false,
   "bases": 56,
   "scenarios": 777,
@@ -18,7 +18,7 @@
   },
   "weights": "2026-09-27",
   "workers": 30,
-  "seconds": 568,
+  "seconds": 619,
   "skipped": [],
   "errors": 0
  },
@@ -140,11 +140,11 @@
    "n": 217205,
    "fail": 16334,
    "examples": [
+    "Blacksteel Gauntlets: AddedPhysicalDamage6 read as AddedPhysicalDamage7, right mod listed as a candidate",
+    "Blacksteel Gauntlets: AddedPhysicalDamage8 read as AddedPhysicalDamage9, right mod listed as a candidate",
+    "Blacksteel Gauntlets: AddedPhysicalDamage2 read as AddedPhysicalDamage3, right mod listed as a candidate",
     "Grand Spear: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate",
-    "Grand Spear: LocalAddedPhysicalDamage6 read as LocalAddedPhysicalDamage7, right mod listed as a candidate",
-    "Grand Spear: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate",
-    "Grand Cuisses: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate",
-    "Grand Cuisses: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate"
+    "Grand Spear: LocalAddedPhysicalDamage6 read as LocalAddedPhysicalDamage7, right mod listed as a candidate"
    ]
   }
  ],
@@ -160,8 +160,8 @@
   "fracture": 15987,
   "divine": 39306,
   "alchemy": 25778,
-  "pessence": 70250,
   "essence": 10758,
+  "pessence": 70250,
   "flux": 19966
  },
  "freq": {
@@ -1979,11 +1979,7 @@
   }
  ],
  "sincePrevious": {
-  "previous": "2026-09-27T02:23:23.004Z",
-  "changes": [
-   "pair-prefix-suffix-T2 · rare: best route \"Greater orbs, side omens, Chaos Orb\" -> \"basic orbs, Chaos Orb\".",
-   "pair-two-suffixes · rare: best route \"basic orbs, side omens, Chaos Orb\" -> \"basic orbs, Chaos Orb\".",
-   "single-suffix-rare-T1 · rare: best route \"basic orbs, side omens, Chaos Orb\" -> \"basic orbs, Chaos Orb\"."
-  ]
+  "previous": "2026-09-27T09:37:27.969Z",
+  "changes": []
  }
 }
