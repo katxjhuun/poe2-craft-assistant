@@ -29,7 +29,7 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 
 | # | Area | Source | Target level | Status |
 |---|---|---|---|---|
-| 1 | Natural mod pools per base: tiers, levels, groups, tags, texts, value ranges | RePoE mods.json (have); cross-check RePoE mods_by_base.json | game data | **verified**: all 1,617 in-scope bases (22 classes) identical to RePoE's per-base game-data lists (scripts/kb_verify.py). Jewels keep poe2db ids and in-game radius wording; texts and ranges match the game data; the Small/Notable split of radius mods still needs Mods.RadiusJewelType (raw Mods table, 7.4 MB, not downloaded yet) |
+| 1 | Natural mod pools per base: tiers, levels, groups, tags, texts, value ranges | RePoE mods.json (have); cross-check RePoE mods_by_base.json | game data | **verified**: all 1,617 in-scope bases (22 classes) identical to RePoE's per-base game-data lists (scripts/kb_verify.py). Jewels keep poe2db ids and in-game radius wording; texts and ranges match the game data; the Small/Notable split of radius mods is verified against Mods.RadiusJewelType (77 Small, 79 Notable, all identical; user OK for the download) |
 | 2 | Roll weights of natural mods | poe2db DropChance (have); Craft of Exile | cross-checked estimate | poe2db only; comparison pending |
 | 3 | Essence mods per item class | game tables EssenceMods, Essences, EssenceTargetItemCategories | game data | **verified**: all 1,168 essence/alloy -> class -> mod pairs identical (scripts/essences_from_gamedata.py). The 9 essences that give one of several mods are in kb.essence_outcomes (game table; Abyss 50/50 and Perfect Infinite 50/50/50 weights, others none) and the planner rolls among the outcomes the item can take |
 | 4 | Desecrated mods per class, levels, lich tags, reveal rules | RePoE desecrated domain + keywords | game data | done (all equipment desecrated mods are level 65; none on sceptres) |
@@ -40,9 +40,18 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 | 9 | Catalyst quality types and the mods they favour | game table AlternateQualityTypes | game data | **verified**: 26 quality types (13 catalysts for rings and amulets, 13 Refined for jewels) in kb.catalyst_qualities; each maps to a mod tag the planner favours (test). Jewel mods now carry the game's mod tags and stats (all 320 linked to their game mod) |
 | 10 | Currency and omen rules (conditions, limits, tiers) | item texts, keywords, TieredCurrency, CurrencyPerItemClassConditions | game data | **verified**: Greater/Perfect minimum modifier levels identical to TieredCurrency (10 of 10; the build asserts it). CurrencyPerItemClassConditions: columns not identified, not used. Rare jewels 2 + 2 (community source, test t24): the engine used 3 + 3 before, fixed. Removal side of Perfect essences and liquid emotions (players' reports, test t25) |
 | 12 | Tags that mods and implicits give the item (game data adds_tags) | RePoE mods.json adds_tags + spawn weights | game data | **verified**: 168 mods carry them (kb mod.at). Elemental spell prefixes, spell skill level suffixes and ailment suffixes on wands, staves and foci keep the other elements' spell modifiers off (cross-side too); the planner rolls with them, the picker says "blocked by", clashing targets are reported. Implicit "Can roll Ring Modifiers" (Grasping Mail and its Runeforged forms) adds ring: their pools grew from 203 to 407 mods (RePoE's per-base lists leave this out; kb_verify computes it) |
+| 13 | Unique jewels | RePoE uniques.json, EE2 bases, poe2db unique pages, game unique mods | game data + poe2db | **done**: all 13 in kb.uniques (scripts/unique_jewels.py, reports/unique-jewels.md): base, limit, drops corrupted, lines; fixed lines checked against the game's unique mods, lines that vary per item (random passives, keystones, desecrated or jewel mods, timeless leaders) marked. Jewels cannot be chanced (game table Chanceableitemclasses), so unique jewels only drop |
+| 14 | Verisium Anvil (Runeforging) | Expedition2VerisiumCrafts, ArmourTypes, Words; player; runeforging guides | game data + confirmed | **done**: 387 base upgrades with Armour/Evasion/ES and Runic Ward before and after (bases from level 55 give up about 12-20% of their defence; all get Ward), 269 uniques moved to their Runeforged/Runemastered base with crests. Modifiers stay (player; fractured ones too since 0.5.1) |
 | 11 | Mechanics that the files do not state | in-game tests (page) | open until tested | 18 open (see In-game tests; t24-t29 added) |
 
 ## Log
+
+- 27 Sept 2026: player facts checked. Potent Ferocity/Contempt placement (side the removal opened) confirmed by the player, the
+  game data sides and the MMOexp guide (t26). Runeforging confirmed by the game tables (Ward on all 402 upgraded bases,
+  defence loss from base level 55) and a guide (t28). Grasping Mail takes jewellery catalysts (t29, player). Jewel total:
+  the player says a Rare jewel never has more than 4 modifiers; the game data raises one side by 1 without lowering the
+  other and two guides describe 5-modifier jewels, so t24 stays open with the exact test. Orb of Chance does not work
+  on jewels (game table), found while collecting the unique jewels.
 
 - 27 Sept 2026: full self-test on the new data (about 1.07 million checked steps, 213,000 parser round trips, 46,190
   strategy runs per run) found five problems, all fixed: a side over its limit hid a free slot (bones removed a mod they

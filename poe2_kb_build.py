@@ -28,6 +28,10 @@ SRC = {
  'AlternateQualityTypes.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/AlternateQualityTypes.csv',
  # Verisium Anvil: base -> Runeforged/Runemastered base, with Verisium (and crests for the unique forms)
  'Expedition2VerisiumCrafts.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/Expedition2VerisiumCrafts.csv',
+ # base defences incl. Runic Ward, the item classes an Orb of Chance works on, unique names (Words)
+ 'ArmourTypes.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/ArmourTypes.csv',
+ 'Chanceableitemclasses.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/Chanceableitemclasses.csv',
+ 'Words.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/Words.csv',
  # runes, soul cores, talismans, idols: what each gives per item class (RePoE's reading of the SoulCore tables)
  'poe2_augments.json': 'https://raw.githubusercontent.com/repoe-fork/poe2/master/data/augments.json',
  'poe1_base_items.json': 'https://raw.githubusercontent.com/repoe-fork/repoe-fork.github.io/master/data/base_items.json',
@@ -183,7 +187,7 @@ rules=[
  {'id':'R_CORRUPTED_LOCK','rule':'Corrupted items cannot be modified except by currencies that explicitly target corrupted items (Architect\'s Orb, Orbs of Sacrifice, Vaal Cultivation Orb, ...)','conf':G},
  {'id':'R_SANCTIFIED_LOCK','rule':'Sanctifying multiplies each modifier value by a random 78% to 122%; most methods of crafting and modification cannot be used on Sanctified items','conf':G,'source':'keyword Sanctified'},
  {'id':'R_VALUE_MULT_05','rule':'0.5+: Sanctify and the Vaal value-randomise outcome multiply each mod value from its CURRENT value (Divine to max first)','conf':M2,'patch':'0.5.0'},
- {'id':'R_JEWEL_SLOTS','rule':'Rare jewels: max 2 prefix + 2 suffix (Magic jewels 1 + 1). The liquid emotion modifiers "+1 Prefix Modifier allowed" and "+1 Suffix Modifier allowed" raise one side by 1','conf':S1,'source':'IGGM 0.5.0 jewel article; the game help text (keyword ItemRarity) only gives the general 3 + 3','test':'t24'},
+ {'id':'R_JEWEL_SLOTS','rule':'Rare jewels: 2 prefix + 2 suffix by default (Magic jewels 1 + 1). The liquid emotion modifiers "+1 Prefix Modifier allowed" and "+1 Suffix Modifier allowed" raise one side by 1 (game data: +1 on that side, +0 on the other). Whether the total can pass 4 is disputed: the player reports it never does; guides describe 5-mod jewels made by removing the allowance mod after filling the side','conf':M2,'source':'player (27 Sept 2026); IGGM and MMOexp 0.5 jewel guides; game data stats of CraftedJewelAdditionalPrefixAllowed','test':'t24'},
  {'id':'R_SWAP_REMOVAL','rule':'Perfect and Corrupted essences and liquid emotions remove a random modifier and add a guaranteed one: when the side of the new modifier is full, the removed modifier is one of that side; otherwise any modifier can go (Omens of Sinistral/Dextral Crystallisation limit essences to one side)','conf':M2,'source':'GGG forum thread 3853903 (player report, 14 Sept 2025) and the Mobalytics essence guide','test':'t25'},
  {'id':'R_WEIGHTS','rule':'Real roll weights are not in client data (spawn weight 0/1). Use community-estimated weights and label outputs as estimates','conf':M2},
 ]
@@ -214,7 +218,7 @@ ops=[
  op('sacrifice','Kamasa\'s (amulet/ring/belt), Kopec\'s (armour), Yaomac\'s (weapon/quiver), Yugul\'s (jewel) Orb of Sacrifice',input='Rare with corruption enchantment',effect='upgrade corruption enchantment + remove 1 random mod',conf=G),
  op('architect','Architect\'s Orb',input='Corrupted equipment or jewel',effect='modify unpredictably or destroy',conf=G),
  op('cultivation','Vaal Cultivation Orb',input='Corrupted Vaal Unique / other Unique',effect='replace up to 2 mods / turn into corrupted Unique of same class',conf=G),
- op('verisium',['Verisium','Exceptional Verisium'],input='equipment base with an entry in verisium_upgrades',effect='turns the base into its Runeforged or Runemastered form (runeforged tag, often higher defences, some implicits)',conf=G,source='item text: Can be used at the Verisium Anvil to transform Equipment; costs: game table Expedition2VerisiumCrafts',note='not planned; whether the modifiers stay is in-game test t28'),
+ op('verisium',['Verisium','Exceptional Verisium'],input='armour base with an entry in verisium_upgrades (Uniques: verisium_unique_upgrades, with a crest)',effect='Runeforging: adds Runic Ward; bases from level 55 give up part of their Armour/Evasion/Energy Shield for it (ArmourTypes); Uniques move to their Runeforged/Runemastered base and stay the same unique',conf=G,source='item text: Can be used at the Verisium Anvil to transform Equipment; game tables Expedition2VerisiumCrafts, ArmourTypes; player and runeforging guides (modifiers stay, fractured ones too since 0.5.1)',note='not planned (the planner keeps one base per plan)'),
  op('liquid_emotion','Liquid emotions (Diluted, plain, Concentrated and Potent; the Ancient ones are for Time-Lost jewels)',input='Rare Basic Jewel (Ancient: Rare Time-Lost Jewel)',effect='removes a random modifier and adds the guaranteed crafted modifier the game lists for that jewel (liquid_emotions)',conf=G,source='item texts; outcomes: game table LiquidEmotionOutcomes',rule_refs=['R_ONE_CRAFTED','R_SWAP_REMOVAL']),
 ]
 legacy=[{'name':'Omen of Homogenising Exaltation / Coronation','status':'drops disabled since 0.4 (Standard legacy)','conf':M2},
@@ -296,6 +300,27 @@ for r in _table('Expedition2VerisiumCrafts.csv'):
     if k in _vu_seen: continue
     _vu_seen.add(k)
     VU.setdefault(a,[]).append({'to':b,'cost':cost})
+# base defences (game table ArmourTypes, by BaseItemTypes row): what Runeforging changes
+_def={}
+for r in _table('ArmourTypes.csv'):
+    k=bases[_item_keys[int(r['BaseItemType'])]]['name']
+    _def.setdefault(k,{x:int(r[x]) for x in ('Armour','Evasion','EnergyShield','Ward')})
+for a,lst in VU.items():
+    for u in lst:
+        if a in _def and u['to'] in _def: u['def']={'from':_def[a],'to':_def[u['to']]}
+# Uniques at the anvil: a crest (and Verisium) moves a unique to its Runeforged/Runemastered base (UniqueName = Words row)
+_words=[r['Text'] for r in _table('Words.csv')]
+VUU={}
+for r in _table('Expedition2VerisiumCrafts.csv'):
+    if r['UniqueName']=='18': continue
+    items=[bases[_item_keys[i]]['name'] for i in _ints(r['CraftingItem'])]
+    rec={'from':bases[_item_keys[int(r['OriginalBaseType'])]]['name'],'to':bases[_item_keys[int(r['NewBaseType'])]]['name'],'cost':dict(zip(items,_ints(r['CraftingItemCount'])))}
+    lst=VUU.setdefault(_words[int(r['UniqueName'])],[])
+    if rec not in lst: lst.append(rec)
+kb['verisium_unique_upgrades']=VUU
+# item classes an Orb of Chance works on (game table Chanceableitemclasses): jewels are not among them
+kb['chanceable_classes']=sorted({_ic[i] for r in _table('Chanceableitemclasses.csv') for i in [int(r['ItemClass'])]})
+kb['meta']['rules'].append('verisium_unique_upgrades = unique -> base moves at the Verisium Anvil with their cost (crests). chanceable_classes = item classes an Orb of Chance works on (game table Chanceableitemclasses).')
 kb['verisium_upgrades']=VU
 kb['meta']['counts']['verisium_upgrades']=sum(len(v) for v in VU.values())
 kb['meta']['rules'].append('verisium_upgrades = base -> Runeforged/Runemastered base at the Verisium Anvil with its Verisium cost (game table Expedition2VerisiumCrafts). The upgraded bases are in bases; whether the modifiers stay is in-game test t28.')

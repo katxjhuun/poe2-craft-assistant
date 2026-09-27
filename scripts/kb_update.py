@@ -24,7 +24,8 @@ CANDIDATE = os.path.join(CAND_DIR, 'poe2_kb_candidate.json')
 REPORTS = os.path.join(ROOT, 'reports')
 SOURCES = ['poe2_mods.json', 'poe2_base_items.json', 'poe2_version.txt', 'poe2_keywords.json', 'poe1_base_items.json', 'items.ndjson', 'stats.ndjson',
            'poe2_augments.json', 'EssenceMods.csv', 'Essences.csv', 'EssenceTargetItemCategories.csv', 'SoulCoreStatCategories.csv',
-           'ItemClasses.csv', 'LiquidEmotionOutcomes.csv', 'TieredCurrency.csv', 'AlternateQualityTypes.csv', 'Expedition2VerisiumCrafts.csv']
+           'ItemClasses.csv', 'LiquidEmotionOutcomes.csv', 'TieredCurrency.csv', 'AlternateQualityTypes.csv', 'Expedition2VerisiumCrafts.csv',
+           'ArmourTypes.csv', 'Chanceableitemclasses.csv', 'Words.csv', 'poe2_uniques.json']
 
 
 def run(cmd, env=None, cwd=ROOT):
@@ -52,6 +53,10 @@ def build(fresh):
     print(out.strip()[-1500:])
     if code:
         print('jewel augmentation failed (the candidate has no jewel data)'); return code
+    code, out = run([sys.executable, os.path.join('scripts', 'unique_jewels.py')], env={'POE2_KB': CANDIDATE, 'KB_CACHE': CACHE})
+    print(out.strip()[-600:])
+    if code:
+        print('unique jewels failed'); return code
     print(f'candidate: {CANDIDATE}\nnext: python scripts/kb_update.py check')
     return 0
 

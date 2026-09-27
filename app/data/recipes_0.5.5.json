@@ -1604,8 +1604,8 @@
     },
     {
       "id": "t24",
-      "question": "Do Rare jewels allow at most 2 prefixes and 2 suffixes?",
-      "how": "Try an Exalted Orb on a Rare jewel with 2 prefixes and 2 suffixes; the game should refuse it. The game's help text only gives the general 3 + 3. The planner uses 2 + 2 for jewels, as a 0.5 jewel guide (IGGM) says.",
+      "question": "Can a Rare jewel carry more than 4 modifiers?",
+      "how": "You report it never does: 2 prefixes + 2 suffixes, 3 + 1 or 1 + 3 with Potent Liquid Contempt. Some 0.5 guides describe 5-modifier jewels: with \"+1 Suffix Modifier allowed\" (a prefix) fill 3 suffixes, then remove that prefix with an Orb of Annulment and Omen of Sinistral Annulment, and add a prefix again. To settle it, after that removal try an Exalted Orb with Omen of Sinistral Exaltation on the jewel with 3 suffixes and 1 prefix. Until then the planner follows the game data and the guides: the allowance modifier raises its side to 3, and a side over its limit stays when the allowance modifier goes.",
       "claims": []
     },
     {
@@ -1618,12 +1618,15 @@
       "id": "t26",
       "question": "Which modifier does Potent Liquid Contempt or Ferocity add: the prefix or the suffix one?",
       "how": "Use one on a full Rare jewel and note which side lost a modifier and which modifier came in. The game table lists a prefix and a suffix modifier for each jewel. The planner assumes the one on the side the removal opened, at random when both sides have room.",
-      "claims": []
+      "claims": [],
+      "status": "confirmed",
+      "note": "The added modifier sits on the side the removal opened: \"(40-60)% increased Effect of Suffixes\" and \"+1 Suffix Modifier allowed\" are prefixes; \"(40-60)% increased Effect of Prefixes\" and \"+1 Prefix Modifier allowed\" are suffixes.",
+      "source": "your in-game report (27 Sept 2026), the game data (sides of the modifiers) and the MMOexp jewel guide (50/50 by the removed side)"
     },
     {
       "id": "t27",
-      "question": "Can a wand, staff or focus carry one element's spell modifier next to another element's (for example increased Fire Damage with + to Level of all Cold Spell Skills)?",
-      "how": "Search the trade site for such a wand or focus. In the game data, these modifiers give the item tags such as no_cold_spell_mods that stop the other elements' spell modifiers from rolling, so the planner never rolls them together.",
+      "question": "Does one element's spell modifier keep another element's off wands and staves?",
+      "how": "On the trade site (Forbidden Rites, item category Wand, then Staff), search each pair; the game data says the first three find nothing. 1) \"#% increased Fire Damage\" with \"+# to Level of all Cold Spell Skills\". 2) \"#% increased Cold Damage\" with \"#% increased Flammability Magnitude\". 3) \"+# to Level of all Lightning Spell Skills\" with \"#% increased Freeze Buildup\". Check: \"#% increased Fire Damage\" with \"+# to Level of all Fire Spell Skills\" should find items. The stopping is one-way in places: an Ignite (Flammability) suffix does not stop \"+# to Level of all Physical Spell Skills\", but that suffix stops Ignite.",
       "claims": [],
       "found": "game data"
     },
@@ -1631,13 +1634,19 @@
       "id": "t28",
       "question": "Does the Verisium Anvil keep an item's modifiers when it turns the base into its Runeforged form?",
       "how": "Upgrade a cheap magic or rare item at the Verisium Anvil (for example a Rusted Cuirass, 20 Verisium) and compare its modifiers before and after. The game data gives the cost and the new base; the planner only lists the upgrade.",
-      "claims": []
+      "claims": [],
+      "status": "confirmed",
+      "note": "Runeforging keeps the modifiers (fractured ones too since the 0.5.1 hotfix). It adds Runic Ward; bases from level 55 give up part of their Armour, Evasion or Energy Shield for it (0.5.3 lowered that loss by about 20%). Uniques move to their Runeforged base and stay the same unique.",
+      "source": "your in-game report (27 Sept 2026), the game tables Expedition2VerisiumCrafts and ArmourTypes, and the PoE2Path runeforging guide"
     },
     {
       "id": "t29",
       "question": "Which catalysts can be applied to a Grasping Mail (\"Catalysts can be applied to this item\")?",
       "how": "Try a ring and amulet catalyst (for example Flesh Catalyst) and a Refined one on a Grasping Mail. Its implicit also lets it roll ring modifiers; the planner assumes the ring and amulet catalysts work.",
-      "claims": []
+      "claims": [],
+      "status": "confirmed",
+      "note": "Grasping Mail takes every catalyst that works on rings and amulets and rolls like a ring.",
+      "source": "your in-game report (27 Sept 2026); its implicits say \"Can roll Ring Modifiers\" and \"Catalysts can be applied to this item\""
     }
   ]
 }

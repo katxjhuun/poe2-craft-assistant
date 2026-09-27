@@ -477,6 +477,15 @@
       }
     }
 
+    // Unique jewels (kb.uniques): what the knowledge base knows about this one
+    const uj = item.rarity === 'Unique' && item.name && ix.kb.uniques ? ix.kb.uniques[item.name] : null;
+    if (uj) {
+      const v = uj.variants.find((x) => x.base === item.base) || uj.variants[0];
+      const vary = v.mods.filter((m) => m.variable).length;
+      warnings.push({ level: 'info', msg: `${item.name}: Limited to ${v.limit || '-'}${v.corrupted ? ', drops corrupted' : ''}.`
+        + (vary ? ` ${vary} of its lines vary per item (${[...new Set(v.mods.filter((m) => m.variable).map((m) => m.txt.split('\n')[0]))].join('; ')}).` : '')
+        + ' Unique jewels drop only: an Orb of Chance does not work on jewels.' });
+    }
     const parseWarnings = warnings.slice();
     validateItem(ix, item, warnings);
     return { item, warnings, parseWarnings };

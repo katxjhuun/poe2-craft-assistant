@@ -426,6 +426,8 @@
       case 'newbase':
         return null;
       case 'chance':
+        // game table Chanceableitemclasses: jewels, for one, are not among the classes an Orb of Chance works on
+        if (ctx.kb.chanceable_classes && !ctx.kb.chanceable_classes.includes(cls)) return `An Orb of Chance cannot be used on ${cls === 'Jewel' ? 'jewels' : cls + ' items'}.`;
         return R === 'Normal' ? null : 'Orb of Chance needs a Normal item.';
       case 'vaal':
         return null;
@@ -433,8 +435,11 @@
         return st.foresight ? "The item already foresees its next currency (Hinekora's Lock)." : null;
       case 'mirror':
         return null;
-      case 'verisium':
-        return ctx.kb.verisium_upgrades && ctx.kb.verisium_upgrades[ctx.item.base] ? null : 'The Verisium Anvil has no upgrade for this base.';
+      case 'verisium': {
+        const vu = R === 'Unique' ? ((ctx.kb.verisium_unique_upgrades || {})[ctx.item.name] || []).filter((u) => u.from === ctx.item.base)
+          : (ctx.kb.verisium_upgrades || {})[ctx.item.base] || [];
+        return vu.length ? null : 'The Verisium Anvil has no upgrade for this item.';
+      }
       case 'artificer':
         return MARTIAL.includes(cls) || cls === 'Wand' || cls === 'Staff' || ARMOUR.includes(cls) ? null : "Artificer's Orb works on martial weapons, wands, staves and armour.";
       case 'catalyst':
@@ -1796,12 +1801,18 @@
     if (qualityCurrencyFor(cls)) add('quality', 'Add quality', { op: 'quality' }, { cur: [qualityCurrencyFor(cls)] });
     if (infuserFor(cls)) add('infuser', 'Quality past the maximum', { op: 'infuser' }, { cur: [infuserFor(cls)] });
     add('artificer', 'Add an augment socket', { op: 'artificer' }, { cur: ["Artificer's Orb"] });
-    // Verisium Anvil (game table Expedition2VerisiumCrafts): listed, not planned; whether the mods stay is test t28
-    for (const u of (ix.kb.verisium_upgrades || {})[item.base] || []) {
+    // Verisium Anvil (game tables Expedition2VerisiumCrafts, ArmourTypes): listed, not planned
+    const defs = (d) => ['Armour', 'Evasion', 'EnergyShield'].filter((k) => d.from[k] || d.to[k])
+      .map((k) => `${k === 'EnergyShield' ? 'Energy Shield' : k} ${d.from[k]}${d.to[k] !== d.from[k] ? ' -> ' + d.to[k] : ''}`).join(', ');
+    const upgrades = R === 'Unique' ? ((ix.kb.verisium_unique_upgrades || {})[item.name] || []).filter((u) => u.from === item.base)
+      : (ix.kb.verisium_upgrades || {})[item.base] || [];
+    for (const u of upgrades) {
       const b = ix.kb.bases[u.to] || {};
-      add('verisium', `Upgrade the base to ${u.to} (Verisium Anvil)`, { op: 'verisium', to: u.to }, {
-        cur: Object.keys(u.cost), note: `Costs ${Object.entries(u.cost).map(([n, c]) => c + ' ' + n).join(' and ')}.`
-          + (b.imp && b.imp.length ? ` The new base has: ${b.imp.join('; ')}.` : '') + ' The planner does not plan it; whether the modifiers stay is in-game test t28.',
+      add('verisium', `Runeforge: ${u.to} (Verisium Anvil)`, { op: 'verisium', to: u.to }, {
+        cur: Object.keys(u.cost), note: `Costs ${Object.entries(u.cost).map(([n, c]) => c + ' ' + n).join(' and ')}. `
+          + (u.def ? `Base: ${defs(u.def)}, Runic Ward +${u.def.to.Ward - u.def.from.Ward}. ` : '')
+          + (R === 'Unique' ? 'The item stays the same unique on the new base. ' : 'The modifiers stay (fractured ones too). ')
+          + (b.imp && b.imp.length ? `The new base has: ${b.imp.join('; ')}. ` : '') + 'The planner does not plan it.',
       });
     }
     const fluxes = ['fire', 'cold', 'lightning'].filter((to) => !validate(ctx, st, { op: 'flux', to })).map((to) => FLUX[to]);

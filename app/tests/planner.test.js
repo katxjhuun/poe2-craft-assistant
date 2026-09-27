@@ -724,11 +724,34 @@ test('a base whose implicit adds tags ("Can roll Ring Modifiers") rolls ring mod
 
 test('the Verisium Anvil upgrade of a base is listed with its cost (game table Expedition2VerisiumCrafts)', () => {
   const up = kb.verisium_upgrades['Rusted Cuirass'];
-  assert.deepEqual(up, [{ to: 'Runeforged Rusted Cuirass', cost: { Verisium: 20 } }]);
+  assert.deepEqual(up, [{ to: 'Runeforged Rusted Cuirass', cost: { Verisium: 20 },
+    def: { from: { Armour: 45, Evasion: 0, EnergyShield: 0, Ward: 0 }, to: { Armour: 45, Evasion: 0, EnergyShield: 0, Ward: 29 } } }]);
   assert.ok(kb.bases['Runeforged Rusted Cuirass'].tags.includes('runeforged'));
   const item = E.parseItem(ix, 'Item Class: Body Armours\nRarity: Normal\nRusted Cuirass\n--------\nItem Level: 82').item;
   const op = P.availableOps(ix, item).find((o) => o.id === 'verisium');
-  assert.ok(op && op.ok && !op.planned && /20 Verisium/.test(op.note), JSON.stringify(op));
+  assert.ok(op && op.ok && !op.planned && /20 Verisium/.test(op.note) && /Runic Ward \+29/.test(op.note), JSON.stringify(op));
+  // a level 59 base gives up part of its Armour for the Ward (game table ArmourTypes)
+  const heavy = kb.verisium_upgrades['Heavy Plate'][0].def;
+  assert.ok(heavy.to.Armour < heavy.from.Armour && heavy.to.Ward > 0);
+  // a unique moves to its Runeforged base with a crest
+  const [name, ups] = Object.entries(kb.verisium_unique_upgrades).find(([, l]) => l.some((u) => kb.bases[u.from]));
+  const u0 = ups.find((u) => kb.bases[u.from]);
+  const uniq = Object.assign(E.parseItem(ix, `Item Class: X\nRarity: Normal\n${u0.from}\n--------\nItem Level: 82`).item, { rarity: 'Unique', name, mods: [] });
+  const uop = P.availableOps(ix, uniq).find((o) => o.id === 'verisium');
+  assert.ok(uop && uop.ok && /same unique/.test(uop.note), name + ' ' + JSON.stringify(uop));
+});
+
+test('Orb of Chance does not work on jewels (game table Chanceableitemclasses); a pasted unique jewel says what it is', () => {
+  assert.ok(!kb.chanceable_classes.includes('Jewel') && kb.chanceable_classes.includes('Ring'));
+  const ruby = E.parseItem(ix, 'Item Class: Jewels\nRarity: Normal\nRuby\n--------\nItem Level: 82').item;
+  const ctx = ctxOf(ruby);
+  assert.match(P.validate(ctx, P.toState(ctx, ruby), { op: 'chance' }), /cannot be used on jewels/);
+  const ring = E.parseItem(ix, 'Item Class: Rings\nRarity: Normal\nGold Ring\n--------\nItem Level: 82').item;
+  const rctx = ctxOf(ring);
+  assert.equal(P.validate(rctx, P.toState(rctx, ring), { op: 'chance' }), null);
+  assert.equal(Object.keys(kb.uniques).length, 13);
+  const r = E.parseItem(ix, 'Item Class: Jewels\nRarity: Unique\nMegalomaniac\nDiamond\n--------\nItem Level: 82\n--------\nAllocates Heavy Buffer\nAllocates Tenfold Attacks\nAllocates Unstoppable Barrier\n--------\nCorrupted');
+  assert.ok(r.warnings.some((w) => /Megalomaniac: Limited to 1, drops corrupted/.test(w.msg) && /Orb of Chance does not work on jewels/.test(w.msg)), JSON.stringify(r.warnings));
 });
 
 test('a base that says "Catalysts can be applied to this item" takes catalyst quality', () => {
