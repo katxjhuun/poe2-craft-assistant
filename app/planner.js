@@ -1730,11 +1730,7 @@
     const st = toState(ctx, item, opts.locks);
     const why = validate(ctx, st, action);
     if (why) return { reason: why };
-    const hit = (s, q) => s.mods.some((m) => m.fam === q.fam && m.side === q.side && !!m.des === !!q.des && (!q.minTier || (m.tier && m.tier <= q.minTier)));
-    const ok = (s) => groups.every((g) => {
-      const c = g.reqs.filter((q) => hit(s, q)).length;
-      return g.type === 'or' ? c > 0 : g.type === 'not' ? c === 0 : g.type === 'count' ? c >= (g.n || 1) : c === g.reqs.length;
-    });
+    const ok = (s) => groupsMet(ctx, s, groups);
     const rng = rngFrom(opts.seed || 777);
     const N = opts.n || 10000;
     let k = 0, unpredictable = false;
@@ -1745,6 +1741,147 @@
     }
     if (unpredictable) return { reason: 'The planner does not model what this does to the item.' };
     return { p: k / N, before: ok(st), n: N };
+  }
+
+  /**
+   * Requirement groups (calculator, strategy rules and goal) on a state. A requirement is a modifier {fam, side,
+   * minTier, des}, or {kind: 'open', side} (a free slot on that side), or {kind: 'rarity', value}.
+   */
+  function reqMet(ctx, s, q) {
+    if (q.kind === 'open') return open(ctx, s, q.side) > 0;
+    if (q.kind === 'rarity') return s.rarity === q.value;
+    return s.mods.some((m) => m.fam === q.fam && m.side === q.side && !!m.des === !!q.des && (!q.minTier || (m.tier && m.tier <= q.minTier)));
+  }
+  function groupsMet(ctx, s, groups) {
+    return groups.every((g) => {
+      const c = g.reqs.filter((q) => reqMet(ctx, s, q)).length;
+      return g.type === 'or' ? c > 0 : g.type === 'not' ? c === 0 : g.type === 'count' ? c >= (g.n || 1) : c === g.reqs.length;
+    });
+  }
+
+  /**
+   * Strategy simulator: the player's own steps, run many times (as Craft of Exile's simulator). A run starts from the
+   * item and uses the steps in order. After each use it ends when the item meets the goal; otherwise the step's rules are
+   * checked in order and the first that holds says where to go, else the step's `otherwise` (default 'next').
+   *   strategy: {steps: [{action, rules: [{groups, go}], otherwise, unusable, max}], goal: groups}
+   *   go: 'next' | 'repeat' (this step again) | 'restart' (the item as it was, paying opts.baseCost) | 'stop' | {step: i}
+   *   unusable: where to go when the step's currency cannot be used on the item (default 'next'); max: uses of the step
+   *   per run, after which a 'repeat' goes on to the next step.
+   * A run also ends past the last step, at opts.maxUses uses (default 2000) or at opts.budget. At the Well of Souls it
+   * keeps an offered Desecrated modifier the goal or a rule asks for; with none, Omen of Abyssal Echoes rerolls the
+   * three, and then the highest level one is kept.
+   * opts: {trials (2000), seed, maxUses, budget, priceOf(name) -> ex|null, baseCost, weights, essences, catalystMult, locks}.
+   * Returns {trials, p, pLow, pHigh, meanCost, costPerSuccess, p50, p90, meanUses, meanRestarts, steps: [{i, names, avg,
+   * cost}], ends: [{reason, share}], missingPrices} or {reason}.
+   */
+  function runStrategy(ix, item, strategy, opts) {
+    const run = strategyRun(ix, item, strategy, opts || {});
+    if (run.reason) return run;
+    run.step((opts && opts.trials) || 2000);
+    return run.result();
+  }
+  /**
+   * The same, yielding to the page between slices of runs. opts.onProgress(fraction); opts.timeBudgetMs stops early once
+   * opts.minTrials runs are in (the result says how many ran); opts.cancelled() -> true stops with an error.
+   */
+  async function runStrategyAsync(ix, item, strategy, opts) {
+    opts = opts || {};
+    const run = strategyRun(ix, item, strategy, opts);
+    if (run.reason) return run;
+    const total = opts.trials || 2000, t0 = Date.now();
+    while (run.done < total) {
+      if (opts.cancelled && opts.cancelled()) throw new Error('cancelled');
+      const s0 = Date.now();
+      let k = 0;
+      while (run.done < total && Date.now() - s0 < 40) { run.step(Math.min(10, total - run.done)); k++; }
+      if (run.reason) return run;
+      if (opts.onProgress) opts.onProgress(opts.timeBudgetMs ? Math.max(run.done / total, (Date.now() - t0) / opts.timeBudgetMs) : run.done / total);
+      if (opts.timeBudgetMs && Date.now() - t0 > opts.timeBudgetMs && run.done >= (opts.minTrials || 200)) break;
+      await tick();
+    }
+    return run.result();
+  }
+  function strategyRun(ix, item, strategy, opts) {
+    const steps = strategy.steps || [];
+    const goal = (strategy.goal || []).filter((g) => g.reqs && g.reqs.length);
+    if (!steps.length) return { reason: 'Add at least one step.' };
+    const ctx = makeContext(ix, item, { weights: opts.weights, essences: opts.essences, catalystMult: opts.catalystMult });
+    const st0 = toState(ctx, item, opts.locks);
+    const rng = rngFrom(opts.seed || 2024);
+    const maxUses = opts.maxUses || 2000;
+    const missing = new Set();
+    const costs = steps.map((s) => actionNames(s.action, ctx).reduce((t, n) => {
+      const p = opts.priceOf ? opts.priceOf(n) : null;
+      if (p == null) { missing.add(n); return t; }
+      return t + p;
+    }, 0));
+    // the Desecrated modifiers the goal or a rule asks for: kept when offered
+    const wanted = new Set();
+    const want = (groups) => { for (const g of groups || []) if (g.type !== 'not') for (const q of g.reqs) if (q.des && q.fam) wanted.add(q.side + '|' + q.fam); };
+    want(goal);
+    for (const s of steps) for (const r of s.rules || []) want(r.groups);
+    const pick = (list) => list.find((e) => wanted.has(e.side + '|' + e.fam)) || null;
+    const target = (go, i) => (go && typeof go === 'object' ? go.step : go === 'repeat' ? i : go === 'restart' ? 'restart' : go === 'stop' ? 'stop' : i + 1);
+    const uses = steps.map(() => 0), endCount = new Map(), runCosts = [];
+    let succ = 0, useSum = 0, restartSum = 0, N = 0, bad = null;
+    const end = (why) => endCount.set(why, (endCount.get(why) || 0) + 1);
+    function one() {
+      let s = st0, i = 0, cost = 0, n = 0, restarts = 0, why = null, loops = 0;
+      const per = steps.map(() => 0);
+      for (;;) {
+        if (goal.length && groupsMet(ctx, s, goal)) { why = 'goal met'; break; }
+        if (++loops > 4 * maxUses + steps.length) { why = 'the steps go round without using anything'; break; }
+        if (i >= steps.length) { why = 'past the last step'; break; }
+        if (n >= maxUses) { why = `${maxUses} uses without the goal`; break; }
+        const step = steps[i];
+        const err = validate(ctx, s, step.action);
+        let go;
+        if (err) {
+          go = step.unusable || 'next';
+          if (go === 'stop') { why = `step ${i + 1} could not be used: ${err}`; break; }
+          if (go === 'repeat') go = 'next'; // nothing would change
+        } else {
+          if (opts.budget && cost + costs[i] > opts.budget) { why = 'over budget'; break; }
+          const r = apply(ctx, s, step.action, rng, pick);
+          if (r.state.unpredictable) { bad = `The planner does not model what step ${i + 1} does to the item.`; return; }
+          s = r.state; cost += costs[i]; n++; per[i]++; uses[i]++;
+          if (goal.length && groupsMet(ctx, s, goal)) { why = 'goal met'; break; }
+          const rule = (step.rules || []).find((r2) => r2.groups && r2.groups.length && groupsMet(ctx, s, r2.groups.filter((g) => g.reqs.length)));
+          go = rule ? rule.go : step.otherwise || 'next';
+          if (go === 'repeat' && step.max && per[i] >= step.max) go = 'next';
+        }
+        const to = target(go, i);
+        if (to === 'stop') { why = `stopped at step ${i + 1}`; break; }
+        if (to === 'restart') {
+          if (opts.budget && cost + (opts.baseCost || 0) > opts.budget) { why = 'over budget'; break; }
+          s = st0; cost += opts.baseCost || 0; restarts++; i = 0; per.fill(0);
+          continue;
+        }
+        i = Math.max(0, to);
+      }
+      const ok = why === 'goal met' || (!goal.length && why === 'past the last step');
+      if (ok) succ++;
+      end(ok ? 'goal met' : why);
+      runCosts.push(cost); useSum += n; restartSum += restarts; N++;
+    }
+    return {
+      step(k) { for (let t = 0; t < k && !bad; t++) one(); },
+      get done() { return N; },
+      get reason() { return bad; },
+      result() {
+        if (bad) return { reason: bad };
+        const costs2 = runCosts.slice().sort((a, b) => a - b);
+        const q = (p) => costs2[Math.min(N - 1, Math.floor(p * N))];
+        const meanCost = costs2.reduce((a, b) => a + b, 0) / N;
+        const p = succ / N, se = Math.sqrt(Math.max(p * (1 - p), 1e-9) / N);
+        return {
+          trials: N, maxUses, p, pLow: Math.max(0, p - 1.96 * se), pHigh: Math.min(1, p + 1.96 * se), meanCost, costPerSuccess: p > 0 ? meanCost / p : Infinity,
+          p50: q(0.5), p90: q(0.9), meanUses: useSum / N, meanRestarts: restartSum / N, missingPrices: [...missing],
+          steps: steps.map((x, i) => ({ i, names: actionNames(x.action, ctx), avg: uses[i] / N, cost: costs[i] })),
+          ends: [...endCount.entries()].sort((a, b) => b[1] - a[1]).map(([reason, k]) => ({ reason, share: k / N })),
+        };
+      },
+    };
   }
 
   /**
@@ -2001,7 +2138,7 @@
     ORB, OMEN, TIERS, boneFor, actionNames, makeContext, toState, validate, apply, rngFrom, sidePool, desPoolFor,
     goalsFromTargets, goalMet, meets, nearMiss, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
     availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, goalClash, essencesForBase, liquidFor, CATALYST_DEFAULT,
-    emulate, chanceOf, familyChances,
+    emulate, chanceOf, familyChances, runStrategy, runStrategyAsync, groupsMet,
     expandStrategy, recipeParams, relevantKeys, SPACE, improvePlan,
   };
 });

@@ -237,12 +237,22 @@ details.notes[open] summary { margin-bottom: 6px; }
 .bench .b-log div { padding: 3px 6px; border-radius: 6px; }
 .bench .b-log .cur { background: var(--panel-2); }
 .bench .b-grp { border: 1px dashed var(--line-2); border-radius: 8px; padding: 8px; display: grid; gap: 6px; }
-.bench .b-req { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; }
+.bench .b-req { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; align-items: center; }
+.bench .b-req select:first-child { width: 100%; }
+.bench .b-box, .bench .b-box > *, .bench .b-grp > *, .bench .b-step > *, .bench .b-rule > * { min-width: 0; }
+.bench select { max-width: 100%; }
 .bench .b-p { font-size: 22px; font-variant-numeric: tabular-nums; }
 .bench .b-reveal { display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 10px; }
 .bench .b-opt { text-align: left; justify-content: flex-start; white-space: normal; }
 .bench .b-opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
 .bench .b-chk { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+.bench .b-step { border: 1px solid var(--line-2); border-radius: 8px; padding: 8px; display: grid; gap: 6px; }
+.bench .b-step-h { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+.bench .b-step-h b { font-size: 13px; }
+.bench .b-rule { border-left: 2px solid var(--line-2); padding-left: 8px; display: grid; gap: 6px; }
+.bench .b-tab { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.bench .b-tab th, .bench .b-tab td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); }
+.bench .b-tab td.n, .bench .b-tab th.n { text-align: right; }
 @media (max-width: 760px) { .bench { grid-template-columns: 1fr; } .bench .b-req { grid-template-columns: 1fr; } }
 .dd-empty { padding: 10px 11px; color: var(--muted); }
 .toggle { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; color: var(--muted); font-size: 14px; }
@@ -1814,7 +1824,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   }
   function openBench() {
     if (!S.item || S.item.unsupported) return;
-    S.bench = { hist: [{ text: S.text, item: S.item, note: 'Your item' }], idx: 0, sel: { m: 'exalt', tier: 'base', omen: '', lich: '', echoes: false }, msg: null, calc: null,
+    S.bench = { hist: [{ text: S.text, item: S.item, note: 'Your item' }], idx: 0, sel: { m: 'exalt', tier: 'base', omen: '', lich: '', echoes: false }, msg: null, calc: null, strat: { steps: [], res: null, maxUses: 2000, running: false, token: null },
       groups: [{ type: 'and', n: 1, reqs: Object.entries(S.targets).filter(([, t]) => t && t.fam && t.group !== 'essence' && t.group !== 'alloy' && t.group !== 'liquid')
         .map(([k, t]) => ({ fam: t.fam, side: t.group === 'desecrated' ? k.split('-')[0] : t.group, des: t.group === 'desecrated', minTier: t.minTier || null, label: t.label })) }] };
     renderBench();
@@ -1872,11 +1882,33 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       ${rv.canReroll ? '<div class="b-row"><button type="button" class="btn small" id="bReroll">Reroll the three (Omen of Abyssal Echoes)</button></div>' : ''}
       ${rv.first ? `<div class="sub">Offered before the reroll: ${rv.first.map((o) => esc(o.text)).join('; ')}</div>` : ''}</div>` : '';
     const opts = benchOptionsHtml();
-    const reqRow = (q, gi, ri) => `<div class="b-req"><select data-breq="${gi}:${ri}" aria-label="Stat">${opts.map((o) => `<option value="${esc(o.side + '|' + (o.des ? 'd' : '') + '|' + o.fam)}" ${o.fam === q.fam && o.side === q.side && !!o.des === !!q.des ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}${opts.some((o) => o.fam === q.fam && o.side === q.side) ? '' : `<option selected value="${esc(q.side + '|' + (q.des ? 'd' : '') + '|' + q.fam)}">${esc(q.label || q.fam)}</option>`}</select>
-      <select data-btier="${gi}:${ri}" aria-label="Minimum tier"><option value="">Any tier</option>${(opts.find((o) => o.fam === q.fam && o.side === q.side) || { tiers: [] }).tiers.map((t) => `<option value="${t}" ${q.minTier === t ? 'selected' : ''}>T${t} or better</option>`).join('')}</select>
-      <button class="btn small" type="button" data-bdel="${gi}:${ri}" aria-label="Remove requirement">Remove</button></div>`;
-    const grpHtml = B.groups.map((g, gi) => `<div class="b-grp"><div class="b-row"><select data-btype="${gi}" aria-label="Group type">${[['and', 'All of'], ['or', 'Any of'], ['count', 'At least'], ['not', 'None of']].map(([v, l]) => `<option value="${v}" ${g.type === v ? 'selected' : ''}>${l}</option>`).join('')}</select>${g.type === 'count' ? `<input data-bn="${gi}" inputmode="numeric" value="${g.n || 1}" style="width:48px" aria-label="How many">` : ''}<span class="sub">of these</span>${B.groups.length > 1 ? `<button class="btn small" type="button" data-bgdel="${gi}">Remove group</button>` : ''}</div>
-      ${g.reqs.map((q, ri) => reqRow(q, gi, ri)).join('') || '<span class="sub">No requirement yet.</span>'}<div class="b-row"><button class="btn small" type="button" data-badd="${gi}">Add a stat</button></div></div>`).join('');
+    // one requirement: a stat (with a minimum tier) or an item state; a: 'b' calculator, 's' strategy rule
+    const reqRow = (q, key, a) => {
+      const v = reqValue(q);
+      const o = !q.kind && opts.find((x) => reqValue(x) === v);
+      const known = !!o || REQ_STATE.some(([x]) => x === v);
+      return `<div class="b-req"><select data-${a}req="${key}" aria-label="Requirement">${opts.map((x) => `<option value="${esc(reqValue(x))}" ${reqValue(x) === v ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}<optgroup label="Item state">${REQ_STATE.map(([x, l]) => `<option value="${x}" ${x === v ? 'selected' : ''}>${l}</option>`).join('')}</optgroup>${known ? '' : `<option selected value="${esc(v)}">${esc(q.label || q.fam)}</option>`}</select>
+      ${q.kind ? '<span></span>' : `<select data-${a}tier="${key}" aria-label="Minimum tier"><option value="">Any tier</option>${(o || { tiers: [] }).tiers.map((t) => `<option value="${t}" ${q.minTier === t ? 'selected' : ''}>T${t} or better</option>`).join('')}</select>`}
+      <button class="btn small" type="button" data-${a}del="${key}" aria-label="Remove requirement">Remove</button></div>`;
+    };
+    const typeSel = (g, key, a) => `<select data-${a}type="${key}" aria-label="Group type">${GROUP_TYPES.map(([v, l]) => `<option value="${v}" ${g.type === v ? 'selected' : ''}>${l}</option>`).join('')}</select>${g.type === 'count' ? `<input data-${a}n="${key}" inputmode="numeric" value="${g.n || 1}" style="width:48px" aria-label="How many">` : ''}`;
+    const grpHtml = B.groups.map((g, gi) => `<div class="b-grp"><div class="b-row">${typeSel(g, gi, 'b')}<span class="sub">of these</span>${B.groups.length > 1 ? `<button class="btn small" type="button" data-bgdel="${gi}">Remove group</button>` : ''}</div>
+      ${g.reqs.map((q, ri) => reqRow(q, gi + ':' + ri, 'b')).join('') || '<span class="sub">No requirement yet.</span>'}<div class="b-row"><button class="btn small" type="button" data-badd="${gi}">Add a stat</button></div></div>`).join('');
+    // strategy: the player's own steps with rules, run many times
+    const SS = B.strat.steps;
+    const goSel = (go, attr, key) => `<select data-${attr}="${key}" aria-label="Where to go">${GO.concat(SS.map((_, j) => ['step:' + j, 'step ' + (j + 1)])).map(([v, l]) => `<option value="${v}" ${goValue(go) === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+    const stepHtml = SS.map((x, si) => `<div class="b-step"><div class="b-step-h"><b>${si + 1}. ${esc(x.names.join(' + '))}</b><span class="b-row">${si ? `<button class="btn small" type="button" data-sup="${si}" aria-label="Move step ${si + 1} up">Up</button>` : ''}<button class="btn small" type="button" data-sdelstep="${si}">Remove step</button></span></div>
+      ${x.rules.map((r, ki) => `<div class="b-rule"><div class="b-row"><span class="sub">If</span>${typeSel(r, si + ':' + ki, 's')}<span class="sub">of these, go to</span>${goSel(r.go, 'sgo', si + ':' + ki)}<button class="btn small" type="button" data-sdelrule="${si}:${ki}">Remove rule</button></div>
+        ${r.reqs.map((q, ri) => reqRow(q, si + ':' + ki + ':' + ri, 's')).join('')}<div class="b-row"><button class="btn small" type="button" data-saddreq="${si}:${ki}">Add a stat</button></div></div>`).join('')}
+      <div class="b-row"><button class="btn small" type="button" data-saddrule="${si}">Add a rule</button><span class="sub">Otherwise go to</span>${goSel(x.otherwise, 'sother', si)}</div>
+      <div class="b-row"><span class="sub">If it cannot be used, go to</span>${goSel(x.unusable, 'sunuse', si)}<span class="sub">Use at most</span><input data-smax="${si}" inputmode="numeric" placeholder="any" value="${x.max || ''}" style="width:56px" aria-label="Most uses of this step per run"><span class="sub">times per run</span></div></div>`).join('');
+    const sr = B.strat.res;
+    const pct = (x) => (x * 100).toFixed(x > 0 && x < 0.01 ? 2 : 1) + '%';
+    const stratOut = B.strat.running ? '<div class="b-msg" role="status">Running the strategy: <span id="bProg">0%</span></div>' : !sr ? '' : sr.reason ? `<div class="b-msg bad">${esc(sr.reason)}</div>` : `<div class="b-row"><span class="b-p">${pct(sr.p)}</span><span class="sub">of ${sr.trials.toLocaleString('en-US')} runs met the goal (95%: ${pct(sr.pLow)} to ${pct(sr.pHigh)})${sr.trials < 2000 ? '; stopped at the time limit' : ''}.</span></div>
+      <div class="sub">Per run: ${sr.meanUses.toFixed(1)} uses${sr.meanRestarts > 0 ? `, ${sr.meanRestarts.toFixed(1)} new bases` : ''}, about ${money(sr.meanCost)}; per finished item ${isFinite(sr.costPerSuccess) ? money(sr.costPerSuccess) : 'none finished'}. Half the runs cost under ${money(sr.p50)}, one in ten over ${money(sr.p90)}.</div>
+      <div style="overflow-x:auto"><table class="b-tab"><thead><tr><th>Step</th><th class="n">Uses per run</th><th class="n">Price per use</th></tr></thead><tbody>${sr.steps.map((x) => `<tr><td>${x.i + 1}. ${esc(x.names.join(' + '))}</td><td class="n">${x.avg.toFixed(2)}</td><td class="n">${money(x.cost)}</td></tr>`).join('')}</tbody></table></div>
+      <div class="sub">How the runs ended: ${sr.ends.map((e) => `${esc(e.reason)} ${pct(e.share)}`).join('; ')}.</div>
+      ${sr.missingPrices.length ? `<div class="b-msg bad">No price for ${esc(sr.missingPrices.join(', '))}: counted as free.</div>` : ''}`;
     const calc = B.calc;
     const calcOut = calc ? (calc.reason ? `<div class="b-msg bad">${esc(calc.reason)}</div>`
       : `<div class="b-row"><span class="b-p">${(calc.p * 100).toFixed(calc.p < 0.01 ? 2 : 1)}%</span><span class="sub">chance that one use of ${esc(calc.names.join(' + '))} leaves the item meeting every group (${calc.n.toLocaleString('en-US')} simulated uses${calc.before ? '; the item meets them already' : ''})${calc.p > 0 && calc.p < 1 ? `. If you could retry from this same item: about ${Math.max(1, Math.round(1 / calc.p)).toLocaleString('en-US')} uses` : ''}.</span></div>`) : '';
@@ -1895,9 +1927,40 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
           ${grpHtml}
           <div class="b-row"><button class="btn small" type="button" id="bAddGroup">Add a group</button><button class="btn primary" type="button" id="bCalc">Work out the chance</button></div>
           ${calcOut}</div>
+        <div class="b-box"><h3>Strategy</h3>
+          <p class="sub" style="margin:0">Your own steps, run ${(2000).toLocaleString('en-US')} times from the item on the left. A run ends as soon as the item meets the Calculator's groups (the goal). After each use the step's rules are checked in order; the first that holds says where to go. A new base costs the White base price from the plan settings (${money(parseFloat(S.baseCost) || 0)})${parseFloat(S.budget) > 0 ? `, and a run stops at your budget (${money(parseFloat(S.budget))})` : ''}.</p>
+          ${stepHtml || '<span class="sub">No steps yet. Choose a currency in the Emulator, then add it as a step.</span>'}
+          <div class="b-row"><button class="btn small" type="button" id="bAddStep">Add ${esc(names.join(' + '))} as a step</button>${SS.length ? '<button class="btn small" type="button" id="bClearSteps">Remove all steps</button>' : ''}</div>
+          <div class="b-row"><span class="sub">A run gives up after</span><input id="bMaxUses" inputmode="numeric" value="${B.strat.maxUses}" style="width:64px" aria-label="Most uses per run"><span class="sub">uses</span><button class="btn primary" type="button" id="bRun" ${SS.length && !B.strat.running ? '' : 'disabled'}>Run the strategy</button></div>
+          ${stratOut}</div>
       </div></div>`;
   }
-  function benchParse(v) { const [side, d, fam] = v.split('|'); return { side, des: d === 'd', fam }; }
+  /** Requirement <-> select value: a modifier 'side|d|fam', or an item state 'open:side' / 'rarity:Magic'. */
+  function reqValue(q) { return q.kind === 'open' ? 'open:' + q.side : q.kind === 'rarity' ? 'rarity:' + q.value : q.side + '|' + (q.des ? 'd' : '') + '|' + q.fam; }
+  function benchParse(v) {
+    if (v.startsWith('open:')) return { kind: 'open', side: v.slice(5), fam: null, des: false };
+    if (v.startsWith('rarity:')) return { kind: 'rarity', value: v.slice(7), fam: null, side: null, des: false };
+    const [side, d, fam] = v.split('|'); return { kind: null, side, des: d === 'd', fam };
+  }
+  const REQ_STATE = [['open:prefix', 'An open prefix slot'], ['open:suffix', 'An open suffix slot'], ['rarity:Normal', 'Rarity: Normal'], ['rarity:Magic', 'Rarity: Magic'], ['rarity:Rare', 'Rarity: Rare']];
+  const GROUP_TYPES = [['and', 'All of'], ['or', 'Any of'], ['count', 'At least'], ['not', 'None of']];
+  const GO = [['next', 'the next step'], ['repeat', 'this step again'], ['restart', 'a new base (start over)'], ['stop', 'stop the run']];
+  const goValue = (go) => (go && typeof go === 'object' ? 'step:' + go.step : go || 'next');
+  const goParse = (v) => (v.startsWith('step:') ? { step: +v.slice(5) } : v);
+  /** The strategy as the planner runs it: each rule is one requirement group; the goal is the calculator's groups. */
+  function benchStrategy(B) {
+    return {
+      steps: B.strat.steps.map((x) => ({ action: x.action, otherwise: x.otherwise, unusable: x.unusable, max: x.max || null,
+        rules: x.rules.filter((r) => r.reqs.length).map((r) => ({ groups: [{ type: r.type, n: r.n, reqs: r.reqs }], go: r.go })) })),
+      goal: B.groups.filter((g) => g.reqs.length),
+    };
+  }
+  /** After step j is removed: a rule that went to it goes to the next step, later ones move up. */
+  function stratRemoveStep(B, j) {
+    B.strat.steps.splice(j, 1);
+    const fix = (go) => (go && typeof go === 'object' ? (go.step === j ? 'next' : go.step > j ? { step: go.step - 1 } : go) : go);
+    for (const x of B.strat.steps) { x.otherwise = fix(x.otherwise); x.unusable = fix(x.unusable); for (const r of x.rules) r.go = fix(r.go); }
+  }
   benchDlg.addEventListener('change', (e) => {
     const B = S.bench; const t = e.target; if (!B) return;
     if (t.id === 'bMethod') { B.sel.m = t.value; B.sel.omen = ''; B.calc = null; }
@@ -1905,13 +1968,65 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     else if (t.id === 'bOmen') { B.sel.omen = t.value; B.calc = null; }
     else if (t.id === 'bLich') { B.sel.lich = t.value; B.calc = null; }
     else if (t.id === 'bEchoes') { B.sel.echoes = t.checked; B.calc = null; }
-    else if (t.dataset.btype != null) { B.groups[+t.dataset.btype].type = t.value; B.calc = null; }
-    else if (t.dataset.bn != null) { B.groups[+t.dataset.bn].n = Math.max(1, parseInt(t.value, 10) || 1); B.calc = null; }
-    else if (t.dataset.breq != null) { const [gi, ri] = t.dataset.breq.split(':').map(Number); Object.assign(B.groups[gi].reqs[ri], benchParse(t.value), { minTier: null, label: t.selectedOptions[0].textContent }); B.calc = null; }
-    else if (t.dataset.btier != null) { const [gi, ri] = t.dataset.btier.split(':').map(Number); B.groups[gi].reqs[ri].minTier = t.value ? +t.value : null; B.calc = null; }
-    else return;
+    else if (t.dataset.btype != null) { B.groups[+t.dataset.btype].type = t.value; B.calc = null; stratReset(B); }
+    else if (t.dataset.bn != null) { B.groups[+t.dataset.bn].n = Math.max(1, parseInt(t.value, 10) || 1); B.calc = null; stratReset(B); }
+    else if (t.dataset.breq != null) { const [gi, ri] = t.dataset.breq.split(':').map(Number); Object.assign(B.groups[gi].reqs[ri], benchParse(t.value), { minTier: null, label: t.selectedOptions[0].textContent }); B.calc = null; stratReset(B); }
+    else if (t.dataset.btier != null) { const [gi, ri] = t.dataset.btier.split(':').map(Number); B.groups[gi].reqs[ri].minTier = t.value ? +t.value : null; B.calc = null; stratReset(B); }
+    else if (!stratChange(B, t)) return;
     renderBench();
   });
+  /** A change that makes the strategy result stale: drop it and cancel a run in progress. */
+  function stratReset(B) { B.strat.res = null; B.strat.running = false; B.strat.token = null; }
+  /** Strategy editor fields; true when the change was one of them. */
+  function stratChange(B, t) {
+    const d = t.dataset, SS = B.strat.steps;
+    const ix = (k) => k.split(':').map(Number);
+    if (d.stype != null) { const [si, ki] = ix(d.stype); SS[si].rules[ki].type = t.value; }
+    else if (d.sn != null) { const [si, ki] = ix(d.sn); SS[si].rules[ki].n = Math.max(1, parseInt(t.value, 10) || 1); }
+    else if (d.sreq != null) { const [si, ki, ri] = ix(d.sreq); Object.assign(SS[si].rules[ki].reqs[ri], benchParse(t.value), { minTier: null, label: t.selectedOptions[0].textContent }); }
+    else if (d.stier != null) { const [si, ki, ri] = ix(d.stier); SS[si].rules[ki].reqs[ri].minTier = t.value ? +t.value : null; }
+    else if (d.sgo != null) { const [si, ki] = ix(d.sgo); SS[si].rules[ki].go = goParse(t.value); }
+    else if (d.sother != null) SS[+d.sother].otherwise = goParse(t.value);
+    else if (d.sunuse != null) SS[+d.sunuse].unusable = goParse(t.value);
+    else if (d.smax != null) SS[+d.smax].max = parseInt(t.value, 10) > 0 ? parseInt(t.value, 10) : null;
+    else if (t.id === 'bMaxUses') B.strat.maxUses = Math.min(100000, Math.max(10, parseInt(t.value, 10) || 2000));
+    else return false;
+    stratReset(B);
+    return true;
+  }
+  /** Strategy editor buttons; true when the click was one of them. */
+  function stratClick(B, b, action) {
+    const d = b.dataset, SS = B.strat.steps;
+    const ix = (k) => k.split(':').map(Number);
+    const first = () => { const o = benchOptionsHtml()[0]; return o ? { kind: null, fam: o.fam, side: o.side, des: o.des, minTier: null, label: o.label } : { kind: 'open', side: 'prefix', fam: null, des: false }; };
+    if (b.id === 'bAddStep') SS.push({ action, names: P.actionNames(action), rules: [], otherwise: 'next', unusable: 'next', max: null });
+    else if (b.id === 'bClearSteps') SS.length = 0;
+    else if (d.sdelstep != null) stratRemoveStep(B, +d.sdelstep);
+    else if (d.sup != null) {
+      const j = +d.sup;
+      [SS[j - 1], SS[j]] = [SS[j], SS[j - 1]];
+      const swap = (go) => (go && typeof go === 'object' ? (go.step === j ? { step: j - 1 } : go.step === j - 1 ? { step: j } : go) : go);
+      for (const x of SS) { x.otherwise = swap(x.otherwise); x.unusable = swap(x.unusable); for (const r of x.rules) r.go = swap(r.go); }
+    } else if (d.saddrule != null) SS[+d.saddrule].rules.push({ type: 'and', n: 1, reqs: [first()], go: 'next' });
+    else if (d.sdelrule != null) { const [si, ki] = ix(d.sdelrule); SS[si].rules.splice(ki, 1); }
+    else if (d.saddreq != null) { const [si, ki] = ix(d.saddreq); SS[si].rules[ki].reqs.push(first()); }
+    else if (d.sdel != null) { const [si, ki, ri] = ix(d.sdel); SS[si].rules[ki].reqs.splice(ri, 1); }
+    else if (b.id === 'bRun') {
+      // runs in slices so the page stays responsive; a change to the strategy or closing the workbench cancels it
+      if (B.strat.running) return true;
+      const token = B.strat.token = {};
+      const live = () => S.bench === B && B.strat.token === token && benchDlg.open;
+      B.strat.running = true; B.strat.res = null;
+      P.runStrategyAsync(S.ix, benchCur().item, benchStrategy(B), { trials: 2000, maxUses: B.strat.maxUses, timeBudgetMs: 15000, minTrials: 300,
+        priceOf: priceEx, baseCost: parseFloat(S.baseCost) || 0, budget: parseFloat(S.budget) || 0, weights: itemWeights(), essences: itemEssences(), catalystMult: catMult(),
+        onProgress: (f) => { const el = $('#bProg'); if (el) el.textContent = Math.min(99, Math.round(f * 100)) + '%'; }, cancelled: () => !live() })
+        .then((r) => { if (!live()) return; B.strat.res = r; B.strat.running = false; B.strat.token = null; renderBench(); })
+        .catch(() => { if (B.strat.token === token) { B.strat.running = false; B.strat.token = null; } });
+      return true;
+    } else return false;
+    stratReset(B);
+    return true;
+  }
   benchDlg.addEventListener('click', (e) => {
     const B = S.bench; if (!B) return;
     const b = e.target.closest('button'); if (!b) return;
@@ -1926,7 +2041,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       else {
         const h = benchEntry(r, action, null);
         B.hist = B.hist.slice(0, B.idx + 1).concat([h]);
-        B.idx = B.hist.length - 1; B.msg = { text: h.note }; B.calc = null;
+        B.idx = B.hist.length - 1; B.msg = { text: h.note }; B.calc = null; stratReset(B);
       }
     } else if (b.dataset.bpick != null || b.id === 'bReroll') {
       // the same use again (same seed), keeping another offered modifier or rerolling the three
@@ -1935,19 +2050,19 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       const reveal = b.id === 'bReroll' ? { reroll: true } : { choose: +b.dataset.bpick, reroll: cur.replay.reroll };
       const r = P.emulate(S.ix, from.item, cur.replay.action, Object.assign({}, opts, { seed: cur.replay.seed, reveal }));
       if (r.reason) B.msg = { bad: true, text: r.reason };
-      else { B.hist[B.idx] = benchEntry(r, cur.replay.action, reveal); B.hist.length = B.idx + 1; B.msg = { text: B.hist[B.idx].note }; B.calc = null; }
-    } else if (b.id === 'bUndo') { B.idx = Math.max(0, B.idx - 1); B.msg = null; B.calc = null; }
-    else if (b.id === 'bReset') { B.idx = 0; B.msg = null; B.calc = null; }
+      else { B.hist[B.idx] = benchEntry(r, cur.replay.action, reveal); B.hist.length = B.idx + 1; B.msg = { text: B.hist[B.idx].note }; B.calc = null; stratReset(B); }
+    } else if (b.id === 'bUndo') { B.idx = Math.max(0, B.idx - 1); B.msg = null; B.calc = null; stratReset(B); }
+    else if (b.id === 'bReset') { B.idx = 0; B.msg = null; B.calc = null; stratReset(B); }
     else if (b.id === 'bUse') {
       const r = ingest(cur.text, 'Workbench');
       if (r.ok) { benchDlg.close(); renderAll(); schedulePlans(); announce('The workbench item is now your item.'); }
       return;
     } else if (b.id === 'bAddGroup') { B.groups.push({ type: 'and', n: 1, reqs: [] }); }
-    else if (b.dataset.bgdel != null) { B.groups.splice(+b.dataset.bgdel, 1); B.calc = null; }
+    else if (b.dataset.bgdel != null) { B.groups.splice(+b.dataset.bgdel, 1); B.calc = null; stratReset(B); }
     else if (b.dataset.badd != null) {
       const first = benchOptionsHtml()[0];
       if (first) B.groups[+b.dataset.badd].reqs.push({ fam: first.fam, side: first.side, des: first.des, minTier: null, label: first.label });
-    } else if (b.dataset.bdel != null) { const [gi, ri] = b.dataset.bdel.split(':').map(Number); B.groups[gi].reqs.splice(ri, 1); B.calc = null; }
+    } else if (b.dataset.bdel != null) { const [gi, ri] = b.dataset.bdel.split(':').map(Number); B.groups[gi].reqs.splice(ri, 1); B.calc = null; stratReset(B); }
     else if (b.id === 'bCalc') {
       const groups = B.groups.filter((g) => g.reqs.length);
       if (!groups.length) B.calc = { reason: 'Add at least one stat to a group.' };
@@ -1955,7 +2070,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
         const r = P.chanceOf(S.ix, cur.item, action, groups, Object.assign({ n: 10000 }, opts));
         B.calc = r.reason ? r : Object.assign(r, { names: P.actionNames(action) });
       }
-    } else return;
+    } else if (!stratClick(B, b, action)) return;
     renderBench();
   });
   $('#benchBtn').addEventListener('click', openBench);

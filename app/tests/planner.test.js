@@ -864,3 +864,77 @@ test('workbench: a bone use offers three Desecrated modifiers; the same seed tak
   // other currency has no reveal
   assert.equal(P.emulate(ix, item, { op: 'exalt' }, { seed: 3 }).reveal, undefined);
 });
+
+test('strategy simulator: transmute until a Life prefix, augment for Fire Resistance, else a new base; agrees with the stat shares', () => {
+  const white = E.parseItem(ix, ['Item Class: Body Armours', 'Rarity: Normal', 'Heavy Plate', '--------', 'Item Level: 82'].join('\n')).item;
+  const life = { fam: 'IncreasedLife', side: 'prefix' }, fire = { fam: 'FireResistance', side: 'suffix' };
+  const strategy = {
+    steps: [
+      { action: { op: 'transmute', tier: 'base' }, rules: [{ groups: [{ type: 'not', reqs: [life] }], go: 'restart' }] },
+      { action: { op: 'augment', tier: 'base' }, otherwise: 'restart' },
+    ],
+    goal: [{ type: 'and', reqs: [life, fire] }],
+  };
+  const price = { 'Orb of Transmutation': 0.01, 'Orb of Augmentation': 0.02 };
+  const r = P.runStrategy(ix, white, strategy, { trials: 3000, maxUses: 5000, priceOf: (n) => price[n] ?? null, baseCost: 0.005 });
+  assert.ok(!r.reason, r.reason);
+  assert.ok(r.p > 0.99, JSON.stringify(r.ends));
+  // one attempt succeeds with P(Life prefix first) x P(Fire Resistance among the suffixes)
+  const fc = P.familyChances(ix, white, {});
+  const pl = fc.any['prefix|IncreasedLife'];
+  const withLife = E.parseItem(ix, ['Item Class: Body Armours', 'Rarity: Magic', 'Heavy Plate', '--------', 'Item Level: 82', '--------', '+120 to maximum Life'].join('\n')).item;
+  const pf = P.familyChances(ix, withLife, {}).side.suffix.FireResistance;
+  const expected = 1 / (pl * pf);
+  assert.ok(Math.abs(r.meanRestarts + 1 - expected) / expected < 0.12, `${r.meanRestarts + 1} vs ${expected}`);
+  // uses: a Transmutation per attempt, an Augmentation per kept Life prefix; cost = uses x prices + restarts x base
+  assert.ok(Math.abs(r.steps[0].avg - (r.meanRestarts + 1)) < 1e-9);
+  const cost = r.steps[0].avg * 0.01 + r.steps[1].avg * 0.02 + r.meanRestarts * 0.005;
+  assert.ok(Math.abs(cost - r.meanCost) < 1e-6, `${cost} vs ${r.meanCost}`);
+  assert.deepEqual(r.missingPrices, []);
+  // a step that cannot be used can stop the run; a budget ends runs too
+  const reg = P.runStrategy(ix, white, { steps: [{ action: { op: 'regal', tier: 'base' }, unusable: 'stop' }], goal: strategy.goal }, { trials: 50 });
+  assert.equal(reg.p, 0);
+  assert.match(reg.ends[0].reason, /^step 1 could not be used/);
+  const tight = P.runStrategy(ix, white, strategy, { trials: 500, priceOf: (n) => price[n] ?? null, baseCost: 0.005, budget: 0.2 });
+  assert.ok(tight.ends.some((e) => e.reason === 'over budget') && tight.p < 0.9, JSON.stringify(tight.ends));
+  assert.ok(tight.meanCost <= 0.2 + 1e-9);
+  // Well of Souls: an offered Desecrated modifier the goal asks for is kept
+  const rare = E.parseItem(ix, ['Item Class: Body Armours', 'Rarity: Rare', 'Test Robe', 'Heavy Plate', '--------', 'Item Level: 82', '--------',
+    '+120 to maximum Life', '35% increased Armour', '+30% to Fire Resistance'].join('\n')).item;
+  const ctx = P.makeContext(ix, rare);
+  const d = P.desPoolFor(ctx, 'suffix', 0, null).find((e) => e.fam !== 'FireResistance');
+  const one = P.runStrategy(ix, rare, { steps: [{ action: { op: 'bone', quality: 'Preserved', side: 'suffix' } }], goal: [{ type: 'and', reqs: [{ fam: d.fam, side: 'suffix', des: true }] }] }, { trials: 4000 });
+  const two = P.runStrategy(ix, rare, { steps: [{ action: { op: 'bone', quality: 'Preserved', side: 'suffix', echoes: true } }], goal: [{ type: 'and', reqs: [{ fam: d.fam, side: 'suffix', des: true }] }] }, { trials: 4000 });
+  assert.ok(one.p > 0 && two.p > one.p * 1.5, `${one.p} ${two.p}`);
+});
+
+test('strategy simulator: the sliced run gives the same result as the plain one; rules can send a run to a step', async () => {
+  const white = E.parseItem(ix, ['Item Class: Body Armours', 'Rarity: Normal', 'Heavy Plate', '--------', 'Item Level: 82'].join('\n')).item;
+  const life = { fam: 'IncreasedLife', side: 'prefix' };
+  const strategy = {
+    steps: [
+      { action: { op: 'transmute', tier: 'base' }, rules: [{ groups: [{ type: 'and', reqs: [life] }], go: { step: 2 } }], otherwise: 'restart' },
+      { action: { op: 'augment', tier: 'base' } }, // skipped by the rule
+      { action: { op: 'regal', tier: 'base' }, rules: [{ groups: [{ type: 'and', reqs: [{ kind: 'open', side: 'suffix' }] }], go: 'next' }], otherwise: 'stop' },
+      { action: { op: 'exalt', tier: 'base', side: 'suffix' }, rules: [{ groups: [{ type: 'and', reqs: [{ kind: 'rarity', value: 'Rare' }] }], go: 'repeat' }], max: 2 },
+    ],
+    goal: [{ type: 'count', n: 3, reqs: [life, { fam: 'FireResistance', side: 'suffix' }, { fam: 'ColdResistance', side: 'suffix' }, { fam: 'LightningResistance', side: 'suffix' }] }],
+  };
+  const a = P.runStrategy(ix, white, strategy, { trials: 600, seed: 5 });
+  const b = await P.runStrategyAsync(ix, white, strategy, { trials: 600, seed: 5 });
+  assert.deepEqual(b, a);
+  assert.equal(a.steps[1].avg, 0, 'the rule skips the Augmentation');
+  assert.ok(a.steps[3].avg <= 2 + 1e-9, 'at most two Exalted Orbs per run');
+  assert.ok(a.p > 0 && a.p < 1, JSON.stringify(a.ends));
+  assert.ok(a.ends.every((e) => ['goal met', 'past the last step', 'stopped at step 3'].includes(e.reason)), JSON.stringify(a.ends));
+  // the rarity and open-slot requirements
+  const ctx = P.makeContext(ix, white);
+  const st = P.toState(ctx, white);
+  // an open slot counts under the item's rarity: none on a Normal item, one per side on a Magic one
+  assert.ok(P.groupsMet(ctx, st, [{ type: 'and', reqs: [{ kind: 'rarity', value: 'Normal' }] }, { type: 'not', reqs: [{ kind: 'open', side: 'prefix' }] }]));
+  const magic = E.parseItem(ix, ['Item Class: Body Armours', 'Rarity: Magic', 'Heavy Plate', '--------', 'Item Level: 82', '--------', '+120 to maximum Life'].join('\n')).item;
+  const cm = P.makeContext(ix, magic), sm = P.toState(cm, magic);
+  assert.ok(P.groupsMet(cm, sm, [{ type: 'and', reqs: [{ kind: 'open', side: 'suffix' }] }, { type: 'not', reqs: [{ kind: 'open', side: 'prefix' }] }]));
+  assert.ok(!P.groupsMet(ctx, st, [{ type: 'or', reqs: [{ kind: 'rarity', value: 'Rare' }] }]));
+  assert.match(P.runStrategy(ix, white, { steps: [], goal: [] }).reason, /at least one step/);
+});
