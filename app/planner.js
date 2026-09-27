@@ -162,6 +162,7 @@
       essences: essencesForBase(ix, base, (opts.essences || []).filter((r) => !r.liquid)).concat(liquidFor(kb, item.base)),
       catalystMult: opts.catalystMult > 0 ? +opts.catalystMult : CATALYST_DEFAULT,
       capMods: ix._capMods || (ix._capMods = new Map(Object.entries(kb.mods).filter(([, m]) => m.cap).map(([id, m]) => [id, m.cap]))),
+      baseTags: new Set(base.tags || []),
     };
     return ctx;
   }
@@ -501,11 +502,13 @@
   /** Pick one eligible mod for the allowed sides, honouring mod groups. Returns null when nothing fits. */
   function rollMod(ctx, st, sides, floor, rng, boost) {
     const taken = groupsOf(st);
+    const added = E.addedTags(ctx.kb, st.mods.map((m) => m.id));
     const lists = sides.map((s) => sidePool(ctx, s, floor));
     const cands = [], ws = [];
     let total = 0;
     for (const l of lists) for (const e of l) {
       if (e.grp.some((g) => taken.has(g))) continue;
+      if (added && E.tagBlocked(ctx.kb.mods[e.id], ctx.baseTags, added)) continue;
       const w = boost && ctx.kb.mods[e.id].mt.includes(boost.tag) ? e.w * boost.mult : e.w;
       cands.push(e); ws.push(w); total += w;
     }
@@ -857,7 +860,9 @@
     const ok = sidePool(ctx, g.side, 0).some((e) => e.fam === g.fam && (!g.eff || e.tier <= g.eff) && reaches(ctx, e.id, g)) || viaEssence;
     if (!ok) return g.minValue != null ? `no tier reaches ${g.minValue} at this item level` : 'this tier cannot roll at this item level';
     const blocker = st.mods.find((m) => (m.frac || m.lock) && !meets(m, g, g.eff) && m.grp.some((x) => (g.grp || []).includes(x)));
-    return blocker ? 'blocked by a kept or fractured mod of the same group' : null;
+    if (blocker) return 'blocked by a kept or fractured mod of the same group';
+    const stopper = st.mods.find((m) => (m.frac || m.lock) && !meets(m, g, g.eff) && tagStops(ctx, m, g));
+    return stopper ? 'a kept or fractured mod stops it from rolling (the game keeps other elements\' spell modifiers off)' : null;
   }
 
   // ---------------------------------------------------------------- policy
@@ -939,7 +944,7 @@
       // Values come last: when every goal left only needs a better roll on a mod that is already there, reroll values.
       if (left.every((x) => st.mods.some((m) => nearMiss(m, x)))) return { op: 'divine' };
       // Work on a goal that can be slammed into an open slot first; removals come after.
-      const blocks = (g) => st.mods.some((m) => removable(m) && !useful(m, goals) && m.grp.some((x) => (g.grp || []).includes(x)));
+      const blocks = (g) => st.mods.some((m) => removable(m) && !useful(m, goals) && blocksGoal(ctx, m, g));
       const ready = (g) => !blocks(g) && open(ctx, st, g.side) > 0 && (!g.des || !st.mods.some((m) => m.des));
       const g = left.find((x) => x.required && ready(x)) || left.find((x) => x.required) || left.find(ready) || left[0];
       // Perfect/special essence: removes a random mod (side chosen with Crystallisation) and adds the goal mod.
@@ -977,7 +982,7 @@
         return removal(st, g.side, desJunk);
       }
       // A junk mod from the goal's group (e.g. a lower tier of the same stat) must go first.
-      const blocking = st.mods.find((m) => removable(m) && !useful(m, goals) && m.grp.some((x) => (g.grp || []).includes(x)));
+      const blocking = st.mods.find((m) => removable(m) && !useful(m, goals) && blocksGoal(ctx, m, g));
       if (blocking) return removal(st, blocking.side, desJunk, blocking);
       if (open(ctx, st, g.side) > 0) {
         const two = params.greaterExalt && open(ctx, st, g.side) >= 2 && left.filter((x) => x.side === g.side && !x.des).length >= 2;
@@ -1006,6 +1011,36 @@
       if (rm === 'annul') return { op: 'annul', side: params.sideOmens ? side : null };
       return { op: 'chaos', tier: params.chaosTier || params.tier };
     }
+  }
+
+  /** Do the tags this mod gives the item (adds_tags) stop every natural tier of the goal's family on this base? */
+  function tagStops(ctx, m, g) {
+    const at = m.id && ctx.kb.mods[m.id] && ctx.kb.mods[m.id].at;
+    if (!at || g.des || g.essenceOnly) return false;
+    const k = m.id + '|' + g.fam + '|' + g.side;
+    if (!ctx._stops) ctx._stops = new Map();
+    if (!ctx._stops.has(k)) {
+      const added = new Set(at);
+      const fam = sidePool(ctx, g.side, 0).filter((e) => e.fam === g.fam);
+      ctx._stops.set(k, fam.length > 0 && fam.every((e) => E.tagBlocked(ctx.kb.mods[e.id], ctx.baseTags, added)));
+    }
+    return ctx._stops.get(k);
+  }
+  /**
+   * Can this goal never share the item with another one? Every natural tier of the other goal's family gives the item tags
+   * that stop this family (a Fire spell damage prefix keeps the Cold one off, game data adds_tags).
+   */
+  function goalClash(ctx, goals, g) {
+    for (const o of goals) {
+      if (o === g || o.des || o.essenceOnly || g.des || g.essenceOnly) continue;
+      const fam = sidePool(ctx, o.side, 0).filter((e) => e.fam === o.fam);
+      if (fam.length && fam.every((e) => tagStops(ctx, { id: e.id }, g))) return `cannot roll together with "${o.label}" (the game keeps other elements' spell modifiers off)`;
+    }
+    return null;
+  }
+  /** Must this mod go before the goal can roll: same group, or its tags stop the goal's family? */
+  function blocksGoal(ctx, m, g) {
+    return m.grp.some((x) => (g.grp || []).includes(x)) || tagStops(ctx, m, g);
   }
 
   /** Does this mod family carry the tag a catalyst favours (e.g. 'life')? */
@@ -1423,7 +1458,7 @@
     for (let i = 0; i < names.length; i++) {
       const prof = PROFILES[names[i]];
       const pg = prof.goals(goals);
-      const infeasible = pg.map((g) => ({ g, why: goalFeasible(ctx, st, g) })).filter((x) => x.why);
+      const infeasible = pg.map((g) => ({ g, why: goalFeasible(ctx, st, g) || goalClash(ctx, pg, g) })).filter((x) => x.why);
       if (!pg.length) { out.profiles[names[i]] = { label: prof.label, none: 'No required goals. Mark at least one target as Required.' }; done += grids[i].length + 1; continue; }
       if (infeasible.length) { out.profiles[names[i]] = { label: prof.label, impossible: infeasible.map((x) => `${x.g.label}: ${x.why}`) }; done += grids[i].length + 1; continue; }
       const sc = makeScreen(ctx, st, pg, input);
@@ -1760,7 +1795,7 @@
   return {
     ORB, OMEN, TIERS, boneFor, actionNames, makeContext, toState, validate, apply, rngFrom, sidePool, desPoolFor,
     goalsFromTargets, goalMet, meets, nearMiss, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
-    availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, essencesForBase, liquidFor, CATALYST_DEFAULT,
+    availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, goalClash, essencesForBase, liquidFor, CATALYST_DEFAULT,
     expandStrategy, recipeParams, relevantKeys, SPACE, improvePlan,
   };
 });

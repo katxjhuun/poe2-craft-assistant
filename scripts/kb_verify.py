@@ -37,6 +37,23 @@ def strip_radius(t):
     return '\n'.join(RADIUS.sub('', line) for line in sorted_ranges(clean(t)).split('\n'))
 
 
+def expected_with_tags(tags):
+    """Natural and corruption mods (id -> level) an item with these tags can roll, by the spawn-weight rule."""
+    ts = set(tags)
+
+    def ok(sw):
+        for x in sw or []:
+            if x['tag'] in ts:
+                return x['weight'] > 0
+        return False
+    out = {'prefix': {}, 'suffix': {}, 'corrupted': {}}
+    for mid, m in ITEM_MODS.items():
+        g = m.get('generation_type')
+        if m.get('domain') == 'item' and g in out and ok(m.get('spawn_weights')):
+            out[g][mid] = m.get('required_level')
+    return out
+
+
 def main():
     ITEM_MODS.update(json.load(open(os.path.join(ROOT, '.kb_cache', 'poe2_mods.json'), encoding='utf-8')))
     kb = json.load(open(KB, encoding='utf-8'))
@@ -95,6 +112,11 @@ def main():
                 corrupted[cls].add(mid)
             continue
         ok = True
+        if b.get('tags_added'):
+            # Implicits that add tags ("Can roll Ring Modifiers" adds ring): RePoE's lists use the base's own tags only, so
+            # compute the game rule here (first matching spawn tag among the base's tags and the added ones decides).
+            r = {'mods': expected_with_tags(b['tags'])}
+            c['computed with implicit tags'] += 1
         if 'corrupted' in pool:
             mine_c, theirs_c = set(pool['corrupted']), set((r['mods'].get('corrupted') or {}).keys())
             if mine_c != theirs_c:
@@ -124,9 +146,11 @@ def main():
     json.dump(out, open(os.path.join(REPORTS, 'kb-verify.json'), 'w', encoding='utf-8'), indent=1)
     lines = ['# Knowledge base check against the game data', '',
              f"Knowledge base `{out['kb']}` against RePoE's per-base mod lists (mods_by_base.json, game data 0.5.5).", '',
-             '| Class | Bases | Identical pools | Different | Not in RePoE | Corruption mods (not in KB yet) |', '|---|---|---|---|---|---|']
+             '| Class | Bases | Identical pools | Different | Not in RePoE | Computed with implicit tags | Corruption mods |', '|---|---|---|---|---|---|---|']
     for c, v in per_class.items():
-        lines.append(f"| {c} | {v['bases']} | {v['identical']} | {v['different']} | {v['not in RePoE']} | {len(corrupted.get(c, ()))} |")
+        lines.append(f"| {c} | {v['bases']} | {v['identical']} | {v['different']} | {v['not in RePoE']} | {v['computed with implicit tags']} | {len(corrupted.get(c, ()))} |")
+    lines += ['', 'Bases whose implicits add tags (e.g. Grasping Mail: "Can roll Ring Modifiers" adds ring) are compared with the '
+              'spawn-weight rule over their tags plus the added ones; the per-base lists of RePoE leave the added tags out.']
     if examples:
         lines += ['', '## Differences', '']
         for c, ex in examples.items():

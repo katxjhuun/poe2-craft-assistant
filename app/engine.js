@@ -122,6 +122,31 @@
     return false;
   }
 
+  /**
+   * Tags the item's mods give it (game data adds_tags, kb mod.at), or null. A Fire damage prefix on a caster weapon adds
+   * no_cold_spell_mods and the like; ids: the mod ids on the item.
+   */
+  function addedTags(kb, ids) {
+    let out = null;
+    for (const id of ids) {
+      const at = id && kb.mods[id] && kb.mods[id].at;
+      if (at) { out = out || new Set(); for (const t of at) out.add(t); }
+    }
+    return out;
+  }
+  /**
+   * Is a mod of the base's pool kept from rolling by tags the item's mods add? Same first-match walk over its spawn tags,
+   * with the base's tags (baseTags, a Set) and the added ones; the added tags are blocking ones (weight 0).
+   */
+  function tagBlocked(mod, baseTags, added) {
+    if (!added || !mod) return false;
+    for (const [t, w] of mod.sw) {
+      if (added.has(t)) return !(w > 0);
+      if (baseTags.has(t)) return false;
+    }
+    return false;
+  }
+
   /** Desecrated pool for a base (not in kb.pools): eligibility by sw walk, tier by level within family. */
   function desecratedPoolFor(ix, baseName) {
     if (ix._desPool.has(baseName)) return ix._desPool.get(baseName);
@@ -605,6 +630,10 @@
     const others = item.mods.filter((m) => m.modId && m.modId !== opts.exclude);
     const takenGroups = new Map();
     for (const m of others) for (const g of ix.kb.mods[m.modId].grp) takenGroups.set(g, m.text);
+    const baseTags = new Set(base.tags || []);
+    const tagText = new Map(); // tag -> text of the mod that adds it
+    for (const m of others) for (const t of ix.kb.mods[m.modId].at || []) tagText.set(t, m.text);
+    const added = tagText.size ? new Set(tagText.keys()) : null;
 
     const fams = new Map();
     const add = (id, tier, group, baseReason, via) => {
@@ -616,6 +645,10 @@
       if (!reason) {
         const g = m.grp.find((x) => takenGroups.has(x));
         if (g) reason = `conflicts with: ${takenGroups.get(g)}`;
+      }
+      if (!reason && group !== 'essence' && group !== 'alloy' && group !== 'liquid' && tagBlocked(m, baseTags, added)) {
+        const t = m.sw.find(([x]) => added.has(x));
+        reason = `blocked by: ${tagText.get(t[0])}`;
       }
       fams.get(key).tiers.push({ id, tier, lvl: m.lvl, txt: m.txt, ok: !reason, reason, via: via || null });
     };
@@ -826,7 +859,7 @@
   return {
     cleanLine, normalize, template, templateRanges, lineValues, valuesFit,
     buildIndex, poolFor, desecratedPoolFor, swEligible, familyTiersByTags, applyFloor,
-    parseItem, validateItem, slotLimits, itemLimits, pickerOptions, searchOptions, searchScore, resolveTemplateTarget,
+    parseItem, validateItem, slotLimits, itemLimits, pickerOptions, addedTags, tagBlocked, searchOptions, searchScore, resolveTemplateTarget,
     leakScan, legacyScan, explanationProblems, lichOf, diffItems,
   };
 });

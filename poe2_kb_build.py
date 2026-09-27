@@ -72,6 +72,7 @@ for k,m in mods.items():
         M[k]={'fam':m.get('type'),'gen':'c','lvl':m.get('required_level'),'txt':clean(m.get('text')),
               'st':[[s['id'],s.get('min'),s.get('max')] for s in (m.get('stats') or [])],
               'mt':m.get('implicit_tags') or [],'grp':m.get('groups') or [],'sw':[[s['tag'],s['weight']] for s in (m.get('spawn_weights') or [])],'dom':'c','cdom':dom}
+        if m.get('adds_tags'): M[k]['at']=m['adds_tags']
         continue
     if g not in ('prefix','suffix'): continue
     sw=[[s['tag'],s['weight']] for s in (m.get('spawn_weights') or [])]
@@ -85,6 +86,9 @@ for k,m in mods.items():
           'st':[[s['id'],s.get('min'),s.get('max')] for s in (m.get('stats') or [])],
           'mt':m.get('implicit_tags') or [],'grp':m.get('groups') or [],'sw':sw,'dom':'d' if dom=='desecrated' else 'i'}
     if m.get('is_essence_only'): M[k]['eo']=1
+    # tags the mod gives the item (game data adds_tags): e.g. a Fire damage prefix on a caster weapon adds
+    # no_cold_spell_mods, which stops the Cold ones from rolling (their spawn weights hit that tag first, with 0)
+    if m.get('adds_tags'): M[k]['at']=m['adds_tags']
 # ---- bases (trade-listed only, no DNT)
 B={}; seen=set()
 for meta,v in bases.items():
@@ -96,7 +100,9 @@ for meta,v in bases.items():
     if (n,v['item_class']) in seen: continue
     seen.add((n,v['item_class']))
     imp=[x for x in (clean(mods[i]['text']) if i in mods else i for i in (v.get('implicits') or [])) if x]
-    B[n]={'cls':v['item_class'],'lvl':v.get('drop_level'),'tags':tags,'imp':imp,'tl':1 if n in trade_names else 0}
+    added=[t for i in (v.get('implicits') or []) for t in ((mods.get(i) or {}).get('adds_tags') or []) if t not in tags]
+    B[n]={'cls':v['item_class'],'lvl':v.get('drop_level'),'tags':tags+added,'imp':imp,'tl':1 if n in trade_names else 0}
+    if added: B[n]['tags_added']=added
     if v['item_class'] in UNCONF: B[n]['unconfirmed_class']=1
 # ---- pools per tag signature (natural item-domain mods only)
 def weight_for(tags, sw):
@@ -141,7 +147,8 @@ kb={'meta':{'game':'Path of Exile 2','game_data_version':GAME_VERSION,'patch':'0
            'Eligibility rule: walk mod.sw in order; the first tag the base has decides (w>0 eligible, 0 blocked).',
            'Tier numbers in pools are computed per base: T1 = highest mod level within the family on that base (community convention). Verify against in-game Alt view.',
            'dom:i = normal item mod, dom:d = desecrated (Abyss) mod; eo = essence-only.',
-           'Mods whose sw is only [default,0] are not naturally rollable (essence/alloy/Genesis Tree/other source).'],
+           'Mods whose sw is only [default,0] are not naturally rollable (essence/alloy/Genesis Tree/other source).',
+           'at = tags a mod gives the item (game data adds_tags). They join the item\'s tags for spawning: a base\'s implicits add theirs to its tags (tags_added, e.g. "Can roll Ring Modifiers" adds ring), and an explicit mod\'s (the no_*_spell_mods of elemental spell prefixes and spell skill level suffixes) stop other mods while it is on the item.'],
   'counts':{}},
  'bases':B,'tag_signatures':{v:list(k) for k,v in sigs.items()},'pools':pools,'mods':M,'stat_index':SI,'currency_roster':roster,
  'poe1_only_blacklist':{'crafting_like':bl['poe1_only_crafting_like'],'all_currency':bl['poe1_only_currency']}}

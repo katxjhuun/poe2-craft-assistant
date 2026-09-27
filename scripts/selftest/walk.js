@@ -39,7 +39,7 @@ const key = (m) => m.id + '|' + m.side;
 
 /**
  * Check one applied step. Returns a list of failed check ids with detail.
- * Checks: slots, crafted, desecrated, groups, ilvl, fractured, floor, counts, sides, lich, pool, whittle, light.
+ * Checks: slots, crafted, desecrated, groups, ilvl, fractured, floor, counts, sides, lich, pool, whittle, light, tags.
  */
 function checkStep(ctx, before, a, r) {
   const { kb } = load();
@@ -116,6 +116,12 @@ function checkStep(ctx, before, a, r) {
   }
   if (a.op === 'alchemy' && a.side && cnt(after, a.side) < Math.min(3, lim[a.side]) && after.mods.length === 4) fail('side', `alchemy with a ${a.side} omen gave ${cnt(after, a.side)} ${a.side}es`);
   if (a.op === 'bone' && a.lich && r.added.some((m) => E.lichOf(kb.mods[m.id]) !== a.lich)) fail('lich', `lich omen ${a.lich} gave ${r.added[0].id}`);
+  // a natural mod that came in must not be one the item's other mods stop (game data adds_tags, e.g. no_cold_spell_mods)
+  for (const m of r.added) {
+    if (m.crafted || m.des || a.op === 'flux') continue;
+    const others = E.addedTags(kb, after.mods.filter((x) => x !== m).map((x) => x.id));
+    if (E.tagBlocked(kb.mods[m.id], new Set(kb.bases[ctx.item.base].tags), others)) fail('tags', `${m.id} came in although another mod on the item stops it`);
+  }
   // added modifiers must be able to spawn on this base
   for (const m of r.added) {
     if (m.crafted || a.op === 'flux') continue;
@@ -185,7 +191,7 @@ function walkBase(base, opts) {
     c.n++;
     if (!ok) { c.fail++; if (c.examples.length < (opts.maxExamples || 3)) c.examples.push(base + ': ' + msg); }
   };
-  const ALL = ['slots', 'crafted', 'desecrated', 'groups', 'ilvl', 'fractured', 'floor', 'effect', 'side', 'lich', 'pool', 'whittle', 'light'];
+  const ALL = ['slots', 'crafted', 'desecrated', 'groups', 'ilvl', 'fractured', 'floor', 'effect', 'side', 'lich', 'pool', 'whittle', 'light', 'tags'];
   for (let w = 0; w < opts.walks; w++) {
     const ilvl = opts.ilvl || [82, 75, 64, 45][w % 4];
     const white = E.parseItem(ix, renderItem({ base, cls, rarity: 'Normal', ilvl, mods: [] }, r, 'adv').text).item;

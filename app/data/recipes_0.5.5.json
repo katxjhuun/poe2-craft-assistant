@@ -1619,6 +1619,13 @@
       "question": "Which modifier does Potent Liquid Contempt or Ferocity add: the prefix or the suffix one?",
       "how": "Use one on a full Rare jewel and note which side lost a modifier and which modifier came in. The game table lists a prefix and a suffix modifier for each jewel. The planner assumes the one on the side the removal opened, at random when both sides have room.",
       "claims": []
+    },
+    {
+      "id": "t27",
+      "question": "Can a wand, staff or focus carry one element's spell modifier next to another element's (for example increased Fire Damage with + to Level of all Cold Spell Skills)?",
+      "how": "Search the trade site for such a wand or focus. In the game data, these modifiers give the item tags such as no_cold_spell_mods that stop the other elements' spell modifiers from rolling, so the planner never rolls them together.",
+      "claims": [],
+      "found": "game data"
     }
   ]
 }

@@ -666,3 +666,58 @@ test('catalyst quality types (game table AlternateQualityTypes) map to the tags 
   const ruby = kb.pools[kb.bases.Ruby.sig];
   assert.ok(ruby.prefix.concat(ruby.suffix).some(([id]) => kb.mods[id].mt.includes('life')));
 });
+
+test('tags a mod gives the item (game data adds_tags): one element\'s spell mods keep the others off', () => {
+  const white = E.parseItem(ix, 'Item Class: Wands\nRarity: Normal\nAttuned Wand\n--------\nItem Level: 82').item;
+  const ctx = ctxOf(white);
+  const fam = (f) => [...ctx.pool.entries()].filter(([id, pe]) => kb.mods[id].fam === f && kb.mods[id].lvl <= 82).map(([id, pe]) => ({ id, pe }));
+  const fire = fam('FireDamageWeaponPrefix')[0];
+  assert.ok(fire && kb.mods[fire.id].at.includes('no_cold_spell_mods'), 'the Fire prefix adds no_cold_spell_mods');
+  const mk = ({ id, pe }) => ({ id, fam: kb.mods[id].fam, side: pe.side, lvl: kb.mods[id].lvl, grp: kb.mods[id].grp, tier: pe.tier, frac: false, des: false, crafted: false, lock: false });
+  const st = Object.assign(P.toState(ctx, white), { rarity: 'Rare', mods: [mk(fire)] });
+  const blocked = new Set(['ColdDamageWeaponPrefix', 'LightningDamageWeaponPrefix', 'ChaosDamageWeaponPrefix', 'PhysicalSpellDamageWeaponPrefix',
+    'GlobalIncreaseColdSpellSkillGemLevelWeapon', 'GlobalIncreaseLightningSpellSkillGemLevelWeapon', 'GlobalIncreaseChaosSpellSkillGemLevelWeapon',
+    'GlobalIncreasePhysicalSpellSkillGemLevelWeapon', 'FreezeDamageIncrease', 'ShockChanceIncrease']);
+  const rng = P.rngFrom(21);
+  let fireGem = 0;
+  for (let i = 0; i < 3000; i++) {
+    const r = P.apply(ctx, st, { op: 'exalt' }, rng);
+    for (const m of r.added) assert.ok(!blocked.has(m.fam), `${m.fam} came in next to a Fire damage prefix`);
+    if (r.added.some((m) => m.fam === 'GlobalIncreaseFireSpellSkillGemLevelWeapon')) fireGem++;
+  }
+  assert.ok(fireGem > 0, 'Fire spell levels can still come');
+  // without the Fire prefix the Cold one can roll
+  const plain = Object.assign({}, st, { mods: [] });
+  let cold = 0;
+  for (let i = 0; i < 3000; i++) if (P.apply(ctx, plain, { op: 'exalt' }, rng).added.some((m) => m.fam === 'ColdDamageWeaponPrefix')) cold++;
+  assert.ok(cold > 0);
+  // the stat picker says why
+  const item = Object.assign({}, white, { rarity: 'Rare', mods: [{ slot: 'prefix', text: kb.mods[fire.id].txt, modId: fire.id }] });
+  // (Cold damage is also the Fire prefix's group; across sides only the tags keep the Cold spell levels off)
+  const opts = E.pickerOptions(ix, item, { side: 'suffix', showImpossible: true });
+  const c = opts.find((o) => o.fam === 'GlobalIncreaseColdSpellSkillGemLevelWeapon');
+  assert.ok(c && !c.ok && /blocked by/.test(c.reason), JSON.stringify(c && c.reason));
+  assert.ok(opts.find((o) => o.fam === 'GlobalIncreaseFireSpellSkillGemLevelWeapon').ok);
+  // two targets that keep each other off can never be finished
+  const { goals } = P.goalsFromTargets(ctx, {
+    'prefix-0': { fam: 'FireDamageWeaponPrefix', group: 'prefix', required: true, label: 'fire' },
+    'suffix-0': { fam: 'GlobalIncreaseColdSpellSkillGemLevelWeapon', group: 'suffix', required: true, label: 'cold levels' },
+  });
+  assert.match(P.goalClash(ctx, goals, goals.find((g) => g.side === 'suffix')) || '', /cannot roll together with "fire"/);
+  // a junk Fire prefix is removed before the Cold spell level goal is slammed
+  const coldGoal = P.goalsFromTargets(ctx, { 'suffix-0': { fam: 'GlobalIncreaseColdSpellSkillGemLevelWeapon', group: 'suffix', required: true, label: 'cold levels' } }).goals;
+  coldGoal.forEach((g) => { g.eff = g.tier; });
+  const a = P.makePolicy(ctx, coldGoal, { tier: 'base', sideOmens: true, removal: 'annul' })(st);
+  assert.equal(a.op, 'annul');
+});
+
+test('a base whose implicit adds tags ("Can roll Ring Modifiers") rolls ring mods too', () => {
+  const b = kb.bases['Grasping Mail'];
+  assert.ok(b && b.tags.includes('ring') && b.tags_added.includes('ring'));
+  const pool = kb.pools[b.sig];
+  const ids = new Set(pool.prefix.concat(pool.suffix).map(([id]) => id));
+  assert.ok(ids.has('AddedColdDamage1'), 'the ring prefix "Adds # to # Cold Damage to Attacks"');
+  const plain = Object.entries(kb.bases).find(([n, x]) => x.cls === 'Body Armour' && !x.tags_added && x.tags.includes('str_dex_int_armour'));
+  const other = kb.pools[plain[1].sig];
+  assert.ok(!other.prefix.some(([id]) => id === 'AddedColdDamage1'), 'other body armours do not');
+});
