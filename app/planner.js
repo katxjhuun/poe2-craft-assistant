@@ -435,6 +435,10 @@
         return st.foresight ? "The item already foresees its next currency (Hinekora's Lock)." : null;
       case 'mirror':
         return null;
+      case 'aldur': {
+        const rune = ctx.kb.augments && ctx.kb.augments[a.item];
+        return rune && rune.by_class[cls] ? null : `${a.item || 'This rune'} does not go on ${cls} items.`;
+      }
       case 'verisium': {
         const vu = R === 'Unique' ? ((ctx.kb.verisium_unique_upgrades || {})[ctx.item.name] || []).filter((u) => u.from === ctx.item.base)
           : (ctx.kb.verisium_upgrades || {})[ctx.item.base] || [];
@@ -1801,6 +1805,15 @@
     if (qualityCurrencyFor(cls)) add('quality', 'Add quality', { op: 'quality' }, { cur: [qualityCurrencyFor(cls)] });
     if (infuserFor(cls)) add('infuser', 'Quality past the maximum', { op: 'infuser' }, { cur: [infuserFor(cls)] });
     add('artificer', 'Add an augment socket', { op: 'artificer' }, { cur: ["Artificer's Orb"] });
+    // Runes of Aldur: socketed, they turn the other elements' modifiers into their element (rune texts). Listed, not planned.
+    for (const rune of ['Passion of Aldur', 'Breath of Aldur', 'Ire of Aldur', 'Betrayal of Aldur']) {
+      const r = ix.kb.augments && ix.kb.augments[rune];
+      if (!r || !r.by_class[cls]) continue;
+      add('aldur', `Transform element modifiers (${rune})`, { op: 'aldur', item: rune }, {
+        cur: [rune], note: `${r.by_class[cls].txt.join(' ')}. It takes an augment socket and works while socketed; fractured modifiers stay as they are. `
+          + 'Transformed lines show no tier when the base cannot roll them. The planner does not plan it.',
+      });
+    }
     // Verisium Anvil (game tables Expedition2VerisiumCrafts, ArmourTypes): listed, not planned
     const defs = (d) => ['Armour', 'Evasion', 'EnergyShield'].filter((k) => d.from[k] || d.to[k])
       .map((k) => `${k === 'EnergyShield' ? 'Energy Shield' : k} ${d.from[k]}${d.to[k] !== d.from[k] ? ' -> ' + d.to[k] : ''}`).join(', ');

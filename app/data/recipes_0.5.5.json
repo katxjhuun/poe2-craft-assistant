@@ -1631,7 +1631,7 @@
       "claims": [],
       "found": "game data",
       "status": "confirmed",
-      "note": "Your trade searches (27 Sept 2026): wands 0 results for the three pairs, the check pair found (Brimstone Cry). Staves: the Cold/Lightning pair 0; two staves carry a pair, each with something outside normal rolling: Ghoul Beam has the Cold spell levels fractured, and on Mind Roar (a Gelid Staff, whose own tags keep Fire spell modifiers off) the Fire lines show no tier, so they did not roll there. Natural rolls keep to the rule.",
+      "note": "Your trade searches (27 Sept 2026): wands 0 results for the three pairs, the check pair found (Brimstone Cry). Staves: the Cold/Lightning pair 0; two staves carry a pair, each with something outside normal rolling: Ghoul Beam has the Cold spell levels fractured, and on Mind Roar (a Gelid Staff, whose own tags keep Fire spell modifiers off) the Fire lines show no tier, so they did not roll there. Both staves carry Passion of Aldur runes, which turn Cold and Lightning modifiers into Fire ones while the fractured modifier stays (t30). Natural rolls keep to the rule.",
       "source": "your trade searches and items (Brimstone Cry, Eagle Roar, Ghoul Beam, Mind Roar); game data adds_tags and base tags"
     },
     {
@@ -1656,7 +1656,10 @@
       "id": "t30",
       "question": "Which route puts two spell modifiers of different elements on one staff (Ghoul Beam, Mind Roar), and does a fractured modifier still keep other elements off?",
       "how": "Tell in which league the two staves are listed. Mind Roar has Fire lines a Gelid Staff cannot roll (no tier shown): a route that ignores the base, such as the Recombinator, if Expedition brought it back in 0.5.5 (Expedition is core content again in Standard and Forbidden Rites). To test the fracture part: on a wand with a fractured \"+# to Level of all Cold Spell Skills\", use Exalted Orbs with Omen of Sinistral Exaltation and see whether \"#% increased Fire Damage\" ever comes.",
-      "claims": []
+      "claims": [],
+      "status": "confirmed",
+      "note": "The Runes of Aldur: Passion of Aldur turns Cold and Lightning modifiers into equivalent Fire ones (Breath: Cold, Ire: Lightning, Betrayal: Chaos) while socketed; fractured modifiers stay. Both staves carry Passion of Aldur. The Recombinator was removed with 0.5.0 (your research).",
+      "source": "rune texts in the game data (augments), the two staves (Ghoul Beam, Mind Roar) and your report on the Recombinator (27 Sept 2026)"
     }
   ]
 }

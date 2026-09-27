@@ -219,12 +219,13 @@ ops=[
  op('architect','Architect\'s Orb',input='Corrupted equipment or jewel',effect='modify unpredictably or destroy',conf=G),
  op('cultivation','Vaal Cultivation Orb',input='Corrupted Vaal Unique / other Unique',effect='replace up to 2 mods / turn into corrupted Unique of same class',conf=G),
  op('verisium',['Verisium','Exceptional Verisium'],input='armour base with an entry in verisium_upgrades (Uniques: verisium_unique_upgrades, with a crest)',effect='Runeforging: adds Runic Ward; bases from level 55 give up part of their Armour/Evasion/Energy Shield for it (ArmourTypes); Uniques move to their Runeforged/Runemastered base and stay the same unique',conf=G,source='item text: Can be used at the Verisium Anvil to transform Equipment; game tables Expedition2VerisiumCrafts, ArmourTypes; player and runeforging guides (modifiers stay, fractured ones too since 0.5.1)',note='not planned (the planner keeps one base per plan)'),
+ op('aldur_rune',['Passion of Aldur','Breath of Aldur','Ire of Aldur','Betrayal of Aldur'],input='weapon with a free augment socket',effect='while socketed, transforms the other elements\' modifiers into equivalent Fire (Passion), Cold (Breath), Lightning (Ire) or Chaos (Betrayal) modifiers; fractured modifiers stay',conf=G,source='rune texts (augments); two trade staves (Ghoul Beam, Mind Roar, 27 Sept 2026): the fractured Cold modifier stayed, the others became Fire and show no tier',note='listed, not planned'),
  op('liquid_emotion','Liquid emotions (Diluted, plain, Concentrated and Potent; the Ancient ones are for Time-Lost jewels)',input='Rare Basic Jewel (Ancient: Rare Time-Lost Jewel)',effect='removes a random modifier and adds the guaranteed crafted modifier the game lists for that jewel (liquid_emotions)',conf=G,source='item texts; outcomes: game table LiquidEmotionOutcomes',rule_refs=['R_ONE_CRAFTED','R_SWAP_REMOVAL']),
 ]
 legacy=[{'name':'Omen of Homogenising Exaltation / Coronation','status':'drops disabled since 0.4 (Standard legacy)','conf':M2},
         {'name':'Omen of Corruption','status':'unobtainable since 0.5.0 (legacy)','conf':M2},
         {'name':'Omen of Recombination','status':'removed in 0.5.0','conf':M2},
-        {'name':'Recombinator (Expedition)','status':'disabled in Runes of Aldur (0.5.0); 0.5.5 made Expedition core again in Standard and Forbidden Rites, the Recombinator itself unverified; trade staves carry pairs that normal rolls cannot make (test t30)','conf':S1}]
+        {'name':'Recombinator (Expedition)','status':'removed with 0.5.0 (with the Omen of Recombination) and not back in 0.5.5','conf':M2,'source':'player (27 Sept 2026); 0.5 guides'}]
 kb['crafting_rules']=rules; kb['crafting_ops']=ops; kb['legacy_or_disabled']=legacy
 # ---- essences that give one of several mods (EssenceMods rows without a fixed Mod: OutcomeMods, OutcomeModWeights).
 # Table rows refer to BaseItemTypes and Mods by row number; RePoE's base_items.json and mods.json keep that order.

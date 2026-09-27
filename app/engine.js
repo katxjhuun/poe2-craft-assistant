@@ -116,6 +116,30 @@
     return map;
   }
 
+  /**
+   * The lines a unique is known to carry (kb.uniques, from poe2db and checked against the game data): template -> the
+   * line with its ranges. The variant on this base first. null when the item is not a known unique.
+   */
+  function uniqueLinesFor(ix, item) {
+    const u = item.rarity === 'Unique' && item.name && ix.kb.uniques ? ix.kb.uniques[item.name] : null;
+    if (!u) return null;
+    const own = u.variants.filter((v) => v.base === item.base);
+    const map = new Map();
+    for (const v of own.length ? own : u.variants) {
+      for (const m of v.mods) for (const l of m.txt.split('\n')) if (!map.has(normalize(l))) map.set(normalize(l), { line: l, variable: !!m.variable });
+    }
+    return map;
+  }
+  /** A line of a known unique: its ranges come from the unique's own line, and no "no match" warning is raised. */
+  function uniqueLine(lines, known, h) {
+    const k = known && lines.length === 1 ? known.get(normalize(lines[0])) : null;
+    if (!k) return null;
+    const r = makeUnmatched(lines, 'unique', h);
+    const ranges = templateRanges(k.line);
+    r.uniqueLine = k.line; r.fit = valuesFit(r.values, ranges); r.confidence = r.fit === false ? 0.3 : 0.9; r.note = 'unique';
+    return r;
+  }
+
   /** Mods the liquid emotions add on this jewel base (kb.liquid_emotions), or null. */
   function liquidModsFor(ix, baseName) {
     if (!ix._liquid) ix._liquid = new Map();
@@ -379,6 +403,7 @@
     const pool = sig ? poolFor(ix, sig) : new Map();
     const desPool = item.base ? desecratedPoolFor(ix, item.base) : new Map();
     const crafts = item.base ? liquidModsFor(ix, item.base) : null;
+    const known = uniqueLinesFor(ix, item);
     // essence mods of this item class (the page and the self-test set ix.essenceModsByClass from poe2db); without the
     // class map, every essence mod counts (older callers)
     const ess = ix.essenceModsByClass ? (item.base ? ix.essenceModsByClass.get(ix.kb.bases[item.base].cls) || null : null) : ix.essenceMods || null;
@@ -411,7 +436,7 @@
         }
         if (h.kind === 'implicit') { addImplicit(r.lines, { corruption: !!h.corruption }); continue; }
         if (h.kind === 'rune' || h.kind === 'enchant') { for (const l of r.lines) addRune(l, h.kind); continue; }
-        if (h.kind === 'unique') { item.mods.push(makeUnmatched(r.lines, 'unique', h)); continue; }
+        if (h.kind === 'unique') { item.mods.push(uniqueLine(r.lines, known, h) || makeUnmatched(r.lines, 'unique', h)); continue; }
         if (h.kind !== 'prefix' && h.kind !== 'suffix') {
           warnings.push({ level: 'info', msg: `Unrecognised mod header "{ ${h.raw} }"; its lines are shown unmatched.` });
           item.mods.push(makeUnmatched(r.lines, null, h));
@@ -428,6 +453,8 @@
       }
       let i = 0;
       while (i < explicitLines.length) {
+        const ul = uniqueLine([explicitLines[i]], known, markers(explicitLines[i]));
+        if (ul) { item.mods.push(ul); i += 1; continue; }
         const two = i + 1 < explicitLines.length ? [explicitLines[i], explicitLines[i + 1]] : null;
         const markerOf = (l) => ((l.match(RE_MARKER) || [])[1] || '').toLowerCase();
         // Three-line hybrids first (e.g. "% increased Evasion and Energy Shield" + base Evasion + base Energy Shield;
@@ -477,14 +504,15 @@
       }
     }
 
-    // Unique jewels (kb.uniques): what the knowledge base knows about this one
+    // Uniques (kb.uniques): what the knowledge base knows about this one
     const uj = item.rarity === 'Unique' && item.name && ix.kb.uniques ? ix.kb.uniques[item.name] : null;
     if (uj) {
       const v = uj.variants.find((x) => x.base === item.base) || uj.variants[0];
       const vary = v.mods.filter((m) => m.variable).length;
-      warnings.push({ level: 'info', msg: `${item.name}: Limited to ${v.limit || '-'}${v.corrupted ? ', drops corrupted' : ''}.`
-        + (vary ? ` ${vary} of its lines vary per item (${[...new Set(v.mods.filter((m) => m.variable).map((m) => m.txt.split('\n')[0]))].join('; ')}).` : '')
-        + ' Unique jewels drop only: an Orb of Chance does not work on jewels.' });
+      const facts = [v.limit ? `Limited to ${v.limit}` : null, v.corrupted ? 'drops corrupted' : null].filter(Boolean);
+      warnings.push({ level: 'info', msg: `${item.name}: ${facts.length ? facts.join(', ') + '. ' : ''}${v.mods.length} known lines`
+        + (vary ? `, ${vary} of them vary per item (${[...new Set(v.mods.filter((m) => m.variable).map((m) => m.txt.split('\n')[0]))].join('; ')})` : '') + '.'
+        + (uj.cls === 'Jewel' ? ' Unique jewels drop only: an Orb of Chance does not work on jewels.' : '') });
     }
     const parseWarnings = warnings.slice();
     validateItem(ix, item, warnings);
@@ -641,7 +669,12 @@
       if (m.gameTier && m.tier && m.gameTier !== m.tier) warnings.push({ level: 'warn', msg: `"${m.text}": game says T${m.gameTier}, computed T${m.tier}. Showing the game's tier.` });
       if (m.gameTier) m.tier = m.gameTier;
       if (m.ambiguous) warnings.push({ level: 'info', msg: `"${m.text}" matches more than one mod; pick the right one from the candidates.` });
-      if (!m.inPool && !m.desecrated && !m.crafted) warnings.push({ level: 'info', msg: `"${m.text}" is not in this base's natural pool (from an essence, the Genesis Tree or another mechanic).` });
+      if (!m.inPool && !m.desecrated && !m.crafted) {
+        // a socketed Rune of Aldur turns other elements' modifiers into its element (Mind Roar: Cold lines shown as Fire)
+        const aldur = (item.runes || []).map((r) => (/Forged by the (Passion|Breath|Ire|Betrayal) of Aldur/.exec(r.text) || [])[1]).find(Boolean);
+        warnings.push({ level: 'info', msg: aldur ? `"${m.text}" is not in this base's natural pool: the socketed ${aldur} of Aldur rune transformed it from another element.`
+          : `"${m.text}" is not in this base's natural pool (from an essence, the Genesis Tree or another mechanic).` });
+      }
     }
     if (item.flags.corrupted) warnings.push({ level: 'info', msg: "Corrupted: only corrupted-item currency applies (Architect's Orb, Orbs of Sacrifice, Vaal Cultivation Orb)." });
     if (item.flags.sanctified) warnings.push({ level: 'info', msg: 'Sanctified: most crafting is locked (single source, verify in game).' });

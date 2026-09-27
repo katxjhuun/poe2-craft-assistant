@@ -295,5 +295,26 @@ test('trade wands and staves from test t27 read cleanly; mods a base cannot roll
     assert.deepEqual(out, it.id === 'mind-roar' ? ['95% increased Flammability Magnitude', '+7 to Level of all Fire Spell Skills'] : [], it.id);
   }
   assert.ok(kb.bases['Gelid Staff'].tags.includes('no_fire_spell_mods'));
+  // the socketed Passion of Aldur rune explains those lines
+  const mind = E.parseItem(ix, ITEMS.find((x) => x.id === 'mind-roar').text);
+  assert.ok(mind.warnings.some((w) => /Passion of Aldur rune transformed it/.test(w.msg)), JSON.stringify(mind.warnings));
 });
 
+
+test('a pasted unique: its lines match the unique\'s known lines (kb.uniques) with their ranges, no "no match" warnings', () => {
+  // a unique with only fixed, game-verified lines, on a base the knowledge base has
+  const [name, u] = Object.entries(kb.uniques).find(([, x]) => x.cls === 'Ring' && x.trade_base && kb.bases[x.trade_base]
+    && x.variants.length === 1 && x.variants[0].mods.length >= 3 && x.variants[0].mods.every((m) => m.verified && !m.txt.includes('\n')));
+  const v = u.variants[0];
+  const roll = (t) => t.replace(/\((-?[\d.]+)-(-?[\d.]+)\)/g, (_, a) => a);
+  const text = [`Item Class: Rings`, 'Rarity: Unique', name, u.trade_base, '--------', 'Item Level: 80', '--------', ...v.mods.map((m) => roll(m.txt))].join('\n');
+  const r = E.parseItem(ix, text);
+  assert.equal(r.item.mods.length, v.mods.length, name);
+  for (const m of r.item.mods) {
+    assert.equal(m.slot, 'unique', name + ': ' + m.text);
+    assert.ok(m.uniqueLine && m.fit !== false, name + ': ' + m.text);
+  }
+  assert.ok(!r.warnings.some((w) => /No knowledge base match/.test(w.msg)), JSON.stringify(r.warnings));
+  assert.ok(r.warnings.some((w) => w.msg.startsWith(name + ':')));
+  assert.ok(Object.keys(kb.uniques).length > 400);
+});

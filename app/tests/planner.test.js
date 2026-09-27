@@ -384,7 +384,7 @@ test('7.2 operator rules: chance, quality, infuser, flux, liquid emotions, mirro
   assert.match(P.validate(ctx, Object.assign({}, st, { corrupted: true }), { op: 'vaal' }), /Corrupted items only accept/);
   assert.match(P.validate(ctx, st, { op: 'liquid' }), /Rare jewels/);
   const names = P.availableOps(ix, sceptre).flatMap((o) => o.cur.concat(o.omens));
-  for (const n of names) assert.ok(kb.currency_metadata_ids[n] || kb.item_descriptions[n], 'known PoE2 name: ' + n);
+  for (const n of names) assert.ok(kb.currency_metadata_ids[n] || kb.item_descriptions[n] || kb.augments[n], 'known PoE2 name: ' + n);
 });
 
 test('Flux turns a resistance into the same tier of another element, and the planner uses it for a resistance goal', () => {
@@ -749,7 +749,7 @@ test('Orb of Chance does not work on jewels (game table Chanceableitemclasses); 
   const ring = E.parseItem(ix, 'Item Class: Rings\nRarity: Normal\nGold Ring\n--------\nItem Level: 82').item;
   const rctx = ctxOf(ring);
   assert.equal(P.validate(rctx, P.toState(rctx, ring), { op: 'chance' }), null);
-  assert.equal(Object.keys(kb.uniques).length, 13);
+  assert.equal(Object.values(kb.uniques).filter((u) => u.cls === 'Jewel').length, 13);
   const r = E.parseItem(ix, 'Item Class: Jewels\nRarity: Unique\nMegalomaniac\nDiamond\n--------\nItem Level: 82\n--------\nAllocates Heavy Buffer\nAllocates Tenfold Attacks\nAllocates Unstoppable Barrier\n--------\nCorrupted');
   assert.ok(r.warnings.some((w) => /Megalomaniac: Limited to 1, drops corrupted/.test(w.msg) && /Orb of Chance does not work on jewels/.test(w.msg)), JSON.stringify(r.warnings));
 });

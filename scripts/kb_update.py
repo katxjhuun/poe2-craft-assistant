@@ -53,10 +53,10 @@ def build(fresh):
     print(out.strip()[-1500:])
     if code:
         print('jewel augmentation failed (the candidate has no jewel data)'); return code
-    code, out = run([sys.executable, os.path.join('scripts', 'unique_jewels.py')], env={'POE2_KB': CANDIDATE, 'KB_CACHE': CACHE})
+    code, out = run([sys.executable, os.path.join('scripts', 'unique_items.py')], env={'POE2_KB': CANDIDATE, 'KB_CACHE': CACHE})
     print(out.strip()[-600:])
     if code:
-        print('unique jewels failed'); return code
+        print('uniques failed'); return code
     print(f'candidate: {CANDIDATE}\nnext: python scripts/kb_update.py check')
     return 0
 
