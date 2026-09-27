@@ -34,7 +34,7 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 | 3 | Essence mods per item class | game tables EssenceMods, Essences, EssenceTargetItemCategories | game data | **verified**: all 1,168 essence/alloy -> class -> mod pairs identical (scripts/essences_from_gamedata.py). The 9 essences that give one of several mods are in kb.essence_outcomes (game table; Abyss 50/50 and Perfect Infinite 50/50/50 weights, others none) and the planner rolls among the outcomes the item can take |
 | 4 | Desecrated mods per class, levels, lich tags, reveal rules | RePoE desecrated domain + keywords | game data | done (all equipment desecrated mods are level 65; none on sceptres) |
 | 5 | Corruption (Vaal Orb) outcomes and corrupted implicits | RePoE mods generation_type corrupted | game data (list); outcome chances open | **verified**: 119 Corruption Enhancements in the KB (dom 'c'; equipment item-domain, jewels misc-domain), per-base lists identical to RePoE for all 1,617 bases; shown under Vaal Orb. Outcome chances: not in the files |
-| 6 | Runes, soul cores, talismans (augments) per item class | game tables SoulCores, SoulCoreStats, SoulCoreStatCategories, SoulCoreLimits / RePoE augments.json | game data | not in the KB yet |
+| 6 | Runes, soul cores, talismans (augments) per item class | game tables SoulCores, SoulCoreStats, SoulCoreStatCategories, SoulCoreLimits / RePoE augments.json | game data | **done**: 313 augments in kb.augments with stats per item class (categories resolved with the game tables); a target row shows the augments that give the same stat |
 | 7 | Runic Alloy mods | EssenceMods (alloys are essences in the game tables) | game data | **verified** with row 3 (same table) |
 | 8 | Liquid emotions (jewels) | game table LiquidEmotionOutcomes | game data | not in the KB yet |
 | 9 | Catalyst quality types and the mods they favour | game table AlternateQualityTypes | game data | tags known; check pending |
@@ -42,6 +42,8 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 | 11 | Mechanics that the files do not state | in-game tests (page) | open until tested | 12 open (see In-game tests) |
 
 ## Log
+
+- 27 Sept 2026: augments (runes, soul cores, talismans, idols) added from the game data; target rows show them.
 
 - 27 Sept 2026: multi-outcome essences modelled from the game table (planner test added).
 

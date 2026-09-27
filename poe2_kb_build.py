@@ -19,6 +19,11 @@ SRC = {
  # raw game tables (column names are community guesses, values are the game's): essences and their outcomes
  'EssenceMods.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/EssenceMods.csv',
  'Essences.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/Essences.csv',
+ 'EssenceTargetItemCategories.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/EssenceTargetItemCategories.csv',
+ 'SoulCoreStatCategories.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/SoulCoreStatCategories.csv',
+ 'ItemClasses.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/ItemClasses.csv',
+ # runes, soul cores, talismans, idols: what each gives per item class (RePoE's reading of the SoulCore tables)
+ 'poe2_augments.json': 'https://raw.githubusercontent.com/repoe-fork/poe2/master/data/augments.json',
  'poe1_base_items.json': 'https://raw.githubusercontent.com/repoe-fork/repoe-fork.github.io/master/data/base_items.json',
  'items.ndjson': 'https://raw.githubusercontent.com/Kvan7/Exiled-Exchange-2/master/renderer/public/data/en/items.ndjson',
  'stats.ndjson': 'https://raw.githubusercontent.com/Kvan7/Exiled-Exchange-2/master/renderer/public/data/en/stats.ndjson',
@@ -220,6 +225,34 @@ for r in _table('EssenceMods.csv'):
         cur['mods'].append(mid)
         if cur['weights'] is not None: cur['weights'].append(ws[i])
 kb['essence_outcomes']=EO
+# ---- augments (runes, soul cores, talismans, idols): stats per item class. Category -> item classes comes from the game
+# table SoulCoreStatCategories; its "All", "Martial Weapon" and "Armour" rows are empty there and resolve through the
+# essence categories of the same name (AllEquipment, Weapons, Armour).
+_ic=[r['Id'] for r in _table('ItemClasses.csv')]
+_cls=lambda v: [_ic[i] for i in _ints(v)]
+_etc={r['Id']:_cls(r['ItemClasses']) for r in _table('EssenceTargetItemCategories.csv')}
+_scc={r['Id']:_cls(r['TargetItemClasses']) for r in _table('SoulCoreStatCategories.csv')}
+_wide={'All':_etc['AllEquipment'],'Martial Weapon':_etc['Weapons'],'Armour':_etc['Armour']}
+def _classes(cat):
+    got=list(_scc.get(cat) or _wide.get(cat) or [])
+    if cat in ('Martial Or Caster Weapon','Martial Weapon Wand or Staff'): got+= [c for c in _etc['Weapons'] if c not in got]
+    return got
+AUG={}
+for meta,v in json.load(open(get('poe2_augments.json'),encoding='utf-8')).items():
+    b=bases.get(meta) or {}
+    name=b.get('name') or meta.rsplit('/',1)[-1]
+    if name.startswith('[DNT]') or b.get('release_state') not in (None,'released'): continue
+    by={}
+    for cat,c in (v.get('categories') or {}).items():
+        for cl in _classes(cat):
+            e=by.setdefault(cl,{'txt':[],'st':[]})
+            e['txt']+= [clean(t) for t in c.get('stat_text') or []]
+            e['st']+= [s['id'] for s in c.get('stats') or []]
+            if c.get('bonded_stat_text'): e.setdefault('bonded',[]).extend(clean(t) for t in c['bonded_stat_text'])
+    AUG[name]={'type':v.get('type_id'),'lvl':v.get('required_level'),'limit':clean(v.get('limit')) or None,'by_class':by}
+kb['augments']=AUG
+kb['meta']['counts']['augments']=len(AUG)
+kb['meta']['rules'].append('augments = runes, soul cores, talismans and idols with their stats per item class (RePoE augments.json from the game tables; categories resolved with SoulCoreStatCategories). They go into augment sockets, not affix slots.')
 kb['meta']['rules'].append('essence_outcomes = essences that add one of several mods (game table EssenceMods.OutcomeMods, with OutcomeModWeights when the table has them; none = not in the files).')
 _kw = json.load(open(get('poe2_keywords.json'), encoding='utf-8'))
 KEYWORDS = ['ItemRarity','Rarity','Crafted','Fracture','Abyssalify','UnstableDesecration','Sanctified','Corrupted','Mirrored',

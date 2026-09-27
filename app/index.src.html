@@ -2018,6 +2018,24 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     }
   }
 
+  const augCache = new Map();
+  /** Runes, soul cores, talismans and idols (kb.augments, game data) that give a stat of this family on this item class. */
+  function augmentsFor(fam) {
+    const cls = S.item && S.item.itemClass;
+    const k = cls + '|' + fam;
+    if (augCache.has(k)) return augCache.get(k);
+    const stats = new Set((S.ix.famMods.get(fam) || []).flatMap((id) => (S.ix.kb.mods[id].st || []).map((x) => x[0])));
+    const out = [];
+    for (const [name, a] of Object.entries(S.ix.kb.augments || {})) {
+      const c = a.by_class && a.by_class[cls];
+      if (!c) continue;
+      const i = c.st.findIndex((id) => stats.has(id));
+      if (i >= 0) out.push({ name, txt: (c.txt[i] || '').replace(/\n/g, ' / '), lvl: a.lvl });
+    }
+    out.sort((x, y) => (y.lvl || 0) - (x.lvl || 0));
+    augCache.set(k, out);
+    return out;
+  }
   function rowHtml(side, i, opensAt) {
     const key = side + '-' + i;
     const m = modAt(side, i);
@@ -2044,6 +2062,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
         ${byValue && canValue ? `<input class="minval" data-minval="${key}" inputmode="decimal" value="${t.minValue > 0 ? esc(t.minValue) : ''}" placeholder="max ${esc(fmtVal(reach))}" aria-label="Minimum value of the first number">` : ''}
         <button type="button" class="chip" data-req="${key}" aria-pressed="${t.required}">${t.required ? 'Required' : 'Nice to have'}</button>
         ${done ? '<span class="ok-note">Done</span>' : bad}${!done && projCache && projCache.per[key] != null ? `<span class="proj">${signed(projCache.per[key])} if it lands</span>` : ''}</div>`;
+      const aug = augmentsFor(t.fam);
+      if (aug.length) opts += `<div class="sub" style="margin-top:4px">Also from an augment socket (no affix): ${aug.slice(0, 3).map((a) => esc(a.name) + ' (' + esc(a.txt) + ')').join('; ')}${aug.length > 3 ? ` and ${aug.length - 3} more` : ''}.</div>`;
     }
     const value = S.open && S.open.key === key ? S.open.query : (t && t.label) || '';
     return `<div class="srow ${done ? 'done' : ''}">
