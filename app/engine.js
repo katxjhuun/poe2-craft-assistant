@@ -140,6 +140,33 @@
     return r;
   }
 
+  /**
+   * Socketed runes that change crafting (augment texts in the game data): Medved's Tending lets the item roll the Soul
+   * modifiers (spawn tag soul), Astrid's Creativity allows one more crafted modifier. item.runes holds the "(rune)" lines.
+   */
+  function runeRules(item) {
+    const t = (item.runes || []).map((r) => r.text).join('\n');
+    return { soul: /Can roll Soul modifiers/i.test(t), extraCrafted: /Can have 1 additional Crafted Modifier/i.test(t) ? 1 : 0 };
+  }
+  /** Natural pool of the item: its base's, plus the Soul modifiers while Medved's Tending is socketed. */
+  function poolForItem(ix, item) {
+    const base = ix.kb.bases[item.base];
+    const pool = poolFor(ix, base.sig);
+    if (!runeRules(item).soul) return pool;
+    const out = new Map(pool);
+    const byFam = new Map();
+    for (const [id, m] of Object.entries(ix.kb.mods)) {
+      if (m.dom !== 'i' || !m.sw.some(([t, w]) => t === 'soul' && w > 0)) continue;
+      if (!byFam.has(m.fam)) byFam.set(m.fam, []);
+      byFam.get(m.fam).push(id);
+    }
+    for (const ids of byFam.values()) {
+      ids.sort((a, b) => ix.kb.mods[b].lvl - ix.kb.mods[a].lvl);
+      ids.forEach((id, i) => out.set(id, { tier: i + 1, side: ix.kb.mods[id].gen === 'p' ? 'prefix' : 'suffix', soul: true }));
+    }
+    return out;
+  }
+
   /** Mods the liquid emotions add on this jewel base (kb.liquid_emotions), or null. */
   function liquidModsFor(ix, baseName) {
     if (!ix._liquid) ix._liquid = new Map();
@@ -659,7 +686,8 @@
     }
     const crafted = item.mods.filter((m) => m.crafted).length;
     const des = item.mods.filter((m) => m.desecrated).length;
-    if (crafted > 1) warnings.push({ level: 'error', msg: `0.5+ rule: max 1 crafted mod per item (R_ONE_CRAFTED); found ${crafted}.` });
+    const craftedCap = 1 + runeRules(item).extraCrafted; // Astrid's Creativity: one more
+    if (crafted > craftedCap) warnings.push({ level: 'error', msg: `0.5+ rule: max ${craftedCap} crafted mod${craftedCap > 1 ? 's' : ''} per item (R_ONE_CRAFTED${craftedCap > 1 ? ", Astrid's Creativity socketed" : ''}); found ${crafted}.` });
     if (des > 1 && item.flags.corrupted) warnings.push({ level: 'info', msg: `${des} Desecrated mods on a corrupted item: this is an Omen of Putrefaction item (the one-Desecrated cap does not apply to it).` });
     else if (des > 1) warnings.push({ level: 'error', msg: `0.5+ rule: max 1 Desecrated mod per item (R_ONE_DESECRATED); found ${des}.` });
     for (const m of item.mods) {
@@ -669,7 +697,7 @@
       if (m.gameTier && m.tier && m.gameTier !== m.tier) warnings.push({ level: 'warn', msg: `"${m.text}": game says T${m.gameTier}, computed T${m.tier}. Showing the game's tier.` });
       if (m.gameTier) m.tier = m.gameTier;
       if (m.ambiguous) warnings.push({ level: 'info', msg: `"${m.text}" matches more than one mod; pick the right one from the candidates.` });
-      if (!m.inPool && !m.desecrated && !m.crafted) {
+      if (!m.inPool && !m.desecrated && !m.crafted && !(runeRules(item).soul && ix.kb.mods[m.modId].sw.some(([t, w]) => t === 'soul' && w > 0))) {
         // a socketed Rune of Aldur turns other elements' modifiers into its element (Mind Roar: Cold lines shown as Fire)
         const aldur = (item.runes || []).map((r) => (/Forged by the (Passion|Breath|Ire|Betrayal) of Aldur/.exec(r.text) || [])[1]).find(Boolean);
         warnings.push({ level: 'info', msg: aldur ? `"${m.text}" is not in this base's natural pool: the socketed ${aldur} of Aldur rune transformed it from another element.`
@@ -701,7 +729,7 @@
     const base = ix.kb.bases[item.base];
     const ilvl = item.ilvl == null ? 100 : item.ilvl;
     const side = opts.side;
-    const pool = poolFor(ix, base.sig);
+    const pool = poolForItem(ix, item);
     const others = item.mods.filter((m) => m.modId && m.modId !== opts.exclude);
     const takenGroups = new Map();
     for (const m of others) for (const g of ix.kb.mods[m.modId].grp) takenGroups.set(g, m.text);
@@ -731,7 +759,7 @@
     for (const [id, pe] of pool) if (pe.side === side) add(id, pe.tier, side, null);
     for (const [id, pe] of desecratedPoolFor(ix, item.base)) if (pe.side === side) add(id, pe.tier, 'desecrated', null);
 
-    const hasCrafted = item.mods.some((m) => m.crafted && m.modId !== opts.exclude);
+    const hasCrafted = item.mods.filter((m) => m.crafted && m.modId !== opts.exclude).length >= 1 + runeRules(item).extraCrafted;
     const hasDes = item.mods.some((m) => m.desecrated && m.modId !== opts.exclude);
 
     // Essences and alloys that poe2db lists for this item class (base eligibility known).
@@ -934,7 +962,7 @@
   return {
     cleanLine, normalize, template, templateRanges, lineValues, valuesFit,
     buildIndex, poolFor, desecratedPoolFor, swEligible, familyTiersByTags, applyFloor,
-    parseItem, validateItem, slotLimits, itemLimits, pickerOptions, addedTags, tagBlocked, searchOptions, searchScore, resolveTemplateTarget,
+    parseItem, validateItem, slotLimits, itemLimits, pickerOptions, addedTags, tagBlocked, runeRules, poolForItem, searchOptions, searchScore, resolveTemplateTarget,
     leakScan, legacyScan, explanationProblems, lichOf, diffItems,
   };
 });

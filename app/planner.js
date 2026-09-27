@@ -155,7 +155,7 @@
     const base = kb.bases[item.base];
     if (!base) throw new Error('unknown base');
     const ilvl = item.ilvl == null ? 100 : item.ilvl;
-    const pool = E.poolFor(ix, base.sig);
+    const pool = E.poolForItem(ix, item); // Medved's Tending adds the Soul modifiers
     const desPool = E.desecratedPoolFor(ix, item.base);
     const ctx = {
       ix, kb, item, base, cls: base.cls, ilvl, pool, desPool, weights: opts.weights || null,
@@ -164,7 +164,8 @@
       essences: essencesForBase(ix, base, (opts.essences || []).filter((r) => !r.liquid)).concat(liquidFor(kb, item.base)),
       catalystMult: opts.catalystMult > 0 ? +opts.catalystMult : CATALYST_DEFAULT,
       capMods: ix._capMods || (ix._capMods = new Map(Object.entries(kb.mods).filter(([, m]) => m.cap).map(([id, m]) => [id, m.cap]))),
-      baseTags: new Set(base.tags || []),
+      baseTags: new Set((base.tags || []).concat(E.runeRules(item).soul ? ['soul'] : [])),
+      craftedCap: 1 + E.runeRules(item).extraCrafted, // Astrid's Creativity socketed: one more crafted modifier
     };
     return ctx;
   }
@@ -350,7 +351,7 @@
     if (st.mirrored) return 'Mirrored items cannot be modified.';
     if (st.corrupted) return 'Corrupted items only accept corrupted-item currency (Architect\'s Orb, Orbs of Sacrifice, Vaal Cultivation Orb).';
     if (st.sanctified) return 'Sanctified items cannot be crafted further.';
-    const hasCrafted = st.mods.some((m) => m.crafted);
+    const hasCrafted = st.mods.filter((m) => m.crafted).length >= (ctx.craftedCap || 1);
     const hasDes = st.mods.some((m) => m.des);
     // Game text (keyword "Minimum Modifier Level"): currency with a Minimum Modifier Level cannot be used on items with
     // an item level below it.
@@ -435,6 +436,10 @@
         return st.foresight ? "The item already foresees its next currency (Hinekora's Lock)." : null;
       case 'mirror':
         return null;
+      case 'rune_rule': {
+        const rune = ctx.kb.augments && ctx.kb.augments[a.item];
+        return rune && rune.by_class[cls] ? null : `${a.item || 'This rune'} does not go on ${cls} items.`;
+      }
       case 'aldur': {
         const rune = ctx.kb.augments && ctx.kb.augments[a.item];
         return rune && rune.by_class[cls] ? null : `${a.item || 'This rune'} does not go on ${cls} items.`;
@@ -876,7 +881,7 @@
         : g.minValue != null ? `no tier reaches ${g.minValue} at this item level` : 'cannot roll at this item level';
     }
     if (g.essenceOnly) {
-      if (st.mods.some((m) => m.crafted && !meets(m, g, g.eff))) return 'the crafted slot is already used';
+      if (st.mods.filter((m) => m.crafted && !meets(m, g, g.eff)).length >= (ctx.craftedCap || 1)) return 'the crafted slot is already used';
       return (g.ess || []).length ? null : 'no essence gives this mod on this item class';
     }
     const viaEssence = essenceOptions(ctx, g, 'magic').length + essenceOptions(ctx, g, 'rare').length > 0;
@@ -933,7 +938,7 @@
       const R = st.rarity;
       const sideNeed = (s) => left.filter((g) => g.side === s).length;
       const lean = sideNeed('prefix') > sideNeed('suffix') ? 'prefix' : sideNeed('suffix') > sideNeed('prefix') ? 'suffix' : null;
-      const craftedFree = !st.mods.some((m) => m.crafted);
+      const craftedFree = st.mods.filter((m) => m.crafted).length < (ctx.craftedCap || 1);
       const taken = groupsOf(st);
       const magicEss = params.essence && craftedFree
         ? left.map((g) => ({ g, r: essenceOptions(ctx, g, 'magic').find((r) => !ctx.kb.mods[r.mod].grp.some((x) => taken.has(x))) })).find((x) => x.r)
@@ -1805,6 +1810,17 @@
     if (qualityCurrencyFor(cls)) add('quality', 'Add quality', { op: 'quality' }, { cur: [qualityCurrencyFor(cls)] });
     if (infuserFor(cls)) add('infuser', 'Quality past the maximum', { op: 'infuser' }, { cur: [infuserFor(cls)] });
     add('artificer', 'Add an augment socket', { op: 'artificer' }, { cur: ["Artificer's Orb"] });
+    // Runes that change crafting (game data augments): listed, not planned
+    const RUNE_NOTES = {
+      "Astrid's Creativity": 'The item can then have 2 crafted modifiers (essences, alloys, liquid emotions); the planner counts it once the rune is on the item. Once socketed it cannot be taken out, but another augment can replace it.',
+      "Serle's Triumph": 'It raises the suffix limit and the modifier total by 1. Once socketed it cannot be taken out or replaced.',
+      "Medved's Tending": 'The body armour can then roll the Soul modifiers ("Medved\'s" prefixes and "of the Soul" suffixes, level 65); the planner rolls them once the rune is on the item. Once socketed it cannot be taken out or replaced.',
+    };
+    for (const [rune, why] of Object.entries(RUNE_NOTES)) {
+      const r = ix.kb.augments && ix.kb.augments[rune];
+      if (!r || !r.by_class[cls]) continue;
+      add('rune_rule', `${r.by_class[cls].txt.join(' ')} (${rune})`, { op: 'rune_rule', item: rune }, { cur: [rune], note: 'Socket it in an augment socket. ' + why });
+    }
     // Runes of Aldur: socketed, they turn the other elements' modifiers into their element (rune texts). Listed, not planned.
     for (const rune of ['Passion of Aldur', 'Breath of Aldur', 'Ire of Aldur', 'Betrayal of Aldur']) {
       const r = ix.kb.augments && ix.kb.augments[rune];

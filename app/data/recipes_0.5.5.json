@@ -1607,7 +1607,7 @@
       "question": "After the \"+1 Prefix/Suffix Modifier allowed\" mod is removed, can a Rare jewel take a fifth regular modifier?",
       "how": "Settled so far (two trade jewels you pasted, 27 Sept 2026): with the allowance mod a jewel holds 4 regular modifiers and the crafted one, 5 in total (3 prefixes + 2 suffixes, or 2 + 3). Open: guides say a side stays at 3 after the allowance mod is removed, so the other side can be filled for 5 regular modifiers. Test: remove the allowance mod (Orb of Annulment with the side omen of its side) and try an Exalted Orb with the omen of the other side. The planner follows the game data and the guides until then.",
       "claims": [],
-      "note": "With the allowance mod: 4 regular modifiers + 1 crafted (Blight Joy 2 + 3, Loath Ornament 3 + 2)."
+      "note": "With the allowance mod: 4 regular modifiers + 1 crafted (Blight Joy 2 + 3, Loath Ornament 3 + 2). Game data hint: the rune Serle's Triumph raises the suffix limit and a separate modifier total (local_maximum_mods_allowed_+), while the jewel allowance mods raise only their side, so a total limit may still hold."
     },
     {
       "id": "t25",

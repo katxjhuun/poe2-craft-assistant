@@ -775,3 +775,33 @@ test('Omens of Crystallisation are for Perfect and Corrupted essences, not Runic
   assert.match(P.validate(ctx, st, { op: 'pessence', item: alloy.item, mod: alloy.mod, side: 'prefix' }), /not with Runic Alloys/);
   assert.equal(P.validate(ctx, st, { op: 'pessence', item: alloy.item, mod: alloy.mod }), null);
 });
+
+test('runes that change crafting: Medved\'s Tending opens the Soul modifiers, Astrid\'s Creativity a second crafted modifier', () => {
+  const text = (rune, mods) => ['Item Class: Body Armours', 'Rarity: Rare', 'Test Name', 'Heavy Plate', '--------', 'Item Level: 82', '--------',
+    ...(rune ? [rune + ' (rune)', '--------'] : []), ...mods].join('\n');
+  const soulCount = (item) => {
+    const ctx = ctxOf(item);
+    const st = P.toState(ctx, item);
+    const rng = P.rngFrom(4);
+    let n = 0;
+    for (let i = 0; i < 3000; i++) if (P.apply(ctx, st, { op: 'exalt' }, rng).added.some((m) => /^SoulInfluence/.test(m.id))) n++;
+    return n;
+  };
+  const withRune = E.parseItem(ix, text('Can roll Soul modifiers', ['+100 to maximum Life'])).item;
+  const without = E.parseItem(ix, text(null, ['+100 to maximum Life'])).item;
+  assert.ok(E.runeRules(withRune).soul && !E.runeRules(without).soul);
+  assert.ok(soulCount(withRune) > 0, 'Soul modifiers roll with the rune');
+  assert.equal(soulCount(without), 0, 'and never without it');
+  // Astrid's Creativity: a second crafted modifier is allowed
+  const W = require('../data/weights_0.5.5.json');
+  const one = (rune) => {
+    const it = E.parseItem(ix, text(rune, ['+100 to maximum Life'])).item;
+    const ctx = P.makeContext(ix, it, { essences: P.essencesForBase(ix, kb.bases[it.base], W.essences['Body Armour']) });
+    const st = P.toState(ctx, it);
+    st.mods[0].crafted = true;
+    const rec = ctx.essences.find((r) => r.kind === 'rare' && !r.alloy && !kb.mods[r.mod].grp.some((g) => st.mods[0].grp.includes(g)));
+    return P.validate(ctx, st, { op: 'pessence', item: rec.item, mod: rec.mod });
+  };
+  assert.match(one(null), /one crafted modifier/);
+  assert.equal(one('Can have 1 additional Crafted Modifier'), null);
+});

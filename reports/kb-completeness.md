@@ -47,6 +47,11 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 
 ## Log
 
+- 27 Sept 2026: Craft of Exile beta reviewed (user's suggestion). Its visible modpool weights for a STR body armour match ours
+  on all 19 families (tiers and totals). It showed three runes that change crafting, confirmed in the game data: Medved's
+  Tending (Soul modifiers on body armour), Astrid's Creativity (a second crafted modifier), Serle's Triumph (+1 suffix and
+  +1 modifier total). The planner rolls Soul modifiers and counts the second crafted slot when the rune is on the item.
+
 - 27 Sept 2026: all uniques (422) in the KB; pasted uniques match their known lines. t30 solved: both trade staves carry Passion
   of Aldur runes, which turn Cold and Lightning modifiers into Fire ones (fractured ones stay). The Recombinator was removed
   with 0.5.0 (player + guides).
@@ -83,8 +88,8 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 
 - 27 Sept 2026: other sources checked. Incursion2Crafting (Vaal temple benches, 23): bench versions of existing currency
   (quality, augment socket, corruption, Exalted/Regal/Alchemy workbenches, extraction), no new modifier source.
-  SoulInfluence mods (22, "Medved's"/"of the Soul", spawn tag soul that no base or mod gives): drop-only from the
-  Runes of Aldur Expedition content, in the KB and read by the parser, not craftable. poe2db lists desecrated and
+  SoulInfluence mods (22, "Medved's"/"of the Soul", spawn tag soul): craftable on a body armour with the rune Medved's
+  Tending socketed (found via Craft of Exile, confirmed by the rune's game text; see R_SOUL_MODS). poe2db lists desecrated and
   corruption mods with DropChance 1 (no real weights), so desecrated options stay equally likely. "Catalysts can be
   applied to this item" (Grasping Mail forms) now takes catalyst quality (test t29). Verisium Anvil upgrades listed
   (387, kb.verisium_upgrades; test t28).
