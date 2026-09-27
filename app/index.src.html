@@ -2295,7 +2295,11 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   /** White bases the player will use for one finished item (plans that start over keep to it). */
   function baseLimit() { return Math.max(1, parseInt(S.baseLimit, 10) || 100); }
   /** Ring, amulet or jewel with catalyst quality (catalyst_qualities: catalysts for jewellery, Refined ones for jewels). */
-  function hasCatalyst(it) { return !!(it && ['Ring', 'Amulet', 'Jewel'].includes(it.itemClass) && it.quality > 0 && P.catalystTag(it.qualityType)); }
+  function hasCatalyst(it) {
+    const base = it && S.ix && S.ix.kb.bases[it.base];
+    const can = it && (['Ring', 'Amulet', 'Jewel'].includes(it.itemClass) || (base && (base.imp || []).includes('Catalysts can be applied to this item')));
+    return !!(can && it.quality > 0 && P.catalystTag(it.qualityType));
+  }
   /** Essences and alloys poe2db lists for this item class (alloys trade in every league's Currency Exchange). */
   function itemEssences() {
     const list = (S.essences && S.item && S.essences[S.item.itemClass]) || [];

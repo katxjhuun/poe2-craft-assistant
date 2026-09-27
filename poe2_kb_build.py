@@ -26,6 +26,8 @@ SRC = {
  'LiquidEmotionOutcomes.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/LiquidEmotionOutcomes.csv',
  'TieredCurrency.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/TieredCurrency.csv',
  'AlternateQualityTypes.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/AlternateQualityTypes.csv',
+ # Verisium Anvil: base -> Runeforged/Runemastered base, with Verisium (and crests for the unique forms)
+ 'Expedition2VerisiumCrafts.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/Expedition2VerisiumCrafts.csv',
  # runes, soul cores, talismans, idols: what each gives per item class (RePoE's reading of the SoulCore tables)
  'poe2_augments.json': 'https://raw.githubusercontent.com/repoe-fork/poe2/master/data/augments.json',
  'poe1_base_items.json': 'https://raw.githubusercontent.com/repoe-fork/repoe-fork.github.io/master/data/base_items.json',
@@ -212,6 +214,7 @@ ops=[
  op('sacrifice','Kamasa\'s (amulet/ring/belt), Kopec\'s (armour), Yaomac\'s (weapon/quiver), Yugul\'s (jewel) Orb of Sacrifice',input='Rare with corruption enchantment',effect='upgrade corruption enchantment + remove 1 random mod',conf=G),
  op('architect','Architect\'s Orb',input='Corrupted equipment or jewel',effect='modify unpredictably or destroy',conf=G),
  op('cultivation','Vaal Cultivation Orb',input='Corrupted Vaal Unique / other Unique',effect='replace up to 2 mods / turn into corrupted Unique of same class',conf=G),
+ op('verisium',['Verisium','Exceptional Verisium'],input='equipment base with an entry in verisium_upgrades',effect='turns the base into its Runeforged or Runemastered form (runeforged tag, often higher defences, some implicits)',conf=G,source='item text: Can be used at the Verisium Anvil to transform Equipment; costs: game table Expedition2VerisiumCrafts',note='not planned; whether the modifiers stay is in-game test t28'),
  op('liquid_emotion','Liquid emotions (Diluted, plain, Concentrated and Potent; the Ancient ones are for Time-Lost jewels)',input='Rare Basic Jewel (Ancient: Rare Time-Lost Jewel)',effect='removes a random modifier and adds the guaranteed crafted modifier the game lists for that jewel (liquid_emotions)',conf=G,source='item texts; outcomes: game table LiquidEmotionOutcomes',rule_refs=['R_ONE_CRAFTED','R_SWAP_REMOVAL']),
 ]
 legacy=[{'name':'Omen of Homogenising Exaltation / Coronation','status':'drops disabled since 0.4 (Standard legacy)','conf':M2},
@@ -278,6 +281,24 @@ for r in _table('AlternateQualityTypes.csv'):
 _alltags={t for m in M.values() for t in m['mt']}
 assert CQ and all(q['tag'] in _alltags for q in CQ), [q['tag'] for q in CQ if q['tag'] not in _alltags]
 kb['catalyst_qualities']=CQ
+# ---- Verisium Anvil base upgrades (game table Expedition2VerisiumCrafts): rows without a unique (UniqueName 18 in 0.5.5)
+# that cost only Verisium or Exceptional Verisium turn a base into its Runeforged (or Runemastered) form: the runeforged tag,
+# often higher defences, sometimes implicits. Rows with crests forge uniques; Starlit Ore rows forge unique bases.
+VU={}
+_vu_seen=set()
+for r in _table('Expedition2VerisiumCrafts.csv'):
+    items=[bases[_item_keys[i]]['name'] for i in _ints(r['CraftingItem'])]
+    if r['UniqueName']!='18' or not items or any(n not in ('Verisium','Exceptional Verisium') for n in items): continue
+    a=bases[_item_keys[int(r['OriginalBaseType'])]]['name']; b=bases[_item_keys[int(r['NewBaseType'])]]['name']
+    if a not in B or b not in B: continue
+    cost=dict(zip(items,_ints(r['CraftingItemCount'])))
+    k=(a,b,tuple(sorted(cost.items())))
+    if k in _vu_seen: continue
+    _vu_seen.add(k)
+    VU.setdefault(a,[]).append({'to':b,'cost':cost})
+kb['verisium_upgrades']=VU
+kb['meta']['counts']['verisium_upgrades']=sum(len(v) for v in VU.values())
+kb['meta']['rules'].append('verisium_upgrades = base -> Runeforged/Runemastered base at the Verisium Anvil with its Verisium cost (game table Expedition2VerisiumCrafts). The upgraded bases are in bases; whether the modifiers stay is in-game test t28.')
 kb['meta']['rules'].append('catalyst_qualities = catalyst quality types from the game table AlternateQualityTypes with the catalyst that adds each, the item classes it works on and the mod tag it favours.')
 kb['meta']['rules'].append('augments = runes, soul cores, talismans and idols with their stats per item class (RePoE augments.json from the game tables; categories resolved with SoulCoreStatCategories). They go into augment sockets, not affix slots.')
 # ---- Greater/Perfect currency floors: the game table TieredCurrency (Tier, MinimumModLevel) must agree with crafting_ops

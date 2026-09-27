@@ -1,241 +1,270 @@
 {
  "meta": {
-  "date": "2026-09-26T09:30:43.908Z",
+  "date": "2026-09-27T01:55:39.734Z",
   "quick": false,
   "bases": 55,
   "scenarios": 762,
   "recipeScenarios": 7,
-  "strategyRuns": 46065,
+  "strategyRuns": 46190,
   "trials": 300,
   "maxSteps": 400,
-  "walkSteps": 1067207,
-  "roundTrips": 213558,
+  "walkSteps": 1066884,
+  "roundTrips": 213475,
   "prices": {
    "league": "Forbidden Rites",
-   "hourTo": 1790413200,
+   "hourTo": 1790470800,
    "source": ".kb_cache/out",
    "feed": "Exiled Exchange 2 price feed (poe.ninja data, unofficial)"
   },
   "weights": "2026-09-25",
   "workers": 30,
-  "seconds": 698,
+  "seconds": 560,
   "skipped": [],
-  "errors": 0,
-  "reanalyzed": "2026-09-26T19:33:17.204Z",
-  "flasks": 3,
-  "checksRun": "2026-09-26T23:01:57.491Z"
+  "errors": 0
  },
  "checks": [
   {
    "id": "crash",
-   "n": 1067207,
+   "n": 1066884,
    "fail": 0,
    "examples": []
   },
   {
    "id": "slots",
-   "n": 1067207,
+   "n": 1066884,
    "fail": 0,
    "examples": []
   },
   {
    "id": "crafted",
-   "n": 1067207,
+   "n": 1066884,
    "fail": 0,
    "examples": []
   },
   {
    "id": "desecrated",
-   "n": 1067207,
+   "n": 1066884,
    "fail": 0,
    "examples": []
   },
   {
    "id": "groups",
-   "n": 1067207,
+   "n": 1066884,
    "fail": 0,
    "examples": []
   },
   {
    "id": "ilvl",
-   "n": 1067207,
+   "n": 1066884,
    "fail": 0,
    "examples": []
   },
   {
    "id": "fractured",
-   "n": 1067207,
+   "n": 1066884,
    "fail": 0,
    "examples": []
   },
   {
    "id": "floor",
-   "n": 1067207,
+   "n": 1066884,
    "fail": 0,
    "examples": []
   },
   {
    "id": "effect",
-   "n": 1067207,
-   "fail": 0,
-   "examples": []
+   "n": 1066884,
+   "fail": 6,
+   "examples": [
+    "Diamond: bone {\"op\":\"bone\",\"quality\":\"Ancient\",\"side\":null,\"lich\":null,\"echoes\":false}: 4 -> 4 mods, +1 -1",
+    "Diamond: bone {\"op\":\"bone\",\"quality\":\"Gnawed\",\"side\":null,\"lich\":null,\"echoes\":false}: 4 -> 4 mods, +1 -1",
+    "Ruby: bone {\"op\":\"bone\",\"quality\":\"Ancient\",\"side\":null,\"lich\":null,\"echoes\":false}: 4 -> 4 mods, +1 -1",
+    "Sapphire: bone {\"op\":\"bone\",\"quality\":\"Ancient\",\"side\":\"suffix\",\"lich\":null,\"echoes\":true}: 4 -> 3 mods, +0 -1",
+    "Sapphire: bone {\"op\":\"bone\",\"quality\":\"Preserved\",\"side\":\"suffix\",\"lich\":null,\"echoes\":true}: 4 -> 3 mods, +0 -1"
+   ]
   },
   {
    "id": "side",
-   "n": 1067207,
+   "n": 1066884,
    "fail": 0,
    "examples": []
   },
   {
    "id": "lich",
-   "n": 1067207,
+   "n": 1066884,
    "fail": 0,
    "examples": []
   },
   {
    "id": "pool",
-   "n": 1067207,
+   "n": 1066884,
    "fail": 0,
    "examples": []
   },
   {
    "id": "whittle",
-   "n": 1067207,
+   "n": 1066884,
    "fail": 0,
    "examples": []
   },
   {
    "id": "light",
-   "n": 1067207,
+   "n": 1066884,
    "fail": 0,
    "examples": []
+  },
+  {
+   "id": "tags",
+   "n": 1066884,
+   "fail": 17,
+   "examples": [
+    "Dueling Wand: IgniteChanceIncrease3 came in although another mod on the item stops it",
+    "Dueling Wand: FreezeDamageIncrease4 came in although another mod on the item stops it",
+    "Dueling Wand: IgniteChanceIncrease3 came in although another mod on the item stops it",
+    "Permafrost Staff: IgniteChanceIncrease3 came in although another mod on the item stops it",
+    "Permafrost Staff: FreezeDamageIncrease3 came in although another mod on the item stops it"
+   ]
   },
   {
    "id": "parse-adv",
-   "n": 213558,
-   "fail": 0,
-   "examples": []
+   "n": 213475,
+   "fail": 1198,
+   "examples": [
+    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath4, right mod listed as a candidate",
+    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath4, right mod listed as a candidate",
+    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath1, right mod listed as a candidate",
+    "Diamond: CraftedJewelMaximumChaosResistance read as MaximumChaosResist1, right mod listed as a candidate",
+    "Diamond: CraftedJewelMaximumChaosResistance read as MaximumChaosResist1, right mod listed as a candidate"
+   ]
   },
   {
    "id": "parse-adv-flagged",
-   "n": 213558,
-   "fail": 234,
+   "n": 213475,
+   "fail": 1527,
    "examples": [
-    "Permafrost Staff: EssenceSpellSkillLevel2H1 read as GlobalSpellGemsLevelTwoHandWeapon4 (ambiguous), right mod listed as a candidate",
-    "Permafrost Staff: EssenceSpellSkillLevel2H1 read as GlobalSpellGemsLevelTwoHandWeapon4 (ambiguous), right mod listed as a candidate",
-    "Permafrost Staff: EssenceSpellSkillLevel2H1 read as GlobalSpellGemsLevelTwoHandWeapon4 (ambiguous), right mod listed as a candidate"
+    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath4, right mod listed as a candidate",
+    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath4, right mod listed as a candidate",
+    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath1, right mod listed as a candidate",
+    "Diamond: CraftedJewelMaximumChaosResistance read as MaximumChaosResist1, right mod listed as a candidate",
+    "Diamond: CraftedJewelMaximumChaosResistance read as MaximumChaosResist1, right mod listed as a candidate"
    ]
   },
   {
    "id": "parse-simple",
-   "n": 213558,
-   "fail": 0,
-   "examples": []
+   "n": 213475,
+   "fail": 1,
+   "examples": [
+    "Thane Mail: LocalIncreasedArmourAndEvasion1 read as nothing; LocalBaseArmourAndEvasionRating1 read as nothing"
+   ]
   },
   {
    "id": "parse-simple-exact",
-   "n": 213558,
-   "fail": 13814,
+   "n": 213475,
+   "fail": 16189,
    "examples": [
-    "Diamond: P2DB_ElementalDamagePercent_p1 read as AbyssModJewelPrefixElementalDamageAilmentMagnitude (ambiguous), right mod listed as a candidate; P2DB_AilmentEffect_p1 read as AbyssModJewelPrefixElementalDamageAilmentMagnitude (ambiguous), right mod listed as a candidate",
-    "Diamond: P2DB_IncreasedPhysicalDamageReductionRatingPercent_p1 read as AbyssModJewelPrefixMinionDamageArmour (ambiguous), right mod listed as a candidate; P2DB_MinionDamage_p1 read as AbyssModJewelPrefixMinionDamageArmour (ambiguous), right mod listed as a candidate",
-    "Emerald: P2DB_LightningDamagePercentage_p1 read as AbyssModJewelPrefixLightningDamageAndPen (ambiguous), right mod listed as a candidate; P2DB_LightningResistancePenetration_p1 read as AbyssModJewelPrefixLightningDamageAndPen (ambiguous), right mod listed as a candidate",
-    "Grand Regalia: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate",
-    "Grand Regalia: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate"
+    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath1, right mod listed as a candidate",
+    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath1, right mod listed as a candidate",
+    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath4, right mod listed as a candidate",
+    "Diamond: CraftedJewelMaximumChaosResistance read as MaximumChaosResist1, right mod listed as a candidate",
+    "Diamond: CraftedJewelMaximumChaosResistance read as MaximumChaosResist1, right mod listed as a candidate"
    ]
   }
  ],
  "ops": {
-  "alchemy": 25271,
-  "exalt": 253362,
-  "chaos": 399409,
-  "divine": 39137,
-  "annul": 206635,
-  "bone": 10932,
-  "fracture": 16667,
-  "transmute": 18906,
-  "regal": 5588,
-  "augment": 1638,
-  "essence": 10426,
-  "pessence": 59075,
-  "flux": 20161
+  "transmute": 19131,
+  "augment": 1557,
+  "annul": 198928,
+  "regal": 5739,
+  "liquid": 22624,
+  "exalt": 240984,
+  "chaos": 388255,
+  "bone": 10749,
+  "fracture": 15816,
+  "divine": 38427,
+  "alchemy": 25392,
+  "pessence": 68928,
+  "essence": 10513,
+  "flux": 19841
  },
  "freq": {
   "tests": 110,
-  "failed": 0,
-  "maxZ": 3.94,
-  "families": 3236,
-  "failures": []
+  "failed": 2,
+  "maxZ": 51.17,
+  "families": 2858,
+  "failures": [
+   "Dueling Wand base: 23 families off",
+   "Dueling Wand perfect: 18 families off"
+  ]
  },
  "techniques": [
   {
    "id": "sideOmens",
    "label": "Sinistral/Dextral omens (aim the side)",
    "scenarios": 755,
-   "comparisons": 7851,
+   "comparisons": 7393,
    "verdict": "mixed",
-   "cheaper": 0.16,
-   "costlier": 0.47,
-   "likelier": 0.13,
+   "cheaper": 0.15,
+   "costlier": 0.48,
+   "likelier": 0.14,
    "lessLikely": 0.01,
-   "medianCostRatio": 1.041,
+   "medianCostRatio": 1.044,
    "medianSuccessDelta": 0,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "base",
-     "n": 4365,
-     "ratio": 1.037,
-     "cheaper": 0.17
+     "n": 4066,
+     "ratio": 1.039,
+     "cheaper": 0.16
     },
     {
      "name": "greater",
-     "n": 3486,
-     "ratio": 1.047,
+     "n": 3327,
+     "ratio": 1.051,
      "cheaper": 0.14
     }
    ],
    "helpsMost": [
     {
      "name": "desecrated · rare",
-     "n": 48,
-     "ratio": 0.257,
+     "n": 16,
+     "ratio": 0.513,
      "cheaper": 1
     },
     {
      "name": "single-suffix-rare-T1 · rare",
-     "n": 504,
-     "ratio": 1.02,
-     "cheaper": 0.2
+     "n": 454,
+     "ratio": 1.024,
+     "cheaper": 0.19
     },
     {
-     "name": "single-suffix-rare-T1 · rare-low",
-     "n": 504,
-     "ratio": 1.03,
-     "cheaper": 0.16
+     "name": "pair-prefix-suffix-T2 · white",
+     "n": 1156,
+     "ratio": 1.028,
+     "cheaper": 0.17
     }
    ],
    "hurtsMost": [
     {
      "name": "essence-reachable · white",
      "n": 423,
-     "ratio": 1.122,
-     "cheaper": 0.15
-    },
-    {
-     "name": "essence-reachable · magic",
-     "n": 282,
-     "ratio": 1.084,
+     "ratio": 1.117,
      "cheaper": 0.17
     },
     {
      "name": "resistance-T2 · white",
      "n": 432,
-     "ratio": 1.079,
+     "ratio": 1.084,
      "cheaper": 0.15
+    },
+    {
+     "name": "essence-reachable · magic",
+     "n": 282,
+     "ratio": 1.081,
+     "cheaper": 0.17
     }
    ],
-   "text": "Cheaper per success in 16% of 7851 comparisons (median x1.04), more likely to finish in 13%, less likely in 1%. By orb tier: base x1.04, greater x1.05."
+   "text": "Cheaper per success in 15% of 7393 comparisons (median x1.04), more likely to finish in 14%, less likely in 1%. By orb tier: base x1.04, greater x1.05."
   },
   {
    "id": "greaterExalt",
@@ -279,53 +308,53 @@
   {
    "id": "erasure",
    "label": "Erasure omen on Chaos Orbs (vs plain Chaos)",
-   "scenarios": 754,
-   "comparisons": 7977,
+   "scenarios": 762,
+   "comparisons": 8062,
    "verdict": "con",
    "cheaper": 0.03,
-   "costlier": 0.96,
+   "costlier": 0.95,
    "likelier": 0.29,
    "lessLikely": 0,
-   "medianCostRatio": 12.927,
+   "medianCostRatio": 13.433,
    "medianSuccessDelta": 0,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "base",
-     "n": 2357,
-     "ratio": 38.643,
+     "n": 2363,
+     "ratio": 39.679,
      "cheaper": 0
     },
     {
      "name": "greater",
-     "n": 3372,
-     "ratio": 13.136,
+     "n": 3381,
+     "ratio": 13.685,
      "cheaper": 0
     },
     {
      "name": "perfect",
-     "n": 2248,
-     "ratio": 1.281,
-     "cheaper": 0.1
+     "n": 2254,
+     "ratio": 1.283,
+     "cheaper": 0.12
     }
    ],
    "helpsMost": [
     {
      "name": "pair-prefix-suffix-T2 · white",
-     "n": 1302,
-     "ratio": 7.893,
-     "cheaper": 0.11
+     "n": 1316,
+     "ratio": 8.164,
+     "cheaper": 0.13
     },
     {
      "name": "pair-prefix-suffix-T2 · rare",
-     "n": 651,
-     "ratio": 8.814,
-     "cheaper": 0.12
+     "n": 658,
+     "ratio": 9.449,
+     "cheaper": 0.11
     },
     {
      "name": "single-suffix-common-T2 · rare",
      "n": 584,
-     "ratio": 12.548,
+     "ratio": 13.121,
      "cheaper": 0
     }
    ],
@@ -333,186 +362,186 @@
     {
      "name": "essence-reachable · magic",
      "n": 329,
-     "ratio": 18.713,
-     "cheaper": 0
-    },
-    {
-     "name": "single-prefix-rare-T1 · rare",
-     "n": 434,
-     "ratio": 18.646,
+     "ratio": 20.123,
      "cheaper": 0
     },
     {
      "name": "single-prefix-common-T2 · rare",
      "n": 539,
-     "ratio": 18.6,
+     "ratio": 19.879,
+     "cheaper": 0
+    },
+    {
+     "name": "catalyst-life · rare",
+     "n": 28,
+     "ratio": 19.73,
      "cheaper": 0
     }
    ],
-   "text": "Cheaper per success in 3% of 7977 comparisons (median x13), more likely to finish in 29%, less likely in 0%. By orb tier: base x39, greater x13, perfect x1.28."
+   "text": "Cheaper per success in 3% of 7998 comparisons (median x13), more likely to finish in 29%, less likely in 0%. By orb tier: base x40, greater x14, perfect x1.28."
   },
   {
    "id": "whittle",
    "label": "Omen of Whittling (vs Erasure)",
-   "scenarios": 747,
-   "comparisons": 3348,
+   "scenarios": 755,
+   "comparisons": 3412,
    "verdict": "con",
-   "cheaper": 0.22,
-   "costlier": 0.69,
+   "cheaper": 0.21,
+   "costlier": 0.71,
    "likelier": 0,
    "lessLikely": 0.32,
-   "medianCostRatio": 1.548,
-   "medianSuccessDelta": -0.003,
+   "medianCostRatio": 1.634,
+   "medianSuccessDelta": 0,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "greater",
      "n": 1116,
-     "ratio": 1.467,
-     "cheaper": 0.31
+     "ratio": 1.547,
+     "cheaper": 0.29
     },
     {
      "name": "perfect",
      "n": 2232,
-     "ratio": 1.581,
-     "cheaper": 0.17
+     "ratio": 1.65,
+     "cheaper": 0.16
     }
    ],
    "helpsMost": [
     {
      "name": "pair-prefix-suffix-T2 · rare",
      "n": 279,
-     "ratio": 0.949,
-     "cheaper": 0.51
+     "ratio": 0.963,
+     "cheaper": 0.48
     },
     {
      "name": "pair-prefix-suffix-T2 · white",
      "n": 534,
-     "ratio": 0.961,
-     "cheaper": 0.48
+     "ratio": 0.977,
+     "cheaper": 0.44
     },
     {
      "name": "single-prefix-rare-T1 · rare-low",
      "n": 186,
-     "ratio": 0.999,
-     "cheaper": 0.47
+     "ratio": 1.016,
+     "cheaper": 0.42
     }
    ],
    "hurtsMost": [
     {
      "name": "single-suffix-rare-T1 · rare-low",
      "n": 198,
-     "ratio": 14.446,
-     "cheaper": 0.01
-    },
-    {
-     "name": "single-suffix-rare-T1 · rare",
-     "n": 198,
-     "ratio": 13.333,
+     "ratio": 15.029,
      "cheaper": 0.02
     },
     {
      "name": "single-suffix-rare-T1 · white",
      "n": 183,
-     "ratio": 13.229,
+     "ratio": 14.462,
      "cheaper": 0.02
+    },
+    {
+     "name": "single-suffix-rare-T1 · rare",
+     "n": 198,
+     "ratio": 14.197,
+     "cheaper": 0.03
     }
    ],
-   "text": "Cheaper per success in 22% of 3348 comparisons (median x1.55), more likely to finish in 0%, less likely in 32%. By orb tier: greater x1.47, perfect x1.58."
+   "text": "Cheaper per success in 21% of 3348 comparisons (median x1.63), more likely to finish in 0%, less likely in 32%. By orb tier: greater x1.55, perfect x1.65."
   },
   {
    "id": "annul",
    "label": "Annulment instead of Chaos + Erasure",
-   "scenarios": 747,
-   "comparisons": 7970,
-   "verdict": "mixed",
-   "cheaper": 0.64,
-   "costlier": 0.2,
-   "likelier": 0,
-   "lessLikely": 0.24,
-   "medianCostRatio": 0.873,
+   "scenarios": 755,
+   "comparisons": 8087,
+   "verdict": "pro",
+   "cheaper": 0.68,
+   "costlier": 0.19,
+   "likelier": 0.01,
+   "lessLikely": 0.23,
+   "medianCostRatio": 0.857,
    "medianSuccessDelta": 0,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "base",
-     "n": 2350,
-     "ratio": 0.629,
-     "cheaper": 0.63
+     "n": 2356,
+     "ratio": 0.642,
+     "cheaper": 0.65
     },
     {
      "name": "greater",
-     "n": 3372,
-     "ratio": 0.95,
-     "cheaper": 0.5
+     "n": 3381,
+     "ratio": 0.929,
+     "cheaper": 0.53
     },
     {
      "name": "perfect",
-     "n": 2248,
-     "ratio": 0.852,
-     "cheaper": 0.86
+     "n": 2254,
+     "ratio": 0.839,
+     "cheaper": 0.92
     }
    ],
    "helpsMost": [
     {
      "name": "single-prefix-rare-T1 · rare-low",
      "n": 434,
-     "ratio": 0.837,
-     "cheaper": 0.72
+     "ratio": 0.807,
+     "cheaper": 0.79
     },
     {
-     "name": "single-prefix-rare-T1 · rare",
+     "name": "single-prefix-rare-T1 · white",
      "n": 434,
-     "ratio": 0.846,
-     "cheaper": 0.72
+     "ratio": 0.809,
+     "cheaper": 0.82
     },
     {
-     "name": "resistance-T2 · white",
-     "n": 504,
-     "ratio": 0.846,
-     "cheaper": 0.67
+     "name": "single-prefix-common-T2 · rare",
+     "n": 539,
+     "ratio": 0.82,
+     "cheaper": 0.86
     }
    ],
    "hurtsMost": [
     {
      "name": "catalyst-life · rare",
      "n": 28,
-     "ratio": 0.974,
-     "cheaper": 0.43
+     "ratio": 0.932,
+     "cheaper": 0.71
     },
     {
      "name": "essence-reachable · magic",
      "n": 329,
-     "ratio": 0.947,
-     "cheaper": 0.51
+     "ratio": 0.929,
+     "cheaper": 0.55
     },
     {
-     "name": "essence-reachable · white",
-     "n": 423,
-     "ratio": 0.915,
-     "cheaper": 0.55
+     "name": "resistance-T2 · rare",
+     "n": 448,
+     "ratio": 0.897,
+     "cheaper": 0.58
     }
    ],
-   "text": "Cheaper per success in 64% of 7970 comparisons (median x0.87), more likely to finish in 0%, less likely in 24%. By orb tier: base x0.63, greater x0.95, perfect x0.85."
+   "text": "Cheaper per success in 68% of 7991 comparisons (median x0.86), more likely to finish in 1%, less likely in 23%. By orb tier: base x0.64, greater x0.93, perfect x0.84."
   },
   {
    "id": "greater",
    "label": "Greater orbs (vs basic)",
-   "scenarios": 747,
-   "comparisons": 9578,
+   "scenarios": 755,
+   "comparisons": 9616,
    "verdict": "pro",
    "cheaper": 0.72,
-   "costlier": 0.23,
-   "likelier": 0.34,
+   "costlier": 0.22,
+   "likelier": 0.26,
    "lessLikely": 0,
-   "medianCostRatio": 0.567,
-   "medianSuccessDelta": 0.003,
+   "medianCostRatio": 0.554,
+   "medianSuccessDelta": 0,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "base",
-     "n": 9578,
-     "ratio": 0.567,
+     "n": 9584,
+     "ratio": 0.554,
      "cheaper": 0.72
     }
    ],
@@ -520,325 +549,325 @@
     {
      "name": "essence-reachable · magic",
      "n": 564,
-     "ratio": 0.396,
+     "ratio": 0.395,
      "cheaper": 0.9
     },
     {
      "name": "single-prefix-rare-T1 · white",
      "n": 744,
-     "ratio": 0.429,
+     "ratio": 0.415,
      "cheaper": 0.81
     },
     {
      "name": "essence-reachable · white",
      "n": 1128,
-     "ratio": 0.436,
-     "cheaper": 0.85
+     "ratio": 0.447,
+     "cheaper": 0.86
     }
    ],
    "hurtsMost": [
     {
-     "name": "single-suffix-rare-T1 · rare-low",
-     "n": 476,
-     "ratio": 0.964,
-     "cheaper": 0.5
-    },
-    {
      "name": "single-suffix-rare-T1 · rare",
-     "n": 478,
-     "ratio": 0.954,
-     "cheaper": 0.5
+     "n": 476,
+     "ratio": 0.96,
+     "cheaper": 0.49
     },
     {
      "name": "single-prefix-rare-T1 · rare",
-     "n": 462,
-     "ratio": 0.952,
+     "n": 460,
+     "ratio": 0.945,
+     "cheaper": 0.5
+    },
+    {
+     "name": "single-suffix-rare-T1 · rare-low",
+     "n": 474,
+     "ratio": 0.944,
      "cheaper": 0.5
     }
    ],
-   "text": "Cheaper per success in 72% of 9578 comparisons (median x0.57), more likely to finish in 34%, less likely in 0%."
+   "text": "Cheaper per success in 72% of 9584 comparisons (median x0.55), more likely to finish in 26%, less likely in 0%."
   },
   {
    "id": "perfect",
    "label": "Perfect orbs (vs Greater)",
-   "scenarios": 747,
-   "comparisons": 7585,
+   "scenarios": 755,
+   "comparisons": 7680,
    "verdict": "con",
-   "cheaper": 0.21,
-   "costlier": 0.72,
-   "likelier": 0.12,
-   "lessLikely": 0.02,
+   "cheaper": 0.22,
+   "costlier": 0.7,
+   "likelier": 0.07,
+   "lessLikely": 0.01,
    "medianCostRatio": 1.512,
    "medianSuccessDelta": 0,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "greater",
-     "n": 7585,
+     "n": 7600,
      "ratio": 1.512,
-     "cheaper": 0.21
+     "cheaper": 0.22
     }
    ],
    "helpsMost": [
     {
      "name": "single-prefix-common-T2 · rare",
      "n": 385,
-     "ratio": 1.04,
-     "cheaper": 0.42
+     "ratio": 1.02,
+     "cheaper": 0.43
     },
     {
      "name": "single-prefix-rare-T1 · rare",
      "n": 310,
-     "ratio": 1.046,
-     "cheaper": 0.37
+     "ratio": 1.032,
+     "cheaper": 0.39
     },
     {
      "name": "single-prefix-rare-T1 · rare-low",
      "n": 310,
-     "ratio": 1.067,
-     "cheaper": 0.34
+     "ratio": 1.043,
+     "cheaper": 0.35
     }
    ],
    "hurtsMost": [
     {
      "name": "essence-reachable · magic",
      "n": 470,
-     "ratio": 13.216,
-     "cheaper": 0.02
+     "ratio": 13.033,
+     "cheaper": 0.03
     },
     {
      "name": "essence-reachable · white",
      "n": 940,
-     "ratio": 7.832,
+     "ratio": 8.926,
      "cheaper": 0.02
     },
     {
      "name": "single-prefix-rare-T1 · white",
      "n": 620,
-     "ratio": 3.833,
-     "cheaper": 0.17
+     "ratio": 4.318,
+     "cheaper": 0.18
     }
    ],
-   "text": "Cheaper per success in 21% of 7585 comparisons (median x1.51), more likely to finish in 12%, less likely in 2%."
+   "text": "Cheaper per success in 22% of 7600 comparisons (median x1.51), more likely to finish in 7%, less likely in 1%."
   },
   {
    "id": "alchemy",
    "label": "Start with Orb of Alchemy (vs Transmutation)",
    "scenarios": 295,
-   "comparisons": 9874,
+   "comparisons": 9905,
    "verdict": "con",
    "cheaper": 0,
    "costlier": 0.99,
-   "likelier": 0.18,
-   "lessLikely": 0.04,
-   "medianCostRatio": 133.886,
+   "likelier": 0,
+   "lessLikely": 0.14,
+   "medianCostRatio": 83.485,
    "medianSuccessDelta": 0,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "base",
-     "n": 2614,
-     "ratio": 38.527,
+     "n": 2626,
+     "ratio": 26.221,
      "cheaper": 0
     },
     {
      "name": "greater",
-     "n": 4204,
-     "ratio": 175.618,
+     "n": 4215,
+     "ratio": 116.109,
      "cheaper": 0
     },
     {
      "name": "perfect",
-     "n": 3056,
-     "ratio": 191.132,
+     "n": 3064,
+     "ratio": 123.806,
      "cheaper": 0
     }
    ],
    "helpsMost": [
     {
      "name": "pair-prefix-suffix-T2 · white",
-     "n": 2343,
-     "ratio": 1.588,
-     "cheaper": 0.01
-    },
-    {
-     "name": "essence-reachable · magic",
-     "n": 1175,
-     "ratio": 97.063,
+     "n": 2368,
+     "ratio": 1.561,
      "cheaper": 0
     },
     {
      "name": "essence-reachable · white",
      "n": 1457,
-     "ratio": 103.629,
+     "ratio": 61.298,
+     "cheaper": 0
+    },
+    {
+     "name": "essence-reachable · magic",
+     "n": 1175,
+     "ratio": 62.64,
      "cheaper": 0
     }
    ],
    "hurtsMost": [
     {
      "name": "single-suffix-rare-T1 · white",
-     "n": 1549,
-     "ratio": 587.97,
-     "cheaper": 0
-    },
-    {
-     "name": "single-prefix-rare-T1 · white",
-     "n": 1550,
-     "ratio": 353.658,
+     "n": 1555,
+     "ratio": 348.295,
      "cheaper": 0
     },
     {
      "name": "resistance-T2 · white",
      "n": 1800,
-     "ratio": 314.941,
+     "ratio": 275.948,
+     "cheaper": 0
+    },
+    {
+     "name": "single-prefix-rare-T1 · white",
+     "n": 1550,
+     "ratio": 213.453,
      "cheaper": 0
     }
    ],
-   "text": "Cheaper per success in 0% of 9874 comparisons (median x134), more likely to finish in 18%, less likely in 4%. By orb tier: base x39, greater x176, perfect x191."
+   "text": "Cheaper per success in 0% of 9905 comparisons (median x83), more likely to finish in 0%, less likely in 14%. By orb tier: base x26, greater x116, perfect x124."
   },
   {
    "id": "essence",
    "label": "Essences when one guarantees a goal",
-   "scenarios": 106,
-   "comparisons": 5200,
+   "scenarios": 110,
+   "comparisons": 5325,
    "verdict": "pro",
    "cheaper": 0.98,
    "costlier": 0.02,
-   "likelier": 0.07,
+   "likelier": 0.03,
    "lessLikely": 0,
-   "medianCostRatio": 0.033,
+   "medianCostRatio": 0.024,
    "medianSuccessDelta": 0,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "base",
-     "n": 1248,
-     "ratio": 0.043,
-     "cheaper": 1
+     "n": 1278,
+     "ratio": 0.034,
+     "cheaper": 0.99
     },
     {
      "name": "greater",
-     "n": 2288,
-     "ratio": 0.093,
+     "n": 2343,
+     "ratio": 0.048,
      "cheaper": 0.96
     },
     {
      "name": "perfect",
-     "n": 1664,
-     "ratio": 0.005,
+     "n": 1704,
+     "ratio": 0.003,
      "cheaper": 1
     }
    ],
    "helpsMost": [
     {
+     "name": "single-suffix-common-T2 · rare",
+     "n": 25,
+     "ratio": 0,
+     "cheaper": 1
+    },
+    {
+     "name": "single-prefix-common-T2 · rare",
+     "n": 25,
+     "ratio": 0,
+     "cheaper": 1
+    },
+    {
      "name": "essence-reachable · magic",
      "n": 2350,
-     "ratio": 0.006,
+     "ratio": 0.003,
      "cheaper": 0.98
-    },
-    {
-     "name": "essence-reachable · white",
-     "n": 2350,
-     "ratio": 0.048,
-     "cheaper": 0.98
-    },
-    {
-     "name": "single-suffix-rare-T1 · white",
-     "n": 250,
-     "ratio": 0.076,
-     "cheaper": 1
     }
    ],
    "hurtsMost": [
     {
      "name": "pair-prefix-suffix-T2 · rare",
-     "n": 75,
-     "ratio": 0.444,
-     "cheaper": 0.99
+     "n": 100,
+     "ratio": 0.465,
+     "cheaper": 1
     },
     {
      "name": "pair-prefix-suffix-T2 · white",
-     "n": 150,
-     "ratio": 0.403,
+     "n": 200,
+     "ratio": 0.41,
      "cheaper": 1
     },
     {
      "name": "pair-two-suffixes · rare",
      "n": 25,
-     "ratio": 0.177,
+     "ratio": 0.173,
      "cheaper": 1
     }
    ],
-   "text": "Cheaper per success in 98% of 5200 comparisons (median x0.03), more likely to finish in 7%, less likely in 0%. By orb tier: base x0.04, greater x0.09, perfect x0.01."
+   "text": "Cheaper per success in 98% of 5325 comparisons (median x0.02), more likely to finish in 3%, less likely in 0%. By orb tier: base x0.03, greater x0.05, perfect x0.00."
   },
   {
    "id": "fracture",
    "label": "Fracture a finished goal",
-   "scenarios": 66,
-   "comparisons": 198,
+   "scenarios": 75,
+   "comparisons": 223,
    "verdict": "con",
    "cheaper": 0.14,
-   "costlier": 0.73,
-   "likelier": 0.14,
+   "costlier": 0.72,
+   "likelier": 0.13,
    "lessLikely": 0.03,
-   "medianCostRatio": 1.234,
+   "medianCostRatio": 1.205,
    "medianSuccessDelta": 0,
-   "medianLostDelta": -0.147,
+   "medianLostDelta": -0.153,
    "byTier": [
     {
      "name": "base",
-     "n": 55,
-     "ratio": 1.061,
-     "cheaper": 0.27
+     "n": 62,
+     "ratio": 1.068,
+     "cheaper": 0.23
     },
     {
      "name": "greater",
-     "n": 140,
-     "ratio": 1.408,
-     "cheaper": 0.09
+     "n": 161,
+     "ratio": 1.324,
+     "cheaper": 0.11
     }
    ],
    "helpsMost": [
     {
      "name": "pair-two-suffixes · rare",
      "n": 18,
-     "ratio": 1.131,
+     "ratio": 1.145,
      "cheaper": 0
     },
     {
      "name": "pair-prefix-suffix-T2 · white",
      "n": 165,
-     "ratio": 1.22,
-     "cheaper": 0.16
+     "ratio": 1.207,
+     "cheaper": 0.14
     },
     {
      "name": "pair-prefix-suffix-T2 · rare",
-     "n": 15,
-     "ratio": 1.454,
-     "cheaper": 0
+     "n": 40,
+     "ratio": 1.247,
+     "cheaper": 0.23
     }
    ],
    "hurtsMost": [
     {
      "name": "pair-prefix-suffix-T2 · rare",
-     "n": 15,
-     "ratio": 1.454,
-     "cheaper": 0
+     "n": 40,
+     "ratio": 1.247,
+     "cheaper": 0.23
     },
     {
      "name": "pair-prefix-suffix-T2 · white",
      "n": 165,
-     "ratio": 1.22,
-     "cheaper": 0.16
+     "ratio": 1.207,
+     "cheaper": 0.14
     },
     {
      "name": "pair-two-suffixes · rare",
      "n": 18,
-     "ratio": 1.131,
+     "ratio": 1.145,
      "cheaper": 0
     }
    ],
-   "text": "Cheaper per success in 14% of 198 comparisons (median x1.23), more likely to finish in 14%, less likely in 3%. By orb tier: base x1.06, greater x1.41."
+   "text": "Cheaper per success in 14% of 223 comparisons (median x1.20), more likely to finish in 13%, less likely in 3%. By orb tier: base x1.07, greater x1.32."
   },
   {
    "id": "catalyse",
@@ -850,14 +879,14 @@
    "costlier": 0.5,
    "likelier": 0,
    "lessLikely": 0,
-   "medianCostRatio": 1.046,
+   "medianCostRatio": 1.044,
    "medianSuccessDelta": 0.002,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "base",
      "n": 6,
-     "ratio": 1.046,
+     "ratio": 1.044,
      "cheaper": 0
     }
    ],
@@ -865,7 +894,7 @@
     {
      "name": "catalyst-life · rare",
      "n": 6,
-     "ratio": 1.046,
+     "ratio": 1.044,
      "cheaper": 0
     }
    ],
@@ -873,11 +902,11 @@
     {
      "name": "catalyst-life · rare",
      "n": 6,
-     "ratio": 1.046,
+     "ratio": 1.044,
      "cheaper": 0
     }
    ],
-   "text": "Cheaper per success in 0% of 6 comparisons (median x1.05), more likely to finish in 0%, less likely in 0%."
+   "text": "Cheaper per success in 0% of 6 comparisons (median x1.04), more likely to finish in 0%, less likely in 0%."
   },
   {
    "id": "flux",
@@ -885,68 +914,68 @@
    "scenarios": 211,
    "comparisons": 633,
    "verdict": "pro",
-   "cheaper": 0.8,
-   "costlier": 0.19,
+   "cheaper": 0.97,
+   "costlier": 0.03,
    "likelier": 0.32,
    "lessLikely": 0,
-   "medianCostRatio": 0.434,
-   "medianSuccessDelta": 0.01,
+   "medianCostRatio": 0.425,
+   "medianSuccessDelta": 0.007,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "base",
-     "n": 354,
-     "ratio": 0.407,
+     "n": 342,
+     "ratio": 0.404,
      "cheaper": 0.97
     },
     {
      "name": "greater",
-     "n": 276,
-     "ratio": 0.511,
-     "cheaper": 0.58
+     "n": 291,
+     "ratio": 0.506,
+     "cheaper": 0.96
     }
    ],
    "helpsMost": [
     {
      "name": "resistance-T2 · rare",
      "n": 108,
-     "ratio": 0.385,
+     "ratio": 0.381,
      "cheaper": 1
     },
     {
      "name": "single-suffix-common-T2 · rare",
      "n": 96,
-     "ratio": 0.386,
+     "ratio": 0.382,
      "cheaper": 1
     },
     {
      "name": "pair-two-suffixes · rare",
      "n": 108,
-     "ratio": 0.422,
+     "ratio": 0.415,
      "cheaper": 1
     }
    ],
    "hurtsMost": [
     {
-     "name": "resistance-T2 · white",
-     "n": 108,
-     "ratio": 1.661,
+     "name": "essence-reachable · white",
+     "n": 21,
+     "ratio": 1.075,
      "cheaper": 0
     },
     {
-     "name": "essence-reachable · white",
-     "n": 21,
-     "ratio": 1.096,
-     "cheaper": 0
+     "name": "resistance-T2 · white",
+     "n": 108,
+     "ratio": 0.802,
+     "cheaper": 1
     },
     {
      "name": "pair-prefix-suffix-T2 · rare",
      "n": 96,
-     "ratio": 0.459,
+     "ratio": 0.455,
      "cheaper": 1
     }
    ],
-   "text": "Cheaper per success in 80% of 633 comparisons (median x0.43), more likely to finish in 32%, less likely in 0%. By orb tier: base x0.41, greater x0.51."
+   "text": "Cheaper per success in 97% of 633 comparisons (median x0.42), more likely to finish in 32%, less likely in 0%. By orb tier: base x0.40, greater x0.51."
   }
  ],
  "routes": [
@@ -956,18 +985,18 @@
    "bestRoute": "basic orbs, Chaos Orb",
    "share": 0.5,
    "runnerUp": "basic orbs, side omens, Chaos Orb, catalysing",
-   "medianCostPerSuccess": 4303.9,
+   "medianCostPerSuccess": 4065,
    "medianUses": 66.2,
    "medianSuccess": 0.997
   },
   {
    "group": "desecrated · rare",
    "scenarios": 8,
-   "bestRoute": "basic orbs, side omens, Chaos Orb",
-   "share": 0.5,
-   "runnerUp": "Greater orbs, side omens, Chaos Orb",
-   "medianCostPerSuccess": 13197.7,
-   "medianUses": 1.3,
+   "bestRoute": "Perfect orbs, side omens, Annulment",
+   "share": 1,
+   "runnerUp": null,
+   "medianCostPerSuccess": 6518,
+   "medianUses": 2.3,
    "medianSuccess": 1
   },
   {
@@ -985,8 +1014,8 @@
    "scenarios": 47,
    "bestRoute": "Greater orbs, Chaos Orb, start with Alchemy, essences",
    "share": 0.77,
-   "runnerUp": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
-   "medianCostPerSuccess": 2.3,
+   "runnerUp": "Greater orbs, Chaos Orb, start with Alchemy, essences, no flux",
+   "medianCostPerSuccess": 2.8,
    "medianUses": 1.9,
    "medianSuccess": 1
   },
@@ -994,79 +1023,79 @@
    "group": "pair-prefix-suffix-T2 · rare",
    "scenarios": 55,
    "bestRoute": "Greater orbs, side omens, Chaos Orb",
-   "share": 0.31,
+   "share": 0.27,
    "runnerUp": "Greater orbs, Chaos Orb",
-   "medianCostPerSuccess": 18928.6,
-   "medianUses": 135.7,
+   "medianCostPerSuccess": 21743.8,
+   "medianUses": 134.6,
    "medianSuccess": 0.947
   },
   {
    "group": "pair-prefix-suffix-T2 · white",
    "scenarios": 55,
-   "bestRoute": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
-   "share": 0.31,
-   "runnerUp": "Greater orbs, side omens, Chaos Orb, start with Transmutation, new base on a miss",
-   "medianCostPerSuccess": 14737,
-   "medianUses": 124.6,
-   "medianSuccess": 0.95
+   "bestRoute": "Greater orbs, side omens, Chaos Orb, start with Transmutation, new base on a miss",
+   "share": 0.35,
+   "runnerUp": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
+   "medianCostPerSuccess": 17111,
+   "medianUses": 112.8,
+   "medianSuccess": 0.963
   },
   {
    "group": "pair-two-suffixes · rare",
    "scenarios": 36,
    "bestRoute": "basic orbs, side omens, Chaos Orb",
-   "share": 0.53,
+   "share": 0.5,
    "runnerUp": "basic orbs, Chaos Orb",
-   "medianCostPerSuccess": 21707.8,
-   "medianUses": 232.7,
-   "medianSuccess": 0.703
+   "medianCostPerSuccess": 20242.8,
+   "medianUses": 230.8,
+   "medianSuccess": 0.705
   },
   {
    "group": "resistance-T2 · rare",
    "scenarios": 36,
    "bestRoute": "basic orbs, Chaos Orb",
-   "share": 0.67,
+   "share": 0.72,
    "runnerUp": "basic orbs, side omens, Chaos Orb",
-   "medianCostPerSuccess": 1755.2,
+   "medianCostPerSuccess": 1648.7,
    "medianUses": 28.3,
    "medianSuccess": 1
   },
   {
    "group": "resistance-T2 · white",
    "scenarios": 36,
-   "bestRoute": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss, no flux",
+   "bestRoute": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
    "share": 1,
    "runnerUp": null,
-   "medianCostPerSuccess": 39.8,
-   "medianUses": 55,
+   "medianCostPerSuccess": 51.1,
+   "medianUses": 21.5,
    "medianSuccess": 1
   },
   {
    "group": "single-prefix-common-T2 · rare",
    "scenarios": 55,
    "bestRoute": "basic orbs, Chaos Orb",
-   "share": 0.58,
+   "share": 0.56,
    "runnerUp": "basic orbs, side omens, Chaos Orb",
-   "medianCostPerSuccess": 3443.1,
-   "medianUses": 53.8,
+   "medianCostPerSuccess": 3254.7,
+   "medianUses": 53.1,
    "medianSuccess": 1
   },
   {
    "group": "single-prefix-rare-T1 · rare",
    "scenarios": 55,
-   "bestRoute": "basic orbs, side omens, Chaos Orb",
-   "share": 0.47,
-   "runnerUp": "basic orbs, Chaos Orb",
-   "medianCostPerSuccess": 6264.4,
+   "bestRoute": "basic orbs, Chaos Orb",
+   "share": 0.49,
+   "runnerUp": "basic orbs, side omens, Chaos Orb",
+   "medianCostPerSuccess": 5934.6,
    "medianUses": 93.5,
-   "medianSuccess": 0.983
+   "medianSuccess": 0.987
   },
   {
    "group": "single-prefix-rare-T1 · rare-low",
    "scenarios": 55,
    "bestRoute": "basic orbs, Chaos Orb",
-   "share": 0.49,
+   "share": 0.55,
    "runnerUp": "basic orbs, side omens, Chaos Orb",
-   "medianCostPerSuccess": 6596.8,
+   "medianCostPerSuccess": 6233.4,
    "medianUses": 95.8,
    "medianSuccess": 0.983
   },
@@ -1074,29 +1103,29 @@
    "group": "single-prefix-rare-T1 · white",
    "scenarios": 55,
    "bestRoute": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
-   "share": 0.96,
-   "runnerUp": "Perfect orbs, side omens, Chaos Orb, start with Transmutation, new base on a miss",
-   "medianCostPerSuccess": 100.6,
-   "medianUses": 129.6,
-   "medianSuccess": 0.937
+   "share": 1,
+   "runnerUp": null,
+   "medianCostPerSuccess": 155.7,
+   "medianUses": 158.7,
+   "medianSuccess": 1
   },
   {
    "group": "single-suffix-common-T2 · rare",
    "scenarios": 55,
    "bestRoute": "basic orbs, Chaos Orb",
-   "share": 0.56,
+   "share": 0.53,
    "runnerUp": "basic orbs, side omens, Chaos Orb",
-   "medianCostPerSuccess": 1958.4,
-   "medianUses": 31.3,
+   "medianCostPerSuccess": 1757,
+   "medianUses": 29.6,
    "medianSuccess": 1
   },
   {
    "group": "single-suffix-rare-T1 · rare",
    "scenarios": 55,
    "bestRoute": "basic orbs, side omens, Chaos Orb",
-   "share": 0.67,
+   "share": 0.64,
    "runnerUp": "basic orbs, Chaos Orb",
-   "medianCostPerSuccess": 14681.8,
+   "medianCostPerSuccess": 13908.7,
    "medianUses": 185.8,
    "medianSuccess": 0.82
   },
@@ -1104,10 +1133,10 @@
    "group": "single-suffix-rare-T1 · rare-low",
    "scenarios": 55,
    "bestRoute": "basic orbs, Chaos Orb",
-   "share": 0.51,
+   "share": 0.58,
    "runnerUp": "basic orbs, side omens, Chaos Orb",
-   "medianCostPerSuccess": 15786.8,
-   "medianUses": 194.6,
+   "medianCostPerSuccess": 14975.1,
+   "medianUses": 194.8,
    "medianSuccess": 0.817
   },
   {
@@ -1116,132 +1145,12 @@
    "bestRoute": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
    "share": 0.91,
    "runnerUp": "Greater orbs, Chaos Orb, start with Alchemy, essences",
-   "medianCostPerSuccess": 140.5,
-   "medianUses": 167.2,
-   "medianSuccess": 0.877
+   "medianCostPerSuccess": 219.7,
+   "medianUses": 224,
+   "medianSuccess": 1
   }
  ],
  "shortcuts": [
-  {
-   "cls": "Gloves",
-   "base": "Adherent Cuffs",
-   "start": "magic",
-   "goals": "#% increased Armour and Energy Shield T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Helmet",
-   "base": "Ancestral Tiara",
-   "start": "magic",
-   "goals": "#% increased Energy Shield T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Body Armour",
-   "base": "Austere Garb",
-   "start": "magic",
-   "goals": "#% increased Evasion and Energy Shield T5",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Shield",
-   "base": "Blacksteel Crest Shield",
-   "start": "magic",
-   "goals": "#% increased Armour and Energy Shield T5",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Gloves",
-   "base": "Blacksteel Gauntlets",
-   "start": "magic",
-   "goals": "#% increased Armour and Evasion T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Boots",
-   "base": "Blacksteel Sabatons",
-   "start": "magic",
-   "goals": "#% increased Armour and Evasion T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Body Armour",
-   "base": "Corsair Coat",
-   "start": "magic",
-   "goals": "#% increased Evasion Rating T5",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Helmet",
-   "base": "Cryptic Crown",
-   "start": "magic",
-   "goals": "#% increased Armour and Energy Shield T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Boots",
-   "base": "Cryptic Leggings",
-   "start": "magic",
-   "goals": "#% increased Armour and Energy Shield T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Boots",
-   "base": "Daggerfoot Shoes",
-   "start": "magic",
-   "goals": "#% increased Evasion and Energy Shield T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Buckler",
-   "base": "Desert Buckler",
-   "start": "magic",
-   "goals": "#% increased Evasion Rating T5",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Boots",
-   "base": "Drakeskin Boots",
-   "start": "magic",
-   "goals": "#% increased Evasion Rating T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
   {
    "cls": "Wand",
    "base": "Dueling Wand",
@@ -1250,77 +1159,7 @@
    "route": "Essence of Alacrity",
    "uses": 1,
    "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Body Armour",
-   "base": "Feathered Raiment",
-   "start": "magic",
-   "goals": "#% increased Energy Shield T5",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Helmet",
-   "base": "Freebooter Cap",
-   "start": "magic",
-   "goals": "#% increased Evasion Rating T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Helmet",
-   "base": "Gladiatorial Helm",
-   "start": "magic",
-   "goals": "#% increased Armour and Evasion T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Shield",
-   "base": "Golden Targe",
-   "start": "magic",
-   "goals": "#% increased Armour and Evasion T5",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Helmet",
-   "base": "Grinning Mask",
-   "start": "magic",
-   "goals": "#% increased Evasion and Energy Shield T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Helmet",
-   "base": "Imperial Greathelm",
-   "start": "magic",
-   "goals": "#% increased Armour T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Gloves",
-   "base": "Massive Mitts",
-   "start": "magic",
-   "goals": "#% increased Armour T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
+   "cost": 0.6
   },
   {
    "cls": "Staff",
@@ -1330,57 +1169,7 @@
    "route": "Essence of Alacrity",
    "uses": 1,
    "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Gloves",
-   "base": "Polished Bracers",
-   "start": "magic",
-   "goals": "#% increased Evasion Rating T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Body Armour",
-   "base": "Seastorm Mantle",
-   "start": "magic",
-   "goals": "#% increased Armour and Energy Shield T5",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Gloves",
-   "base": "Secured Wraps",
-   "start": "magic",
-   "goals": "#% increased Evasion and Energy Shield T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Boots",
-   "base": "Sekhema Sandals",
-   "start": "magic",
-   "goals": "#% increased Energy Shield T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Gloves",
-   "base": "Sirenscale Gloves",
-   "start": "magic",
-   "goals": "#% increased Energy Shield T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
+   "cost": 0.6
   },
   {
    "cls": "Focus",
@@ -1390,327 +1179,7 @@
    "route": "Essence of Alacrity",
    "uses": 1,
    "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Boots",
-   "base": "Tasalian Greaves",
-   "start": "magic",
-   "goals": "#% increased Armour T4",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Shield",
-   "base": "Tawhoan Tower Shield",
-   "start": "magic",
-   "goals": "#% increased Armour T5",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Body Armour",
-   "base": "Thane Mail",
-   "start": "magic",
-   "goals": "#% increased Armour and Evasion T5",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Body Armour",
-   "base": "Warlord Cuirass",
-   "start": "magic",
-   "goals": "#% increased Armour T5",
-   "route": "Essence of Enhancement",
-   "uses": 1,
-   "success": 1,
-   "cost": 2
-  },
-  {
-   "cls": "Shield",
-   "base": "Blacksteel Crest Shield",
-   "start": "white",
-   "goals": "#% increased Armour and Energy Shield T5",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.91,
-   "success": 1,
-   "cost": 2.27
-  },
-  {
-   "cls": "Buckler",
-   "base": "Desert Buckler",
-   "start": "white",
-   "goals": "#% increased Evasion Rating T5",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.91,
-   "success": 1,
-   "cost": 2.27
-  },
-  {
-   "cls": "Shield",
-   "base": "Tawhoan Tower Shield",
-   "start": "white",
-   "goals": "#% increased Armour T5",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.91,
-   "success": 1,
-   "cost": 2.27
-  },
-  {
-   "cls": "Gloves",
-   "base": "Adherent Cuffs",
-   "start": "white",
-   "goals": "#% increased Armour and Energy Shield T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.91,
-   "success": 1,
-   "cost": 2.28
-  },
-  {
-   "cls": "Body Armour",
-   "base": "Feathered Raiment",
-   "start": "white",
-   "goals": "#% increased Energy Shield T5",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.91,
-   "success": 1,
-   "cost": 2.28
-  },
-  {
-   "cls": "Shield",
-   "base": "Golden Targe",
-   "start": "white",
-   "goals": "#% increased Armour and Evasion T5",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.91,
-   "success": 1,
-   "cost": 2.28
-  },
-  {
-   "cls": "Helmet",
-   "base": "Ancestral Tiara",
-   "start": "white",
-   "goals": "#% increased Energy Shield T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.91,
-   "success": 1,
-   "cost": 2.29
-  },
-  {
-   "cls": "Gloves",
-   "base": "Blacksteel Gauntlets",
-   "start": "white",
-   "goals": "#% increased Armour and Evasion T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.92,
-   "success": 1,
-   "cost": 2.29
-  },
-  {
-   "cls": "Boots",
-   "base": "Blacksteel Sabatons",
-   "start": "white",
-   "goals": "#% increased Armour and Evasion T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.91,
-   "success": 1,
-   "cost": 2.29
-  },
-  {
-   "cls": "Boots",
-   "base": "Cryptic Leggings",
-   "start": "white",
-   "goals": "#% increased Armour and Energy Shield T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.92,
-   "success": 1,
-   "cost": 2.29
-  },
-  {
-   "cls": "Boots",
-   "base": "Daggerfoot Shoes",
-   "start": "white",
-   "goals": "#% increased Evasion and Energy Shield T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.92,
-   "success": 1,
-   "cost": 2.29
-  },
-  {
-   "cls": "Boots",
-   "base": "Drakeskin Boots",
-   "start": "white",
-   "goals": "#% increased Evasion Rating T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.92,
-   "success": 1,
-   "cost": 2.29
-  },
-  {
-   "cls": "Gloves",
-   "base": "Secured Wraps",
-   "start": "white",
-   "goals": "#% increased Evasion and Energy Shield T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.92,
-   "success": 1,
-   "cost": 2.29
-  },
-  {
-   "cls": "Boots",
-   "base": "Sekhema Sandals",
-   "start": "white",
-   "goals": "#% increased Energy Shield T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.92,
-   "success": 1,
-   "cost": 2.29
-  },
-  {
-   "cls": "Boots",
-   "base": "Tasalian Greaves",
-   "start": "white",
-   "goals": "#% increased Armour T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.92,
-   "success": 1,
-   "cost": 2.29
-  },
-  {
-   "cls": "Body Armour",
-   "base": "Austere Garb",
-   "start": "white",
-   "goals": "#% increased Evasion and Energy Shield T5",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.93,
-   "success": 1,
-   "cost": 2.31
-  },
-  {
-   "cls": "Helmet",
-   "base": "Gladiatorial Helm",
-   "start": "white",
-   "goals": "#% increased Armour and Evasion T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.92,
-   "success": 1,
-   "cost": 2.31
-  },
-  {
-   "cls": "Gloves",
-   "base": "Polished Bracers",
-   "start": "white",
-   "goals": "#% increased Evasion Rating T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.93,
-   "success": 1,
-   "cost": 2.31
-  },
-  {
-   "cls": "Body Armour",
-   "base": "Seastorm Mantle",
-   "start": "white",
-   "goals": "#% increased Armour and Energy Shield T5",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.93,
-   "success": 1,
-   "cost": 2.31
-  },
-  {
-   "cls": "Body Armour",
-   "base": "Thane Mail",
-   "start": "white",
-   "goals": "#% increased Armour and Evasion T5",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.93,
-   "success": 1,
-   "cost": 2.31
-  },
-  {
-   "cls": "Body Armour",
-   "base": "Corsair Coat",
-   "start": "white",
-   "goals": "#% increased Evasion Rating T5",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.93,
-   "success": 1,
-   "cost": 2.32
-  },
-  {
-   "cls": "Helmet",
-   "base": "Cryptic Crown",
-   "start": "white",
-   "goals": "#% increased Armour and Energy Shield T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.93,
-   "success": 1,
-   "cost": 2.32
-  },
-  {
-   "cls": "Helmet",
-   "base": "Grinning Mask",
-   "start": "white",
-   "goals": "#% increased Evasion and Energy Shield T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.93,
-   "success": 1,
-   "cost": 2.32
-  },
-  {
-   "cls": "Gloves",
-   "base": "Massive Mitts",
-   "start": "white",
-   "goals": "#% increased Armour T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.93,
-   "success": 1,
-   "cost": 2.32
-  },
-  {
-   "cls": "Body Armour",
-   "base": "Warlord Cuirass",
-   "start": "white",
-   "goals": "#% increased Armour T5",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.93,
-   "success": 1,
-   "cost": 2.32
-  },
-  {
-   "cls": "Helmet",
-   "base": "Freebooter Cap",
-   "start": "white",
-   "goals": "#% increased Evasion Rating T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.94,
-   "success": 1,
-   "cost": 2.33
-  },
-  {
-   "cls": "Helmet",
-   "base": "Imperial Greathelm",
-   "start": "white",
-   "goals": "#% increased Armour T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.94,
-   "success": 1,
-   "cost": 2.33
-  },
-  {
-   "cls": "Gloves",
-   "base": "Sirenscale Gloves",
-   "start": "white",
-   "goals": "#% increased Energy Shield T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.93,
-   "success": 1,
-   "cost": 2.33
+   "cost": 0.6
   },
   {
    "cls": "Focus",
@@ -1720,7 +1189,567 @@
    "route": "Greater Orb of Transmutation > Essence of Alacrity",
    "uses": 1.96,
    "success": 1,
-   "cost": 2.38
+   "cost": 1.54
+  },
+  {
+   "cls": "Gloves",
+   "base": "Adherent Cuffs",
+   "start": "magic",
+   "goals": "#% increased Armour and Energy Shield T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Helmet",
+   "base": "Ancestral Tiara",
+   "start": "magic",
+   "goals": "#% increased Energy Shield T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Body Armour",
+   "base": "Austere Garb",
+   "start": "magic",
+   "goals": "#% increased Evasion and Energy Shield T5",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Shield",
+   "base": "Blacksteel Crest Shield",
+   "start": "magic",
+   "goals": "#% increased Armour and Energy Shield T5",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Gloves",
+   "base": "Blacksteel Gauntlets",
+   "start": "magic",
+   "goals": "#% increased Armour and Evasion T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Boots",
+   "base": "Blacksteel Sabatons",
+   "start": "magic",
+   "goals": "#% increased Armour and Evasion T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Body Armour",
+   "base": "Corsair Coat",
+   "start": "magic",
+   "goals": "#% increased Evasion Rating T5",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Helmet",
+   "base": "Cryptic Crown",
+   "start": "magic",
+   "goals": "#% increased Armour and Energy Shield T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Boots",
+   "base": "Cryptic Leggings",
+   "start": "magic",
+   "goals": "#% increased Armour and Energy Shield T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Boots",
+   "base": "Daggerfoot Shoes",
+   "start": "magic",
+   "goals": "#% increased Evasion and Energy Shield T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Buckler",
+   "base": "Desert Buckler",
+   "start": "magic",
+   "goals": "#% increased Evasion Rating T5",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Boots",
+   "base": "Drakeskin Boots",
+   "start": "magic",
+   "goals": "#% increased Evasion Rating T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Body Armour",
+   "base": "Feathered Raiment",
+   "start": "magic",
+   "goals": "#% increased Energy Shield T5",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Helmet",
+   "base": "Freebooter Cap",
+   "start": "magic",
+   "goals": "#% increased Evasion Rating T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Helmet",
+   "base": "Gladiatorial Helm",
+   "start": "magic",
+   "goals": "#% increased Armour and Evasion T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Shield",
+   "base": "Golden Targe",
+   "start": "magic",
+   "goals": "#% increased Armour and Evasion T5",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Helmet",
+   "base": "Grinning Mask",
+   "start": "magic",
+   "goals": "#% increased Evasion and Energy Shield T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Helmet",
+   "base": "Imperial Greathelm",
+   "start": "magic",
+   "goals": "#% increased Armour T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Gloves",
+   "base": "Massive Mitts",
+   "start": "magic",
+   "goals": "#% increased Armour T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Gloves",
+   "base": "Polished Bracers",
+   "start": "magic",
+   "goals": "#% increased Evasion Rating T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Body Armour",
+   "base": "Seastorm Mantle",
+   "start": "magic",
+   "goals": "#% increased Armour and Energy Shield T5",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Gloves",
+   "base": "Secured Wraps",
+   "start": "magic",
+   "goals": "#% increased Evasion and Energy Shield T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Boots",
+   "base": "Sekhema Sandals",
+   "start": "magic",
+   "goals": "#% increased Energy Shield T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Gloves",
+   "base": "Sirenscale Gloves",
+   "start": "magic",
+   "goals": "#% increased Energy Shield T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Boots",
+   "base": "Tasalian Greaves",
+   "start": "magic",
+   "goals": "#% increased Armour T4",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Shield",
+   "base": "Tawhoan Tower Shield",
+   "start": "magic",
+   "goals": "#% increased Armour T5",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Body Armour",
+   "base": "Thane Mail",
+   "start": "magic",
+   "goals": "#% increased Armour and Evasion T5",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Body Armour",
+   "base": "Warlord Cuirass",
+   "start": "magic",
+   "goals": "#% increased Armour T5",
+   "route": "Essence of Enhancement",
+   "uses": 1,
+   "success": 1,
+   "cost": 2
+  },
+  {
+   "cls": "Sceptre",
+   "base": "Wrath Sceptre",
+   "start": "magic",
+   "goals": "Allies in your Presence deal #% increased Damage T5",
+   "route": "Essence of Command",
+   "uses": 1,
+   "success": 1,
+   "cost": 2.5
+  },
+  {
+   "cls": "Gloves",
+   "base": "Adherent Cuffs",
+   "start": "white",
+   "goals": "#% increased Armour and Energy Shield T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.91,
+   "success": 1,
+   "cost": 2.78
+  },
+  {
+   "cls": "Shield",
+   "base": "Blacksteel Crest Shield",
+   "start": "white",
+   "goals": "#% increased Armour and Energy Shield T5",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.91,
+   "success": 1,
+   "cost": 2.78
+  },
+  {
+   "cls": "Buckler",
+   "base": "Desert Buckler",
+   "start": "white",
+   "goals": "#% increased Evasion Rating T5",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.91,
+   "success": 1,
+   "cost": 2.78
+  },
+  {
+   "cls": "Body Armour",
+   "base": "Feathered Raiment",
+   "start": "white",
+   "goals": "#% increased Energy Shield T5",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.91,
+   "success": 1,
+   "cost": 2.78
+  },
+  {
+   "cls": "Shield",
+   "base": "Golden Targe",
+   "start": "white",
+   "goals": "#% increased Armour and Evasion T5",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.91,
+   "success": 1,
+   "cost": 2.78
+  },
+  {
+   "cls": "Shield",
+   "base": "Tawhoan Tower Shield",
+   "start": "white",
+   "goals": "#% increased Armour T5",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.91,
+   "success": 1,
+   "cost": 2.78
+  },
+  {
+   "cls": "Helmet",
+   "base": "Ancestral Tiara",
+   "start": "white",
+   "goals": "#% increased Energy Shield T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.91,
+   "success": 1,
+   "cost": 2.79
+  },
+  {
+   "cls": "Boots",
+   "base": "Blacksteel Sabatons",
+   "start": "white",
+   "goals": "#% increased Armour and Evasion T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.91,
+   "success": 1,
+   "cost": 2.79
+  },
+  {
+   "cls": "Gloves",
+   "base": "Blacksteel Gauntlets",
+   "start": "white",
+   "goals": "#% increased Armour and Evasion T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.92,
+   "success": 1,
+   "cost": 2.8
+  },
+  {
+   "cls": "Boots",
+   "base": "Cryptic Leggings",
+   "start": "white",
+   "goals": "#% increased Armour and Energy Shield T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.92,
+   "success": 1,
+   "cost": 2.8
+  },
+  {
+   "cls": "Boots",
+   "base": "Daggerfoot Shoes",
+   "start": "white",
+   "goals": "#% increased Evasion and Energy Shield T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.92,
+   "success": 1,
+   "cost": 2.8
+  },
+  {
+   "cls": "Boots",
+   "base": "Drakeskin Boots",
+   "start": "white",
+   "goals": "#% increased Evasion Rating T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.92,
+   "success": 1,
+   "cost": 2.8
+  },
+  {
+   "cls": "Gloves",
+   "base": "Secured Wraps",
+   "start": "white",
+   "goals": "#% increased Evasion and Energy Shield T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.92,
+   "success": 1,
+   "cost": 2.8
+  },
+  {
+   "cls": "Boots",
+   "base": "Sekhema Sandals",
+   "start": "white",
+   "goals": "#% increased Energy Shield T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.92,
+   "success": 1,
+   "cost": 2.8
+  },
+  {
+   "cls": "Boots",
+   "base": "Tasalian Greaves",
+   "start": "white",
+   "goals": "#% increased Armour T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.92,
+   "success": 1,
+   "cost": 2.8
+  },
+  {
+   "cls": "Helmet",
+   "base": "Gladiatorial Helm",
+   "start": "white",
+   "goals": "#% increased Armour and Evasion T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.92,
+   "success": 1,
+   "cost": 2.81
+  },
+  {
+   "cls": "Body Armour",
+   "base": "Austere Garb",
+   "start": "white",
+   "goals": "#% increased Evasion and Energy Shield T5",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.93,
+   "success": 1,
+   "cost": 2.82
+  },
+  {
+   "cls": "Body Armour",
+   "base": "Corsair Coat",
+   "start": "white",
+   "goals": "#% increased Evasion Rating T5",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.93,
+   "success": 1,
+   "cost": 2.82
+  },
+  {
+   "cls": "Helmet",
+   "base": "Cryptic Crown",
+   "start": "white",
+   "goals": "#% increased Armour and Energy Shield T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.93,
+   "success": 1,
+   "cost": 2.82
+  },
+  {
+   "cls": "Helmet",
+   "base": "Grinning Mask",
+   "start": "white",
+   "goals": "#% increased Evasion and Energy Shield T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.93,
+   "success": 1,
+   "cost": 2.82
+  },
+  {
+   "cls": "Gloves",
+   "base": "Massive Mitts",
+   "start": "white",
+   "goals": "#% increased Armour T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.93,
+   "success": 1,
+   "cost": 2.82
+  },
+  {
+   "cls": "Gloves",
+   "base": "Polished Bracers",
+   "start": "white",
+   "goals": "#% increased Evasion Rating T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.93,
+   "success": 1,
+   "cost": 2.82
+  },
+  {
+   "cls": "Body Armour",
+   "base": "Seastorm Mantle",
+   "start": "white",
+   "goals": "#% increased Armour and Energy Shield T5",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.93,
+   "success": 1,
+   "cost": 2.82
+  },
+  {
+   "cls": "Body Armour",
+   "base": "Thane Mail",
+   "start": "white",
+   "goals": "#% increased Armour and Evasion T5",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.93,
+   "success": 1,
+   "cost": 2.82
+  },
+  {
+   "cls": "Body Armour",
+   "base": "Warlord Cuirass",
+   "start": "white",
+   "goals": "#% increased Armour T5",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.93,
+   "success": 1,
+   "cost": 2.82
+  },
+  {
+   "cls": "Gloves",
+   "base": "Sirenscale Gloves",
+   "start": "white",
+   "goals": "#% increased Energy Shield T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.93,
+   "success": 1,
+   "cost": 2.83
+  },
+  {
+   "cls": "Helmet",
+   "base": "Freebooter Cap",
+   "start": "white",
+   "goals": "#% increased Evasion Rating T4",
+   "route": "Greater Orb of Transmutation > Essence of Enhancement",
+   "uses": 1.94,
+   "success": 1,
+   "cost": 2.84
   }
  ],
  "recipes": [
@@ -1738,14 +1767,14 @@
    },
    "matched": "3/4",
    "recipeRoute": "Greater orbs, side omens, Chaos Orb, start with Transmutation, new base on a miss",
-   "recipeCostPerSuccess": 503.54,
-   "recipeSuccess": 0.44,
+   "recipeCostPerSuccess": 850.56,
+   "recipeSuccess": 1,
    "bestRoute": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
-   "bestCostPerSuccess": 503.54,
-   "bestSuccess": 0.44,
+   "bestCostPerSuccess": 850.56,
+   "bestSuccess": 1,
    "ratio": 1,
-   "slow": true,
-   "note": "The cheapest simulated route per success follows the recipe (within 15%). It is slow: 44% of runs finish within 400 uses; the rest are charged as abandoned."
+   "slow": false,
+   "note": "The cheapest simulated route per success follows the recipe (within 15%)."
   },
   {
    "id": "c1b",
@@ -1762,11 +1791,11 @@
    },
    "matched": "3/5",
    "recipeRoute": "Greater orbs, side omens, Chaos + Whittling, start with Transmutation, new base on a miss",
-   "recipeCostPerSuccess": 148.05,
-   "recipeSuccess": 0.8967,
+   "recipeCostPerSuccess": 242.16,
+   "recipeSuccess": 1,
    "bestRoute": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
-   "bestCostPerSuccess": 148.05,
-   "bestSuccess": 0.8967,
+   "bestCostPerSuccess": 242.16,
+   "bestSuccess": 1,
    "ratio": 1,
    "slow": false,
    "note": "The cheapest simulated route per success follows the recipe (within 15%)."
@@ -1792,11 +1821,11 @@
    },
    "matched": "3/4",
    "recipeRoute": "Greater orbs, side omens, Chaos Orb, start with Transmutation, new base on a miss",
-   "recipeCostPerSuccess": 385.01,
-   "recipeSuccess": 0.53,
+   "recipeCostPerSuccess": 616.24,
+   "recipeSuccess": 1,
    "bestRoute": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
-   "bestCostPerSuccess": 385.01,
-   "bestSuccess": 0.53,
+   "bestCostPerSuccess": 616.24,
+   "bestSuccess": 1,
    "ratio": 1,
    "slow": false,
    "note": "The cheapest simulated route per success follows the recipe (within 15%)."
@@ -1814,11 +1843,11 @@
    },
    "matched": "3/3",
    "recipeRoute": "Greater orbs, side omens, Chaos Orb, start with Transmutation, new base on a miss, essences",
-   "recipeCostPerSuccess": 276.06,
-   "recipeSuccess": 0.65,
+   "recipeCostPerSuccess": 447.69,
+   "recipeSuccess": 1,
    "bestRoute": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
-   "bestCostPerSuccess": 276.06,
-   "bestSuccess": 0.65,
+   "bestCostPerSuccess": 447.69,
+   "bestSuccess": 1,
    "ratio": 1,
    "slow": false,
    "note": "The cheapest simulated route per success follows the recipe (within 15%)."
@@ -1834,14 +1863,14 @@
    },
    "matched": "1/1",
    "recipeRoute": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
-   "recipeCostPerSuccess": 1278.5,
-   "recipeSuccess": 0.2033,
+   "recipeCostPerSuccess": 1793.48,
+   "recipeSuccess": 1,
    "bestRoute": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
-   "bestCostPerSuccess": 1278.5,
-   "bestSuccess": 0.2033,
+   "bestCostPerSuccess": 1793.48,
+   "bestSuccess": 1,
    "ratio": 1,
-   "slow": true,
-   "note": "The cheapest simulated route per success follows the recipe (within 15%). It is slow: 20% of runs finish within 400 uses; the rest are charged as abandoned."
+   "slow": false,
+   "note": "The cheapest simulated route per success follows the recipe (within 15%)."
   },
   {
    "id": "c4c",
@@ -1871,10 +1900,10 @@
    },
    "matched": "4/4",
    "recipeRoute": "Greater orbs, side omens, Chaos Orb, start with Transmutation, new base on a miss, essences",
-   "recipeCostPerSuccess": 35.44,
+   "recipeCostPerSuccess": 54.09,
    "recipeSuccess": 1,
    "bestRoute": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
-   "bestCostPerSuccess": 35.44,
+   "bestCostPerSuccess": 54.09,
    "bestSuccess": 1,
    "ratio": 1,
    "slow": false,
@@ -1894,10 +1923,10 @@
    },
    "matched": "4/4",
    "recipeRoute": "Greater orbs, side omens, Greater Exaltation, Annulment, start with Transmutation, new base on a miss, essences",
-   "recipeCostPerSuccess": 43.14,
+   "recipeCostPerSuccess": 66.97,
    "recipeSuccess": 1,
    "bestRoute": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
-   "bestCostPerSuccess": 43.14,
+   "bestCostPerSuccess": 66.97,
    "bestSuccess": 1,
    "ratio": 1,
    "slow": false,
@@ -1975,7 +2004,15 @@
   }
  ],
  "sincePrevious": {
-  "previous": "2026-09-26T09:08:39.604Z",
-  "changes": []
+  "previous": "2026-09-26T09:30:43.908Z",
+  "changes": [
+   "Annulment instead of Chaos + Erasure: mixed -> pro.",
+   "Start with Orb of Alchemy (vs Transmutation): cost ratio x133.886 -> x83.485.",
+   "Essences when one guarantees a goal: cost ratio x0.033 -> x0.024.",
+   "desecrated · rare: best route \"basic orbs, side omens, Chaos Orb\" -> \"Perfect orbs, side omens, Annulment\".",
+   "pair-prefix-suffix-T2 · white: best route \"Greater orbs, Chaos Orb, start with Transmutation, new base on a miss\" -> \"Greater orbs, side omens, Chaos Orb, start with Transmutation, new base on a miss\".",
+   "resistance-T2 · white: best route \"Greater orbs, Chaos Orb, start with Transmutation, new base on a miss, no flux\" -> \"Greater orbs, Chaos Orb, start with Transmutation, new base on a miss\".",
+   "single-prefix-rare-T1 · rare: best route \"basic orbs, side omens, Chaos Orb\" -> \"basic orbs, Chaos Orb\"."
+  ]
  }
 }

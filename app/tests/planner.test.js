@@ -721,3 +721,34 @@ test('a base whose implicit adds tags ("Can roll Ring Modifiers") rolls ring mod
   const other = kb.pools[plain[1].sig];
   assert.ok(!other.prefix.some(([id]) => id === 'AddedColdDamage1'), 'other body armours do not');
 });
+
+test('the Verisium Anvil upgrade of a base is listed with its cost (game table Expedition2VerisiumCrafts)', () => {
+  const up = kb.verisium_upgrades['Rusted Cuirass'];
+  assert.deepEqual(up, [{ to: 'Runeforged Rusted Cuirass', cost: { Verisium: 20 } }]);
+  assert.ok(kb.bases['Runeforged Rusted Cuirass'].tags.includes('runeforged'));
+  const item = E.parseItem(ix, 'Item Class: Body Armours\nRarity: Normal\nRusted Cuirass\n--------\nItem Level: 82').item;
+  const op = P.availableOps(ix, item).find((o) => o.id === 'verisium');
+  assert.ok(op && op.ok && !op.planned && /20 Verisium/.test(op.note), JSON.stringify(op));
+});
+
+test('a base that says "Catalysts can be applied to this item" takes catalyst quality', () => {
+  const mail = E.parseItem(ix, 'Item Class: Body Armours\nRarity: Rare\nTest Name\nGrasping Mail\n--------\nItem Level: 82').item;
+  assert.ok(P.availableOps(ix, mail).some((o) => o.id === 'catalyst' && o.ok));
+  const ctx = ctxOf(Object.assign({}, mail, { quality: 20, qualityType: 'Life Modifiers' }));
+  assert.equal(P.toState(ctx, Object.assign({}, mail, { quality: 20, qualityType: 'Life Modifiers' })).catTag, 'life');
+  const plain = E.parseItem(ix, 'Item Class: Body Armours\nRarity: Rare\nTest Name\nRusted Cuirass\n--------\nItem Level: 82').item;
+  assert.ok(!P.availableOps(ix, plain).some((o) => o.id === 'catalyst'));
+});
+
+test('Omens of Crystallisation are for Perfect and Corrupted essences, not Runic Alloys (game text)', () => {
+  const W = require('../data/weights_0.5.5.json');
+  const helmBase = Object.entries(kb.bases).find(([, b]) => b.cls === 'Helmet' && b.tags.includes('str_armour') && b.tl)[0];
+  const helm = E.parseItem(ix, `Item Class: Helmets\nRarity: Normal\n${helmBase}\n--------\nItem Level: 82`).item;
+  const ctx = P.makeContext(ix, helm, { essences: P.essencesForBase(ix, kb.bases[helm.base], W.essences.Helmet) });
+  const alloy = ctx.essences.find((r) => r.alloy);
+  assert.ok(alloy, 'a Runic Alloy for helmets');
+  const pe = [...ctx.pool.entries()].find(([id, e]) => e.side === 'prefix' && !kb.mods[id].grp.some((g) => kb.mods[alloy.mod].grp.includes(g)));
+  const st = Object.assign(P.toState(ctx, helm), { rarity: 'Rare', mods: [{ id: pe[0], fam: kb.mods[pe[0]].fam, side: 'prefix', lvl: kb.mods[pe[0]].lvl, grp: kb.mods[pe[0]].grp, tier: pe[1].tier, frac: false, des: false, crafted: false, lock: false }] });
+  assert.match(P.validate(ctx, st, { op: 'pessence', item: alloy.item, mod: alloy.mod, side: 'prefix' }), /not with Runic Alloys/);
+  assert.equal(P.validate(ctx, st, { op: 'pessence', item: alloy.item, mod: alloy.mod }), null);
+});

@@ -1626,6 +1626,18 @@
       "how": "Search the trade site for such a wand or focus. In the game data, these modifiers give the item tags such as no_cold_spell_mods that stop the other elements' spell modifiers from rolling, so the planner never rolls them together.",
       "claims": [],
       "found": "game data"
+    },
+    {
+      "id": "t28",
+      "question": "Does the Verisium Anvil keep an item's modifiers when it turns the base into its Runeforged form?",
+      "how": "Upgrade a cheap magic or rare item at the Verisium Anvil (for example a Rusted Cuirass, 20 Verisium) and compare its modifiers before and after. The game data gives the cost and the new base; the planner only lists the upgrade.",
+      "claims": []
+    },
+    {
+      "id": "t29",
+      "question": "Which catalysts can be applied to a Grasping Mail (\"Catalysts can be applied to this item\")?",
+      "how": "Try a ring and amulet catalyst (for example Flesh Catalyst) and a Refined one on a Grasping Mail. Its implicit also lets it roll ring modifiers; the planner assumes the ring and amulet catalysts work.",
+      "claims": []
     }
   ]
 }

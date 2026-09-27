@@ -55,6 +55,8 @@
   // Void Flux (to Chaos) is listed but not planned: Chaos resistance tiers have other ranges.
   const RES = { fire: 'FireResist', cold: 'ColdResist', lightning: 'LightningResist' };
   const FLUX = { fire: 'Blazing Flux', cold: 'Chilling Flux', lightning: 'Crackling Flux' };
+  /** A base whose implicit says "Catalysts can be applied to this item" (Grasping Mail and its Runeforged forms). */
+  function catalystBase(base) { return !!(base && (base.imp || []).includes('Catalysts can be applied to this item')); }
   function resElement(id) {
     const m = /^(Fire|Cold|Lightning)Resist(\d+)$/.exec(id || '');
     return m ? { el: m[1].toLowerCase(), n: +m[2] } : null;
@@ -242,7 +244,9 @@
     const floor = a.quality === 'Ancient' ? 40 : 0;
     const full = open(ctx, st, 'prefix') + open(ctx, st, 'suffix') === 0;
     const taken = groupsOf(st);
-    return (a.side ? [a.side] : SIDES).filter((s) => (full ? st.mods.some((m) => removable(m) && m.side === s) : open(ctx, st, s) > 0)
+    // on a full item the removal must open the side: a side over its limit (see open) stays full after losing one mod
+    const opens = (s) => count(st, s) <= limits(ctx, st)[s] && st.mods.some((m) => removable(m) && m.side === s);
+    return (a.side ? [a.side] : SIDES).filter((s) => (full ? opens(s) : open(ctx, st, s) > 0)
       && desPoolFor(ctx, s, floor, a.lich || null).some((e) => !e.grp.some((g) => taken.has(g))));
   }
 
@@ -285,7 +289,7 @@
       });
     }
     const f = item.flags || {};
-    const catTag = ['Ring', 'Amulet'].includes(ctx.cls) || ctx.cls === 'Jewel' ? catalystTag(item.qualityType) : null;
+    const catTag = ['Ring', 'Amulet'].includes(ctx.cls) || ctx.cls === 'Jewel' || catalystBase(ctx.base) ? catalystTag(item.qualityType) : null;
     return {
       rarity: item.rarity, mods,
       corrupted: !!f.corrupted, sanctified: !!f.sanctified, mirrored: !!f.mirrored, unidentified: !!f.unidentified,
@@ -317,7 +321,9 @@
     return sides.some((s) => open(ctx, st, s) > 0) ? null : sides.length === 1 ? sides[0] : null;
   }
   function count(st, side) { let n = 0; for (const m of st.mods) if (m.side === side) n++; return n; }
-  function open(ctx, st, side) { return limits(ctx, st)[side] - count(st, side); }
+  // Never below 0: a side can sit over its limit (a removed "+1 Suffix Modifier allowed" leaves 3 suffixes on a jewel),
+  // and sums of both sides must not let that hide a free slot on the other side.
+  function open(ctx, st, side) { return Math.max(0, limits(ctx, st)[side] - count(st, side)); }
   const removable = (m) => !m.frac;
 
   // ---------------------------------------------------------------- rules
@@ -409,6 +415,8 @@
         if (a.op === 'essence' && m.grp.some((g) => taken.has(g))) return 'The item already has a modifier of this type; the essence would fail.';
         if (a.op === 'pessence') {
           const mside = sideOf(m);
+          // Game text: Omens of Crystallisation act on "your next Perfect or Corrupted Essence"; Runic Alloys are not essences.
+          if (a.side && isAlloy(ctx, a)) return 'Omens of Crystallisation work with Perfect and Corrupted essences, not with Runic Alloys.';
           if (a.side && a.side !== mside && open(ctx, st, mside) < 1) return `The essence adds a ${mside} and the ${mside}es are full; the omen would remove a ${a.side}.`;
           const from = swapSide(ctx, st, [mside], a.side);
           if (!st.mods.some((x) => removable(x) && (!from || x.side === from))) return 'No removable modifier on that side.';
@@ -425,11 +433,13 @@
         return st.foresight ? "The item already foresees its next currency (Hinekora's Lock)." : null;
       case 'mirror':
         return null;
+      case 'verisium':
+        return ctx.kb.verisium_upgrades && ctx.kb.verisium_upgrades[ctx.item.base] ? null : 'The Verisium Anvil has no upgrade for this base.';
       case 'artificer':
         return MARTIAL.includes(cls) || cls === 'Wand' || cls === 'Staff' || ARMOUR.includes(cls) ? null : "Artificer's Orb works on martial weapons, wands, staves and armour.";
       case 'catalyst':
         if (a.refined) return cls === 'Jewel' ? null : 'Refined catalysts work on jewels.';
-        return cls === 'Ring' || cls === 'Amulet' ? null : 'Catalysts work on rings and amulets (Refined ones on jewels).';
+        return cls === 'Ring' || cls === 'Amulet' || catalystBase(ctx.base) ? null : 'Catalysts work on rings and amulets (Refined ones on jewels).';
       case 'quality': {
         const want = qualityCurrencyFor(cls);
         if (!want) return 'No quality currency works on this item class.';
@@ -575,6 +585,10 @@
     return fit[fit.length - 1].id;
   }
 
+  /** Is this swap a Runic Alloy (not an essence)? */
+  function isAlloy(ctx, a) {
+    return /Alloy$/.test(a.item || '') || ctx.essences.some((r) => r.item === a.item && r.alloy);
+  }
   /** Knowledge base mods a liquid emotion adds on this jewel base (one, or a prefix and a suffix). */
   function liquidOutcomes(ctx, a) {
     const e = a.item && ctx.kb.liquid_emotions ? ctx.kb.liquid_emotions[a.item] : null;
@@ -965,6 +979,11 @@
             continue;
           }
           // A full essence side loses one of its own mods without an omen (R_SWAP_REMOVAL): the omen only helps the other way.
+          // Runic Alloys take no omen (Crystallisation names Perfect and Corrupted essences): they go only where any removal is safe.
+          if (r.alloy) {
+            if (open(ctx, st, mside) < 1 ? junkSide(mside) && cleanSide(mside) : st.mods.every((m) => !removable(m) || !useful(m, goals))) return { op: 'pessence', item: r.item, mod: r.mod, side: null };
+            continue;
+          }
           if (side) return { op: 'pessence', item: r.item, mod: r.mod, side: params.sideOmens && !(side === mside && open(ctx, st, mside) < 1) ? side : null };
         }
       }
@@ -1761,6 +1780,8 @@
     add('fracture', 'Lock one mod', { op: 'fracture' }, { cur: ['Fracturing Orb'], planned: true });
     if (cls === 'Jewel') add('catalyst', 'Add catalyst quality', { op: 'catalyst', refined: true }, { cat: 'Catalysts', match: { include: '^Refined' }, label: 'Refined catalysts' });
     else if (cls === 'Ring' || cls === 'Amulet') add('catalyst', 'Add catalyst quality', { op: 'catalyst' }, { cat: 'Catalysts', match: { include: 'Catalyst$', exclude: '^Refined' }, label: 'Catalysts' });
+    else if (catalystBase(ctx.base)) add('catalyst', 'Add catalyst quality', { op: 'catalyst' }, { cat: 'Catalysts', match: { include: 'Catalyst$', exclude: '^Refined' }, label: 'Catalysts',
+      note: 'The base says "Catalysts can be applied to this item". Which catalysts it takes is in-game test t29; the planner assumes the ring and amulet ones.' });
     const alloyWhy = R !== 'Rare' ? 'Runic Alloys need a Rare item.' : { op: 'alloy' };
     add('alloy', 'Swap a mod for an alloy mod', alloyWhy, { cat: 'Verisium', match: { include: 'Alloy' }, label: 'Runic Alloys', planned: true });
     if (cls === 'Jewel') {
@@ -1775,6 +1796,14 @@
     if (qualityCurrencyFor(cls)) add('quality', 'Add quality', { op: 'quality' }, { cur: [qualityCurrencyFor(cls)] });
     if (infuserFor(cls)) add('infuser', 'Quality past the maximum', { op: 'infuser' }, { cur: [infuserFor(cls)] });
     add('artificer', 'Add an augment socket', { op: 'artificer' }, { cur: ["Artificer's Orb"] });
+    // Verisium Anvil (game table Expedition2VerisiumCrafts): listed, not planned; whether the mods stay is test t28
+    for (const u of (ix.kb.verisium_upgrades || {})[item.base] || []) {
+      const b = ix.kb.bases[u.to] || {};
+      add('verisium', `Upgrade the base to ${u.to} (Verisium Anvil)`, { op: 'verisium', to: u.to }, {
+        cur: Object.keys(u.cost), note: `Costs ${Object.entries(u.cost).map(([n, c]) => c + ' ' + n).join(' and ')}.`
+          + (b.imp && b.imp.length ? ` The new base has: ${b.imp.join('; ')}.` : '') + ' The planner does not plan it; whether the modifiers stay is in-game test t28.',
+      });
+    }
     const fluxes = ['fire', 'cold', 'lightning'].filter((to) => !validate(ctx, st, { op: 'flux', to })).map((to) => FLUX[to]);
     if (!validate(ctx, st, { op: 'flux', to: 'chaos' })) fluxes.push('Void Flux');
     add('flux', 'Change a resistance element', fluxes.length ? { op: 'flux', to: 'chaos' } : 'The item has no Fire, Cold or Lightning Resistance modifier.',

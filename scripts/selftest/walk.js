@@ -116,12 +116,15 @@ function checkStep(ctx, before, a, r) {
   }
   if (a.op === 'alchemy' && a.side && cnt(after, a.side) < Math.min(3, lim[a.side]) && after.mods.length === 4) fail('side', `alchemy with a ${a.side} omen gave ${cnt(after, a.side)} ${a.side}es`);
   if (a.op === 'bone' && a.lich && r.added.some((m) => E.lichOf(kb.mods[m.id]) !== a.lich)) fail('lich', `lich omen ${a.lich} gave ${r.added[0].id}`);
-  // a natural mod that came in must not be one the item's other mods stop (game data adds_tags, e.g. no_cold_spell_mods)
-  for (const m of r.added) {
-    if (m.crafted || m.des || a.op === 'flux') continue;
-    const others = E.addedTags(kb, after.mods.filter((x) => x !== m).map((x) => x.id));
-    if (E.tagBlocked(kb.mods[m.id], new Set(kb.bases[ctx.item.base].tags), others)) fail('tags', `${m.id} came in although another mod on the item stops it`);
-  }
+  // a natural mod that came in must not be one the mods on the item at that moment stop (game data adds_tags, e.g.
+  // no_cold_spell_mods): the kept mods and the ones this step added before it. Not symmetric: an Ignite suffix does not
+  // stop a Physical spell level suffix, but the level suffix stops Ignite, so the order of arrival decides.
+  const kept = after.mods.filter((x) => !r.added.includes(x));
+  r.added.forEach((m, i) => {
+    if (m.crafted || m.des || a.op === 'flux') return;
+    const present = E.addedTags(kb, kept.concat(r.added.slice(0, i)).map((x) => x.id));
+    if (E.tagBlocked(kb.mods[m.id], new Set(kb.bases[ctx.item.base].tags), present)) fail('tags', `${m.id} came in although a mod on the item stops it`);
+  });
   // added modifiers must be able to spawn on this base
   for (const m of r.added) {
     if (m.crafted || a.op === 'flux') continue;
@@ -251,11 +254,14 @@ function frequencyTest(base, seed, n) {
   for (const tier of ['base', 'perfect']) {
     const f = tier === 'base' ? 0 : ctx.floors.exalt.Perfect;
     const taken = new Set(groupsOf(st));
+    const added = E.addedTags(kb, st.mods.map((m) => m.id));
+    const baseTags = new Set(kb.bases[base].tags);
     const sides = ['prefix', 'suffix'].filter((s) => P.validate(ctx, st, { op: 'exalt', side: s }) === null);
     const exp = new Map();
     let total = 0;
     for (const s of sides) for (const e of P.sidePool(ctx, s, f)) {
       if (e.grp.some((g) => taken.has(g))) continue;
+      if (E.tagBlocked(kb.mods[e.id], baseTags, added)) continue; // the item's mods stop it (game data adds_tags)
       exp.set(e.fam + '|' + s, (exp.get(e.fam + '|' + s) || 0) + e.w); total += e.w;
     }
     const obs = new Map();
