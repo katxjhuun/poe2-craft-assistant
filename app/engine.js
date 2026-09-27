@@ -379,6 +379,9 @@
     const pool = sig ? poolFor(ix, sig) : new Map();
     const desPool = item.base ? desecratedPoolFor(ix, item.base) : new Map();
     const crafts = item.base ? liquidModsFor(ix, item.base) : null;
+    // essence mods of this item class (the page and the self-test set ix.essenceModsByClass from poe2db); without the
+    // class map, every essence mod counts (older callers)
+    const ess = ix.essenceModsByClass ? (item.base ? ix.essenceModsByClass.get(ix.kb.bases[item.base].cls) || null : null) : ix.essenceMods || null;
 
     const slotLine = (l) => {
       const sm = cleanLine(l).match(/^([+-]\d+) (Prefix|Suffix) Modifiers? allowed$/i);
@@ -414,7 +417,7 @@
           item.mods.push(makeUnmatched(r.lines, null, h));
           continue;
         }
-        item.mods.push(resolveMod(ix, r.lines, { side: h.kind, header: h, pool, desPool, crafts, ilvl: item.ilvl, warnings, quiet: !!item.unsupported }));
+        item.mods.push(resolveMod(ix, r.lines, { side: h.kind, header: h, pool, desPool, crafts, ess, ilvl: item.ilvl, warnings, quiet: !!item.unsupported }));
       }
     } else {
       // Plain copy: implicit/rune markers are explicit; explicit mods need grouping for hybrids.
@@ -431,11 +434,11 @@
         // found by the self-test), kept only when they can roll here and the values fit.
         const three = i + 2 < explicitLines.length ? explicitLines.slice(i, i + 3) : null;
         if (three && three.every((l) => markerOf(l) === markerOf(three[0]))) {
-          const hy3 = resolveMod(ix, three, { side: null, header: markers(three[0]), pool, desPool, crafts, ilvl: item.ilvl, warnings: [], hybridOnly: true });
+          const hy3 = resolveMod(ix, three, { side: null, header: markers(three[0]), pool, desPool, crafts, ess, ilvl: item.ilvl, warnings: [], hybridOnly: true });
           if (hy3.modId && (hy3.inPool || markerOf(three[0]) === 'crafted') && hy3.fit !== false) {
             // The same three lines can also be two or three mods that roll here (self-test: "% increased Armour and
             // Evasion" + a two-line base Armour and Evasion mod on Thane Mail): flag it like the two-line case.
-            const opt3 = { side: null, pool, desPool, crafts, ilvl: item.ilvl, warnings: [] };
+            const opt3 = { side: null, pool, desPool, crafts, ess, ilvl: item.ilvl, warnings: [] };
             const ok3 = (m, line) => m.modId && (m.inPool || markerOf(line) === 'crafted') && m.fit !== false;
             const read = (ls) => resolveMod(ix, ls, Object.assign({ header: markers(ls[0]), hybridOnly: ls.length > 1 }, opt3));
             for (const sp of [[[three[0]], three.slice(1)], [three.slice(0, 2), [three[2]]], [[three[0]], [three[1]], [three[2]]]]) {
@@ -450,12 +453,12 @@
           }
         }
         if (two && markerOf(two[0]) === markerOf(two[1])) {
-          const hy = resolveMod(ix, two, { side: null, header: markers(two[0]), pool, desPool, crafts, ilvl: item.ilvl, warnings: [], hybridOnly: true });
+          const hy = resolveMod(ix, two, { side: null, header: markers(two[0]), pool, desPool, crafts, ess, ilvl: item.ilvl, warnings: [], hybridOnly: true });
           if (hy.modId) {
             // Two lines that also read as two mods which can roll here: keep the hybrid only when it can roll here too
             // and its values fit (found by the self-test: two plain lines were read as a Runes of Aldur alloy hybrid).
             const ok = (m, line) => m.modId && (m.inPool || markerOf(line) === 'crafted') && m.fit !== false;
-            const opt = { side: null, pool, desPool, crafts, ilvl: item.ilvl, warnings: [] };
+            const opt = { side: null, pool, desPool, crafts, ess, ilvl: item.ilvl, warnings: [] };
             const a = resolveMod(ix, [two[0]], Object.assign({ header: markers(two[0]) }, opt));
             const b = resolveMod(ix, [two[1]], Object.assign({ header: markers(two[1]) }, opt));
             if (ok(hy, two[0]) || (!ok(a, two[0]) && !ok(b, two[1]))) {
@@ -469,7 +472,7 @@
             }
           }
         }
-        item.mods.push(resolveMod(ix, [explicitLines[i]], { side: null, header: markers(explicitLines[i]), pool, desPool, crafts, ilvl: item.ilvl, warnings, quiet: !!item.unsupported }));
+        item.mods.push(resolveMod(ix, [explicitLines[i]], { side: null, header: markers(explicitLines[i]), pool, desPool, crafts, ess, ilvl: item.ilvl, warnings, quiet: !!item.unsupported }));
         i += 1;
       }
     }
@@ -531,8 +534,9 @@
       if (h.crafted && !des) score += 2;
       if (h.crafted && !pe && (m.eo || /^Essence/.test(e.id))) score += 1; // same text elsewhere: the essence mod wins
       // A crafted line is an essence (or alloy) mod: a mod an essence gives beats a natural one with the same text
-      // (self-test finding: "+# to Level of all Spell Skills" on wands). ix.essenceMods is set by the page from poe2db.
-      if (h.crafted && ix.essenceMods && ix.essenceMods.has(e.id)) score += 3;
+      // (self-test finding: "+# to Level of all Spell Skills" on wands). Only essences of this item class count (self-test:
+      // a jewel's liquid "+#% to Chaos Resistance" was read as an equipment essence mod).
+      if (h.crafted && ctx.ess && ctx.ess.has(e.id)) score += 3;
       // ... and on a jewel, a mod its liquid emotions add (game table LiquidEmotionOutcomes), even one from another jewel's pool
       if (h.crafted && ctx.crafts && ctx.crafts.has(e.id)) score += 3;
       if (h.tier && pe && pe.tier === h.tier) score += 2;

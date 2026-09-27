@@ -1,6 +1,6 @@
 {
  "meta": {
-  "date": "2026-09-27T01:55:39.734Z",
+  "date": "2026-09-27T02:23:23.004Z",
   "quick": false,
   "bases": 55,
   "scenarios": 762,
@@ -8,8 +8,8 @@
   "strategyRuns": 46190,
   "trials": 300,
   "maxSteps": 400,
-  "walkSteps": 1066884,
-  "roundTrips": 213475,
+  "walkSteps": 1067052,
+  "roundTrips": 213513,
   "prices": {
    "league": "Forbidden Rites",
    "hourTo": 1790470800,
@@ -18,183 +18,158 @@
   },
   "weights": "2026-09-25",
   "workers": 30,
-  "seconds": 560,
+  "seconds": 533,
   "skipped": [],
   "errors": 0
  },
  "checks": [
   {
    "id": "crash",
-   "n": 1066884,
+   "n": 1067052,
    "fail": 0,
    "examples": []
   },
   {
    "id": "slots",
-   "n": 1066884,
+   "n": 1067052,
    "fail": 0,
    "examples": []
   },
   {
    "id": "crafted",
-   "n": 1066884,
+   "n": 1067052,
    "fail": 0,
    "examples": []
   },
   {
    "id": "desecrated",
-   "n": 1066884,
+   "n": 1067052,
    "fail": 0,
    "examples": []
   },
   {
    "id": "groups",
-   "n": 1066884,
+   "n": 1067052,
    "fail": 0,
    "examples": []
   },
   {
    "id": "ilvl",
-   "n": 1066884,
+   "n": 1067052,
    "fail": 0,
    "examples": []
   },
   {
    "id": "fractured",
-   "n": 1066884,
+   "n": 1067052,
    "fail": 0,
    "examples": []
   },
   {
    "id": "floor",
-   "n": 1066884,
+   "n": 1067052,
    "fail": 0,
    "examples": []
   },
   {
    "id": "effect",
-   "n": 1066884,
-   "fail": 6,
-   "examples": [
-    "Diamond: bone {\"op\":\"bone\",\"quality\":\"Ancient\",\"side\":null,\"lich\":null,\"echoes\":false}: 4 -> 4 mods, +1 -1",
-    "Diamond: bone {\"op\":\"bone\",\"quality\":\"Gnawed\",\"side\":null,\"lich\":null,\"echoes\":false}: 4 -> 4 mods, +1 -1",
-    "Ruby: bone {\"op\":\"bone\",\"quality\":\"Ancient\",\"side\":null,\"lich\":null,\"echoes\":false}: 4 -> 4 mods, +1 -1",
-    "Sapphire: bone {\"op\":\"bone\",\"quality\":\"Ancient\",\"side\":\"suffix\",\"lich\":null,\"echoes\":true}: 4 -> 3 mods, +0 -1",
-    "Sapphire: bone {\"op\":\"bone\",\"quality\":\"Preserved\",\"side\":\"suffix\",\"lich\":null,\"echoes\":true}: 4 -> 3 mods, +0 -1"
-   ]
+   "n": 1067052,
+   "fail": 0,
+   "examples": []
   },
   {
    "id": "side",
-   "n": 1066884,
+   "n": 1067052,
    "fail": 0,
    "examples": []
   },
   {
    "id": "lich",
-   "n": 1066884,
+   "n": 1067052,
    "fail": 0,
    "examples": []
   },
   {
    "id": "pool",
-   "n": 1066884,
+   "n": 1067052,
    "fail": 0,
    "examples": []
   },
   {
    "id": "whittle",
-   "n": 1066884,
+   "n": 1067052,
    "fail": 0,
    "examples": []
   },
   {
    "id": "light",
-   "n": 1066884,
+   "n": 1067052,
    "fail": 0,
    "examples": []
   },
   {
    "id": "tags",
-   "n": 1066884,
-   "fail": 17,
-   "examples": [
-    "Dueling Wand: IgniteChanceIncrease3 came in although another mod on the item stops it",
-    "Dueling Wand: FreezeDamageIncrease4 came in although another mod on the item stops it",
-    "Dueling Wand: IgniteChanceIncrease3 came in although another mod on the item stops it",
-    "Permafrost Staff: IgniteChanceIncrease3 came in although another mod on the item stops it",
-    "Permafrost Staff: FreezeDamageIncrease3 came in although another mod on the item stops it"
-   ]
+   "n": 1067052,
+   "fail": 0,
+   "examples": []
   },
   {
    "id": "parse-adv",
-   "n": 213475,
-   "fail": 1198,
-   "examples": [
-    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath4, right mod listed as a candidate",
-    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath4, right mod listed as a candidate",
-    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath1, right mod listed as a candidate",
-    "Diamond: CraftedJewelMaximumChaosResistance read as MaximumChaosResist1, right mod listed as a candidate",
-    "Diamond: CraftedJewelMaximumChaosResistance read as MaximumChaosResist1, right mod listed as a candidate"
-   ]
+   "n": 213513,
+   "fail": 0,
+   "examples": []
   },
   {
    "id": "parse-adv-flagged",
-   "n": 213475,
-   "fail": 1527,
+   "n": 213513,
+   "fail": 329,
    "examples": [
-    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath4, right mod listed as a candidate",
-    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath4, right mod listed as a candidate",
-    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath1, right mod listed as a candidate",
-    "Diamond: CraftedJewelMaximumChaosResistance read as MaximumChaosResist1, right mod listed as a candidate",
-    "Diamond: CraftedJewelMaximumChaosResistance read as MaximumChaosResist1, right mod listed as a candidate"
+    "Permafrost Staff: EssenceSpellSkillLevel2H1 read as GlobalSpellGemsLevelTwoHandWeapon4 (ambiguous), right mod listed as a candidate",
+    "Permafrost Staff: EssenceSpellSkillLevel2H1 read as GlobalSpellGemsLevelTwoHandWeapon4 (ambiguous), right mod listed as a candidate",
+    "Permafrost Staff: EssenceSpellSkillLevel2H1 read as GlobalSpellGemsLevelTwoHandWeapon4 (ambiguous), right mod listed as a candidate"
    ]
   },
   {
    "id": "parse-simple",
-   "n": 213475,
-   "fail": 1,
-   "examples": [
-    "Thane Mail: LocalIncreasedArmourAndEvasion1 read as nothing; LocalBaseArmourAndEvasionRating1 read as nothing"
-   ]
+   "n": 213513,
+   "fail": 0,
+   "examples": []
   },
   {
    "id": "parse-simple-exact",
-   "n": 213475,
-   "fail": 16189,
+   "n": 213513,
+   "fail": 15107,
    "examples": [
-    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath1, right mod listed as a candidate",
-    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath1, right mod listed as a candidate",
-    "Emerald: P2DB_MaximumLifeOnKillPercent_s1 read as HandWrapsLifeGainedFromEnemyDeath4, right mod listed as a candidate",
-    "Diamond: CraftedJewelMaximumChaosResistance read as MaximumChaosResist1, right mod listed as a candidate",
-    "Diamond: CraftedJewelMaximumChaosResistance read as MaximumChaosResist1, right mod listed as a candidate"
+    "Diamond: P2DB_LightningDamagePercentage_p1 read as AbyssModJewelPrefixLightningDamageAndPen (ambiguous), right mod listed as a candidate; P2DB_LightningResistancePenetration_p1 read as AbyssModJewelPrefixLightningDamageAndPen (ambiguous), right mod listed as a candidate",
+    "Diamond: P2DB_IncreasedChaosDamage_p1 read as AbyssModJewelPrefixChaosDamageWitherEffect (ambiguous), right mod listed as a candidate; P2DB_WitheredEffect_p1 read as AbyssModJewelPrefixChaosDamageWitherEffect (ambiguous), right mod listed as a candidate",
+    "Aegis Quarterstaff: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate",
+    "Aegis Quarterstaff: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate",
+    "Aegis Quarterstaff: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate"
    ]
   }
  ],
  "ops": {
-  "transmute": 19131,
-  "augment": 1557,
-  "annul": 198928,
-  "regal": 5739,
-  "liquid": 22624,
-  "exalt": 240984,
-  "chaos": 388255,
-  "bone": 10749,
-  "fracture": 15816,
-  "divine": 38427,
-  "alchemy": 25392,
+  "alchemy": 25312,
+  "annul": 198922,
+  "chaos": 388640,
+  "liquid": 22578,
+  "exalt": 241015,
+  "divine": 38439,
+  "fracture": 15835,
+  "transmute": 19045,
+  "regal": 5676,
+  "bone": 10742,
+  "augment": 1566,
   "pessence": 68928,
   "essence": 10513,
   "flux": 19841
  },
  "freq": {
   "tests": 110,
-  "failed": 2,
-  "maxZ": 51.17,
-  "families": 2858,
-  "failures": [
-   "Dueling Wand base: 23 families off",
-   "Dueling Wand perfect: 18 families off"
-  ]
+  "failed": 0,
+  "maxZ": 3.94,
+  "families": 2846,
+  "failures": []
  },
  "techniques": [
   {
@@ -2004,15 +1979,7 @@
   }
  ],
  "sincePrevious": {
-  "previous": "2026-09-26T09:30:43.908Z",
-  "changes": [
-   "Annulment instead of Chaos + Erasure: mixed -> pro.",
-   "Start with Orb of Alchemy (vs Transmutation): cost ratio x133.886 -> x83.485.",
-   "Essences when one guarantees a goal: cost ratio x0.033 -> x0.024.",
-   "desecrated · rare: best route \"basic orbs, side omens, Chaos Orb\" -> \"Perfect orbs, side omens, Annulment\".",
-   "pair-prefix-suffix-T2 · white: best route \"Greater orbs, Chaos Orb, start with Transmutation, new base on a miss\" -> \"Greater orbs, side omens, Chaos Orb, start with Transmutation, new base on a miss\".",
-   "resistance-T2 · white: best route \"Greater orbs, Chaos Orb, start with Transmutation, new base on a miss, no flux\" -> \"Greater orbs, Chaos Orb, start with Transmutation, new base on a miss\".",
-   "single-prefix-rare-T1 · rare: best route \"basic orbs, side omens, Chaos Orb\" -> \"basic orbs, Chaos Orb\"."
-  ]
+  "previous": "2026-09-27T02:12:30.047Z",
+  "changes": []
  }
 }

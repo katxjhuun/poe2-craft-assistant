@@ -31,6 +31,7 @@ function load() {
   const ix = E.buildIndex(kb);
   const W = require(path.join(ROOT, 'app', 'data', 'weights_0.5.5.json'));
   ix.essenceMods = new Set(Object.values(W.essences || {}).flat().map((r) => r.mod)); // as the page does
+  ix.essenceModsByClass = new Map(Object.entries(W.essences || {}).map(([c, l]) => [c, new Set(l.map((r) => r.mod))]));
   const snap = latestPrices();
   const lib = require(path.join(ROOT, 'app', 'data', 'recipes_0.5.5.json'));
   const league = snap.leagues['forbidden-rites'];

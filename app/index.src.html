@@ -812,6 +812,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (weights) {
       S.weightsData = weights; S.weightsMeta = weights.meta; S.essences = weights.essences;
       S.ix.essenceMods = new Set(Object.values(weights.essences || {}).flat().map((r) => r.mod)); // crafted lines prefer essence mods
+      S.ix.essenceModsByClass = new Map(Object.entries(weights.essences || {}).map(([c, l]) => [c, new Set(l.map((r) => r.mod))])); // ... of the item's class
     }
     for (const [name, meta] of Object.entries(kb.currency_metadata_ids)) { S.sidByName[name] = meta.split('/').pop(); S.nameBySid[meta.split('/').pop()] = name; }
     const last = store.get('lastText', null);

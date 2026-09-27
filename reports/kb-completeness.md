@@ -44,6 +44,12 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 
 ## Log
 
+- 27 Sept 2026: full self-test on the new data (about 1.07 million checked steps, 213,000 parser round trips, 46,190
+  strategy runs per run) found five problems, all fixed: a side over its limit hid a free slot (bones removed a mod they
+  should not), the stopping by added tags is one-way (the check now follows arrival order), frequency expectations
+  ignored stopped mods, crafted liquid mods on jewels were read as other classes' essence mods (essence preference is
+  now per item class), and three-line plain-text hybrids that also read as separate mods were not flagged.
+
 - 27 Sept 2026: other sources checked. Incursion2Crafting (Vaal temple benches, 23): bench versions of existing currency
   (quality, augment socket, corruption, Exalted/Regal/Alchemy workbenches, extraction), no new modifier source.
   SoulInfluence mods (22, "Medved's"/"of the Soul", spawn tag soul that no base or mod gives): drop-only from the
