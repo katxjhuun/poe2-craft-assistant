@@ -514,6 +514,25 @@
     return tier === 'greater' ? f.Greater || 0 : f.Perfect || 0;
   }
 
+  /**
+   * The mod an essence adds. Most essences have one; some add one of several (game table EssenceMods.OutcomeMods, in
+   * kb.essence_outcomes): roll among the ones this base can take, by the table's weights, or evenly when the table has
+   * none (the files do not say more).
+   */
+  function essenceOutcome(ctx, a, rng, st) {
+    const o = ctx.kb.essence_outcomes && ctx.kb.essence_outcomes[a.item];
+    if (!o || !rng) return a.mod;
+    // only outcomes the item can take now: this base, a free group, room on the mod's side
+    const taken = groupsOf(st);
+    const fit = o.mods.map((id, i) => ({ id, w: o.weights ? o.weights[i] : 1 }))
+      .filter((x) => ctx.essences.some((r) => r.item === a.item && r.mod === x.id))
+      .filter((x) => { const m = ctx.kb.mods[x.id]; return !m.grp.some((g) => taken.has(g)) && open(ctx, st, m.gen === 'p' ? 'prefix' : 'suffix') > 0; });
+    if (fit.length < 2) return a.mod;
+    let r = rng() * fit.reduce((t, x) => t + x.w, 0);
+    for (const x of fit) { r -= x.w; if (r <= 0) return x.id; }
+    return fit[fit.length - 1].id;
+  }
+
   function removeRandom(st, pred, rng) {
     const idx = [];
     st.mods.forEach((m, i) => { if (pred(m)) idx.push(i); });
@@ -625,12 +644,13 @@
           const r = removeRandom(st, (m) => removable(m) && (!a.side || m.side === a.side), rng);
           if (r) removed.push(r);
         }
-        const m = ctx.kb.mods[a.mod];
+        const id = essenceOutcome(ctx, a, rng, st);
+        const m = ctx.kb.mods[id];
         const side = m.gen === 'p' ? 'prefix' : 'suffix';
         const taken = groupsOf(st);
         if (!m.grp.some((g) => taken.has(g)) && open(ctx, st, side) > 0) {
-          const pe = ctx.pool.get(a.mod);
-          addRolled(ctx, st, { id: a.mod, fam: m.fam, side, lvl: m.lvl, grp: m.grp, tier: pe ? pe.tier : null }, { crafted: true }, rng);
+          const pe = ctx.pool.get(id);
+          addRolled(ctx, st, { id, fam: m.fam, side, lvl: m.lvl, grp: m.grp, tier: pe ? pe.tier : null }, { crafted: true }, rng);
           added.push(st.mods[st.mods.length - 1]);
         }
         break;

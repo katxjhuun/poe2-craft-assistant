@@ -31,17 +31,21 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 |---|---|---|---|---|
 | 1 | Natural mod pools per base: tiers, levels, groups, tags, texts, value ranges | RePoE mods.json (have); cross-check RePoE mods_by_base.json | game data | **verified**: all 1,617 in-scope bases (22 classes) identical to RePoE's per-base game-data lists (scripts/kb_verify.py). Jewels keep poe2db ids and in-game radius wording; texts and ranges match the game data; the Small/Notable split of radius mods still needs Mods.RadiusJewelType (raw Mods table, 7.4 MB, not downloaded yet) |
 | 2 | Roll weights of natural mods | poe2db DropChance (have); Craft of Exile | cross-checked estimate | poe2db only; comparison pending |
-| 3 | Essence mods per item class | game tables EssenceMods, Essences, EssenceTargetItemCategories | game data | from poe2db pages; check against game tables pending |
+| 3 | Essence mods per item class | game tables EssenceMods, Essences, EssenceTargetItemCategories | game data | **verified**: all 1,168 essence/alloy -> class -> mod pairs identical (scripts/essences_from_gamedata.py). The 9 essences that give one of several mods are in kb.essence_outcomes (game table; Abyss 50/50 and Perfect Infinite 50/50/50 weights, others none) and the planner rolls among the outcomes the item can take |
 | 4 | Desecrated mods per class, levels, lich tags, reveal rules | RePoE desecrated domain + keywords | game data | done (all equipment desecrated mods are level 65; none on sceptres) |
 | 5 | Corruption (Vaal Orb) outcomes and corrupted implicits | RePoE mods generation_type corrupted | game data (list); outcome chances open | **verified**: 119 Corruption Enhancements in the KB (dom 'c'; equipment item-domain, jewels misc-domain), per-base lists identical to RePoE for all 1,617 bases; shown under Vaal Orb. Outcome chances: not in the files |
 | 6 | Runes, soul cores, talismans (augments) per item class | game tables SoulCores, SoulCoreStats, SoulCoreStatCategories, SoulCoreLimits / RePoE augments.json | game data | not in the KB yet |
-| 7 | Runic Alloy mods | crafted-domain mods; Expedition2VerisiumCrafts | game data | alloy mods known from poe2db pages; check pending |
+| 7 | Runic Alloy mods | EssenceMods (alloys are essences in the game tables) | game data | **verified** with row 3 (same table) |
 | 8 | Liquid emotions (jewels) | game table LiquidEmotionOutcomes | game data | not in the KB yet |
 | 9 | Catalyst quality types and the mods they favour | game table AlternateQualityTypes | game data | tags known; check pending |
 | 10 | Currency and omen rules (conditions, limits, tiers) | item texts, keywords, TieredCurrency, CurrencyPerItemClassConditions | game data | keywords and texts done; tier table check pending |
 | 11 | Mechanics that the files do not state | in-game tests (page) | open until tested | 12 open (see In-game tests) |
 
 ## Log
+
+- 27 Sept 2026: multi-outcome essences modelled from the game table (planner test added).
+
+- 27 Sept 2026: essences and alloys verified against EssenceMods (1,168/1,168). Found the multi-outcome essences (OutcomeMods).
 
 - 27 Sept 2026: corruption enhancements added and verified (all bases); jewel texts verified against the game data.
 

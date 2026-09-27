@@ -2359,6 +2359,13 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   function namesHtml(names) {
     return names.map((n) => (n === 'New base' ? '' : icon(S.sidByName[n], n, 'sm'))).join('') + `<span>${esc(names.join(' + '))}</span>`;
   }
+  /** What an essence adds on this item: its mod for certain, or one of several at random (game table EssenceMods). */
+  function essenceAdds(a) {
+    const o = a.item && S.ix && S.ix.kb.essence_outcomes && S.ix.kb.essence_outcomes[a.item];
+    const fit = o ? o.mods.filter((id) => itemEssences().some((r) => r.item === a.item && r.mod === id)) : [];
+    if (fit.length < 2) return "this essence's mod for certain";
+    return `one of ${fit.length} mods at random (${fit.map((id) => S.ix.kb.mods[id].txt.replace(/\n/g, ' / ')).join('; ')})${o.weights ? '' : ', evenly as far as the game files say'}`;
+  }
   function stepHelp(a, params) {
     switch (a.op) {
       case 'newbase': return 'A mod missed the goals and fixing it would cost more: start again on a fresh white base.';
@@ -2372,11 +2379,11 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       case 'chaos': return a.whittle ? 'Removes the lowest-level mod and adds a random one. Check which mod is highlighted in game before using it.'
         : a.side ? `Removes a random ${a.side} (fractured mods are safe) and adds a random mod.` : 'Removes one random mod and adds a random mod. It can hit a mod you want.';
       case 'annul': return a.light ? 'Removes only the Desecrated mod.' : a.side ? `Removes a random ${a.side}.` : 'Removes one random mod.';
-      case 'essence': return 'Makes the Magic item Rare and adds this essence\'s mod for certain. Uses the crafted slot.';
-      case 'pessence': return `Removes a random ${a.side || 'modifier'}${a.side ? '' : ''} and adds this essence's mod for certain. Uses the crafted slot.`;
+      case 'essence': return `Makes the Magic item Rare and adds ${essenceAdds(a)}. Uses the crafted slot.`;
+      case 'pessence': return `Removes a random ${a.side || 'modifier'} and adds ${essenceAdds(a)}. Uses the crafted slot.`;
       case 'bone': return `Adds a hidden Desecrated mod${a.side ? ' as a ' + a.side : ''}. Reveal it at the Well of Souls and pick 1 of 3${a.echoes ? '; Abyssal Echoes lets you reroll the three once' : ''}.`;
       case 'fracture': return 'Locks one random mod for good. It cannot be undone; the plan uses it only when a finished goal is among 4 mods (or 5 with two goals).';
-      case 'divine': return 'Rerolls the values of every mod; the mods themselves stay. Comes last, because later currency does not change existing values.';
+      case 'divine': return 'Rerolls the values of every mod except fractured ones; the mods themselves stay. Comes last, because later currency does not change existing values.';
       case 'flux': return `Turns the other elements' resistance mod into the same tier of ${a.to === 'fire' ? 'Fire' : a.to === 'cold' ? 'Cold' : 'Lightning'} Resistance. Nothing random.`;
       default: return '';
     }

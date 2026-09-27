@@ -536,3 +536,27 @@ test('profiles keep to the player\'s white-base limit and a success floor', () =
   assert.ok(P.PROFILES.cheap.score(r(0.25, 5000, 1, null)) < P.PROFILES.cheap.score(r(0.05, 100, 1, null)));
   assert.ok(P.PROFILES.balanced.score(r(0.6, 5000, 1, null)) < P.PROFILES.balanced.score(r(0.3, 100, 1, null)));
 });
+
+test('essences with several outcomes (game table EssenceMods.OutcomeMods) roll among what the base can take', () => {
+  const W = require('../data/weights_0.5.5.json');
+  const amulet = E.parseItem(ix, 'Item Class: Amulets\nRarity: Magic\nGold Amulet\n--------\nItem Level: 82').item;
+  const ctx = P.makeContext(ix, amulet, { essences: P.essencesForBase(ix, kb.bases[amulet.base], W.essences.Amulet) });
+  let st = P.toState(ctx, amulet);
+  const got = new Map();
+  const rng = P.rngFrom(5);
+  for (let i = 0; i < 600; i++) {
+    const r = P.apply(ctx, st, { op: 'essence', item: 'Essence of the Infinite', mod: 'Strength4' }, rng);
+    const id = r.added[0] && r.added[0].id;
+    got.set(id, (got.get(id) || 0) + 1);
+  }
+  assert.deepEqual([...got.keys()].sort(), ['Dexterity4', 'Intelligence4', 'Strength4'], 'one of the three attributes, not always Strength');
+  for (const n of got.values()) assert.ok(n > 120, 'about a third each');
+  // Essence of Enhancement: only the defence type of the base fits, so it stays deterministic
+  const helmBase = Object.entries(kb.bases).find(([, b]) => b.cls === 'Helmet' && b.tags.includes('str_armour') && b.tl)[0];
+  const helm = E.parseItem(ix, `Item Class: Helmets\nRarity: Magic\n${helmBase}\n--------\nItem Level: 82`).item;
+  const hctx = P.makeContext(ix, helm, { essences: P.essencesForBase(ix, kb.bases[helm.base], W.essences.Helmet) });
+  const fit = hctx.essences.filter((r) => r.item === 'Essence of Enhancement').map((r) => r.mod);
+  assert.equal(fit.length, 1);
+  const r = P.apply(hctx, P.toState(hctx, helm), { op: 'essence', item: 'Essence of Enhancement', mod: fit[0] }, rng);
+  assert.equal(r.added[0].id, fit[0]);
+});

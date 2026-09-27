@@ -16,6 +16,9 @@ SRC = {
  'poe2_base_items.json': 'https://raw.githubusercontent.com/repoe-fork/poe2/master/data/base_items.json',
  'poe2_version.txt': 'https://raw.githubusercontent.com/repoe-fork/poe2/master/version.txt',
  'poe2_keywords.json': 'https://raw.githubusercontent.com/repoe-fork/poe2/master/data/keywords.json',
+ # raw game tables (column names are community guesses, values are the game's): essences and their outcomes
+ 'EssenceMods.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/EssenceMods.csv',
+ 'Essences.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/Essences.csv',
  'poe1_base_items.json': 'https://raw.githubusercontent.com/repoe-fork/repoe-fork.github.io/master/data/base_items.json',
  'items.ndjson': 'https://raw.githubusercontent.com/Kvan7/Exiled-Exchange-2/master/renderer/public/data/en/items.ndjson',
  'stats.ndjson': 'https://raw.githubusercontent.com/Kvan7/Exiled-Exchange-2/master/renderer/public/data/en/stats.ndjson',
@@ -198,6 +201,26 @@ legacy=[{'name':'Omen of Homogenising Exaltation / Coronation','status':'drops d
         {'name':'Omen of Recombination','status':'removed in 0.5.0','conf':M2},
         {'name':'Recombinator (Expedition)','status':'disabled in Runes of Aldur; status in 0.5.5 / Forbidden Rites unverified','conf':S1}]
 kb['crafting_rules']=rules; kb['crafting_ops']=ops; kb['legacy_or_disabled']=legacy
+# ---- essences that give one of several mods (EssenceMods rows without a fixed Mod: OutcomeMods, OutcomeModWeights).
+# Table rows refer to BaseItemTypes and Mods by row number; RePoE's base_items.json and mods.json keep that order.
+import csv as _csv
+def _table(name):
+    with open(get(name), encoding='utf-8') as f: return list(_csv.DictReader(f))
+def _ints(v):
+    v=(v or '').strip('[]'); return [int(x) for x in v.split(',') if x.strip()] if v else []
+_item_keys=list(bases.keys()); _mod_keys=list(mods.keys()); _ess=_table('Essences.csv')
+EO={}
+for r in _table('EssenceMods.csv'):
+    if r['Mod'] or not r['OutcomeMods']: continue
+    name=bases[_item_keys[int(_ess[int(r['Essence'])]['BaseItemType'])]]['name']
+    ids=[_mod_keys[i] for i in _ints(r['OutcomeMods'])]; ws=_ints(r['OutcomeModWeights'])
+    cur=EO.setdefault(name,{'mods':[],'weights':[] if len(ws)==len(ids) else None})
+    for i,mid in enumerate(ids):
+        if mid in cur['mods']: continue
+        cur['mods'].append(mid)
+        if cur['weights'] is not None: cur['weights'].append(ws[i])
+kb['essence_outcomes']=EO
+kb['meta']['rules'].append('essence_outcomes = essences that add one of several mods (game table EssenceMods.OutcomeMods, with OutcomeModWeights when the table has them; none = not in the files).')
 _kw = json.load(open(get('poe2_keywords.json'), encoding='utf-8'))
 KEYWORDS = ['ItemRarity','Rarity','Crafted','Fracture','Abyssalify','UnstableDesecration','Sanctified','Corrupted','Mirrored',
             'BetterCurrencyMinimumLevel','CurrencyMaximumItemLevel','Essence','Omen','Catalyst','Quality','MaximumQuality',
