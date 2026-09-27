@@ -1877,8 +1877,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const price = names.reduce((t, n) => t + (priceEx(n) || 0), 0);
     const rv = B.idx > 0 && cur.reveal && cur.reveal.options ? cur.reveal : null;
     const sideName = (o) => (o.side === 'prefix' ? 'Prefix' : 'Suffix');
-    const revealHtml = rv ? `<div class="b-reveal"><div class="sub">Well of Souls: the game offers ${rv.options.length === 1 ? 'one Desecrated modifier' : rv.options.length + ' Desecrated modifiers and you keep one'}${rv.rerolled ? ', rerolled once with Omen of Abyssal Echoes' : ''}. Select another to take it instead.</div>
-      ${rv.options.map((o, i) => `<button type="button" class="btn small b-opt" data-bpick="${i}" aria-pressed="${i === rv.chosen}">${sideName(o)}: ${esc(o.text)}${o.tier ? ` (T${o.tier})` : ''}</button>`).join('')}
+    const revealHtml = rv ? `<div class="b-reveal"><div class="sub">Well of Souls: the game offers ${rv.options.length === 1 ? 'one modifier' : rv.options.length + ' modifiers and you keep one'} (base modifiers of this side or desecrated-only ones; at least one desecrated-only when one can roll)${rv.rerolled ? ', rerolled once with Omen of Abyssal Echoes' : ''}. Select another to take it instead.</div>
+      ${rv.options.map((o, i) => `<button type="button" class="btn small b-opt" data-bpick="${i}" aria-pressed="${i === rv.chosen}">${sideName(o)}: ${esc(o.text)}${o.tier ? ` (T${o.tier})` : ''}${o.only ? ' · desecrated only' : ' · base modifier'}</button>`).join('')}
       ${rv.canReroll ? '<div class="b-row"><button type="button" class="btn small" id="bReroll">Reroll the three (Omen of Abyssal Echoes)</button></div>' : ''}
       ${rv.first ? `<div class="sub">Offered before the reroll: ${rv.first.map((o) => esc(o.text)).join('; ')}</div>` : ''}</div>` : '';
     const opts = benchOptionsHtml();
@@ -2798,10 +2798,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       case 'essence': return `Makes the Magic item Rare and adds ${essenceAdds(a)}. Uses the crafted slot.`;
       case 'pessence': return `Removes a random ${a.side || 'modifier'}${a.side ? '' : swapNote([a.mod])} and adds ${essenceAdds(a)}. Uses the crafted slot.`;
       case 'liquid': return `Removes a random modifier${swapNote(liquidMods(a))} and adds ${liquidAdds(a)} as a crafted mod. Uses the crafted slot.`;
-      case 'bone': return `Adds a hidden Desecrated mod${a.side ? ' as a ' + a.side : ''}. Reveal it at the Well of Souls and pick 1 of 3${a.echoes ? '; Abyssal Echoes lets you reroll the three once' : ''}.`;
+      case 'bone': return `Adds a hidden Desecrated ${a.side || 'prefix or suffix (the side is set now, at random)'}. Reveal it at the Well of Souls and pick 1 of 3: base modifiers of that side and desecrated-only ones${a.lich ? ' (with the lich omen, only that lich\'s)' : ''}${a.echoes ? '; Abyssal Echoes lets you reroll the three once' : ''}. Keep the one the goals ask for.`;
       case 'fracture': return 'Locks one random mod for good. It cannot be undone; the plan uses it only when a finished goal is among 4 mods (or 5 with two goals).';
       case 'divine': return 'Rerolls the values of every mod except fractured ones; the mods themselves stay. Comes last, because later currency does not change existing values.';
-      case 'flux': return `Turns the other elements' resistance mod into the same tier of ${a.to === 'fire' ? 'Fire' : a.to === 'cold' ? 'Cold' : 'Lightning'} Resistance. Nothing random.`;
+      case 'flux': return `Turns every resistance mod of the other elements into the same tier of ${a.to === 'fire' ? 'Fire' : a.to === 'cold' ? 'Cold' : 'Lightning'} Resistance, with its value rolled again. An item that has that resistance already keeps both.`;
       default: return '';
     }
   }

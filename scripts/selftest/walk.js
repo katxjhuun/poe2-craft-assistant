@@ -60,7 +60,8 @@ function checkStep(ctx, before, a, r) {
   if (over('prefix') || over('suffix')) fail('slots', `${cnt(after, 'prefix')}p/${cnt(after, 'suffix')}s on ${after.rarity}`);
   if (after.mods.filter((m) => m.crafted).length > 1) fail('crafted', 'two crafted modifiers');
   if (after.mods.filter((m) => m.des).length > 1) fail('desecrated', 'two desecrated modifiers');
-  const g = groupsOf(after);
+  // a Flux may leave two resistance modifiers of one element (t20): a group may repeat only through flux-converted mods
+  const g = groupsOf({ mods: after.mods.filter((m) => !m.flux) });
   if (new Set(g).size !== g.length) fail('groups', 'two modifiers of one group: ' + g.filter((x, i) => g.indexOf(x) !== i).join(','));
   // Natural and desecrated mods need their level <= item level. Essence (crafted) mods are left out: whether essences
   // check item level is not in the data (open question t18); the self-test counts them separately.
@@ -121,14 +122,15 @@ function checkStep(ctx, before, a, r) {
   // stop a Physical spell level suffix, but the level suffix stops Ignite, so the order of arrival decides.
   const kept = after.mods.filter((x) => !r.added.includes(x));
   r.added.forEach((m, i) => {
-    if (m.crafted || m.des || a.op === 'flux') return;
+    if (m.crafted || (m.des && ctx.desPool.has(m.id)) || a.op === 'flux') return; // desecrated base modifiers keep to the tags too
     const present = E.addedTags(kb, kept.concat(r.added.slice(0, i)).map((x) => x.id));
     if (E.tagBlocked(kb.mods[m.id], new Set(kb.bases[ctx.item.base].tags), present)) fail('tags', `${m.id} came in although a mod on the item stops it`);
   });
   // added modifiers must be able to spawn on this base
   for (const m of r.added) {
     if (m.crafted || a.op === 'flux') continue;
-    if (m.des ? !ctx.desPool.has(m.id) : !ctx.pool.has(m.id)) fail('pool', `${m.id} cannot spawn on ${ctx.item.base}`);
+    // a desecrated modifier is desecrated-only or a base modifier the Well of Souls offered
+    if (m.des ? !ctx.desPool.has(m.id) && !ctx.pool.has(m.id) : !ctx.pool.has(m.id)) fail('pool', `${m.id} cannot spawn on ${ctx.item.base}`);
   }
   if (a.whittle && r.removed.length) {
     const low = Math.min(...before.mods.filter((m) => !m.frac).map((m) => m.lvl));
@@ -138,7 +140,7 @@ function checkStep(ctx, before, a, r) {
   // Ancient bones (Minimum Modifier Level 40): a family with no tier at 40 or above keeps its best tier (game text)
   if (a.op === 'bone' && a.quality === 'Ancient') for (const m of r.added) {
     if (kb.mods[m.id].lvl >= 40) continue;
-    const fam = [...ctx.desPool.entries()].filter(([id, pe]) => kb.mods[id].fam === m.fam && pe.side === m.side && kb.mods[id].lvl <= ctx.ilvl);
+    const fam = [...(ctx.desPool.has(m.id) ? ctx.desPool : ctx.pool).entries()].filter(([id, pe]) => kb.mods[id].fam === m.fam && pe.side === m.side && kb.mods[id].lvl <= ctx.ilvl);
     if (fam.some(([id]) => kb.mods[id].lvl >= 40)) fail('floor', `Ancient bone added ${m.id} (level ${kb.mods[m.id].lvl}) below level 40`);
   }
   return bad;

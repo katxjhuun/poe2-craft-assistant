@@ -326,13 +326,17 @@ test('10.2 lich omens are listed for weapons and jewellery only; armour shows wh
   assert.ok(boots.blocked.some((b) => b.name === 'Omen of the Liege' && /weapon or jewellery/.test(b.reason)));
   const wand = P.availableOps(ix, E.parseItem(ix, 'Item Class: Wands\nRarity: Rare\nDoom Song\nAttuned Wand\n--------\nItem Level: 82').item).find((o) => o.id === 'desecrate');
   assert.ok(wand.omens.includes('Omen of the Liege'));
-  // desecrated equipment modifiers are level 65 in the game data: below item level 65 nothing can roll, lich omens say why
-  const low = P.availableOps(ix, E.parseItem(ix, 'Item Class: Wands\nRarity: Rare\nDoom Song\nAttuned Wand\n--------\nItem Level: 60').item, { all: true }).find((o) => o.id === 'desecrate');
-  assert.ok(!low.ok && /no desecrated modifier/.test(low.reason));
+  // desecrated-only equipment modifiers are level 65 in the game data: below item level 65 the Well of Souls offers base
+  // modifiers only (t22), and lich omens say why they cannot be used
+  const lowItem = E.parseItem(ix, 'Item Class: Wands\nRarity: Rare\nDoom Song\nAttuned Wand\n--------\nItem Level: 60').item;
+  const low = P.availableOps(ix, lowItem, { all: true }).find((o) => o.id === 'desecrate');
+  assert.ok(low.ok, low.reason);
   assert.ok(!low.omens.includes('Omen of the Liege') && low.blocked.some((b) => b.name === 'Omen of the Liege' && /65/.test(b.reason)));
-  // no desecrated modifier has a sceptre spawn tag in the game data
+  const r = P.emulate(ix, lowItem, { op: 'bone', quality: 'Gnawed' }, { seed: 4 });
+  assert.ok(r.reveal.options.length === 3 && r.reveal.options.every((o) => !o.only), JSON.stringify(r.reveal));
+  // sceptres have no desecrated-only modifier (poe2db); they are desecrated with base modifiers (t23)
   const sceptre = P.availableOps(ix, parse('rare-sceptre-adv'), { all: true }).find((o) => o.id === 'desecrate');
-  assert.ok(!sceptre.ok && /no desecrated modifier/.test(sceptre.reason));
+  assert.ok(sceptre.ok, sceptre.reason);
 });
 
 test('game text rules: Minimum Modifier Level gates the item level, Fracturing Orb, full desecration, Divine and fractured values', () => {
@@ -937,4 +941,60 @@ test('strategy simulator: the sliced run gives the same result as the plain one;
   assert.ok(P.groupsMet(cm, sm, [{ type: 'and', reqs: [{ kind: 'open', side: 'suffix' }] }, { type: 'not', reqs: [{ kind: 'open', side: 'prefix' }] }]));
   assert.ok(!P.groupsMet(ctx, st, [{ type: 'or', reqs: [{ kind: 'rarity', value: 'Rare' }] }]));
   assert.match(P.runStrategy(ix, white, { steps: [], goal: [] }).reason, /at least one step/);
+});
+
+test('Well of Souls: three options from one side, base modifiers and desecrated-only ones, at least one desecrated-only when one can roll', () => {
+  const armour = E.parseItem(ix, ['Item Class: Body Armours', 'Rarity: Rare', 'Test Robe', 'Heavy Plate', '--------', 'Item Level: 82', '--------',
+    '+120 to maximum Life', '+30% to Fire Resistance'].join('\n')).item;
+  const ctx = P.makeContext(ix, armour);
+  // poe2db: body armour, gloves, boots and helmets have no desecrated-only prefix; the game data agrees
+  assert.equal(P.desPoolFor(ctx, 'prefix', 0, null).length, 0);
+  assert.ok(P.desPoolFor(ctx, 'suffix', 0, null).length > 0);
+  let sides = { prefix: 0, suffix: 0 }, base = 0, only = 0;
+  for (let seed = 1; seed <= 300; seed++) {
+    const r = P.emulate(ix, armour, { op: 'bone', quality: 'Preserved' }, { seed });
+    const o = r.reveal.options;
+    assert.equal(o.length, 3);
+    assert.equal(new Set(o.map((x) => x.side)).size, 1, 'one side, set when the bone is used');
+    sides[o[0].side]++;
+    if (o[0].side === 'suffix') assert.ok(o.some((x) => x.only), 'at least one desecrated-only suffix');
+    else assert.ok(o.every((x) => !x.only), 'no desecrated-only prefix on body armour');
+    base += o.filter((x) => !x.only).length; only += o.filter((x) => x.only).length;
+  }
+  assert.ok(sides.prefix > 100 && sides.suffix > 100, JSON.stringify(sides));
+  assert.ok(base > 0 && only > 0);
+  // the side omen sets the side; a lich omen offers only that lich's modifiers
+  const rs = P.emulate(ix, armour, { op: 'bone', quality: 'Preserved', side: 'suffix' }, { seed: 7 });
+  assert.ok(rs.reveal.options.every((x) => x.side === 'suffix'));
+  const ring = E.parseItem(ix, ['Item Class: Rings', 'Rarity: Rare', 'Test Loop', 'Ruby Ring', '--------', 'Item Level: 82', '--------', '+60 to maximum Life'].join('\n')).item;
+  for (let seed = 1; seed <= 20; seed++) {
+    const rl = P.emulate(ix, ring, { op: 'bone', quality: 'Preserved', lich: 'Kurgal' }, { seed });
+    assert.ok(rl.reveal.options.length && rl.reveal.options.every((x) => x.only), JSON.stringify(rl.reveal.options));
+  }
+  // a base-modifier goal is met by a Desecrated base modifier of that family, and the Well keeps it when offered
+  const lifeGoal = { fam: 'IncreasedLife', side: 'prefix', des: false, grp: ['IncreasedLife'], tier: null };
+  assert.ok(P.meets({ fam: 'IncreasedLife', des: true, tier: 3 }, lifeGoal));
+  assert.ok(!P.meets({ fam: 'IncreasedLife', des: false, tier: 3 }, Object.assign({}, lifeGoal, { des: true })));
+  const noLife = E.parseItem(ix, ['Item Class: Body Armours', 'Rarity: Rare', 'Test Robe', 'Heavy Plate', '--------', 'Item Level: 82', '--------',
+    '35% increased Armour', '+30% to Fire Resistance'].join('\n')).item;
+  const c2 = P.makeContext(ix, noLife);
+  const { goals } = P.goalsFromTargets(c2, { 'prefix-0': { fam: 'IncreasedLife', group: 'prefix', label: 'Life' } });
+  const run = P.simulate(c2, P.toState(c2, noLife), goals, { bone: 'Preserved', echoes: true }, { trials: 1 }); // policy smoke
+  assert.ok(run.trials === 1);
+});
+
+test('Flux: every other-element resistance converts at its tier, values rolled again, even onto an element the item has (t20)', () => {
+  const item = E.parseItem(ix, ['Item Class: Body Armours', 'Rarity: Rare', 'Test Robe', 'Heavy Plate', '--------', 'Item Level: 82', '--------',
+    '+120 to maximum Life', '+30% to Fire Resistance', '+31% to Cold Resistance'].join('\n')).item;
+  const ctx = P.makeContext(ix, item);
+  const st = P.toState(ctx, item);
+  assert.equal(P.validate(ctx, st, { op: 'flux', to: 'fire' }), null);
+  const cold = st.mods.find((m) => m.fam === 'ColdResistance');
+  const r = P.apply(ctx, st, { op: 'flux', to: 'fire' }, P.rngFrom(3));
+  const fire = r.state.mods.filter((m) => m.fam === 'FireResistance');
+  assert.equal(fire.length, 2, 'two Fire Resistance modifiers');
+  assert.equal(fire.find((m) => m.flux).tier, cold.tier, 'same tier');
+  const out = P.emulate(ix, item, { op: 'flux', to: 'fire' }, { seed: 5 });
+  assert.equal((out.text.match(/to Fire Resistance/g) || []).length, 2);
+  assert.ok(!/Cold Resistance/.test(out.text));
 });

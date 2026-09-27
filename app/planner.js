@@ -238,17 +238,57 @@
   }
 
   /**
-   * Sides where a bone can place its desecrated modifier: a desecrated modifier of this bone (floor, lich omen) can roll
-   * there, and the side has room, or the item is full and the side has a modifier the desecration may remove.
+   * Sides where a bone can place its desecrated modifier: the Well of Souls has something to offer there (see
+   * revealPool), and the side has room, or the item is full and the side has a modifier the desecration may remove.
    */
   function desSides(ctx, st, a) {
     const floor = a.quality === 'Ancient' ? 40 : 0;
     const full = open(ctx, st, 'prefix') + open(ctx, st, 'suffix') === 0;
-    const taken = groupsOf(st);
     // on a full item the removal must open the side: a side over its limit (see open) stays full after losing one mod
     const opens = (s) => count(st, s) <= limits(ctx, st)[s] && st.mods.some((m) => removable(m) && m.side === s);
-    return (a.side ? [a.side] : SIDES).filter((s) => (full ? opens(s) : open(ctx, st, s) > 0)
-      && desPoolFor(ctx, s, floor, a.lich || null).some((e) => !e.grp.some((g) => taken.has(g))));
+    return (a.side ? [a.side] : SIDES).filter((s) => (full ? opens(s) : open(ctx, st, s) > 0) && revealPool(ctx, st, s, floor, a.lich || null).any);
+  }
+
+  /**
+   * What the Well of Souls can offer for a desecrated modifier on this side: the side's desecrated-only modifiers (with a
+   * lich omen only that lich's) and, without a lich omen, the base modifiers that could roll there. poe2db: "Reveal
+   * desecrated modifiers may include base modifiers. Unless you use Omen to guarantee named modifiers"; Game8 and Sift
+   * agree, and two of the player's staves carry a Desecrated base modifier (T1 "Gain % of Damage as Extra Fire Damage").
+   * Groups on the item and the tags its mods add are respected; the bone's floor applies to both kinds.
+   */
+  function revealPool(ctx, st, side, floor, lich) {
+    const taken = groupsOf(st);
+    const added = E.addedTags(ctx.kb, st.mods.map((m) => m.id));
+    const free = (e) => !e.grp.some((g) => taken.has(g));
+    const excl = desPoolFor(ctx, side, floor, lich).filter(free);
+    const norm = lich ? [] : sidePool(ctx, side, floor).filter((e) => free(e) && !(added && E.tagBlocked(ctx.kb.mods[e.id], ctx.baseTags, added)));
+    return { excl, norm, any: excl.length + norm.length > 0 };
+  }
+  /**
+   * The three modifiers the Well of Souls offers. At least one is desecrated-only when one can roll (Game8, Sift; for
+   * equipment that means item level 65+); Sift estimates each of the other two is desecrated-only about half the time.
+   * Base modifiers are drawn by their spawn weight, desecrated-only ones evenly (no weights are published). No two share a
+   * group.
+   */
+  function revealOptions(ctx, st, side, floor, lich, rng) {
+    const { excl, norm } = revealPool(ctx, st, side, floor, lich);
+    const opts = [], used = new Set();
+    const take = (list) => {
+      const ok = list.filter((e) => !e.grp.some((g) => used.has(g)));
+      let total = 0;
+      for (const e of ok) total += e.w;
+      if (!total) return null;
+      let r = rng() * total, e = ok[ok.length - 1];
+      for (const x of ok) { r -= x.w; if (r <= 0) { e = x; break; } }
+      for (const g of e.grp) used.add(g);
+      opts.push(Object.assign({}, e, { des: true }));
+      return e;
+    };
+    for (let k = 0; k < 3; k++) {
+      const wantExcl = excl.length > 0 && (k === 0 || !norm.length || rng() < 0.5);
+      if (!(wantExcl ? take(excl) : take(norm)) && !(wantExcl ? take(norm) : take(excl))) break;
+    }
+    return opts;
   }
 
   function desPoolFor(ctx, side, floor, lich) {
@@ -396,7 +436,7 @@
         const full = open(ctx, st, 'prefix') + open(ctx, st, 'suffix') === 0;
         if (full && !st.mods.some((m) => removable(m) && (!a.side || m.side === a.side))) return 'The item is full and no modifier there can be removed.';
         if (!full && a.side && open(ctx, st, a.side) < 1) return `No room: the item already has ${count(st, a.side)} ${a.side}es.`;
-        if (!desSides(ctx, st, a).length) return `The game data has no desecrated modifier that can roll here${a.lich ? ' with this lich omen' : ''} (desecrated equipment modifiers are level 65).`;
+        if (!desSides(ctx, st, a).length) return a.lich ? `No ${a.lich} modifier can roll here (lich modifiers on equipment are level 65).` : 'The Well of Souls would have no modifier to offer on a side with room.';
         return null;
       }
       case 'fracture':
@@ -469,9 +509,8 @@
         if (a.to === 'chaos') return st.mods.some((m) => resElement(m.id) && !m.frac) ? null : 'Void Flux needs a Fire, Cold or Lightning Resistance modifier that is not fractured.';
         const src = st.mods.filter((m) => { const r = resElement(m.id); return r && r.el !== a.to && !m.frac; });
         if (!src.length) return `${FLUX[a.to] || 'This Flux'} needs a resistance modifier of another element.`;
-        // Two mods of one element would result (the self-test found this); what the game does then is not known (t20).
-        const target = RES[a.to];
-        if (src.length > 1 || st.mods.some((m) => (m.id || '').startsWith(target))) return `The item would end up with two ${a.to} resistance modifiers; what Flux does then is not known (verify in game).`;
+        // Two mods of one element can result (poe2wiki, u4n guide: every source mod converts, the item can end with
+        // several resistance modifiers of the same type); t20.
         return null;
       }
       case 'liquid': {
@@ -686,27 +725,20 @@
       }
       case 'bone': {
         const floor = a.quality === 'Ancient' ? 40 : 0;
+        const fit = desSides(ctx, st, a);
+        let side = null;
         if (open(ctx, st, 'prefix') + open(ctx, st, 'suffix') === 0) {
           // The game text does not say which side loses the mod: take it from a side that can hold a desecrated mod.
-          const fit = desSides(ctx, st, a);
           const r = removeRandom(st, (m) => removable(m) && fit.includes(m.side), rng);
-          if (r) removed.push(r);
+          if (r) { removed.push(r); side = r.side; }
+        } else {
+          // The side is set when the bone is used (an unrevealed mod already reads "Desecrated Suffix Modifier"): the
+          // omen's side, else one of the sides with room at random (Sift: 50/50).
+          const cand = fit.filter((x) => open(ctx, st, x) > 0);
+          side = cand.length ? cand[Math.floor(rng() * cand.length)] : null;
         }
-        const sides = openSides(ctx, st, a.side);
-        const draw = () => {
-          const pool = [];
-          for (const s of sides) pool.push(...desPoolFor(ctx, s, floor, a.lich || null));
-          const taken = groupsOf(st);
-          const ok = pool.filter((e) => !e.grp.some((g) => taken.has(g)));
-          const opts = [];
-          const bag = ok.slice();
-          while (opts.length < 3 && bag.length) {
-            let total = bag.reduce((t, e) => t + e.w, 0), r = rng() * total, k = 0;
-            for (; k < bag.length; k++) { r -= bag[k].w; if (r <= 0) break; }
-            opts.push(bag.splice(Math.min(k, bag.length - 1), 1)[0]);
-          }
-          return opts;
-        };
+        if (!side) break;
+        const draw = () => revealOptions(ctx, st, side, floor, a.lich || null, rng);
         let opts = draw();
         let choice = pick ? pick(opts, false) : null;
         if (a.echoes && !choice) { opts = draw(); choice = pick ? pick(opts, true) : null; }
@@ -753,8 +785,9 @@
           if (!km) continue;
           const pe = ctx.pool.get(id);
           removed.push(Object.assign({}, m));
-          Object.assign(m, { id, fam: km.fam, grp: km.grp, lvl: km.lvl, tier: pe ? pe.tier : m.tier });
-          if (ctx.needValues) { const rg = rangeOf(ctx, id); m.hi = rg ? rg[1] : m.hi; }
+          // same tier, the value rolled again inside it (poe2wiki, u4n guide); flux: it may share its group with another mod
+          Object.assign(m, { id, fam: km.fam, grp: km.grp, lvl: km.lvl, tier: pe ? pe.tier : m.tier, flux: true });
+          if (ctx.needValues) { const rg = rangeOf(ctx, id); m.hi = rg ? rg[1] : m.hi; m.v = rg ? rollValue(rg, rng) : m.v; }
           added.push(m);
         }
         break;
@@ -855,14 +888,15 @@
   }
 
   function meets(m, g, tier) {
-    if (m.fam !== g.fam || !!m.des !== g.des) return false;
+    // a Desecrated base modifier is the same stat, so it meets a base-modifier goal; a desecrated goal needs a desecrated one
+    if (m.fam !== g.fam || (g.des && !m.des)) return false;
     if (g.minValue != null) return m.v != null && m.v >= g.minValue;
     const want = tier === undefined ? g.tier : tier;
     return !want || !!(m.tier && m.tier <= want);
   }
   /** Right mod, value too low, but its tier can roll the value: a Divine Orb can fix it (not a fractured one). */
   function nearMiss(m, g) {
-    return g.minValue != null && !m.frac && m.fam === g.fam && !!m.des === g.des && m.v != null && m.v < g.minValue && m.hi != null && m.hi >= g.minValue;
+    return g.minValue != null && !m.frac && m.fam === g.fam && (!g.des || m.des) && m.v != null && m.v < g.minValue && m.hi != null && m.hi >= g.minValue;
   }
   function goalMet(st, g) { return st.mods.some((m) => meets(m, g, g.eff)); }
   function useful(m, goals) { return m.lock || goals.some((g) => meets(m, g, g.eff) || nearMiss(m, g)); }
@@ -909,6 +943,9 @@
    *  slamOnly: bool    with restart: on the Rare item, fill the open slots and start over on a new base when a goal's
    *                    side is full of unwanted mods, instead of paying for removals that may hit a finished goal
    *  bone: 'Gnawed'|'Preserved'|'Ancient', echoes: bool, lich: bool
+   *  desSlam: bool     on the Rare item, a bone instead of an Exalted Orb for a base-modifier goal while the item has no
+   *                    desecrated modifier and no desecrated goal is left: the Well of Souls offers base modifiers of
+   *                    the side too, and the one the goal asks for is kept (echoes: reroll the three once)
    *  essence: bool     use an essence when one guarantees an unmet goal (and the crafted slot is free)
    */
   function makePolicy(ctx, goals, params) {
@@ -918,10 +955,8 @@
     function fluxStep(st, left) {
       if (params.flux === false || (st.rarity !== 'Magic' && st.rarity !== 'Rare')) return null;
       for (const g of left) {
-        if (!resGoal(g) || st.mods.some((m) => m.fam === g.fam)) continue;
+        if (!resGoal(g)) continue;
         const to = g.fam.replace('Resistance', '').toLowerCase();
-        const src = st.mods.filter((m) => { const r = resElement(m.id); return r && r.el !== to && !m.frac; });
-        if (src.length !== 1) continue; // two sources would become two mods of one group: not modelled
         const a = { op: 'flux', to };
         if (validate(ctx, st, a)) continue;
         const after = apply(ctx, st, a, () => 0.5).state;
@@ -1018,6 +1053,10 @@
       const blocking = st.mods.find((m) => removable(m) && !useful(m, goals) && blocksGoal(ctx, m, g));
       if (blocking) return removal(st, blocking.side, desJunk, blocking);
       if (open(ctx, st, g.side) > 0) {
+        if (params.desSlam && ctx.bone && !st.mods.some((m) => m.des) && !left.some((x) => x.des)) {
+          const b = { op: 'bone', quality: params.bone || 'Preserved', side: params.sideOmens ? g.side : null, echoes: !!params.echoes };
+          if (!validate(ctx, st, b)) return b;
+        }
         const two = params.greaterExalt && open(ctx, st, g.side) >= 2 && left.filter((x) => x.side === g.side && !x.des).length >= 2;
         const catalyse = !!(params.catalyse && st.catQ > 0 && st.catTag && famHasTag(ctx, g.fam, st.catTag));
         return { op: 'exalt', tier: params.exaltTier || params.tier, side: params.sideOmens ? g.side : null, greater: two, catalyse };
@@ -1084,10 +1123,11 @@
     return ctx._famTag.get(k);
   }
 
+  /** At the Well of Souls: an offered modifier a desecrated goal asks for, else one a base-modifier goal asks for. */
   function pickFor(goals, ctx) {
     return function (opts) {
-      for (const g of goals) {
-        if (!g.des) continue;
+      for (const des of [true, false]) for (const g of goals) {
+        if (!!g.des !== des || g.essenceOnly) continue;
         const hit = opts.find((o) => o.fam === g.fam && (g.minValue != null ? reaches(ctx, o.id, g) : !g.eff || o.tier <= g.eff));
         if (hit) return hit;
       }
@@ -1365,14 +1405,14 @@
     exaltTier: TIERS, chaosTier: TIERS, magicTier: TIERS, sideOmens: [false, true], greaterExalt: [false, true],
     removal: ['chaos', 'erasure', 'whittle', 'annul'], start: ['transmute', 'alchemy'], restart: [true, false], pair: [false, true], slamOnly: [false, true],
     essence: [false, true], fracture: [false, true], catalyse: [false, true], flux: [true, false],
-    bone: ['Gnawed', 'Preserved', 'Ancient'], echoes: [false, true], lich: [false, true],
+    bone: ['Gnawed', 'Preserved', 'Ancient'], echoes: [false, true], lich: [false, true], desSlam: [false, true],
   };
   const BEAM_WIDTH = 6, BEAM_DEPTH = 8;
   /** A complete strategy: the per-operation orb tiers filled from `tier`, every setting present. */
   function expandStrategy(p) {
     const t = p.tier || 'base';
     const out = Object.assign({ exaltTier: t, chaosTier: t, magicTier: t, sideOmens: false, greaterExalt: false, removal: 'chaos', start: 'transmute',
-      restart: true, pair: false, slamOnly: false, essence: false, fracture: false, catalyse: false, flux: true, bone: 'Preserved', echoes: false, lich: false }, p);
+      restart: true, pair: false, slamOnly: false, essence: false, fracture: false, catalyse: false, flux: true, bone: 'Preserved', echoes: false, lich: false, desSlam: false }, p);
     delete out.tier;
     return out;
   }
@@ -1384,6 +1424,8 @@
     if (goals.length >= 2) keys.push('fracture');
     if (st.catTag && st.catQ > 0) keys.push('catalyse');
     if (goals.some((g) => g.des)) keys.push('bone', 'echoes', 'lich');
+    // bones for base-modifier goals (the Well of Souls offers base modifiers too)
+    if (goals.some((g) => !g.des && !g.essenceOnly)) keys.push('desSlam', ...(goals.some((g) => g.des) ? [] : ['bone', 'echoes']));
     return keys;
   }
   /**
@@ -1665,7 +1707,7 @@
    * another of the offered Desecrated modifiers. reveal (bones): {choose: index of the three offered, reroll: true to
    * reroll the first three with Omen of Abyssal Echoes}; without a choice the highest level one is taken, as the planner
    * does. Returns {text, added: [texts], removed: [texts], seed, reveal?} or {reason}; reveal: {options: [{text, lvl,
-   * tier, side}], chosen, canReroll, rerolled, first: the three before the reroll}.
+   * tier, side, only: desecrated-only, not a base modifier}], chosen, canReroll, rerolled, first: the three before the reroll}.
    */
   function emulate(ix, item, action, opts) {
     opts = opts || {};
@@ -1680,7 +1722,7 @@
     // Well of Souls: three Desecrated modifiers are offered and one is kept; Omen of Abyssal Echoes rerolls the three once
     const want = opts.reveal || {};
     let reveal = null;
-    const show = (list) => list.map((e) => ({ text: ctx.kb.mods[e.id].txt.replace(/\n/g, ' / '), lvl: e.lvl, tier: e.tier || null, side: e.side }));
+    const show = (list) => list.map((e) => ({ text: ctx.kb.mods[e.id].txt.replace(/\n/g, ' / '), lvl: e.lvl, tier: e.tier || null, side: e.side, only: ctx.kb.mods[e.id].dom === 'd' }));
     const pick = action.op === 'bone' ? (list, second) => {
       if (!second && action.echoes && want.reroll) { reveal = { first: show(list) }; return null; }
       const best = list.reduce((b, e, i) => (e.lvl > list[b].lvl ? i : b), 0);

@@ -66,7 +66,7 @@ function relevant(params, st, goals) {
   const hasEss = goals.some((g) => (g.ess || []).length);
   return Object.assign({}, params,
     st.rarity === 'Rare' ? { start: null, restart: null } : {},
-    hasDes ? {} : { bone: null, echoes: null, lich: null },
+    hasDes || params.desSlam ? {} : { bone: null, echoes: null, lich: null },
     hasEss ? {} : { essence: null });
 }
 
@@ -109,6 +109,8 @@ function mineScenario(sc, opts) {
     run(Object.assign({}, b.params, { fracture: true }), 'fracture');
     if (st.catTag && st.catQ > 0) run(Object.assign({}, b.params, { catalyse: true }), 'catalyse');
     run(Object.assign({}, b.params, { flux: false }), 'no-flux');
+    // bones for base-modifier goals: pick the goal's modifier at the Well of Souls
+    if (P.boneFor(cls)) run(Object.assign({}, b.params, { desSlam: true }), 'des-slam');
   }
   return out;
 }

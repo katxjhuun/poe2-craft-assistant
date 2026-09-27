@@ -197,6 +197,7 @@ function describe(p, withStart) {
   if (p.fracture) parts.push('fracture');
   if (p.catalyse) parts.push('catalysing');
   if (p.flux === false) parts.push('no flux');
+  if (p.desSlam) parts.push('bones for base modifiers');
   return parts.join(', ');
 }
 
@@ -228,6 +229,7 @@ const TECH = [
   { id: 'fracture', label: 'Fracture a finished goal', a: { fracture: undefined }, b: { fracture: true } },
   { id: 'catalyse', label: 'Omen of Catalysing Exaltation', a: { catalyse: undefined }, b: { catalyse: true } },
   { id: 'flux', label: 'Flux shortcut for resistances', a: { flux: false }, b: { flux: undefined } },
+  { id: 'desSlam', label: 'Bones for base-modifier goals (keep the goal at the Well of Souls)', a: { desSlam: undefined }, b: { desSlam: true } },
 ];
 
 /** Compare pairs of strategies that differ only in one technique, per scenario, and sum up cost and success apart. */

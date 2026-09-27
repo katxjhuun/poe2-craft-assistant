@@ -43,9 +43,18 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 | 13 | Unique items (all classes but flasks and charms) | RePoE uniques.json, EE2 bases, poe2db unique pages, game unique mods | game data + poe2db | **done**: 423 of 423 in kb.uniques (scripts/unique_items.py, reports/uniques.md); all 2,479 lines match a game mod, vary per item or are item properties (Unmodifiable, hidden sockets). Pasted uniques read their lines with ranges. Jewels cannot be chanced (Chanceableitemclasses), so unique jewels only drop |
 | 15 | Runes of Aldur (element transform) | rune texts (augments), two trade staves | game data + confirmed | **done**: Passion/Breath/Ire/Betrayal of Aldur turn the other elements' modifiers into Fire/Cold/Lightning/Chaos ones while socketed; fractured ones stay; listed under What you can use now (t30) |
 | 14 | Verisium Anvil (Runeforging) | Expedition2VerisiumCrafts, ArmourTypes, Words; player; runeforging guides | game data + confirmed | **done**: 387 base upgrades with Armour/Evasion/ES and Runic Ward before and after (bases from level 55 give up about 12-20% of their defence; all get Ward), 269 uniques moved to their Runeforged/Runemastered base with crests. Modifiers stay (player; fractured ones too since 0.5.1) |
-| 11 | Mechanics that the files do not state | in-game tests (page) | open until tested | 12 open of 30 (t1, t3, t8, t12, t14, t18, t20-t25); 15 confirmed, 3 refuted |
+| 11 | Mechanics that the files do not state | in-game tests (page), guides, the player's items | open until tested | 5 open of 31 (t8 Catalysing size, t18 essence item level, t24 jewel fifth mod, t25 Perfect essence removal side, t31 Well of Souls share); 23 confirmed, 3 refuted. Settled 28 Sept 2026 from sources: t1, t3, t12, t14, t20, t21, t22, t23 |
 
 ## Log
+
+- 28 Sept 2026: desecration model corrected. The player's staves carry a Desecrated T1 base modifier, and poe2db ("Reveal
+  desecrated modifiers may include base modifiers"), Game8 and Sift agree: the Well of Souls offers base modifiers of the
+  side as well as desecrated-only ones, at least one desecrated-only when one can roll; the side is set when the bone is
+  used; a lich omen offers only that lich's. So Gnawed bones and sceptres get base modifiers (t22, t23), and a bone can
+  serve a base-modifier goal (new strategy setting desSlam). Flux (t20, poe2wiki + u4n): every other-element resistance
+  converts at its tier with a new value, even onto an element already there. Also settled from sources: t1 (25 of 25 tiers
+  on the player's items), t3, t12 (Maxroll), t14 (the player's copies carry tags), t21 (Maxroll: jewels take Transmute,
+  Augment, Regal, Exalt). New rules R_DESECRATE_REVEAL, R_FLUX; claims k47-k49; test t31 (share of desecrated-only options).
 
 - 27 Sept 2026: Workbench. A bone use shows the three Desecrated modifiers the Well of Souls offers; the player keeps
   any of them (the same use replays from its seed), Omen of Abyssal Echoes rerolls the three once, lich omens can be

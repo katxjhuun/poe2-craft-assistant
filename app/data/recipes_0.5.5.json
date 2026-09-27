@@ -1362,8 +1362,8 @@
     {
       "id": "k41",
       "claim": "Tier 1 in Advanced Mod Descriptions is the best tier",
-      "verdict": "plausible",
-      "reason": "poe2db lists T1 as the top tier; no official definition found."
+      "verdict": "verified",
+      "reason": "Your Alt+Ctrl+C copies: 25 of 25 modifiers show the planner's tier, T1 the highest level (test t1)."
     },
     {
       "id": "k42",
@@ -1394,6 +1394,24 @@
       "claim": "Corrupted items only accept corrupted-item currency",
       "verdict": "verified",
       "reason": "Game text: Architect's Orb, Orbs of Sacrifice, Vaal Cultivation Orb."
+    },
+    {
+      "id": "k47",
+      "claim": "The Well of Souls offers base modifiers as well as desecrated-only ones; a lich omen offers only that lich's",
+      "verdict": "verified",
+      "reason": "poe2db Desecrated Modifiers page and two guides (Game8, Sift) agree; your staves carry a Desecrated T1 base modifier."
+    },
+    {
+      "id": "k48",
+      "claim": "A Flux can leave two resistance modifiers of one element on an item",
+      "verdict": "verified",
+      "reason": "poe2wiki Blazing Flux and the u4n flux guide agree (test t20)."
+    },
+    {
+      "id": "k49",
+      "claim": "Jewels can be crafted with Transmutation, Augmentation, Regal and Exalted Orbs",
+      "verdict": "verified",
+      "reason": "Maxroll crafting guide (test t21)."
     }
   ],
   "tests": [
@@ -1404,7 +1422,9 @@
       "claims": [
         "k41"
       ],
-      "note": "A community 0.5.5 reference says Tier 1 is always the highest tier; not yet game text."
+      "note": "On the 6 real items you pasted (2 jewels, 4 wands and staves, 27 Sept 2026) all 25 modifiers show the same tier in the game's Alt+Ctrl+C text as the planner gives them; T1 is the highest level of the family (e.g. level 81 = T1, level 6 = T10).",
+      "status": "confirmed",
+      "source": "your Alt+Ctrl+C copies (parser fixtures jewels and spell-weapons) compared with the knowledge base tiers"
     },
     {
       "id": "t2",
@@ -1424,7 +1444,9 @@
       "claims": [
         "!k17"
       ],
-      "note": "Game text: an item can only have one crafted modifier (Crafted Modifiers keyword). Whether a second is blocked or replaces the first is still open."
+      "note": "A second essence does not go on: the item keeps its one crafted modifier (an in-game report quoted \"this item already has a crafted modifier\").",
+      "status": "confirmed",
+      "source": "an in-game report (June 2026, claim k17), the Stratlore and Timesaver essence guides (\"it will not stack\"), the Crafted Modifiers keyword"
     },
     {
       "id": "t4",
@@ -1476,7 +1498,8 @@
       "how": "With full catalyst quality, slam ten times with and ten times without the omen on similar items and count matching mods.",
       "claims": [
         "k19"
-      ]
+      ],
+      "note": "Guides agree the size of the boost is not documented (Game8, PoE2 crafting codex); the planner uses x5 at 20% quality, adjustable."
     },
     {
       "id": "t9",
@@ -1511,7 +1534,10 @@
       "id": "t12",
       "question": "Omen of Catalysing Exaltation works together with a side exaltation omen?",
       "how": "Activate both omens, then use an Exalted Orb; check that both effects applied.",
-      "claims": []
+      "claims": [],
+      "status": "confirmed",
+      "note": "Yes: Omen of Catalysing Exaltation can be combined with Omen of Sinistral or Dextral Exaltation.",
+      "source": "Maxroll crafting guide: \"This Omen can be combined with Omen of Sinistral Exaltation or Omen of Dextral Exaltation to target specific modifiers.\""
     },
     {
       "id": "t13",
@@ -1526,7 +1552,9 @@
       "question": "Does the Alt+Ctrl+C copy include mod tags?",
       "how": "Copy an item with Alt+Ctrl+C and paste it into a text editor; look for words after the dash in the { ... } headers.",
       "claims": [],
-      "note": "Exiled Exchange 2 reads real copies with no tag field, so probably no tags."
+      "note": "Yes: the Alt+Ctrl+C headers carry the modifier tags after a dash, e.g. { Prefix Modifier \"Prismatic\" (Tier: 1) — Damage, Elemental, Fire, Cold, Lightning }; modifiers without tags show none. The parser reads them.",
+      "status": "confirmed",
+      "source": "your Alt+Ctrl+C copies (Blight Joy, Loath Ornament, Ghoul Beam, Mind Roar, Brimstone Cry, Eagle Roar)"
     },
     {
       "id": "t15",
@@ -1577,43 +1605,62 @@
     {
       "id": "t20",
       "question": "What does a Flux do when the item already has a resistance of the target element (for example Blazing Flux on an item with Fire and Cold Resistance)?",
-      "how": "Try a Blazing Flux on a cheap item with both Fire and Cold Resistance and note the result. Found by the self-test: two modifiers of one group would result; the planner does not use Flux then.",
-      "claims": [],
-      "found": "self-test"
+      "how": "Try a Blazing Flux on a cheap item with both Fire and Cold Resistance and note the result. Found by the self-test: two modifiers of one group would result.",
+      "claims": [
+        "k48"
+      ],
+      "found": "self-test",
+      "status": "confirmed",
+      "note": "Every resistance modifier of the other elements turns into the same tier of the target element with its value rolled again, even when the item has that resistance already: the item ends with two modifiers of one element. The planner now plans it that way.",
+      "source": "poe2wiki Blazing Flux (\"this can result in an item with multiple resistance modifiers of the same type\") and the u4n flux guide (two resistances both convert, same tier, new value)"
     },
     {
       "id": "t21",
       "question": "Can Orbs of Transmutation, Regal Orbs or Orbs of Alchemy be used on jewels?",
-      "how": "Try an Orb of Transmutation on a Normal jewel, or a Regal Orb on a Magic jewel. The game data gives jewels the same \"cannot upgrade rarity\" flag as flasks and charms, while equipment has it on; the name of that flag is a community guess.",
-      "claims": [],
-      "found": "game data"
+      "how": "Try an Orb of Transmutation on a Normal jewel, or a Regal Orb on a Magic jewel. A game-data flag (column name guessed by the community) suggested jewels could not be upgraded.",
+      "claims": [
+        "k49"
+      ],
+      "found": "game data",
+      "status": "confirmed",
+      "note": "Yes: jewels are crafted like other gear (Transmutation, Augmentation, Regal, then Exalted Orbs). The game-data flag was a guess and is not used.",
+      "source": "Maxroll crafting guide: \"It's a good idea to Transmute, Augment, Regal and then Exalt Jewels to the four modifier limit.\""
     },
     {
       "id": "t22",
       "question": "What does a Gnawed bone reveal on a Rare of item level 64 or lower?",
-      "how": "Desecrate a cheap Rare of item level 64 or lower with a Gnawed bone and reveal it at the Well of Souls. The game data lists desecrated equipment modifiers only at level 65, so the planner does not plan desecration below it.",
-      "claims": [],
-      "found": "game data"
+      "how": "Desecrate a cheap Rare of item level 64 or lower with a Gnawed bone and reveal it at the Well of Souls. The desecrated-only equipment modifiers in the game data are all level 65.",
+      "claims": [
+        "k47"
+      ],
+      "found": "game data",
+      "status": "confirmed",
+      "note": "Base modifiers: the Well of Souls offers base modifiers that could roll on the item as well as desecrated-only ones, and the desecrated-only equipment ones need item level 65, so a Gnawed bone (item level 64 or lower) reveals base modifiers only. The planner now plans desecration below item level 65 that way.",
+      "source": "poe2db Desecrated Modifiers (\"Reveal desecrated modifiers may include base modifiers\"), Sift and Game8 desecration guides; your staves show a Desecrated T1 base modifier"
     },
     {
       "id": "t23",
       "question": "Can a sceptre be desecrated?",
-      "how": "Try a Preserved Jawbone on a Rare sceptre. No desecrated modifier in the game data can roll on sceptres (none carries a sceptre or weapon tag they have), so the planner does not offer it.",
+      "how": "Try a Preserved Jawbone on a Rare sceptre. No desecrated-only modifier in the game data can roll on sceptres.",
       "claims": [],
-      "found": "game data"
+      "found": "game data",
+      "status": "confirmed",
+      "note": "Yes, with base modifiers only: sceptres have no desecrated-only modifier, and the Well of Souls offers base modifiers too. Not tried in game yet; the planner now offers it.",
+      "source": "poe2db Desecrated Modifiers community note (\"Sceptres do not have exclusive desecrated modifiers\") and R_DESECRATE_REVEAL"
     },
     {
       "id": "t24",
       "question": "After the \"+1 Prefix/Suffix Modifier allowed\" mod is removed, can a Rare jewel take a fifth regular modifier?",
       "how": "Settled so far (two trade jewels you pasted, 27 Sept 2026): with the allowance mod a jewel holds 4 regular modifiers and the crafted one, 5 in total (3 prefixes + 2 suffixes, or 2 + 3). Open: guides say a side stays at 3 after the allowance mod is removed, so the other side can be filled for 5 regular modifiers. Test: remove the allowance mod (Orb of Annulment with the side omen of its side) and try an Exalted Orb with the omen of the other side. The planner follows the game data and the guides until then.",
       "claims": [],
-      "note": "With the allowance mod: 4 regular modifiers + 1 crafted (Blight Joy 2 + 3, Loath Ornament 3 + 2). Game data hint: the rune Serle's Triumph raises the suffix limit and a separate modifier total (local_maximum_mods_allowed_+), while the jewel allowance mods raise only their side, so a total limit may still hold."
+      "note": "With the allowance mod: 4 regular modifiers + 1 crafted (Blight Joy 2 + 3, Loath Ornament 3 + 2). Game data hint: the rune Serle's Triumph raises the suffix limit and a separate modifier total (local_maximum_mods_allowed_+), while the jewel allowance mods raise only their side, so a total limit may still hold. Maxroll: \"Jewels have a limit of four modifiers — two prefixes and two suffixes.\""
     },
     {
       "id": "t25",
       "question": "When the side of the new modifier is full, does a Perfect essence or a liquid emotion remove a modifier of that side?",
       "how": "Without an omen, use a cheap Perfect essence on a Rare whose side for the essence modifier is full (or a liquid emotion on such a jewel), and see which modifier goes. Players report that it removes one of that side. The planner plans it that way and uses an Omen of Crystallisation only to remove from the other side.",
-      "claims": []
+      "claims": [],
+      "note": "Players report it; the Mobalytics essence guide advises filling the essence's side first so the other side is not touched, which agrees. Not yet seen in game here."
     },
     {
       "id": "t26",
@@ -1660,6 +1707,14 @@
       "status": "confirmed",
       "note": "The Runes of Aldur: Passion of Aldur turns Cold and Lightning modifiers into equivalent Fire ones (Breath: Cold, Ire: Lightning, Betrayal: Chaos) while socketed; fractured modifiers stay. Both staves carry Passion of Aldur. The Recombinator was removed with 0.5.0 (your research).",
       "source": "rune texts in the game data (augments), the two staves (Ghoul Beam, Mind Roar) and your report on the Recombinator (27 Sept 2026)"
+    },
+    {
+      "id": "t31",
+      "question": "How many of the three Well of Souls options are desecrated-only?",
+      "how": "Reveal a few desecrated modifiers on item level 65+ gear without a lich omen and count options that name a lich (Amanamu's, Kurgal's, Ulaman's) against base modifiers.",
+      "claims": [],
+      "found": "guides",
+      "note": "Game8 and Sift: at least one desecrated-only when one can roll; Sift estimates each of the other two is desecrated-only about half the time. The planner uses that estimate."
     }
   ]
 }
