@@ -225,6 +225,10 @@
   function isReminder(line) {
     return /^\(.*\)$/.test(line.trim());
   }
+  /** The item's own usage text at the end of a copy (jewels: "Place into an allocated Jewel Socket ..."): not a mod. */
+  function isUsage(line) {
+    return /^Place into an allocated Jewel Socket on the Passive Skill Tree\./.test(line.trim());
+  }
 
   /**
    * Parse item text copied from the game.
@@ -314,7 +318,7 @@
           sectionHasMod = true;
           continue;
         }
-        if (isReminder(line)) continue;
+        if (isReminder(line) || isUsage(line)) continue;
         if (adv) {
           if (cur) cur.lines.push(line);
           else pending.push({ header: null, lines: [line], loose: true });

@@ -250,3 +250,16 @@ test('flasks and charms are marked not supported', () => {
   assert.ok(r.item && r.item.unsupported);
   assert.ok(!r.warnings.some((w) => w.level === 'error'));
 });
+
+test('a Rare jewel copy: usage text is not a mod, limits are 2 + 2, "+1 Prefix Modifier allowed" raises them', () => {
+  const lines = ['Item Class: Jewels', 'Rarity: Rare', 'Gloom Spark', 'Ruby', '--------', 'Item Level: 82', '--------',
+    '6% increased Area of Effect', '15% increased Attack Damage', '10% increased Bleeding Duration', '20% increased Flammability Magnitude', '--------',
+    'Place into an allocated Jewel Socket on the Passive Skill Tree. Right click to remove from the Socket.'];
+  const r = E.parseItem(ix, lines.join('\n'));
+  assert.equal(r.item.mods.length, 4);
+  assert.ok(!r.warnings.some((w) => /No knowledge base match/.test(w.msg)), JSON.stringify(r.warnings));
+  assert.deepEqual(E.itemLimits(ix, r.item), { prefix: 2, suffix: 2 });
+  // a crafted "+1 Prefix Modifier allowed" (Potent Liquid Contempt) lets a third prefix in
+  const withCap = Object.assign({}, r.item, { mods: r.item.mods.concat([{ slot: 'suffix', text: '+1 Prefix Modifier allowed', modId: 'CraftedJewelAdditionalPrefixAllowed', crafted: true }]) });
+  assert.deepEqual(E.itemLimits(ix, withCap), { prefix: 3, suffix: 2 });
+});
