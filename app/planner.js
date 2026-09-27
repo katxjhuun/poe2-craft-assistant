@@ -1643,6 +1643,126 @@
     };
   }
 
+  // ---------------------------------------------------------------- workbench: emulator, calculator, family chances
+
+  const CLASS_TEXT = { Staff: 'Staves', Focus: 'Foci', Warstaff: 'Quarterstaves', 'Body Armour': 'Body Armours', Gloves: 'Gloves', Boots: 'Boots' };
+  const RE_RANGE = /\((-?\d+(?:\.\d+)?)-(-?\d+(?:\.\d+)?)\)/g;
+  /** A value inside (a-b): whole numbers when both ends are whole (the game publishes no value weights: uniform). */
+  function rollIn(a, b, rng) {
+    const lo = Math.min(a, b), hi = Math.max(a, b);
+    if (Number.isInteger(lo) && Number.isInteger(hi)) return lo + Math.floor(rng() * (hi - lo + 1));
+    return Math.round((lo + rng() * (hi - lo)) * 100) / 100;
+  }
+  /** Mod text lines with rolled values, Alt+Ctrl+C style "7(5-8)". */
+  function rolledLines(txt, rng) {
+    return txt.split('\n').map((line) => line.replace(RE_RANGE, (all, a, b) => `${rollIn(+a, +b, rng)}(${a}-${b})`));
+  }
+
+  /**
+   * Emulator: one use of `action` on the item, as the game would show it. Modifiers that stay keep their lines and
+   * values; new ones roll inside their range; a Divine Orb rolls every value but fractured ones again.
+   * opts: {weights, essences, catalystMult, locks, rng}. Returns {text, added: [texts], removed: [texts]} or {reason}.
+   */
+  function emulate(ix, item, action, opts) {
+    opts = opts || {};
+    const ctx = makeContext(ix, item, { weights: opts.weights, essences: opts.essences, catalystMult: opts.catalystMult });
+    const st = toState(ctx, item, opts.locks);
+    const src = item.mods.filter((m) => m.slot === 'prefix' || m.slot === 'suffix');
+    st.mods.forEach((m, i) => { m.src = i; });
+    const why = validate(ctx, st, action);
+    if (why) return { reason: why };
+    const rng = opts.rng || rngFrom((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0);
+    const r = apply(ctx, st, action, rng);
+    if (r.state.unpredictable) return { reason: 'The planner does not model what this does to the item, so the emulator cannot show it.' };
+    const out = [`Item Class: ${CLASS_TEXT[ctx.cls] || ctx.cls + 's'}`, `Rarity: ${r.state.rarity}`];
+    if (r.state.rarity === 'Rare' || r.state.rarity === 'Unique') out.push(item.name || 'Emulated Item');
+    out.push(item.base, '--------');
+    if (r.state.quality) out.push(`Quality${item.qualityType ? ` (${item.qualityType})` : ''}: +${r.state.quality}% (augmented)`, '--------');
+    out.push(`Item Level: ${item.ilvl == null ? 82 : item.ilvl}`);
+    const pre = [];
+    for (const x of item.runes || []) pre.push(`${x.text} (${x.kind === 'enchant' ? 'enchant' : 'rune'})`);
+    for (const x of item.implicits || []) pre.push(`${x.text} (implicit)`);
+    if (pre.length) out.push('--------', ...pre);
+    const reroll = action.op === 'divine';
+    const lines = [];
+    const order = r.state.mods.slice().sort((a, b) => (a.side === b.side ? 0 : a.side === 'prefix' ? -1 : 1));
+    for (const m of order) {
+      const km = m.id && ctx.kb.mods[m.id];
+      const kind = (m.frac ? 'Fractured ' : '') + (m.des ? 'Desecrated ' : '') + (m.crafted ? 'Crafted ' : '') + (m.side === 'prefix' ? 'Prefix' : 'Suffix');
+      lines.push(`{ ${kind} Modifier ""${m.tier ? ` (Tier: ${m.tier})` : ''} }`);
+      const keep = m.src != null && src[m.src] && src[m.src].modId === m.id && !(reroll && !m.frac);
+      lines.push(...(keep || !km ? src[m.src].text.split('\n') : rolledLines(km.txt, rng)));
+    }
+    // unique and other lines the planner does not track stay as they were
+    for (const m of item.mods.filter((x) => x.slot !== 'prefix' && x.slot !== 'suffix')) lines.push(...m.text.split('\n'));
+    if (lines.length) out.push('--------', ...lines);
+    if (r.state.mods.some((m) => m.frac)) out.push('--------', 'Fractured Item');
+    if (r.state.corrupted) out.push('--------', 'Corrupted');
+    if (r.state.sanctified) out.push('--------', 'Sanctified');
+    const txt = (m) => (m.id && ctx.kb.mods[m.id] ? ctx.kb.mods[m.id].txt.replace(/\n/g, ' / ') : '?');
+    return { text: out.join('\n'), added: r.added.map(txt), removed: r.removed.map(txt) };
+  }
+
+  /**
+   * Calculator: the chance that one use of `action` leaves the item meeting every requirement group.
+   * groups: [{type: 'and'|'or'|'not'|'count', n, reqs: [{fam, side, minTier, des}]}]; a requirement is met by a mod of
+   * that family and side at that tier or better. Returns {p, before, n} or {reason}.
+   */
+  function chanceOf(ix, item, action, groups, opts) {
+    opts = opts || {};
+    const ctx = makeContext(ix, item, { weights: opts.weights, essences: opts.essences, catalystMult: opts.catalystMult });
+    const st = toState(ctx, item, opts.locks);
+    const why = validate(ctx, st, action);
+    if (why) return { reason: why };
+    const hit = (s, q) => s.mods.some((m) => m.fam === q.fam && m.side === q.side && !!m.des === !!q.des && (!q.minTier || (m.tier && m.tier <= q.minTier)));
+    const ok = (s) => groups.every((g) => {
+      const c = g.reqs.filter((q) => hit(s, q)).length;
+      return g.type === 'or' ? c > 0 : g.type === 'not' ? c === 0 : g.type === 'count' ? c >= (g.n || 1) : c === g.reqs.length;
+    });
+    const rng = rngFrom(opts.seed || 777);
+    const N = opts.n || 10000;
+    let k = 0, unpredictable = false;
+    for (let i = 0; i < N; i++) {
+      const r = apply(ctx, st, action, rng);
+      if (r.state.unpredictable) unpredictable = true;
+      if (ok(r.state)) k++;
+    }
+    if (unpredictable) return { reason: 'The planner does not model what this does to the item.' };
+    return { p: k / N, before: ok(st), n: N };
+  }
+
+  /**
+   * Stat picker: the share of each natural family among the next random modifier, from the item as it is (groups taken,
+   * tags its mods add, item level, weights). exclude: the mod id a slot would replace. Returns
+   * {side: {prefix: {fam: share}, suffix: {...}}, any: {'prefix|fam': share}, des: {prefix: {...}, suffix: {...}}, weighted}.
+   */
+  function familyChances(ix, item, opts) {
+    opts = opts || {};
+    const ctx = makeContext(ix, item, { weights: opts.weights });
+    const st = toState(ctx, item);
+    if (opts.exclude) { const i = st.mods.findIndex((m) => m.id === opts.exclude); if (i >= 0) st.mods.splice(i, 1); }
+    const taken = groupsOf(st);
+    const added = E.addedTags(ctx.kb, st.mods.map((m) => m.id));
+    const out = { side: { prefix: {}, suffix: {} }, any: {}, des: { prefix: {}, suffix: {} }, weighted: !!opts.weights };
+    const tot = { prefix: 0, suffix: 0 };
+    for (const side of SIDES) for (const e of sidePool(ctx, side, 0)) {
+      if (e.grp.some((g) => taken.has(g))) continue;
+      if (added && E.tagBlocked(ctx.kb.mods[e.id], ctx.baseTags, added)) continue;
+      out.side[side][e.fam] = (out.side[side][e.fam] || 0) + e.w;
+      tot[side] += e.w;
+    }
+    for (const side of SIDES) for (const f of Object.keys(out.side[side])) {
+      out.any[side + '|' + f] = out.side[side][f] / ((tot.prefix + tot.suffix) || 1);
+      out.side[side][f] /= tot[side] || 1;
+    }
+    // desecrated options: equal weights (none published); the share among the side's desecrated families
+    for (const side of SIDES) {
+      const list = desPoolFor(ctx, side, 0, null).filter((e) => !e.grp.some((g) => taken.has(g)));
+      for (const e of list) out.des[side][e.fam] = (out.des[side][e.fam] || 0) + 1 / list.length;
+    }
+    return out;
+  }
+
   /** Chance that one use of `action` on the current item completes at least one more goal. */
   function stepChance(ix, item, locks, goals, action, weights, n) {
     const ctx = makeContext(ix, item, { weights });
@@ -1865,6 +1985,7 @@
     ORB, OMEN, TIERS, boneFor, actionNames, makeContext, toState, validate, apply, rngFrom, sidePool, desPoolFor,
     goalsFromTargets, goalMet, meets, nearMiss, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
     availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, goalClash, essencesForBase, liquidFor, CATALYST_DEFAULT,
+    emulate, chanceOf, familyChances,
     expandStrategy, recipeParams, relevantKeys, SPACE, improvePlan,
   };
 });

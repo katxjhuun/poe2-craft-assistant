@@ -222,6 +222,24 @@ details.notes[open] summary { margin-bottom: 6px; }
 .dd-opt.g-crafted { color: var(--g-crafted); }
 .dd-opt.bad { color: var(--faint); }
 .dd-opt[aria-selected="true"] { background: var(--panel-2); }
+.dd-opt { display: flex; gap: 10px; align-items: baseline; }
+.dd-opt .dd-t { flex: 1; min-width: 0; }
+.dd-p { font: 12px/1.3 var(--f-ui, system-ui); color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bench { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 18px; align-items: start; }
+.bench h3 { margin: 0 0 8px; font-size: 13px; }
+.bench .b-col { display: grid; gap: 14px; min-width: 0; }
+.bench .b-box { border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: grid; gap: 10px; }
+.bench .b-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.bench .b-row select, .bench .b-row input { max-width: 100%; }
+.bench .b-msg { font-size: 12.5px; }
+.bench .b-msg.bad { color: var(--warn, #d9a441); }
+.bench .b-log { display: grid; gap: 4px; max-height: 180px; overflow: auto; font-size: 12.5px; }
+.bench .b-log div { padding: 3px 6px; border-radius: 6px; }
+.bench .b-log .cur { background: var(--panel-2); }
+.bench .b-grp { border: 1px dashed var(--line-2); border-radius: 8px; padding: 8px; display: grid; gap: 6px; }
+.bench .b-req { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; }
+.bench .b-p { font-size: 22px; font-variant-numeric: tabular-nums; }
+@media (max-width: 760px) { .bench { grid-template-columns: 1fr; } .bench .b-req { grid-template-columns: 1fr; } }
 .dd-empty { padding: 10px 11px; color: var(--muted); }
 .toggle { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; color: var(--muted); font-size: 14px; }
 .tpl-select { background: var(--panel-2); border: 1px solid var(--line-2); border-radius: var(--r); padding: 4px 8px; font-size: 14px; }
@@ -544,6 +562,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
             <button class="chip" id="previewBtn" type="button" aria-pressed="false" title="Show what the next step of the selected plan can do to this item">Next step</button>
             <button class="chip" id="compareBtn" type="button" aria-pressed="false" hidden title="Switch between the item before and after the last paste">Before</button>
             <button class="chip" id="altBtn" type="button" aria-pressed="true" title="Show mod headers and roll ranges, like holding Alt in game">Alt view</button>
+            <button class="chip" id="benchBtn" type="button" title="Try currency on a copy of this item, and work out the chance of one use">Workbench</button>
             <button class="btn primary" id="pasteBtn" type="button">
               <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="3" y="2.5" width="10" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 2.5h4v2H6z" fill="currentColor"/></svg>
               Paste item
@@ -643,6 +662,12 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   </div>
 </dialog>
 
+<dialog class="dlg wide" id="benchDlg" aria-labelledby="benchTitle">
+  <div class="dlg-in">
+    <div class="dlg-head"><h2 id="benchTitle">Workbench</h2><span class="muted">A copy of your item: try currency, undo, work out chances</span><button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>
+    <div class="dlg-body" id="benchBody"></div>
+  </div>
+</dialog>
 <dialog class="dlg wide" id="libDlg" aria-labelledby="libTitle">
   <div class="dlg-in">
     <div class="dlg-head"><h2 id="libTitle">Recipes &amp; guides</h2><span class="muted" id="libSub"></span><button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>
@@ -1732,6 +1757,181 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     $('#shotBig').src = S.shot; $('#shotDlg').showModal();
   });
 
+  // ============================================================ workbench: emulator and calculator (on a copy of the item)
+  const benchDlg = $('#benchDlg');
+  const BENCH_TIERS = [['base', 'Basic'], ['greater', 'Greater'], ['perfect', 'Perfect']];
+  /** What the emulator can use on this item: orbs with their tiers and omens, bones, fluxes, essences, alloys, emotions. */
+  function benchMethods(it) {
+    const side = (o) => [['', 'No omen'], ['prefix', `Sinistral ${o}`], ['suffix', `Dextral ${o}`]];
+    const L = [
+      { k: 'transmute', g: 'Orbs', label: 'Orb of Transmutation', tiers: true },
+      { k: 'augment', g: 'Orbs', label: 'Orb of Augmentation', tiers: true },
+      { k: 'regal', g: 'Orbs', label: 'Regal Orb', tiers: true, omens: side('Coronation') },
+      { k: 'alchemy', g: 'Orbs', label: 'Orb of Alchemy', omens: side('Alchemy') },
+      { k: 'exalt', g: 'Orbs', label: 'Exalted Orb', tiers: true, omens: side('Exaltation').concat([['greater', 'Greater Exaltation (2 mods)'], ['catalyse', 'Catalysing Exaltation']]) },
+      { k: 'chaos', g: 'Orbs', label: 'Chaos Orb', tiers: true, omens: side('Erasure').concat([['whittle', 'Whittling']]) },
+      { k: 'annul', g: 'Orbs', label: 'Orb of Annulment', omens: side('Annulment').concat([['greater', 'Greater Annulment (2 mods)'], ['light', 'Light (the Desecrated mod)']]) },
+      { k: 'divine', g: 'Orbs', label: 'Divine Orb' },
+      { k: 'fracture', g: 'Orbs', label: 'Fracturing Orb' },
+    ];
+    for (const q of ['Gnawed', 'Preserved', 'Ancient']) L.push({ k: 'bone:' + q, g: 'Desecrate', label: `${q} bone`, omens: side('Necromancy') });
+    for (const [to, n] of [['fire', 'Blazing Flux'], ['cold', 'Chilling Flux'], ['lightning', 'Crackling Flux']]) L.push({ k: 'flux:' + to, g: 'Flux', label: n });
+    for (const r of itemEssences()) {
+      const g = r.liquid ? 'Liquid emotions' : r.alloy ? 'Runic Alloys' : r.kind === 'magic' ? 'Essences (Magic item)' : 'Perfect and special essences';
+      const mt = S.ix.kb.mods[r.mod] ? S.ix.kb.mods[r.mod].txt.replace(/\n/g, ' / ') : r.mod;
+      L.push({ k: 'ess:' + r.item + '|' + r.mod, g, label: `${r.item}: ${mt}`, rec: r, omens: r.kind === 'rare' && !r.alloy && !r.liquid ? side('Crystallisation') : null });
+    }
+    return L;
+  }
+  function benchAction(m, sel) {
+    const o = sel.omen || '';
+    const sideOf = o === 'prefix' || o === 'suffix' ? o : null;
+    if (m.rec) {
+      const r = m.rec;
+      return r.liquid ? { op: 'liquid', item: r.item, mod: r.mod } : r.kind === 'magic' ? { op: 'essence', item: r.item, mod: r.mod } : { op: 'pessence', item: r.item, mod: r.mod, side: sideOf };
+    }
+    if (m.k.startsWith('bone:')) return { op: 'bone', quality: m.k.slice(5), side: sideOf };
+    if (m.k.startsWith('flux:')) return { op: 'flux', to: m.k.slice(5) };
+    const a = { op: m.k };
+    if (m.tiers) a.tier = sel.tier || 'base';
+    if (sideOf) a.side = sideOf;
+    if (o === 'greater') a.greater = true;
+    if (o === 'catalyse') a.catalyse = true;
+    if (o === 'whittle') a.whittle = true;
+    if (o === 'light') a.light = true;
+    return a;
+  }
+  function benchCur() { return S.bench.hist[S.bench.idx]; }
+  function openBench() {
+    if (!S.item || S.item.unsupported) return;
+    S.bench = { hist: [{ text: S.text, item: S.item, note: 'Your item' }], idx: 0, sel: { m: 'exalt', tier: 'base', omen: '' }, msg: null, calc: null,
+      groups: [{ type: 'and', n: 1, reqs: Object.entries(S.targets).filter(([, t]) => t && t.fam && t.group !== 'essence' && t.group !== 'alloy' && t.group !== 'liquid')
+        .map(([k, t]) => ({ fam: t.fam, side: t.group === 'desecrated' ? k.split('-')[0] : t.group, des: t.group === 'desecrated', minTier: t.minTier || null, label: t.label })) }] };
+    renderBench();
+    benchDlg.showModal();
+  }
+  function benchItemHtml(item, prev) {
+    const before = new Set(prev ? prev.mods.map(modKey) : []);
+    const now = new Set(item.mods.map(modKey));
+    const rows = [];
+    const grp = (label, list) => list.forEach((m, i) => rows.push(modRow(m, label, i === 0, prev && !before.has(modKey(m)) ? 'added' : '')));
+    grp('Prefix', item.mods.filter((m) => m.slot === 'prefix'));
+    grp('Suffix', item.mods.filter((m) => m.slot === 'suffix'));
+    grp('Unique', item.mods.filter((m) => m.slot !== 'prefix' && m.slot !== 'suffix'));
+    if (prev) prev.mods.filter((m) => !now.has(modKey(m))).forEach((m) => rows.push(plainRow('', false, esc(m.text), 'removed', '')));
+    const pre = item.runes.map((r) => plainRow('', false, kw(esc(r.text)), 'pale', '')).concat(item.implicits.map((m, i) => plainRow('Implicit', i === 0, kw(esc(m.text)), m.corruption ? 'vaal' : '', m.corruption ? 'V' : 'I')));
+    const st = [item.flags.sanctified ? '<div class="tt-status sanct">Sanctified</div>' : '', item.flags.corrupted ? '<div class="tt-status corrupted">Corrupted</div>' : ''].join('');
+    const blocks = [`<div class="tt-prop w"><span class="kw">${esc(item.itemClass || 'Item')}</span>: Item Level ${item.ilvl == null ? '?' : item.ilvl}</div>`];
+    if (pre.length) blocks.push(`<div class="tt-rows">${pre.join('')}</div>`);
+    blocks.push(rows.length ? `<div class="tt-rows">${rows.join('')}</div>` : '<div class="tt-prop">No explicit modifiers</div>');
+    if (st) blocks.push(st);
+    return `<div class="tt r-${esc(item.rarity)} ${S.alt ? 'alt' : ''}"><div class="tt-head"><span class="tt-gem l"></span><span class="tt-gem r"></span>${item.name ? `<div class="tt-name">${esc(item.name)}</div>` : ''}<div class="tt-name">${esc(item.base)}</div></div><div class="tt-body">${blocks.join('<div class="tt-sep"></div>')}</div></div>`;
+  }
+  function benchOptionsHtml() {
+    // stat choices for the calculator: what can roll on this base now, both sides and desecrated
+    const out = [];
+    for (const side of ['prefix', 'suffix']) {
+      let opts = [];
+      try { opts = E.pickerOptions(S.ix, benchCur().item, { side, essences: itemEssences() }); } catch (e) { opts = []; }
+      for (const o of opts) if (['prefix', 'suffix', 'desecrated'].includes(o.group)) out.push({ fam: o.fam, side, des: o.group === 'desecrated', label: (o.group === 'desecrated' ? 'Desecrated ' : '') + side + ': ' + o.label.replace(/\n/g, ' / '), tiers: o.tiers.filter((t) => t.tier).map((t) => t.tier) });
+    }
+    return out.sort((a, b) => (a.des - b.des) || a.label.localeCompare(b.label)); // desecrated ones last
+  }
+  function renderBench() {
+    const B = S.bench;
+    if (!B) return;
+    const cur = benchCur();
+    const prev = B.idx > 0 ? B.hist[B.idx - 1].item : null;
+    const methods = benchMethods(cur.item);
+    const m = methods.find((x) => x.k === B.sel.m) || methods[0];
+    B.sel.m = m.k;
+    const groups = [...new Set(methods.map((x) => x.g))];
+    const methodSel = `<select id="bMethod" aria-label="Currency">${groups.map((g) => `<optgroup label="${esc(g)}">${methods.filter((x) => x.g === g).map((x) => `<option value="${esc(x.k)}" ${x.k === m.k ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</optgroup>`).join('')}</select>`;
+    const tierSel = m.tiers ? `<select id="bTier" aria-label="Orb tier">${BENCH_TIERS.map(([v, l]) => `<option value="${v}" ${B.sel.tier === v ? 'selected' : ''}>${l}</option>`).join('')}</select>` : '';
+    const omenSel = m.omens ? `<select id="bOmen" aria-label="Omen">${m.omens.map(([v, l]) => `<option value="${v}" ${B.sel.omen === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>` : '';
+    const action = benchAction(m, B.sel);
+    const names = P.actionNames(action);
+    const price = names.reduce((t, n) => t + (priceEx(n) || 0), 0);
+    const opts = benchOptionsHtml();
+    const reqRow = (q, gi, ri) => `<div class="b-req"><select data-breq="${gi}:${ri}" aria-label="Stat">${opts.map((o) => `<option value="${esc(o.side + '|' + (o.des ? 'd' : '') + '|' + o.fam)}" ${o.fam === q.fam && o.side === q.side && !!o.des === !!q.des ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}${opts.some((o) => o.fam === q.fam && o.side === q.side) ? '' : `<option selected value="${esc(q.side + '|' + (q.des ? 'd' : '') + '|' + q.fam)}">${esc(q.label || q.fam)}</option>`}</select>
+      <select data-btier="${gi}:${ri}" aria-label="Minimum tier"><option value="">Any tier</option>${(opts.find((o) => o.fam === q.fam && o.side === q.side) || { tiers: [] }).tiers.map((t) => `<option value="${t}" ${q.minTier === t ? 'selected' : ''}>T${t} or better</option>`).join('')}</select>
+      <button class="btn small" type="button" data-bdel="${gi}:${ri}" aria-label="Remove requirement">Remove</button></div>`;
+    const grpHtml = B.groups.map((g, gi) => `<div class="b-grp"><div class="b-row"><select data-btype="${gi}" aria-label="Group type">${[['and', 'All of'], ['or', 'Any of'], ['count', 'At least'], ['not', 'None of']].map(([v, l]) => `<option value="${v}" ${g.type === v ? 'selected' : ''}>${l}</option>`).join('')}</select>${g.type === 'count' ? `<input data-bn="${gi}" inputmode="numeric" value="${g.n || 1}" style="width:48px" aria-label="How many">` : ''}<span class="sub">of these</span>${B.groups.length > 1 ? `<button class="btn small" type="button" data-bgdel="${gi}">Remove group</button>` : ''}</div>
+      ${g.reqs.map((q, ri) => reqRow(q, gi, ri)).join('') || '<span class="sub">No requirement yet.</span>'}<div class="b-row"><button class="btn small" type="button" data-badd="${gi}">Add a stat</button></div></div>`).join('');
+    const calc = B.calc;
+    const calcOut = calc ? (calc.reason ? `<div class="b-msg bad">${esc(calc.reason)}</div>`
+      : `<div class="b-row"><span class="b-p">${(calc.p * 100).toFixed(calc.p < 0.01 ? 2 : 1)}%</span><span class="sub">chance that one use of ${esc(calc.names.join(' + '))} leaves the item meeting every group (${calc.n.toLocaleString('en-US')} simulated uses${calc.before ? '; the item meets them already' : ''})${calc.p > 0 && calc.p < 1 ? `. If you could retry from this same item: about ${Math.max(1, Math.round(1 / calc.p)).toLocaleString('en-US')} uses` : ''}.</span></div>`) : '';
+    $('#benchBody').innerHTML = `<div class="bench">
+      <div class="b-col"><div>${benchItemHtml(cur.item, prev)}</div>
+        <div class="b-log">${B.hist.map((h, i) => `<div class="${i === B.idx ? 'cur' : ''}">${i}. ${esc(h.note)}</div>`).join('')}</div></div>
+      <div class="b-col">
+        <div class="b-box"><h3>Emulator</h3>
+          <div class="b-row">${methodSel}${tierSel}${omenSel}</div>
+          <div class="b-row"><button class="btn primary" type="button" id="bApply">Use ${esc(names.join(' + '))}</button><span class="sub">${price ? '≈ ' + money(price) + ' per use' : ''}</span></div>
+          <div class="b-row"><button class="btn small" type="button" id="bUndo" ${B.idx === 0 ? 'disabled' : ''}>Undo</button><button class="btn small" type="button" id="bReset" ${B.idx === 0 ? 'disabled' : ''}>Back to your item</button><button class="btn small" type="button" id="bUse" ${B.idx === 0 ? 'disabled' : ''}>Use as my item</button></div>
+          ${B.msg ? `<div class="b-msg ${B.msg.bad ? 'bad' : ''}">${esc(B.msg.text)}</div>` : ''}
+          <p class="sub" style="margin:0">Each use rolls like the planner's simulation (${itemWeights() ? 'poe2db weights' : 'equal weights'}); modifiers that stay keep their values. Nothing here changes your item until you choose Use as my item.</p></div>
+        <div class="b-box"><h3>Calculator</h3>
+          <p class="sub" style="margin:0">Chance that one use of the currency chosen above leaves this item meeting every group below. Groups start from your targets.</p>
+          ${grpHtml}
+          <div class="b-row"><button class="btn small" type="button" id="bAddGroup">Add a group</button><button class="btn primary" type="button" id="bCalc">Work out the chance</button></div>
+          ${calcOut}</div>
+      </div></div>`;
+  }
+  function benchParse(v) { const [side, d, fam] = v.split('|'); return { side, des: d === 'd', fam }; }
+  benchDlg.addEventListener('change', (e) => {
+    const B = S.bench; const t = e.target; if (!B) return;
+    if (t.id === 'bMethod') { B.sel.m = t.value; B.sel.omen = ''; B.calc = null; }
+    else if (t.id === 'bTier') { B.sel.tier = t.value; B.calc = null; }
+    else if (t.id === 'bOmen') { B.sel.omen = t.value; B.calc = null; }
+    else if (t.dataset.btype != null) { B.groups[+t.dataset.btype].type = t.value; B.calc = null; }
+    else if (t.dataset.bn != null) { B.groups[+t.dataset.bn].n = Math.max(1, parseInt(t.value, 10) || 1); B.calc = null; }
+    else if (t.dataset.breq != null) { const [gi, ri] = t.dataset.breq.split(':').map(Number); Object.assign(B.groups[gi].reqs[ri], benchParse(t.value), { minTier: null, label: t.selectedOptions[0].textContent }); B.calc = null; }
+    else if (t.dataset.btier != null) { const [gi, ri] = t.dataset.btier.split(':').map(Number); B.groups[gi].reqs[ri].minTier = t.value ? +t.value : null; B.calc = null; }
+    else return;
+    renderBench();
+  });
+  benchDlg.addEventListener('click', (e) => {
+    const B = S.bench; if (!B) return;
+    const b = e.target.closest('button'); if (!b) return;
+    const cur = benchCur();
+    const methods = benchMethods(cur.item);
+    const m = methods.find((x) => x.k === B.sel.m) || methods[0];
+    const action = benchAction(m, B.sel);
+    const opts = { weights: itemWeights(), essences: itemEssences(), catalystMult: catMult() };
+    if (b.id === 'bApply') {
+      const r = P.emulate(S.ix, cur.item, action, opts);
+      if (r.reason) B.msg = { bad: true, text: r.reason };
+      else {
+        const pr = E.parseItem(S.ix, r.text);
+        const note = `${P.actionNames(action).join(' + ')}: ${r.added.length ? 'added ' + r.added.join('; ') : 'nothing added'}${r.removed.length ? ' · removed ' + r.removed.join('; ') : ''}`;
+        B.hist = B.hist.slice(0, B.idx + 1).concat([{ text: r.text, item: pr.item, note }]);
+        B.idx = B.hist.length - 1; B.msg = { text: note }; B.calc = null;
+      }
+    } else if (b.id === 'bUndo') { B.idx = Math.max(0, B.idx - 1); B.msg = null; B.calc = null; }
+    else if (b.id === 'bReset') { B.idx = 0; B.msg = null; B.calc = null; }
+    else if (b.id === 'bUse') {
+      const r = ingest(cur.text, 'Workbench');
+      if (r.ok) { benchDlg.close(); renderAll(); schedulePlans(); announce('The workbench item is now your item.'); }
+      return;
+    } else if (b.id === 'bAddGroup') { B.groups.push({ type: 'and', n: 1, reqs: [] }); }
+    else if (b.dataset.bgdel != null) { B.groups.splice(+b.dataset.bgdel, 1); B.calc = null; }
+    else if (b.dataset.badd != null) {
+      const first = benchOptionsHtml()[0];
+      if (first) B.groups[+b.dataset.badd].reqs.push({ fam: first.fam, side: first.side, des: first.des, minTier: null, label: first.label });
+    } else if (b.dataset.bdel != null) { const [gi, ri] = b.dataset.bdel.split(':').map(Number); B.groups[gi].reqs.splice(ri, 1); B.calc = null; }
+    else if (b.id === 'bCalc') {
+      const groups = B.groups.filter((g) => g.reqs.length);
+      if (!groups.length) B.calc = { reason: 'Add at least one stat to a group.' };
+      else {
+        const r = P.chanceOf(S.ix, cur.item, action, groups, Object.assign({ n: 10000 }, opts));
+        B.calc = r.reason ? r : Object.assign(r, { names: P.actionNames(action) });
+      }
+    } else return;
+    renderBench();
+  });
+  $('#benchBtn').addEventListener('click', openBench);
+
   // ============================================================ shared collections (artifact database, browser fallback)
   const colls = {};
   function watchColl(name, onChange) {
@@ -2107,7 +2307,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       const g = o._recent ? 'Recent' : GROUP_LABEL[o.group];
       if (g !== last) { html += `<div class="dd-group ${o._recent ? '' : groupCls(o.group)}">${esc(g)}</div>`; last = g; }
       const title = o.ok ? '' : ` title="${esc(o.reason || '')}"`;
-      html += `<div class="dd-opt ${groupCls(o.group)} ${o.ok ? '' : 'bad'}" role="option" id="opt-${key}-${i}" data-opt="${i}" aria-selected="${i === S.open.active}"${title}>${esc(o.label.replace(/\n/g, ' / '))}</div>`;
+      html += `<div class="dd-opt ${groupCls(o.group)} ${o.ok ? '' : 'bad'}" role="option" id="opt-${key}-${i}" data-opt="${i}" aria-selected="${i === S.open.active}"${title}><span class="dd-t">${esc(o.label.replace(/\n/g, ' / '))}</span>${o.ok ? shareHtml(o, side, key) : ''}</div>`;
     });
     dd.innerHTML = html;
     dd.hidden = false;
@@ -2115,6 +2315,31 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (act) act.scrollIntoView({ block: 'nearest' });
     const inp = document.getElementById('combo-' + key);
     if (inp) { if (act) inp.setAttribute('aria-activedescendant', act.id); else inp.removeAttribute('aria-activedescendant'); }
+  }
+  /** Chance that the next random modifier of the slot's side is this stat (poe2db weights, or equal ones). */
+  const shareMemo = new Map();
+  function sharesFor(key) {
+    const m = modAt(key.split('-')[0], +key.split('-')[1]);
+    const k = [S.histIdx, S.text.length, key, m ? m.modId : ''].join('|');
+    if (!shareMemo.has(k)) {
+      if (shareMemo.size > 40) shareMemo.clear();
+      let v = null;
+      try { v = P.familyChances(S.ix, S.item, { weights: itemWeights(), exclude: m ? m.modId : null }); } catch (e) { v = null; }
+      shareMemo.set(k, v);
+    }
+    return shareMemo.get(k);
+  }
+  function shareHtml(o, side, key) {
+    const fc = sharesFor(key);
+    if (!fc) return '';
+    const des = o.group === 'desecrated';
+    const p = des ? fc.des[side][o.fam] : (o.group === 'prefix' || o.group === 'suffix') ? fc.side[o.group][o.fam] : null;
+    if (p == null || !(p > 0)) return '';
+    const any = des ? null : fc.any[o.group + '|' + o.fam];
+    const pc = (x) => (x >= 0.1 ? (x * 100).toFixed(0) : x >= 0.01 ? (x * 100).toFixed(1) : (x * 100).toFixed(2)) + '%';
+    const t = des ? `Chance a desecrated ${side} is this stat (equal weights: none are published).`
+      : `Chance a random ${o.group} (Exalted Orb, Augmentation, Regal…) is this stat, any tier: ${pc(p)} of ${o.group}es, ${pc(any)} of any new modifier. ${fc.weighted ? 'poe2db weights.' : 'Equal weights.'}`;
+    return `<span class="dd-p" title="${esc(t)}">${pc(p)}</span>`;
   }
   function choose(o) {
     if (!o || !o.ok) return;

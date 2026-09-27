@@ -47,6 +47,12 @@ python scripts/fetch_icons.py              # yeni fiyatlı eşyaların ikonları
 4. Paket yüklenemezse sayfa artifact veritabanındaki son kopyayı ya da sayfayla gelen `prices-snapshot.json` dosyasını kullanır.
 5. Paket, bilgi tabanının kaynağı olan RePoE PoE2 dışa aktarımının güncel oyun verisi sürümünü de taşır (`meta.gameData`). Bu sürüm bilgi tabanınınkinden yeniyse sayfada "veri eski olabilir" bandı çıkar; bilgi tabanı `scripts/kb_update.py` ile yeniden üretilince kaybolur.
 
+## Workbench (Craft of Exile'dan esinlenildi)
+
+- Item panelindeki **Workbench** düğmesi, item'in bir kopyası üzerinde çalışır: **Emulator** (currency, orb tier'ı ve omen seçip rastgele sonucu görmek, geri almak, istenirse "Use as my item" ile ana item'e aktarmak) ve **Calculator** (All/Any/At least N/None gereksinim grupları, tek kullanımın olasılığı; gruplar hedeflerden başlar).
+- Stat seçicide her stat'ın yanında, bir sonraki rastgele modun o stat olma yüzdesi yazar (o taraf içinde; tooltip'te herhangi bir yeni mod içinde).
+- Planner fonksiyonları: `P.emulate`, `P.chanceOf`, `P.familyChances`.
+
 ## Bilinen eksikler
 
 - Flask ve charm craft'ı kapsam dışı (kullanıcı kararı): bu eşyalar yapıştırılınca panel desteklenmediklerini söyler. Başka eşyalardaki flask ve charm statları (ör. belt'teki Flask Recovery) diğer statlar gibi ağırlıkları ve çıkma şartlarıyla planlanır.

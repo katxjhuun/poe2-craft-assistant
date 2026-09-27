@@ -805,3 +805,29 @@ test('runes that change crafting: Medved\'s Tending opens the Soul modifiers, As
   assert.match(one(null), /one crafted modifier/);
   assert.equal(one('Can have 1 additional Crafted Modifier'), null);
 });
+
+test('workbench: the emulator keeps the modifiers that stay, the calculator and the stat shares agree', () => {
+  const item = E.parseItem(ix, ['Item Class: Body Armours', 'Rarity: Rare', 'Test Robe', 'Heavy Plate', '--------', 'Item Level: 82', '--------',
+    '+120 to maximum Life', '35% increased Armour', '+30% to Fire Resistance'].join('\n')).item;
+  const r = P.emulate(ix, item, { op: 'exalt' }, { rng: P.rngFrom(3) });
+  const after = E.parseItem(ix, r.text);
+  assert.equal(after.item.mods.length, 4);
+  for (const m of item.mods) assert.ok(after.item.mods.some((x) => x.text === m.text && x.modId === m.modId), 'kept as it was: ' + m.text);
+  assert.equal(r.added.length, 1);
+  assert.ok(!after.warnings.some((w) => w.level === 'error'));
+  assert.match(P.emulate(ix, item, { op: 'transmute' }).reason, /Normal/);
+  // Divine rolls values again, fractured ones stay
+  const div = E.parseItem(ix, P.emulate(ix, after.item, { op: 'divine' }, { rng: P.rngFrom(9) }).text).item;
+  assert.deepEqual(div.mods.map((m) => m.modId), after.item.mods.map((m) => m.modId));
+  // calculator: one Chaos Orb and a Cold Resistance suffix; stat share of the same family
+  const cold = [...P.makeContext(ix, item).pool.entries()].find(([id, pe]) => kb.mods[id].fam === 'ColdResistance' && pe.side === 'suffix');
+  assert.ok(cold);
+  const c = P.chanceOf(ix, item, { op: 'chaos' }, [{ type: 'and', reqs: [{ fam: 'ColdResistance', side: 'suffix' }] }], { n: 8000 });
+  const fc = P.familyChances(ix, item, {});
+  assert.ok(c.p > 0.02 && c.p < 0.5, JSON.stringify(c));
+  assert.ok(Math.abs(c.p - fc.any['suffix|ColdResistance']) < 0.03, `${c.p} vs ${fc.any['suffix|ColdResistance']}`);
+  assert.equal(fc.side.suffix.FireResistance, undefined, 'the Fire Resistance group is taken');
+  assert.deepEqual(P.chanceOf(ix, item, { op: 'chaos' }, [{ type: 'not', reqs: [{ fam: 'IncreasedLife', side: 'prefix' }] }], { n: 2000 }).before, false);
+  const sum = Object.values(fc.side.prefix).reduce((t, x) => t + x, 0);
+  assert.ok(Math.abs(sum - 1) < 1e-9);
+});
