@@ -81,6 +81,20 @@ def text_of(html_str):
     return s
 
 
+def exact_text(s):
+    """A mod text with its numbers, for telling same-text twins apart (IncreasedMana vs IncreasedManaTwoHandWeapon):
+    ranges low to high (the game writes "reduced" ones high to low), one line, lower case."""
+    s = s.replace('\u2014', '-').replace('\u2013', '-')
+    s = re.sub(r'\((-?[\d.]+)-(-?[\d.]+)\)', lambda m: '(%s-%s)' % tuple(sorted((m.group(1), m.group(2)), key=float)), s)
+    # poe2db writes some hybrids' lines in the other order ("+# to Evasion Rating" first): compare them as a set
+    return ' | '.join(sorted(re.sub(r'\s+', ' ', l).strip().lower() for l in s.split('\n') if l.strip()))
+
+
+def template_lines(s):
+    """The mod text with numbers as #, lines in any order."""
+    return ' | '.join(sorted(norm(l) for l in s.split('\n') if l.strip()))
+
+
 def norm(s):
     s = re.sub(r'\((-?[\d.]+)-(-?[\d.]+)\)', '#', s)
     s = re.sub(r'[+-]?\d+(?:\.\d+)?', '#', s)
@@ -97,6 +111,13 @@ def main():
             continue
         index[(m['gen'], frozenset(m['grp']), m['lvl'])].append(mid)
     # flask and charm pages are not matched on purpose: those classes are not supported
+    # mods that roll on some base of each class: a page's entry belongs to its own class's mod, not to a one-hand
+    # or two-hand twin with the same text (IncreasedMana vs IncreasedManaTwoHandWeapon)
+    class_pool = defaultdict(set)
+    for b in kb['bases'].values():
+        p = kb['pools'].get(b.get('sig')) or {}
+        for side in ('prefix', 'suffix'):
+            class_pool[b['cls']].update(mid for mid, _t in p.get(side, []))
 
     per_page = {}
     essences = defaultdict(dict)
@@ -116,8 +137,12 @@ def main():
             key = (gen, frozenset(e.get('ModFamilyList') or []), int(e.get('Level') or 0))
             cands = index.get(key, [])
             if len(cands) > 1:
-                t = norm(text_of(e.get('str', '')))
-                narrowed = [c for c in cands if norm(kb['mods'][c]['txt'].replace('\n', ' ')) == t.replace('\n', ' ')]
+                cands = [c for c in cands if c in class_pool[cls]] or cands
+            if len(cands) > 1:
+                # same text and ranges first, then the same text with any numbers
+                raw = text_of(e.get('str', ''))
+                exact = [c for c in cands if exact_text(kb['mods'][c]['txt']) == exact_text(raw)]
+                narrowed = exact or [c for c in cands if template_lines(kb['mods'][c]['txt']) == template_lines(raw)]
                 cands = narrowed or cands[:1]
             if not cands:
                 unmatched.append(f"{page}: {text_of(e.get('str', ''))[:60]} (lvl {e.get('Level')})")
@@ -126,7 +151,8 @@ def main():
                 w = int(float(e.get('DropChance') or 0))
             except ValueError:
                 continue
-            pw[cands[0]] = w
+            for c in cands:  # every twin of this class with the same text (bases differ in which one they roll)
+                pw[c] = w
         for listname in ('essence', 'perfect_essence'):
             for e in obj.get(listname, []):
                 code = e.get('Code')
@@ -158,13 +184,41 @@ def main():
         want = [p for p in pages if attr and p.endswith('_' + attr)] or [p for p in pages if p.replace('_', ' ') == name]
         if want:
             base_page[name] = want[0]
+    # Bases without a page of their own (all-attribute Grand Manchettes/Cuisses/Visage, the Golden bases): the class's
+    # pages merged (a mod keeps the weight its class pages give it). Bases whose implicit adds the ring tag (Grasping
+    # Mail forms) also take the Rings page for the ring mods their own page does not list.
+    merged = {}
+    for name, b in kb['bases'].items():
+        pages = page_of_cls.get(b['cls'], [])
+        if name in base_page or not pages:
+            continue
+        key = b['cls'] + ' (all pages)'
+        if key not in merged:
+            w = {}
+            for pg in pages:
+                for mid, v in per_page[pg]['weights'].items():
+                    w.setdefault(mid, v)
+            merged[key] = {'cls': b['cls'], 'weights': w, 'merged_from': pages}
+        base_page[name] = key
+    for name, b in kb['bases'].items():
+        pg = base_page.get(name)
+        if 'ring' not in (b.get('tags_added') or []) or not pg or 'Rings' not in per_page:
+            continue
+        key = pg + ' + Rings'
+        if key not in merged:
+            w = dict(per_page[pg]['weights']) if pg in per_page else dict(merged[pg]['weights'])
+            for mid, v in per_page['Rings']['weights'].items():
+                w.setdefault(mid, v)
+            merged[key] = {'cls': b['cls'], 'weights': w, 'merged_from': [pg, 'Rings']}
+        base_page[name] = key
+    per_page.update(merged)
     matched = len({m for p in per_page.values() for m in p['weights']})
     out = {
         'meta': {
             'source': 'poe2db.tw item-class modifier pages (DropChance)', 'source_url': 'https://poe2db.tw/us/Modifiers',
             'fetched': datetime.now(timezone.utc).strftime('%Y-%m-%d'), 'patch': '0.5.5', 'pages': pages_ok,
             'matched': matched, 'unmatched': len(unmatched), 'bases_mapped': len(base_page),
-            'note': 'Community weights, not official. Desecrated mods have no published weights and stay equal.',
+            'note': 'Community weights, not official. Desecrated mods have no published weights and stay equal. Bases without a poe2db page use their class pages merged; Grasping Mail forms add the Rings page for ring mods.',
         },
         'pages': per_page,
         'base_page': base_page,

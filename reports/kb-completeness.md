@@ -30,7 +30,7 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 | # | Area | Source | Target level | Status |
 |---|---|---|---|---|
 | 1 | Natural mod pools per base: tiers, levels, groups, tags, texts, value ranges | RePoE mods.json (have); cross-check RePoE mods_by_base.json | game data | **verified**: all 1,617 in-scope bases (22 classes) identical to RePoE's per-base game-data lists (scripts/kb_verify.py). Jewels keep poe2db ids and in-game radius wording; texts and ranges match the game data; the Small/Notable split of radius mods is verified against Mods.RadiusJewelType (77 Small, 79 Notable, all identical; user OK for the download) |
-| 2 | Roll weights of natural mods | poe2db DropChance (have); Craft of Exile | cross-checked estimate | poe2db only; comparison pending |
+| 2 | Roll weights of natural mods | poe2db DropChance | estimate (community) | **coverage fixed**: 99.8% of base-mod pairs have a poe2db weight (was 92.9%); the matcher gave one-hand/two-hand twins and same-number mods each other's weights. 445 of 239,511 pairs (Grasping Mail's Genesis Tree mods, a few specials) take their family's lowest weight. Craft of Exile skipped (user, 27 Sept 2026: same Recombinator source) |
 | 3 | Essence mods per item class | game tables EssenceMods, Essences, EssenceTargetItemCategories | game data | **verified**: all 1,168 essence/alloy -> class -> mod pairs identical (scripts/essences_from_gamedata.py). The 9 essences that give one of several mods are in kb.essence_outcomes (game table; Abyss 50/50 and Perfect Infinite 50/50/50 weights, others none) and the planner rolls among the outcomes the item can take |
 | 4 | Desecrated mods per class, levels, lich tags, reveal rules | RePoE desecrated domain + keywords | game data | done (all equipment desecrated mods are level 65; none on sceptres) |
 | 5 | Corruption (Vaal Orb) outcomes and corrupted implicits | RePoE mods generation_type corrupted | game data (list); outcome chances open | **verified**: 119 Corruption Enhancements in the KB (dom 'c'; equipment item-domain, jewels misc-domain), per-base lists identical to RePoE for all 1,617 bases; shown under Vaal Orb. Outcome chances: not in the files |
@@ -45,6 +45,12 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 | 11 | Mechanics that the files do not state | in-game tests (page) | open until tested | 18 open (see In-game tests; t24-t29 added) |
 
 ## Log
+
+- 27 Sept 2026: weights. The poe2db matcher picked the first of several KB mods with the same group and level, so two-hand
+  weapons got the one-hand twins' weights (Staff 71% of pairs without weight, Crossbow/Two Hand Mace/Warstaff/Talisman
+  ~40%), and "reduced Bleeding duration" went to the Ignite mod with the same numbers. Now: the class's own pool first, then
+  text + ranges (reversed ranges and hybrid line order normalised), weight to every same-class twin, merged class pages
+  for bases without a page, Rings page for Grasping Mail. Pairs without weight: 17,060 -> 445.
 
 - 27 Sept 2026: t27 from the player's trade searches: wands never carry two elements' spell modifiers (0 results for three
   pairs, the check pair found), so natural rolls follow the adds_tags rule. Two staves do carry such pairs, each with something

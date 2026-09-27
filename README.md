@@ -57,7 +57,7 @@ python scripts/fetch_icons.py              # yeni fiyatlı eşyaların ikonları
 - Unique jewel'lar (13) bilgi tabanında: base, sınır, bozuk düşme, satırları; her item'de değişen satırlar işaretli.
 - Expedition Tablet'in ikonu yok; Exiled Exchange 2 listesinde adresi bulunmuyor. Diğer bütün fiyatlı eşyaların ikonu var.
 - Beyaz bazdan başlayan planlarda yeni baza dönmek (Magic aşamasında iki hedef tutmazsa ya da Rare'de taraf dolunca) çoğu zaman pahalı omen'lerle düzeltmekten çok daha ucuzdur ama çok sayıda baz ister. Baz fiyatı (varsayılan 1 ex) ve eşya başına baz sınırı (varsayılan 100) oyuncunun girdisidir; piyasada o kadar baz bulunmayabilir. Sınırın ötesinde çok daha ucuz bir yol varsa plan bunu söyler.
-- Olasılıklar tahmindir: mod ağırlıkları poe2db'nin topluluk verisi, desecrated modlar eşit ağırlıklı, Catalysing Exaltation çarpanı (varsayılan ×5) tek kaynaklı ve ayarlanabilir.
+- Olasılıklar tahmindir: mod ağırlıkları poe2db'nin topluluk verisi (base-mod çiftlerinin %99,8'inde var; kalanlar ailenin en düşük ağırlığını alır), desecrated modlar eşit ağırlıklı, Catalysing Exaltation çarpanı (varsayılan ×5) tek kaynaklı ve ayarlanabilir.
 - Rare item değeri yalnızca kullanıcının kaydettiği fiyatlardan tahmin edilir; resmi fiyat geçmişi yok ve trade sitesine otomatik istek yasak (ToS 7i).
 - Unique fiyatları poe.ninja'dan gelir; ilan sayısı olmadığı için nadir unique'lerde gerçek satıştan uzak olabilir.
 - Ctrl+C (basit) metninde tier yoktur; aynı metne uyan hibrit ve yerel/genel modlar seçim için işaretlenir.
