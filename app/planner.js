@@ -1661,7 +1661,11 @@
   /**
    * Emulator: one use of `action` on the item, as the game would show it. Modifiers that stay keep their lines and
    * values; new ones roll inside their range; a Divine Orb rolls every value but fractured ones again.
-   * opts: {weights, essences, catalystMult, locks, rng}. Returns {text, added: [texts], removed: [texts]} or {reason}.
+   * opts: {weights, essences, catalystMult, locks, rng, seed, reveal}. seed replays the same use, so the page can take
+   * another of the offered Desecrated modifiers. reveal (bones): {choose: index of the three offered, reroll: true to
+   * reroll the first three with Omen of Abyssal Echoes}; without a choice the highest level one is taken, as the planner
+   * does. Returns {text, added: [texts], removed: [texts], seed, reveal?} or {reason}; reveal: {options: [{text, lvl,
+   * tier, side}], chosen, canReroll, rerolled, first: the three before the reroll}.
    */
   function emulate(ix, item, action, opts) {
     opts = opts || {};
@@ -1671,8 +1675,20 @@
     st.mods.forEach((m, i) => { m.src = i; });
     const why = validate(ctx, st, action);
     if (why) return { reason: why };
-    const rng = opts.rng || rngFrom((Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0);
-    const r = apply(ctx, st, action, rng);
+    const seed = opts.seed != null ? opts.seed : (Date.now() ^ Math.floor(Math.random() * 1e9)) >>> 0;
+    const rng = opts.rng || rngFrom(seed);
+    // Well of Souls: three Desecrated modifiers are offered and one is kept; Omen of Abyssal Echoes rerolls the three once
+    const want = opts.reveal || {};
+    let reveal = null;
+    const show = (list) => list.map((e) => ({ text: ctx.kb.mods[e.id].txt.replace(/\n/g, ' / '), lvl: e.lvl, tier: e.tier || null, side: e.side }));
+    const pick = action.op === 'bone' ? (list, second) => {
+      if (!second && action.echoes && want.reroll) { reveal = { first: show(list) }; return null; }
+      const best = list.reduce((b, e, i) => (e.lvl > list[b].lvl ? i : b), 0);
+      const i = want.choose != null && want.choose >= 0 && want.choose < list.length ? want.choose : best;
+      reveal = Object.assign(reveal || {}, { options: show(list), chosen: list.length ? i : null, rerolled: !!second, canReroll: !!action.echoes && !second });
+      return list[i] || null;
+    } : undefined;
+    const r = apply(ctx, st, action, rng, pick);
     if (r.state.unpredictable) return { reason: 'The planner does not model what this does to the item, so the emulator cannot show it.' };
     const out = [`Item Class: ${CLASS_TEXT[ctx.cls] || ctx.cls + 's'}`, `Rarity: ${r.state.rarity}`];
     if (r.state.rarity === 'Rare' || r.state.rarity === 'Unique') out.push(item.name || 'Emulated Item');
@@ -1700,7 +1716,7 @@
     if (r.state.corrupted) out.push('--------', 'Corrupted');
     if (r.state.sanctified) out.push('--------', 'Sanctified');
     const txt = (m) => (m.id && ctx.kb.mods[m.id] ? ctx.kb.mods[m.id].txt.replace(/\n/g, ' / ') : '?');
-    return { text: out.join('\n'), added: r.added.map(txt), removed: r.removed.map(txt) };
+    return Object.assign({ text: out.join('\n'), added: r.added.map(txt), removed: r.removed.map(txt), seed }, reveal ? { reveal } : {});
   }
 
   /**

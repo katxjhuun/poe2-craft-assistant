@@ -831,3 +831,36 @@ test('workbench: the emulator keeps the modifiers that stay, the calculator and 
   const sum = Object.values(fc.side.prefix).reduce((t, x) => t + x, 0);
   assert.ok(Math.abs(sum - 1) < 1e-9);
 });
+
+test('workbench: a bone use offers three Desecrated modifiers; the same seed takes another one; Abyssal Echoes rerolls the three', () => {
+  const item = E.parseItem(ix, ['Item Class: Body Armours', 'Rarity: Rare', 'Test Robe', 'Heavy Plate', '--------', 'Item Level: 82', '--------',
+    '+120 to maximum Life', '35% increased Armour', '+30% to Fire Resistance'].join('\n')).item;
+  const a = { op: 'bone', quality: 'Preserved' };
+  const r = P.emulate(ix, item, a, { seed: 11 });
+  assert.ok(r.reveal && r.reveal.options.length === 3, JSON.stringify(r.reveal));
+  const top = Math.max(...r.reveal.options.map((o) => o.lvl));
+  assert.equal(r.reveal.options[r.reveal.chosen].lvl, top, 'default: the highest level one, as the planner takes');
+  assert.equal(r.reveal.canReroll, false);
+  assert.deepEqual(r.added, [r.reveal.options[r.reveal.chosen].text]);
+  const other = (r.reveal.chosen + 1) % 3;
+  const r2 = P.emulate(ix, item, a, { seed: r.seed, reveal: { choose: other } });
+  assert.deepEqual(r2.reveal.options, r.reveal.options, 'same seed, same three offered');
+  assert.deepEqual(r2.added, [r.reveal.options[other].text]);
+  const it2 = E.parseItem(ix, r2.text).item;
+  assert.equal(it2.mods.filter((m) => m.slot === 'prefix' || m.slot === 'suffix').length, 4);
+  assert.equal(it2.mods.filter((m) => m.desecrated).length, 1, 'the kept one reads back as Desecrated');
+  // Omen of Abyssal Echoes: the first three can be rerolled once, then one of the new three is kept
+  const e = { op: 'bone', quality: 'Preserved', echoes: true };
+  const r3 = P.emulate(ix, item, e, { seed: 11 });
+  assert.equal(r3.reveal.canReroll, true);
+  const r4 = P.emulate(ix, item, e, { seed: 11, reveal: { reroll: true } });
+  assert.equal(r4.reveal.rerolled, true);
+  assert.equal(r4.reveal.canReroll, false);
+  assert.deepEqual(r4.reveal.first, r3.reveal.options, 'the three before the reroll are the first ones');
+  const r5 = P.emulate(ix, item, e, { seed: 11, reveal: { reroll: true, choose: 2 } });
+  assert.deepEqual(r5.reveal.options, r4.reveal.options);
+  assert.deepEqual(r5.added, [r4.reveal.options[2].text]);
+  assert.ok(P.actionNames(e).includes('Omen of Abyssal Echoes'));
+  // other currency has no reveal
+  assert.equal(P.emulate(ix, item, { op: 'exalt' }, { seed: 3 }).reveal, undefined);
+});

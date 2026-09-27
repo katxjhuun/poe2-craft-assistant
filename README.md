@@ -50,6 +50,7 @@ python scripts/fetch_icons.py              # yeni fiyatlı eşyaların ikonları
 ## Workbench (Craft of Exile'dan esinlenildi)
 
 - Item panelindeki **Workbench** düğmesi, item'in bir kopyası üzerinde çalışır: **Emulator** (currency, orb tier'ı ve omen seçip rastgele sonucu görmek, geri almak, istenirse "Use as my item" ile ana item'e aktarmak) ve **Calculator** (All/Any/At least N/None gereksinim grupları, tek kullanımın olasılığı; gruplar hedeflerden başlar).
+- Bone (desecrate) kullanımında emülatör, Well of Souls'taki gibi 3 Desecrated mod sunar; varsayılan en yüksek seviyeli olandır (planner da onu alır), başka biri seçilebilir. Omen of Abyssal Echoes seçiliyse ilk üçlü bir kez yeniden çekilebilir; lich omen'leri (Blackblooded, Liege, Sovereign) de seçilebilir. Aynı kullanım aynı tohumla (seed) tekrar oynatılır, yani seçim değişince item'in geri kalanı değişmez.
 - Stat seçicide her stat'ın yanında, bir sonraki rastgele modun o stat olma yüzdesi yazar (o taraf içinde; tooltip'te herhangi bir yeni mod içinde).
 - Planner fonksiyonları: `P.emulate`, `P.chanceOf`, `P.familyChances`.
 

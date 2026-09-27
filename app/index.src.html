@@ -239,6 +239,10 @@ details.notes[open] summary { margin-bottom: 6px; }
 .bench .b-grp { border: 1px dashed var(--line-2); border-radius: 8px; padding: 8px; display: grid; gap: 6px; }
 .bench .b-req { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; }
 .bench .b-p { font-size: 22px; font-variant-numeric: tabular-nums; }
+.bench .b-reveal { display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 10px; }
+.bench .b-opt { text-align: left; justify-content: flex-start; white-space: normal; }
+.bench .b-opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.bench .b-chk { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
 @media (max-width: 760px) { .bench { grid-template-columns: 1fr; } .bench .b-req { grid-template-columns: 1fr; } }
 .dd-empty { padding: 10px 11px; color: var(--muted); }
 .toggle { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; color: var(--muted); font-size: 14px; }
@@ -1790,7 +1794,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       const r = m.rec;
       return r.liquid ? { op: 'liquid', item: r.item, mod: r.mod } : r.kind === 'magic' ? { op: 'essence', item: r.item, mod: r.mod } : { op: 'pessence', item: r.item, mod: r.mod, side: sideOf };
     }
-    if (m.k.startsWith('bone:')) return { op: 'bone', quality: m.k.slice(5), side: sideOf };
+    if (m.k.startsWith('bone:')) return { op: 'bone', quality: m.k.slice(5), side: sideOf, echoes: !!sel.echoes, lich: sel.lich || null };
     if (m.k.startsWith('flux:')) return { op: 'flux', to: m.k.slice(5) };
     const a = { op: m.k };
     if (m.tiers) a.tier = sel.tier || 'base';
@@ -1802,9 +1806,15 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     return a;
   }
   function benchCur() { return S.bench.hist[S.bench.idx]; }
+  /** A workbench history entry from an emulated use; a bone use keeps its seed so another offered modifier can be taken. */
+  function benchEntry(r, action, reveal) {
+    const pr = E.parseItem(S.ix, r.text);
+    const note = `${P.actionNames(action).join(' + ')}: ${r.added.length ? 'added ' + r.added.join('; ') : 'nothing added'}${r.removed.length ? ' · removed ' + r.removed.join('; ') : ''}`;
+    return { text: r.text, item: pr.item, note, reveal: r.reveal || null, replay: { seed: r.seed, action, reroll: !!(reveal && reveal.reroll) } };
+  }
   function openBench() {
     if (!S.item || S.item.unsupported) return;
-    S.bench = { hist: [{ text: S.text, item: S.item, note: 'Your item' }], idx: 0, sel: { m: 'exalt', tier: 'base', omen: '' }, msg: null, calc: null,
+    S.bench = { hist: [{ text: S.text, item: S.item, note: 'Your item' }], idx: 0, sel: { m: 'exalt', tier: 'base', omen: '', lich: '', echoes: false }, msg: null, calc: null,
       groups: [{ type: 'and', n: 1, reqs: Object.entries(S.targets).filter(([, t]) => t && t.fam && t.group !== 'essence' && t.group !== 'alloy' && t.group !== 'liquid')
         .map(([k, t]) => ({ fam: t.fam, side: t.group === 'desecrated' ? k.split('-')[0] : t.group, des: t.group === 'desecrated', minTier: t.minTier || null, label: t.label })) }] };
     renderBench();
@@ -1849,9 +1859,18 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const methodSel = `<select id="bMethod" aria-label="Currency">${groups.map((g) => `<optgroup label="${esc(g)}">${methods.filter((x) => x.g === g).map((x) => `<option value="${esc(x.k)}" ${x.k === m.k ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}</optgroup>`).join('')}</select>`;
     const tierSel = m.tiers ? `<select id="bTier" aria-label="Orb tier">${BENCH_TIERS.map(([v, l]) => `<option value="${v}" ${B.sel.tier === v ? 'selected' : ''}>${l}</option>`).join('')}</select>` : '';
     const omenSel = m.omens ? `<select id="bOmen" aria-label="Omen">${m.omens.map(([v, l]) => `<option value="${v}" ${B.sel.omen === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>` : '';
+    const LICH = [['Kurgal', 'Omen of the Blackblooded (Kurgal)'], ['Amanamu', 'Omen of the Liege (Amanamu)'], ['Ulaman', 'Omen of the Sovereign (Ulaman)']];
+    const boneSel = m.k.startsWith('bone:') ? `<div class="b-row"><select id="bLich" aria-label="Lich omen"><option value="">No lich omen</option>${LICH.map(([v, l]) => `<option value="${v}" ${B.sel.lich === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <label class="b-chk"><input type="checkbox" id="bEchoes" ${B.sel.echoes ? 'checked' : ''}>Omen of Abyssal Echoes</label></div>` : '';
     const action = benchAction(m, B.sel);
     const names = P.actionNames(action);
     const price = names.reduce((t, n) => t + (priceEx(n) || 0), 0);
+    const rv = B.idx > 0 && cur.reveal && cur.reveal.options ? cur.reveal : null;
+    const sideName = (o) => (o.side === 'prefix' ? 'Prefix' : 'Suffix');
+    const revealHtml = rv ? `<div class="b-reveal"><div class="sub">Well of Souls: the game offers ${rv.options.length === 1 ? 'one Desecrated modifier' : rv.options.length + ' Desecrated modifiers and you keep one'}${rv.rerolled ? ', rerolled once with Omen of Abyssal Echoes' : ''}. Select another to take it instead.</div>
+      ${rv.options.map((o, i) => `<button type="button" class="btn small b-opt" data-bpick="${i}" aria-pressed="${i === rv.chosen}">${sideName(o)}: ${esc(o.text)}${o.tier ? ` (T${o.tier})` : ''}</button>`).join('')}
+      ${rv.canReroll ? '<div class="b-row"><button type="button" class="btn small" id="bReroll">Reroll the three (Omen of Abyssal Echoes)</button></div>' : ''}
+      ${rv.first ? `<div class="sub">Offered before the reroll: ${rv.first.map((o) => esc(o.text)).join('; ')}</div>` : ''}</div>` : '';
     const opts = benchOptionsHtml();
     const reqRow = (q, gi, ri) => `<div class="b-req"><select data-breq="${gi}:${ri}" aria-label="Stat">${opts.map((o) => `<option value="${esc(o.side + '|' + (o.des ? 'd' : '') + '|' + o.fam)}" ${o.fam === q.fam && o.side === q.side && !!o.des === !!q.des ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}${opts.some((o) => o.fam === q.fam && o.side === q.side) ? '' : `<option selected value="${esc(q.side + '|' + (q.des ? 'd' : '') + '|' + q.fam)}">${esc(q.label || q.fam)}</option>`}</select>
       <select data-btier="${gi}:${ri}" aria-label="Minimum tier"><option value="">Any tier</option>${(opts.find((o) => o.fam === q.fam && o.side === q.side) || { tiers: [] }).tiers.map((t) => `<option value="${t}" ${q.minTier === t ? 'selected' : ''}>T${t} or better</option>`).join('')}</select>
@@ -1866,10 +1885,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
         <div class="b-log">${B.hist.map((h, i) => `<div class="${i === B.idx ? 'cur' : ''}">${i}. ${esc(h.note)}</div>`).join('')}</div></div>
       <div class="b-col">
         <div class="b-box"><h3>Emulator</h3>
-          <div class="b-row">${methodSel}${tierSel}${omenSel}</div>
+          <div class="b-row">${methodSel}${tierSel}${omenSel}</div>${boneSel}
           <div class="b-row"><button class="btn primary" type="button" id="bApply">Use ${esc(names.join(' + '))}</button><span class="sub">${price ? '≈ ' + money(price) + ' per use' : ''}</span></div>
           <div class="b-row"><button class="btn small" type="button" id="bUndo" ${B.idx === 0 ? 'disabled' : ''}>Undo</button><button class="btn small" type="button" id="bReset" ${B.idx === 0 ? 'disabled' : ''}>Back to your item</button><button class="btn small" type="button" id="bUse" ${B.idx === 0 ? 'disabled' : ''}>Use as my item</button></div>
-          ${B.msg ? `<div class="b-msg ${B.msg.bad ? 'bad' : ''}">${esc(B.msg.text)}</div>` : ''}
+          ${B.msg ? `<div class="b-msg ${B.msg.bad ? 'bad' : ''}">${esc(B.msg.text)}</div>` : ''}${revealHtml}
           <p class="sub" style="margin:0">Each use rolls like the planner's simulation (${itemWeights() ? 'poe2db weights' : 'equal weights'}); modifiers that stay keep their values. Nothing here changes your item until you choose Use as my item.</p></div>
         <div class="b-box"><h3>Calculator</h3>
           <p class="sub" style="margin:0">Chance that one use of the currency chosen above leaves this item meeting every group below. Groups start from your targets.</p>
@@ -1884,6 +1903,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (t.id === 'bMethod') { B.sel.m = t.value; B.sel.omen = ''; B.calc = null; }
     else if (t.id === 'bTier') { B.sel.tier = t.value; B.calc = null; }
     else if (t.id === 'bOmen') { B.sel.omen = t.value; B.calc = null; }
+    else if (t.id === 'bLich') { B.sel.lich = t.value; B.calc = null; }
+    else if (t.id === 'bEchoes') { B.sel.echoes = t.checked; B.calc = null; }
     else if (t.dataset.btype != null) { B.groups[+t.dataset.btype].type = t.value; B.calc = null; }
     else if (t.dataset.bn != null) { B.groups[+t.dataset.bn].n = Math.max(1, parseInt(t.value, 10) || 1); B.calc = null; }
     else if (t.dataset.breq != null) { const [gi, ri] = t.dataset.breq.split(':').map(Number); Object.assign(B.groups[gi].reqs[ri], benchParse(t.value), { minTier: null, label: t.selectedOptions[0].textContent }); B.calc = null; }
@@ -1903,11 +1924,18 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       const r = P.emulate(S.ix, cur.item, action, opts);
       if (r.reason) B.msg = { bad: true, text: r.reason };
       else {
-        const pr = E.parseItem(S.ix, r.text);
-        const note = `${P.actionNames(action).join(' + ')}: ${r.added.length ? 'added ' + r.added.join('; ') : 'nothing added'}${r.removed.length ? ' · removed ' + r.removed.join('; ') : ''}`;
-        B.hist = B.hist.slice(0, B.idx + 1).concat([{ text: r.text, item: pr.item, note }]);
-        B.idx = B.hist.length - 1; B.msg = { text: note }; B.calc = null;
+        const h = benchEntry(r, action, null);
+        B.hist = B.hist.slice(0, B.idx + 1).concat([h]);
+        B.idx = B.hist.length - 1; B.msg = { text: h.note }; B.calc = null;
       }
+    } else if (b.dataset.bpick != null || b.id === 'bReroll') {
+      // the same use again (same seed), keeping another offered modifier or rerolling the three
+      const from = B.hist[B.idx - 1];
+      if (!cur.replay || !from) return;
+      const reveal = b.id === 'bReroll' ? { reroll: true } : { choose: +b.dataset.bpick, reroll: cur.replay.reroll };
+      const r = P.emulate(S.ix, from.item, cur.replay.action, Object.assign({}, opts, { seed: cur.replay.seed, reveal }));
+      if (r.reason) B.msg = { bad: true, text: r.reason };
+      else { B.hist[B.idx] = benchEntry(r, cur.replay.action, reveal); B.hist.length = B.idx + 1; B.msg = { text: B.hist[B.idx].note }; B.calc = null; }
     } else if (b.id === 'bUndo') { B.idx = Math.max(0, B.idx - 1); B.msg = null; B.calc = null; }
     else if (b.id === 'bReset') { B.idx = 0; B.msg = null; B.calc = null; }
     else if (b.id === 'bUse') {
