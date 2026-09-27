@@ -1824,7 +1824,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   }
   function openBench() {
     if (!S.item || S.item.unsupported) return;
-    S.bench = { hist: [{ text: S.text, item: S.item, note: 'Your item' }], idx: 0, sel: { m: 'exalt', tier: 'base', omen: '', lich: '', echoes: false }, msg: null, calc: null, strat: { steps: [], res: null, maxUses: 2000, running: false, token: null },
+    S.bench = { hist: [{ text: S.text, item: S.item, note: 'Your item' }], idx: 0, sel: { m: 'exalt', tier: 'base', omen: '', lich: '', echoes: false }, msg: null, calc: null, strat: Object.assign({ res: null, running: false, token: null }, stratLoad()),
       groups: [{ type: 'and', n: 1, reqs: Object.entries(S.targets).filter(([, t]) => t && t.fam && t.group !== 'essence' && t.group !== 'alloy' && t.group !== 'liquid')
         .map(([k, t]) => ({ fam: t.fam, side: t.group === 'desecrated' ? k.split('-')[0] : t.group, des: t.group === 'desecrated', minTier: t.minTier || null, label: t.label })) }] };
     renderBench();
@@ -1975,8 +1975,15 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     else if (!stratChange(B, t)) return;
     renderBench();
   });
-  /** A change that makes the strategy result stale: drop it and cancel a run in progress. */
-  function stratReset(B) { B.strat.res = null; B.strat.running = false; B.strat.token = null; }
+  /** A change that makes the strategy result stale: drop it and cancel a run in progress; the steps are kept. */
+  function stratReset(B) { B.strat.res = null; B.strat.running = false; B.strat.token = null; stratSave(B); }
+  // the strategy steps are remembered in this browser per item class (currencies differ between classes)
+  const stratKey = () => 'strategy.' + ((S.item && S.item.base && S.ix.kb.bases[S.item.base]) ? S.ix.kb.bases[S.item.base].cls : 'any');
+  function stratLoad() {
+    const v = store.get(stratKey(), null);
+    return v && Array.isArray(v.steps) ? { steps: v.steps, maxUses: v.maxUses || 2000 } : { steps: [], maxUses: 2000 };
+  }
+  function stratSave(B) { store.set(stratKey(), { steps: B.strat.steps, maxUses: B.strat.maxUses }); }
   /** Strategy editor fields; true when the change was one of them. */
   function stratChange(B, t) {
     const d = t.dataset, SS = B.strat.steps;

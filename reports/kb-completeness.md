@@ -43,9 +43,15 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 | 13 | Unique items (all classes but flasks and charms) | RePoE uniques.json, EE2 bases, poe2db unique pages, game unique mods | game data + poe2db | **done**: 423 of 423 in kb.uniques (scripts/unique_items.py, reports/uniques.md); all 2,479 lines match a game mod, vary per item or are item properties (Unmodifiable, hidden sockets). Pasted uniques read their lines with ranges. Jewels cannot be chanced (Chanceableitemclasses), so unique jewels only drop |
 | 15 | Runes of Aldur (element transform) | rune texts (augments), two trade staves | game data + confirmed | **done**: Passion/Breath/Ire/Betrayal of Aldur turn the other elements' modifiers into Fire/Cold/Lightning/Chaos ones while socketed; fractured ones stay; listed under What you can use now (t30) |
 | 14 | Verisium Anvil (Runeforging) | Expedition2VerisiumCrafts, ArmourTypes, Words; player; runeforging guides | game data + confirmed | **done**: 387 base upgrades with Armour/Evasion/ES and Runic Ward before and after (bases from level 55 give up about 12-20% of their defence; all get Ward), 269 uniques moved to their Runeforged/Runemastered base with crests. Modifiers stay (player; fractured ones too since 0.5.1) |
-| 11 | Mechanics that the files do not state | in-game tests (page) | open until tested | 18 open (see In-game tests; t24-t29 added) |
+| 11 | Mechanics that the files do not state | in-game tests (page) | open until tested | 12 open of 30 (t1, t3, t8, t12, t14, t18, t20-t25); 15 confirmed, 3 refuted |
 
 ## Log
+
+- 27 Sept 2026: Workbench. A bone use shows the three Desecrated modifiers the Well of Souls offers; the player keeps
+  any of them (the same use replays from its seed), Omen of Abyssal Echoes rerolls the three once, lich omens can be
+  chosen. New Strategy simulator (as Craft of Exile's): the player's own steps with rules (a requirement group -> next,
+  repeat, new base, stop or step N), stats, open slots and rarity as requirements, the Calculator's groups as the goal;
+  2,000 runs report success, cost per run and per finished item, uses per step and how the runs ended.
 
 - 27 Sept 2026: unique lines 2,339 -> 2,479 of 2,479 verified. The rest differed only in how poe2db writes them: negative
   ranges ("(-20--10)%" for the game's "-(20-10)%"), ranges across zero ("(-25-25)% reduced" for "(-25-25)% increased",
