@@ -263,3 +263,23 @@ test('a Rare jewel copy: usage text is not a mod, limits are 2 + 2, "+1 Prefix M
   const withCap = Object.assign({}, r.item, { mods: r.item.mods.concat([{ slot: 'suffix', text: '+1 Prefix Modifier allowed', modId: 'CraftedJewelAdditionalPrefixAllowed', crafted: true }]) });
   assert.deepEqual(E.itemLimits(ix, withCap), { prefix: 3, suffix: 2 });
 });
+
+test('real jewels with a "+1 Prefix/Suffix Modifier allowed" mod: 4 regular mods and the crafted one, tiers as the game shows', () => {
+  const JEWELS = require('./fixtures/jewels.js');
+  const want = { 'blight-joy': { prefix: 2, suffix: 3 }, 'loath-ornament': { prefix: 3, suffix: 2 } };
+  for (const j of JEWELS) {
+    const r = E.parseItem(ix, j.text);
+    assert.equal(r.item.mods.length, 5, j.id);
+    assert.ok(r.item.mods.every((m) => m.modId), j.id + ' every line matched');
+    assert.equal(r.item.mods.filter((m) => m.crafted).length, 1, j.id);
+    assert.deepEqual(E.itemLimits(ix, r.item), want[j.id], j.id);
+    assert.ok(!r.warnings.some((w) => w.level !== 'info'), j.id + ' ' + JSON.stringify(r.warnings));
+    for (const m of r.item.mods) if (!m.crafted) assert.equal(m.tier, 1, `${j.id}: ${m.text}`);
+  }
+  // different stats that share a mod group keep their own family (game mod type)
+  const loath = E.parseItem(ix, JEWELS[1].text).item;
+  const staff = loath.mods.find((m) => /Quarterstaves/.test(m.text));
+  const mace = Object.entries(kb.mods).find(([, m]) => m.src === 'poe2db' && /Damage with Maces$/.test(m.txt));
+  assert.ok(mace && kb.mods[staff.modId].fam !== mace[1].fam && kb.mods[staff.modId].grp.some((g) => mace[1].grp.includes(g)));
+});
+

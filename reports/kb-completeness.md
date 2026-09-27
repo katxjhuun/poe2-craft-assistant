@@ -46,6 +46,11 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 
 ## Log
 
+- 27 Sept 2026: two trade jewels from the player (Blight Joy, Loath Ornament) read cleanly: with a Potent Liquid Contempt
+  allowance mod a jewel holds 4 regular mods + the crafted one (3 + 2 or 2 + 3). They showed a real bug: poe2db's jewel
+  families are mod groups, so different stats shared one family (Damage with Maces/Quarterstaves/Spears; 9 families) and
+  got tiers T2, T3; jewel mods now use the game's mod type as family (tiers T1 as in game) and keep the group in grp.
+
 - 27 Sept 2026: player facts checked. Potent Ferocity/Contempt placement (side the removal opened) confirmed by the player, the
   game data sides and the MMOexp guide (t26). Runeforging confirmed by the game tables (Ward on all 402 upgraded bases,
   defence loss from base level 55) and a guide (t28). Grasping Mail takes jewellery catalysts (t29, player). Jewel total:

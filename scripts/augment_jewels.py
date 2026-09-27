@@ -91,8 +91,26 @@ def link_game(kb, repoe):
         m['gid'] = gid
         m['mt'] = g.get('implicit_tags') or []
         m['st'] = [[s['id'], s.get('min'), s.get('max')] for s in g.get('stats') or []]
+        # family = the game's mod type: poe2db's family list is the mod group, which puts different stats together
+        # (Damage with Maces, Quarterstaves and Spears share SpecificWeaponDamage); the group stays in grp
+        if g.get('type'):
+            m['fam'] = g['type']
     if missing or clash:
         raise SystemExit('jewel mods without one game mod: ' + '; '.join(missing[:10]) + (f'; conflicting: {sorted(clash)[:10]}' if clash else ''))
+    # tiers again, per game mod type (a player's Alt+Ctrl+C shows T1 on each of those single-tier stats)
+    for name, b in kb['bases'].items():
+        if b['cls'] != 'Jewel':
+            continue
+        pool = kb['pools'][b['sig']]
+        for side in ('prefix', 'suffix'):
+            fam = collections.defaultdict(list)
+            for mid, _t in pool[side]:
+                fam[kb['mods'][mid]['fam']].append(mid)
+            out = []
+            for lst in fam.values():
+                lst.sort(key=lambda i: -(kb['mods'][i]['lvl'] or 0))
+                out += [[i, t + 1] for t, i in enumerate(lst)]
+            pool[side] = out
 
     # liquid emotions: natural outcomes carry game ids from poe2_kb_build.py; use the knowledge base's jewel mod instead.
     # An emotion can add a mod that does not roll naturally on that jewel (Liquid Disgust gives Emeralds the Sapphire mod
