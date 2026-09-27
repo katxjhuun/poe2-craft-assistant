@@ -318,3 +318,17 @@ test('a pasted unique: its lines match the unique\'s known lines (kb.uniques) wi
   assert.ok(r.warnings.some((w) => w.msg.startsWith(name + ':')));
   assert.ok(Object.keys(kb.uniques).length > 400);
 });
+
+test('a unique line with a range across zero: both "increased" and "reduced" rolls match it, any magnitude up to the end', () => {
+  const u = kb.uniques["Ventor's Gamble"];
+  assert.ok(u && u.variants[0].mods.some((m) => /^\(-25-25\)% reduced Rarity of Items found$/.test(m.txt) && m.verified));
+  const base = u.trade_base || u.variants[0].base;
+  const parse = (line) => E.parseItem(ix, ['Item Class: Rings', 'Rarity: Unique', "Ventor's Gamble", base, '--------', 'Item Level: 80', '--------', line].join('\n'));
+  for (const line of ['12% increased Rarity of Items found', '7% reduced Rarity of Items found']) {
+    const r = parse(line);
+    assert.equal(r.item.mods.length, 1, line);
+    assert.equal(r.item.mods[0].slot, 'unique', line);
+    assert.equal(r.item.mods[0].fit, true, line);
+  }
+  assert.equal(parse('30% increased Rarity of Items found').item.mods[0].fit, false, 'above the range');
+});

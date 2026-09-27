@@ -67,7 +67,8 @@
       const lo = Math.min(ranges[i][0], ranges[i][1]);
       const hi = Math.max(ranges[i][0], ranges[i][1]);
       const v = Math.abs(values[i]);
-      const alo = Math.min(Math.abs(lo), Math.abs(hi));
+      // a range across zero ("(-25-25)%"): any magnitude up to the larger end
+      const alo = lo < 0 && hi > 0 ? 0 : Math.min(Math.abs(lo), Math.abs(hi));
       const ahi = Math.max(Math.abs(lo), Math.abs(hi));
       // Compare on magnitude: "reduced" lines show a positive number for a negative stat.
       if (v < alo - 1e-6 || v > ahi + 1e-6) return false;
@@ -125,8 +126,16 @@
     if (!u) return null;
     const own = u.variants.filter((v) => v.base === item.base);
     const map = new Map();
+    const flip = { increased: 'reduced', reduced: 'increased', more: 'less', less: 'more' };
     for (const v of own.length ? own : u.variants) {
-      for (const m of v.mods) for (const l of m.txt.split('\n')) if (!map.has(normalize(l))) map.set(normalize(l), { line: l, variable: !!m.variable });
+      for (const m of v.mods) {
+        for (const l of m.txt.split('\n')) {
+          const keys = [normalize(l)];
+          // a range across zero ("(-25-25)% reduced"): the item says "increased" or "reduced" by the rolled sign
+          if (/\(-[\d.]+-[\d.]+\)/.test(l)) keys.push(normalize(l.replace(/\b(increased|reduced|more|less)\b/, (w) => flip[w])));
+          for (const k of keys) if (!map.has(k)) map.set(k, { line: l, variable: !!m.variable });
+        }
+      }
     }
     return map;
   }

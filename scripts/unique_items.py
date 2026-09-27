@@ -4,8 +4,12 @@
 1. Names: RePoE uniques.json (game data). Base types: Exiled Exchange 2 items.ndjson (trade site list), else the poe2db page.
 2. Each unique's lines: poe2db unique pages (in-game wording, ranges), cached in .kb_cache/poe2db, fetched one every 2 s.
 3. Every line is matched to the game data's unique-generation mods (RePoE mods.json) by text and range; a line counts as
-   verified when a game mod has the same text and range. Lines that vary per item (a random passive, a keystone, random
-   jewel or desecrated mods, a timeless leader) are marked; other lines without a game mod stay, marked unverified.
+   verified when a game mod has the same text and range, or when it is one or more lines of a multi-line game mod (poe2db
+   splits some). The two sources write some things differently, made equal before matching: a negative range ("-(20-10)%"
+   vs "(-20--10)%"), a range across zero ("+(-10-10)", "(-25-25)% increased" vs "(-10-10)", "(-25-25)% reduced").
+   Lines that vary per item (a random passive, a keystone, random jewel or desecrated mods, a timeless leader, Mage's
+   Legacy) and item properties (Unmodifiable, hidden sockets) are marked; a line whose game mod has other numbers is
+   marked text_only; any other line stays, marked unverified.
 
 Writes kb['uniques'] into the knowledge base given by POE2_KB (default poe2_kb_0.5.5.json) and reports/uniques.md.
 Usage: python scripts/unique_items.py [--offline]
@@ -21,8 +25,11 @@ bw = util.module_from_spec(spec); spec.loader.exec_module(bw)
 OFFLINE = '--offline' in sys.argv
 SKIP_CLASSES = {'Charm', 'Flask'}  # out of scope (user decision)
 
-HIDDEN = re.compile(r'^[a-z][a-z0-9_ %+-]*\[[\d, -]+\]$')
-VARIABLE = re.compile(r'\[[A-Za-z]|^Allocates Passive Skill$|Specific Skill|^Random \d|Conquered by|^Historic$')
+HIDDEN = re.compile(r'^[a-z][a-zA-Z0-9_ %+-]*\[[\d, -]+\]$')
+# item properties poe2db lists among the modifiers: not modifiers, nothing to match
+PROPERTY = re.compile(r'^(Unmodifiable|Has \d+ (Augment|Jewel) Sockets? \(Hidden\))$')
+VARIABLE = re.compile(r'\[[A-Za-z]|^\[\d+ Random|^Allocates Passive Skill$|Radius of Passive Skill|Specific Skill|^Random \d|Conquered by|^Historic$'
+                      r"|^Legacy of ")  # Mage's Legacy: the game text is a placeholder for the flask it copies
 
 
 def fetch(page):
@@ -53,7 +60,17 @@ def fetch(page):
 def game_text(t):
     t = re.sub(r'\[([^\]|]+)\|([^\]]+)\]', r'\2', t or '')
     t = re.sub(r'\[([^\]|]+)\]', r'\1', t).strip()
+    t = '\n'.join(l.strip() for l in t.split('\n'))
+    # the game writes negative ranges with the sign outside, "-(20-10)%"; poe2db writes "(-20--10)%"
+    t = re.sub(r'(?<![\w)])-\(([\d.]+)-([\d.]+)\)', lambda m: '(-%s--%s)' % (m.group(1), m.group(2)), t)
+    # a range across zero: the game writes "+(-10-10)" and "(-25-25)% increased", poe2db "(-10-10)" and "(-25-25)% reduced"
+    t = re.sub(r'\+\((-[\d.]+-[\d.]+)\)', r'(\1)', t)
+    t = re.sub(r'(\(-[\d.]+-[\d.]+\)%?) (reduced|less)\b', lambda m: m.group(1) + (' increased' if m.group(2) == 'reduced' else ' more'), t)
     return re.sub(r'\((-?[\d.]+)-(-?[\d.]+)\)', lambda m: '(%s-%s)' % tuple(sorted((m.group(1), m.group(2)), key=float)), t)
+
+
+def template(t):
+    return re.sub(r'\(?-?[\d.]+(?:--?[\d.]+)?\)?', '#', t).strip().lower()
 
 
 def page_text(html):
@@ -85,10 +102,17 @@ def main():
     ee = [json.loads(l) for l in open(os.path.join(CACHE, 'items.ndjson'), encoding='utf-8') if l.strip()]
     ee_base = {i.get('name') or i.get('refName'): (i.get('unique') or {}).get('base') for i in ee if i.get('namespace') == 'UNIQUE'}
     kb = json.load(open(KB, encoding='utf-8'))
-    by_text = collections.defaultdict(list)
+    by_text, by_line, by_tpl = collections.defaultdict(list), collections.defaultdict(list), collections.defaultdict(list)
     for mid, m in mods.items():
         if m.get('generation_type') == 'unique' and m.get('domain') in ('misc', 'item'):
-            by_text[game_text(m.get('text'))].append(mid)
+            t = game_text(m.get('text'))
+            by_text[t].append(mid)
+            ls = t.split('\n')
+            for a in range(len(ls)):  # poe2db can show the lines of a multi-line mod on their own, or some of them together
+                for b in range(a + 1, len(ls) + 1):
+                    by_line['\n'.join(ls[a:b])].append(mid)
+                    by_tpl[template('\n'.join(ls[a:b]))].append(mid)
+            by_tpl[template(t)].append(mid)
     names = sorted({v['name'] for v in uniques.values() if v.get('item_class') not in SKIP_CLASSES})
     U, missing = {}, []
     lines = ['# Unique items', '', 'Sources: RePoE uniques.json (names), Exiled Exchange 2 (base types), poe2db unique pages (lines),',
@@ -113,10 +137,17 @@ def main():
             seen.add(key)
             ml = []
             for t in p['explicit']:
-                if HIDDEN.match(t):
-                    continue  # internal stat lines poe2db shows in grey, not on the item
-                ids = by_text.get(t) or []
+                # internal stat lines poe2db shows in grey, not on the item, alone or inside a block
+                t = '\n'.join(l for l in t.split('\n') if not HIDDEN.match(l.strip()))
+                if not t:
+                    continue
+                gt = game_text(t)
+                ids = by_text.get(gt) or by_line.get(gt) or []
                 rec = {'txt': t, 'ids': ids[:3], 'verified': bool(ids)}
+                if PROPERTY.match(t):
+                    rec['property'] = True
+                elif not ids and by_tpl.get(template(gt)):
+                    rec['ids'] = by_tpl[template(gt)][:3]; rec['text_only'] = True  # same text, other numbers (a version difference)
                 if VARIABLE.search(t):
                     rec['variable'] = True
                 ml.append(rec)
@@ -130,13 +161,15 @@ def main():
             cls = 'Jewel'
         U[name] = {'cls': cls, 'trade_base': ee_base.get(name), 'variants': variants}
         per_cls[cls] += 1
-        ok = sum(1 for v in variants for m in v['mods'] if m['verified'] or m.get('variable'))
+        ok = sum(1 for v in variants for m in v['mods'] if m['verified'] or m.get('variable') or m.get('property'))
         n = sum(len(v['mods']) for v in variants)
         lines.append(f"- **{name}** ({cls}; {', '.join(sorted({v['base'] or '?' for v in variants}))}{'; drops corrupted' if variants[0]['corrupted'] else ''}): "
                      f"{ok} of {n} lines matched or marked as varying")
         for v in variants:
             for m in v['mods']:
-                if not m['verified'] and not m.get('variable'):
+                if m.get('text_only'):
+                    lines.append(f"  - same text as a game mod, other numbers: {m['txt'].replace(chr(10), ' / ')}")
+                elif not m['verified'] and not m.get('variable') and not m.get('property'):
                     lines.append(f"  - no game mod with this text: {m['txt'].replace(chr(10), ' / ')}")
         if (i + 1) % 50 == 0:
             print(f'  {i + 1}/{len(names)}', flush=True)
@@ -146,8 +179,10 @@ def main():
     kb['meta']['rules'] = [r for r in kb['meta']['rules'] if not r.startswith('uniques = ')] + [note]
     json.dump(kb, open(KB, 'w', encoding='utf-8'), separators=(',', ':'), ensure_ascii=False)
     tot = sum(len(v['mods']) for u in U.values() for v in u['variants'])
-    good = sum(1 for u in U.values() for v in u['variants'] for m in v['mods'] if m['verified'] or m.get('variable'))
-    head = [f'{len(U)} of {len(names)} uniques read; {good} of {tot} lines match a game mod or vary per item.',
+    good = sum(1 for u in U.values() for v in u['variants'] for m in v['mods'] if m['verified'] or m.get('variable') or m.get('property'))
+    txt_only = sum(1 for u in U.values() for v in u['variants'] for m in v['mods'] if m.get('text_only'))
+    head = [f'{len(U)} of {len(names)} uniques read; {good} of {tot} lines match a game mod, vary per item or are item properties; '
+            f'{txt_only} more have a game mod with the same text and other numbers.',
             'By class: ' + ', '.join(f'{c} {n}' for c, n in per_cls.most_common()) + '.',
             ('No poe2db page: ' + ', '.join(missing)) if missing else 'Every unique has a poe2db page.', '']
     open(os.path.join(ROOT, 'reports', 'uniques.md'), 'w', encoding='utf-8').write('\n'.join(lines[:5] + head + lines[5:]) + '\n')

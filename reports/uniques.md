@@ -3,17 +3,14 @@
 Sources: RePoE uniques.json (names), Exiled Exchange 2 (base types), poe2db unique pages (lines),
 RePoE mods.json unique mods (text and range check). Flasks and charms are out of scope.
 
-423 of 423 uniques read; 2339 of 2480 lines match a game mod or vary per item.
+423 of 423 uniques read; 2479 of 2479 lines match a game mod, vary per item or are item properties; 0 more have a game mod with the same text and other numbers.
 By class: Body Armour 73, Helmet 53, Ring 39, Gloves 37, Amulet 26, Boots 25, Shield 21, Belt 21, Jewel 13, Two Hand Mace 12, One Hand Mace 12, Bow 11, Spear 10, Staff 10, Buckler 9, Sceptre 9, Wand 8, Focus 8, Quiver 8, Warstaff 7, Talisman 6, Crossbow 5.
 Every unique has a poe2db page.
 
 - **Ab Aeterno** (Boots; Grand Cuisses): 5 of 5 lines matched or marked as varying
-- **Adonia's Ego** (Wand; Siphoning Wand): 4 of 5 lines matched or marked as varying
-  - no game mod with this text: (-1-1) to Maximum Power Charges
-- **Aerisvane's Wings** (Gloves; Burnished Gauntlets, Fists of Stone): 8 of 9 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
-- **Against the Darkness** (Jewel; Time-Lost Diamond): 0 of 1 lines matched or marked as varying
-  - no game mod with this text: [2 Random Jewel Modifiers]
+- **Adonia's Ego** (Wand; Siphoning Wand): 5 of 5 lines matched or marked as varying
+- **Aerisvane's Wings** (Gloves; Burnished Gauntlets, Fists of Stone): 9 of 9 lines matched or marked as varying
+- **Against the Darkness** (Jewel; Time-Lost Diamond): 1 of 1 lines matched or marked as varying
 - **Alkem Eira** (Shield; Blazon Crest Shield): 4 of 4 lines matched or marked as varying
 - **Alpha's Howl** (Helmet; Armoured Cap): 4 of 4 lines matched or marked as varying
 - **Amor Mandragora** (Talisman; Changeling Talisman): 5 of 5 lines matched or marked as varying
@@ -26,20 +23,13 @@ Every unique has a poe2db page.
 - **Assailum** (Helmet; Closed Helm): 4 of 4 lines matched or marked as varying
 - **Astramentis** (Amulet; Stellar Amulet): 2 of 2 lines matched or marked as varying
 - **Atsak's Sight** (Helmet; Veiled Mask): 5 of 5 lines matched or marked as varying
-- **Atziri's Acuity** (Gloves; Fists of Stone, Moulded Mitts): 12 of 15 lines matched or marked as varying
-  - no game mod with this text: Leech (13-17)% of Physical Attack Damage as Life
-  - no game mod with this text: Leech Life (20-25)% slower
-  - no game mod with this text: Unmodifiable
+- **Atziri's Acuity** (Gloves; Fists of Stone, Moulded Mitts): 15 of 15 lines matched or marked as varying
 - **Atziri's Contempt** (Spear; Pronged Spear): 11 of 11 lines matched or marked as varying
 - **Atziri's Disdain** (Helmet; Gold Circlet): 8 of 8 lines matched or marked as varying
 - **Atziri's Rule** (Staff; Reflecting Staff): 10 of 10 lines matched or marked as varying
-- **Atziri's Splendour** (Body Armour; Sacrificial Regalia): 20 of 21 lines matched or marked as varying
-  - no game mod with this text: Has 6 Augment Sockets (Hidden)
-- **Atziri's Step** (Boots; Cinched Boots): 10 of 12 lines matched or marked as varying
-  - no game mod with this text: (-12--6)% to amount of Damage Prevented by Deflection
-  - no game mod with this text: (-12--6)% to amount of Damage Prevented by Deflection
-- **Aurseize** (Gloves; Fists of Stone, Layered Gauntlets): 6 of 7 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Atziri's Splendour** (Body Armour; Sacrificial Regalia): 21 of 21 lines matched or marked as varying
+- **Atziri's Step** (Boots; Cinched Boots): 12 of 12 lines matched or marked as varying
+- **Aurseize** (Gloves; Fists of Stone, Layered Gauntlets): 7 of 7 lines matched or marked as varying
 - **Beacon of Azis** (Amulet; Solar Amulet): 4 of 4 lines matched or marked as varying
 - **Beetlebite** (Boots; Velour Shoes): 4 of 4 lines matched or marked as varying
 - **Belly of the Beast** (Body Armour; Explorer Armour): 11 of 11 lines matched or marked as varying
@@ -56,16 +46,11 @@ Every unique has a poe2db page.
 - **Blackflame** (Ring; Amethyst Ring): 6 of 6 lines matched or marked as varying
 - **Blackgleam** (Quiver; Fire Quiver): 5 of 5 lines matched or marked as varying
 - **Blackheart** (Ring; Iron Ring): 4 of 4 lines matched or marked as varying
-- **Blessed Bonds** (Gloves; Linen Wraps): 5 of 6 lines matched or marked as varying
-  - no game mod with this text: +(60-100) to Evasion Rating
-- **Blistering Bond** (Ring; Ruby Ring): 5 of 6 lines matched or marked as varying
-  - no game mod with this text: (-15--10)% to Cold Resistance
+- **Blessed Bonds** (Gloves; Linen Wraps): 6 of 6 lines matched or marked as varying
+- **Blistering Bond** (Ring; Ruby Ring): 6 of 6 lines matched or marked as varying
 - **Blood Price** (Helmet; Fierce Greathelm): 5 of 5 lines matched or marked as varying
 - **Bloodbarrier** (Buckler; Iron Buckler): 8 of 8 lines matched or marked as varying
-- **Blueflame Bracers** (Gloves; Fists of Stone, Goldcast Cuffs): 10 of 13 lines matched or marked as varying
-  - no game mod with this text: Has +1 to Evasion Rating per player level
-  - no game mod with this text: Has +1 to maximum Energy Shield per player level
-  - no game mod with this text: Unmodifiable
+- **Blueflame Bracers** (Gloves; Fists of Stone, Goldcast Cuffs): 13 of 13 lines matched or marked as varying
 - **Bones of Ullr** (Boots; Lattice Sandals): 5 of 5 lines matched or marked as varying
 - **Brain Rattler** (Two Hand Mace; Studded Greatclub): 3 of 3 lines matched or marked as varying
 - **Bramblejack** (Body Armour; Rusted Cuirass): 5 of 5 lines matched or marked as varying
@@ -73,8 +58,7 @@ Every unique has a poe2db page.
 - **Briskwrap** (Body Armour; Rhoahide Coat): 6 of 6 lines matched or marked as varying
 - **Bristleboar** (Body Armour; Leather Vest): 5 of 5 lines matched or marked as varying
 - **Bronzebeard** (Helmet; Horned Crown): 6 of 6 lines matched or marked as varying
-- **Brutus' Lead Sprinkler** (One Hand Mace; Morning Star): 5 of 6 lines matched or marked as varying
-  - no game mod with this text: local display grants level X molten shower [1]
+- **Brutus' Lead Sprinkler** (One Hand Mace; Morning Star): 5 of 5 lines matched or marked as varying
 - **Brynhand's Mark** (One Hand Mace; Wooden Club): 5 of 5 lines matched or marked as varying
 - **Bursting Decay** (Ring; Unset Ring): 4 of 4 lines matched or marked as varying
 - **Bushwhack** (Boots; Lizardscale Boots): 4 of 4 lines matched or marked as varying
@@ -82,11 +66,7 @@ Every unique has a poe2db page.
 - **Cadiro's Gambit** (Quiver; Primed Quiver): 1 of 1 lines matched or marked as varying
 - **Calgyra's Arc** (Buckler; Ornate Buckler): 5 of 5 lines matched or marked as varying
 - **Call of the Brotherhood** (Ring; Topaz Ring): 4 of 4 lines matched or marked as varying
-- **Candlemaker** (Gloves; Fists of Stone, Sombre Gloves): 10 of 14 lines matched or marked as varying
-  - no game mod with this text: (-20--10)% to Cold Resistance
-  - no game mod with this text: +(2-3)% to Maximum Fire Resistance
-  - no game mod with this text: Enemies Ignited or Chilled by you have (-25--15)% to Elemental Resistances
-  - no game mod with this text: Unmodifiable
+- **Candlemaker** (Gloves; Fists of Stone, Sombre Gloves): 14 of 14 lines matched or marked as varying
 - **Carnage Heart** (Amulet; Amber Amulet): 5 of 5 lines matched or marked as varying
 - **Carrion Call** (Focus; Engraved Focus): 5 of 5 lines matched or marked as varying
 - **Cat O' Nine Tails** (Belt; Utility Belt): 5 of 5 lines matched or marked as varying
@@ -99,16 +79,13 @@ Every unique has a poe2db page.
 - **Coat of Red** (Body Armour; Chain Mail): 4 of 4 lines matched or marked as varying
 - **Collapsing Horizon** (Warstaff; Wyrm Quarterstaff): 4 of 4 lines matched or marked as varying
 - **Constricting Command** (Helmet; Viper Cap): 8 of 8 lines matched or marked as varying
-- **Controlled Metamorphosis** (Jewel; Diamond): 2 of 3 lines matched or marked as varying
-  - no game mod with this text: (-20--5)% to all Elemental Resistances
+- **Controlled Metamorphosis** (Jewel; Diamond): 3 of 3 lines matched or marked as varying
 - **Cornathaum** (Helmet; Heavy Crown): 8 of 8 lines matched or marked as varying
 - **Corona of the Red Sun** (Helmet; Warrior Greathelm): 10 of 10 lines matched or marked as varying
 - **Corpsewade** (Boots; Iron Greaves): 4 of 4 lines matched or marked as varying
 - **Cospri's Will** (Body Armour; Assassin Garb): 5 of 5 lines matched or marked as varying
 - **Couture of Crimson** (Body Armour; Gilded Vestments): 4 of 4 lines matched or marked as varying
-- **Coward's Legacy** (Belt; Mail Belt): 6 of 8 lines matched or marked as varying
-  - no game mod with this text: (-20--10) to Strength
-  - no game mod with this text: (-20--10) to Strength
+- **Coward's Legacy** (Belt; Mail Belt): 8 of 8 lines matched or marked as varying
 - **Cracklecreep** (Ring; Ruby Ring): 4 of 4 lines matched or marked as varying
 - **Crest of Ardura** (Shield; Jingling Crest Shield): 4 of 4 lines matched or marked as varying
 - **Crown of Eyes** (Helmet; Vermeil Circlet): 5 of 5 lines matched or marked as varying
@@ -117,75 +94,49 @@ Every unique has a poe2db page.
 - **Crown of the Victor** (Helmet; Iron Crown): 4 of 4 lines matched or marked as varying
 - **Cursecarver** (Wand; Acrid Wand): 5 of 5 lines matched or marked as varying
 - **Daevata's Wind** (Spear; War Spear): 5 of 5 lines matched or marked as varying
-- **Darkness Enthroned** (Belt; Fine Belt): 10 of 15 lines matched or marked as varying
-  - no game mod with this text: Has 2 Augment Sockets (Hidden)
-  - no game mod with this text: Has 2 Augment Sockets (Hidden)
-  - no game mod with this text: Has 2 Augment Sockets (Hidden)
-  - no game mod with this text: Has 2 Augment Sockets (Hidden)
-  - no game mod with this text: Has 2 Augment Sockets (Hidden)
+- **Darkness Enthroned** (Belt; Fine Belt): 15 of 15 lines matched or marked as varying
 - **Darkray Vectors** (Boots; Braced Sabatons): 5 of 5 lines matched or marked as varying
-- **Death Articulated** (Gloves; Fists of Stone, Ornate Gauntlets): 12 of 14 lines matched or marked as varying
-  - no game mod with this text: +2% to Maximum Chaos Resistance
-  - no game mod with this text: Unmodifiable
+- **Death Articulated** (Gloves; Fists of Stone, Ornate Gauntlets): 14 of 14 lines matched or marked as varying
 - **Death Rush** (Ring; Emerald Ring): 4 of 4 lines matched or marked as varying
 - **Death's Harp** (Bow; Dualstring Bow): 4 of 4 lines matched or marked as varying
-- **Deathblow** (Gloves; Doubled Gauntlets, Fists of Stone): 10 of 11 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Deathblow** (Gloves; Doubled Gauntlets, Fists of Stone): 11 of 11 lines matched or marked as varying
 - **Deathrattle** (Focus; Twig Focus): 4 of 4 lines matched or marked as varying
 - **Decree of Acuity** (Helmet; Ancient Visor): 5 of 5 lines matched or marked as varying
 - **Decree of Flight** (Boots; Ancient Leggings): 6 of 6 lines matched or marked as varying
 - **Decree of Loyalty** (Body Armour; Ancient Mail): 6 of 6 lines matched or marked as varying
 - **Defiance of Destiny** (Amulet; Jade Amulet): 4 of 4 lines matched or marked as varying
 - **Deidbell** (Helmet; Elite Greathelm): 5 of 5 lines matched or marked as varying
-- **Demon Stitcher** (Gloves; Fists of Stone, Intricate Gloves): 12 of 13 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Demon Stitcher** (Gloves; Fists of Stone, Intricate Gloves): 13 of 13 lines matched or marked as varying
 - **Dionadair** (Shield; Splintered Tower Shield): 5 of 5 lines matched or marked as varying
 - **Doedre's Damning** (Ring; Lazuli Ring): 3 of 3 lines matched or marked as varying
-- **Doedre's Tenure** (Gloves; Fists of Stone, Stitched Gloves): 7 of 10 lines matched or marked as varying
-  - no game mod with this text: Has +2 to Evasion Rating per player level
-  - no game mod with this text: Has +1 to maximum Energy Shield per player level
-  - no game mod with this text: Unmodifiable
+- **Doedre's Tenure** (Gloves; Fists of Stone, Stitched Gloves): 10 of 10 lines matched or marked as varying
 - **Doomfletch** (Bow; Composite Bow): 4 of 4 lines matched or marked as varying
 - **Doomgate** (Shield; Braced Tower Shield): 5 of 5 lines matched or marked as varying
 - **Doryani's Prototype** (Body Armour; Scale Mail): 10 of 10 lines matched or marked as varying
 - **Double Vision** (Crossbow; Dyad Crossbow): 4 of 4 lines matched or marked as varying
-- **Dreadfist** (Gloves; Bolstered Mitts, Fists of Stone): 10 of 11 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Dreadfist** (Gloves; Bolstered Mitts, Fists of Stone): 11 of 11 lines matched or marked as varying
 - **Dream Fragments** (Ring; Sapphire Ring): 6 of 6 lines matched or marked as varying
 - **Drillneck** (Quiver; Penetrating Quiver): 12 of 12 lines matched or marked as varying
 - **Duality** (Warstaff; Warding Quarterstaff): 5 of 5 lines matched or marked as varying
 - **Dunkelhalt** (Buckler; Leather Buckler): 4 of 4 lines matched or marked as varying
 - **Dusk Vigil** (Staff; Ashen Staff): 5 of 5 lines matched or marked as varying
-- **Dustbloom** (Body Armour; Studded Vest): 2 of 7 lines matched or marked as varying
-  - no game mod with this text: Maximum 10 Fragile Regrowth
-  - no game mod with this text: 0.5% of maximum Life Regenerated per second per Fragile Regrowth
-  - no game mod with this text: 10% increased Mana Regeneration Rate per Fragile Regrowth
-  - no game mod with this text: Lose all Fragile Regrowth when Hit
-  - no game mod with this text: Gain 1 Fragile Regrowth each second
+- **Dustbloom** (Body Armour; Studded Vest): 7 of 7 lines matched or marked as varying
 - **Earthbound** (Staff; Voltaic Staff): 5 of 5 lines matched or marked as varying
 - **Edyrn's Tusks** (Body Armour; Iron Cuirass): 4 of 4 lines matched or marked as varying
 - **Effigy of Cruelty** (Focus; Antler Focus): 5 of 5 lines matched or marked as varying
 - **Elevore** (Helmet; Hunter Hood): 4 of 4 lines matched or marked as varying
-- **Empire's Grasp** (Gloves; Fists of Stone, Titan Mitts): 10 of 11 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Empire's Grasp** (Gloves; Fists of Stone, Titan Mitts): 11 of 11 lines matched or marked as varying
 - **Enezun's Charge** (Wand; Volatile Wand): 4 of 4 lines matched or marked as varying
 - **Enfolding Dawn** (Body Armour; Pilgrim Vestments): 4 of 4 lines matched or marked as varying
 - **Erian's Cobble** (Helmet; Guarded Helm): 15 of 15 lines matched or marked as varying
-- **Eshtera's Path** (Ring; Ring): 4 of 5 lines matched or marked as varying
-  - no game mod with this text: Has 1 Jewel Socket (Hidden)
-- **Essentia Sanguis** (Gloves; Fists of Stone, Furtive Wraps): 10 of 12 lines matched or marked as varying
-  - no game mod with this text: +2% to Maximum Lightning Resistance
-  - no game mod with this text: Unmodifiable
-- **Eventide Petals** (Amulet; Veridical Chain): 3 of 4 lines matched or marked as varying
-  - no game mod with this text: Ice Crystals have (-3-3)% reduced maximum Life per 5% Cold Resistance you have
+- **Eshtera's Path** (Ring; Ring): 5 of 5 lines matched or marked as varying
+- **Essentia Sanguis** (Gloves; Fists of Stone, Furtive Wraps): 12 of 12 lines matched or marked as varying
+- **Eventide Petals** (Amulet; Veridical Chain): 4 of 4 lines matched or marked as varying
 - **Evergrasping Ring** (Ring; Pearl Ring): 3 of 3 lines matched or marked as varying
 - **Eye of Chayula** (Amulet; Gold Amulet): 3 of 3 lines matched or marked as varying
-- **Eyes of the Runefather** (Buckler; Venerable Defender): 3 of 5 lines matched or marked as varying
-  - no game mod with this text: Inflicts Runefather's Challenge on enemies 6 metres in front of you when raised, no more than once every 2 seconds
-  - no game mod with this text: Gain 1 Runefather's Boast per Power of targets affected by Runefather's Challenge you kill
+- **Eyes of the Runefather** (Buckler; Venerable Defender): 5 of 5 lines matched or marked as varying
 - **Ezomyte Peak** (Helmet; Soldier Greathelm): 5 of 5 lines matched or marked as varying
-- **Facebreaker** (Gloves; Fists of Stone, Stocky Mitts): 11 of 12 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Facebreaker** (Gloves; Fists of Stone, Stocky Mitts): 12 of 12 lines matched or marked as varying
 - **Fairgraves' Curse** (Bow; Artillery Bow): 6 of 6 lines matched or marked as varying
 - **Feathered Fortress** (Shield; Crescent Targe): 5 of 5 lines matched or marked as varying
 - **Fireflower** (Amulet; Solar Amulet): 4 of 4 lines matched or marked as varying
@@ -195,8 +146,7 @@ Every unique has a poe2db page.
 - **Forbidden Gaze** (Helmet; Chain Tiara): 4 of 4 lines matched or marked as varying
 - **Forgotten Warden** (Body Armour; Primal Markings): 5 of 5 lines matched or marked as varying
 - **Foxshade** (Body Armour; Quilted Vest): 4 of 4 lines matched or marked as varying
-- **From Nothing** (Jewel; Diamond; drops corrupted): 0 of 1 lines matched or marked as varying
-  - no game mod with this text: Passives in Radius of Passive Skill can be Allocated / without being connected to your tree
+- **From Nothing** (Jewel; Diamond; drops corrupted): 1 of 1 lines matched or marked as varying
 - **Frostbreath** (One Hand Mace; Slim Mace): 5 of 5 lines matched or marked as varying
 - **Fury of the King** (Talisman; Ashbark Talisman): 6 of 6 lines matched or marked as varying
 - **Gamblesprint** (Boots; Embossed Boots): 5 of 5 lines matched or marked as varying
@@ -204,42 +154,24 @@ Every unique has a poe2db page.
 - **Ghostmarch** (Boots; Threaded Shoes): 5 of 5 lines matched or marked as varying
 - **Ghostwrithe** (Body Armour; Tattered Robe): 3 of 3 lines matched or marked as varying
 - **Gifts from Above** (Ring; Prismatic Ring): 4 of 4 lines matched or marked as varying
-- **Glimpse of Chaos** (Helmet; Tribal Mask): 8 of 14 lines matched or marked as varying
-  - no game mod with this text: (-30-30)% to Fire Resistance
-  - no game mod with this text: (-30-30)% to Cold Resistance
-  - no game mod with this text: (-30-30)% to Lightning Resistance
-  - no game mod with this text: (-30-30)% to Fire Resistance
-  - no game mod with this text: (-30-30)% to Cold Resistance
-  - no game mod with this text: (-30-30)% to Lightning Resistance
+- **Glimpse of Chaos** (Helmet; Tribal Mask): 14 of 14 lines matched or marked as varying
 - **Gloamgown** (Body Armour; Elementalist Robe): 5 of 5 lines matched or marked as varying
 - **Gloomform** (Body Armour; Waxed Jacket): 5 of 5 lines matched or marked as varying
 - **Glowswarm** (Ring; Lazuli Ring): 4 of 4 lines matched or marked as varying
 - **Goldrim** (Helmet; Felt Cap): 3 of 3 lines matched or marked as varying
 - **Goregirdle** (Belt; Plate Belt): 4 of 4 lines matched or marked as varying
 - **Grand Spectrum** (Jewel; Emerald, Ruby, Sapphire): 3 of 3 lines matched or marked as varying
-- **Gravebind** (Gloves; Fists of Stone, Rope Cuffs): 8 of 13 lines matched or marked as varying
-  - no game mod with this text: 20% increased Rarity of Items found / Your other Modifiers to Rarity of Items found do not apply
-  - no game mod with this text: Enemies in your Presence killed by anyone count as being killed by you instead
-  - no game mod with this text: 20% increased Rarity of Items found / Your other Modifiers to Rarity of Items found do not apply
-  - no game mod with this text: Enemies in your Presence killed by anyone count as being killed by you instead
-  - no game mod with this text: Unmodifiable
+- **Gravebind** (Gloves; Fists of Stone, Rope Cuffs): 13 of 13 lines matched or marked as varying
 - **Greed's Embrace** (Body Armour; Vaal Cuirass): 10 of 10 lines matched or marked as varying
-- **Greymake** (Helmet; Brimmed Helm): 4 of 5 lines matched or marked as varying
-  - no game mod with this text: Has 4 Augment Sockets (Hidden)
+- **Greymake** (Helmet; Brimmed Helm): 5 of 5 lines matched or marked as varying
 - **Grip of Kulemak** (Ring; Abyssal Signet): 14 of 14 lines matched or marked as varying
-- **Grip of Winter** (Gloves; Firm Bracers, Fists of Stone): 11 of 12 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Grip of Winter** (Gloves; Firm Bracers, Fists of Stone): 12 of 12 lines matched or marked as varying
 - **Guiding Palm** (Sceptre; Shrine Sceptre): 18 of 18 lines matched or marked as varying
 - **Guiding Palm of the Eye** (Sceptre; Shrine Sceptre): 6 of 6 lines matched or marked as varying
 - **Guiding Palm of the Heart** (Sceptre; Shrine Sceptre): 6 of 6 lines matched or marked as varying
 - **Guiding Palm of the Mind** (Sceptre; Shrine Sceptre): 6 of 6 lines matched or marked as varying
-- **Hand of Wisdom and Action** (Gloves; Fists of Stone, Spiral Wraps): 8 of 9 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
-- **Hateforge** (Gloves; Fists of Stone, Moulded Mitts): 12 of 16 lines matched or marked as varying
-  - no game mod with this text: (-10-10) to Maximum Rage
-  - no game mod with this text: (-10-10) to Maximum Rage
-  - no game mod with this text: (-10-10) to Maximum Rage
-  - no game mod with this text: Unmodifiable
+- **Hand of Wisdom and Action** (Gloves; Fists of Stone, Spiral Wraps): 9 of 9 lines matched or marked as varying
+- **Hateforge** (Gloves; Fists of Stone, Moulded Mitts): 16 of 16 lines matched or marked as varying
 - **Headhunter** (Belt; Heavy Belt): 4 of 4 lines matched or marked as varying
 - **Heart of the Well** (Jewel; Diamond): 4 of 4 lines matched or marked as varying
 - **Heartbound Loop** (Ring; Pearl Ring): 5 of 5 lines matched or marked as varying
@@ -248,77 +180,50 @@ Every unique has a poe2db page.
 - **Hinekora's Sight** (Amulet; Stellar Amulet): 3 of 3 lines matched or marked as varying
 - **Hoghunt** (Two Hand Mace; Felled Greatclub): 5 of 5 lines matched or marked as varying
 - **Horns of Bynden** (Helmet; Rusted Greathelm): 5 of 5 lines matched or marked as varying
-- **Horror's Flight** (Gloves; Engraved Bracers, Fists of Stone): 16 of 17 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Horror's Flight** (Gloves; Engraved Bracers, Fists of Stone): 17 of 17 lines matched or marked as varying
 - **Hrimnor's Hymn** (Two Hand Mace; Oak Greathammer): 4 of 4 lines matched or marked as varying
 - **Hyrri's Ire** (Body Armour; Armoured Vest): 5 of 5 lines matched or marked as varying
 - **Hysseg's Claw** (Talisman; Familial Talisman): 5 of 5 lines matched or marked as varying
 - **Icefang Orbit** (Ring; Iron Ring): 6 of 6 lines matched or marked as varying
 - **Icetomb** (Body Armour; Mail Vestments): 4 of 4 lines matched or marked as varying
-- **Idle Hands** (Gloves; Fists of Stone, Sectioned Bracers): 15 of 16 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Idle Hands** (Gloves; Fists of Stone, Sectioned Bracers): 16 of 16 lines matched or marked as varying
 - **Idol of Uldurn** (Amulet; Crimson Amulet): 5 of 5 lines matched or marked as varying
 - **Igniferis** (Amulet; Crimson Amulet): 5 of 5 lines matched or marked as varying
 - **Immaculate Adherence** (Amulet; Solar Amulet): 6 of 6 lines matched or marked as varying
 - **Indigon** (Helmet; Magus Tiara): 5 of 5 lines matched or marked as varying
 - **Infernoclasp** (Belt; Plate Belt): 4 of 4 lines matched or marked as varying
-- **Ingenuity** (Belt; Utility Belt): 2 of 4 lines matched or marked as varying
-  - no game mod with this text: (-20-20)% reduced Charm Charges gained
-  - no game mod with this text: (-10-10)% reduced Charm Charges used
+- **Ingenuity** (Belt; Utility Belt): 4 of 4 lines matched or marked as varying
 - **Innsmouth** (Helmet; Shabby Hood): 5 of 5 lines matched or marked as varying
 - **Ironbound** (Bow; Warden Bow): 6 of 6 lines matched or marked as varying
 - **Irongrasp** (Body Armour; Vagabond Armour): 5 of 5 lines matched or marked as varying
 - **Ironride** (Helmet; Visored Helm): 5 of 5 lines matched or marked as varying
-- **Jarngreipr** (Gloves; Fists of Stone, Ringmail Gauntlets): 10 of 11 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Jarngreipr** (Gloves; Fists of Stone, Ringmail Gauntlets): 11 of 11 lines matched or marked as varying
 - **Kalandra's Touch** (Ring; Ring): 1 of 1 lines matched or marked as varying
 - **Kaltenhalt** (Buckler; Ridged Buckler): 6 of 6 lines matched or marked as varying
 - **Kaom's Heart** (Body Armour; Conqueror Plate): 2 of 2 lines matched or marked as varying
-- **Keelhaul** (Belt; Linen Belt): 2 of 4 lines matched or marked as varying
-  - no game mod with this text: (-25-25)% reduced Flask Life Recovery rate
-  - no game mod with this text: (-25-25)% reduced Flask Mana Recovery rate
+- **Keelhaul** (Belt; Linen Belt): 4 of 4 lines matched or marked as varying
 - **Keeper of the Arc** (Helmet; Spiritbone Crown): 4 of 4 lines matched or marked as varying
-- **Killjoy** (Gloves; Fists of Stone, Linen Wraps): 10 of 11 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Killjoy** (Gloves; Fists of Stone, Linen Wraps): 11 of 11 lines matched or marked as varying
 - **Kingsguard** (Body Armour; Full Plate): 5 of 5 lines matched or marked as varying
-- **Kitoko's Current** (Gloves; Fists of Stone, Jewelled Gloves): 8 of 9 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Kitoko's Current** (Gloves; Fists of Stone, Jewelled Gloves): 9 of 9 lines matched or marked as varying
 - **Leer Cast** (Helmet; Hooded Mask): 5 of 5 lines matched or marked as varying
 - **Legionstride** (Boots; Rough Greaves): 4 of 4 lines matched or marked as varying
-- **Leopold's Applause** (Gloves; Embroidered Gloves, Fists of Stone): 10 of 11 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Leopold's Applause** (Gloves; Embroidered Gloves, Fists of Stone): 11 of 11 lines matched or marked as varying
 - **Levinstone** (Ring; Topaz Ring): 4 of 4 lines matched or marked as varying
 - **Lifesprig** (Wand; Attuned Wand): 4 of 4 lines matched or marked as varying
-- **Lightning Coil** (Body Armour; Ancestral Mail): 4 of 5 lines matched or marked as varying
-  - no game mod with this text: (-40--30)% to Lightning Resistance
+- **Lightning Coil** (Body Armour; Ancestral Mail): 5 of 5 lines matched or marked as varying
 - **Ligurium Talisman** (Amulet; Lapis Amulet): 4 of 4 lines matched or marked as varying
 - **Liminal Coil** (Wand; Twisted Wand): 6 of 6 lines matched or marked as varying
-- **Lioneye's Glare** (Bow; Heavy Bow): 5 of 7 lines matched or marked as varying
-  - no game mod with this text: +2 metres to Dodge Roll distance if you haven't Dodge Rolled Recently
-  - no game mod with this text: -1 metre to Dodge Roll distance if you've Dodge Rolled Recently
-- **Lochtonial Caress** (Gloves; Fists of Stone, Tempered Mitts): 8 of 14 lines matched or marked as varying
-  - no game mod with this text: Has +1 to Evasion Rating per player level
-  - no game mod with this text: Has +1 to maximum Energy Shield per player level
-  - no game mod with this text: (5-10)% chance to grant a Endurance Charge to Allies in your Presence on Hit
-  - no game mod with this text: (5-10)% chance to grant a Frenzy Charge to Allies in your Presence on Hit
-  - no game mod with this text: (5-10)% chance to grant a Power Charge to Allies in your Presence on Hit
-  - no game mod with this text: Unmodifiable
+- **Lioneye's Glare** (Bow; Heavy Bow): 7 of 7 lines matched or marked as varying
+- **Lochtonial Caress** (Gloves; Fists of Stone, Tempered Mitts): 14 of 14 lines matched or marked as varying
 - **Loreweave** (Body Armour; Ornate Ringmail): 8 of 8 lines matched or marked as varying
 - **Luminous Pace** (Boots; Straw Sandals): 5 of 5 lines matched or marked as varying
 - **Lycosidae** (Shield; Rampart Tower Shield): 4 of 4 lines matched or marked as varying
-- **Mageblood** (Belt; Utility Belt): 1 of 5 lines matched or marked as varying
-  - no game mod with this text: Legacy of Mages Legacy
-  - no game mod with this text: Legacy of Mages Legacy
-  - no game mod with this text: Legacy of Mages Legacy
-  - no game mod with this text: Legacy of Mages Legacy
+- **Mageblood** (Belt; Utility Belt): 5 of 5 lines matched or marked as varying
 - **Mahuxotl's Machination** (Shield; Omen Crest Shield): 6 of 6 lines matched or marked as varying
-- **Maligaro's Virtuosity** (Gloves; Fine Bracers, Fists of Stone): 11 of 12 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
-- **Marohi Erqi** (Two Hand Mace; Totemic Greatclub): 5 of 6 lines matched or marked as varying
-  - no game mod with this text: (-300--200) to Accuracy Rating
-- **Mask of the Sanguimancer** (Helmet; Face Mask): 4 of 6 lines matched or marked as varying
-  - no game mod with this text: +(20-25) to Evasion Rating
-  - no game mod with this text: +(10-15) to maximum Energy Shield
+- **Maligaro's Virtuosity** (Gloves; Fine Bracers, Fists of Stone): 12 of 12 lines matched or marked as varying
+- **Marohi Erqi** (Two Hand Mace; Totemic Greatclub): 6 of 6 lines matched or marked as varying
+- **Mask of the Sanguimancer** (Helmet; Face Mask): 6 of 6 lines matched or marked as varying
 - **Mask of the Stitched Demon** (Helmet; Feathered Tiara): 7 of 7 lines matched or marked as varying
 - **Matsya** (Warstaff; Crescent Quarterstaff): 6 of 6 lines matched or marked as varying
 - **Megalomaniac** (Jewel; Diamond; drops corrupted): 5 of 5 lines matched or marked as varying
@@ -329,38 +234,28 @@ Every unique has a poe2db page.
 - **Ming's Heart** (Ring; Amethyst Ring): 3 of 3 lines matched or marked as varying
 - **Mist Whisper** (Crossbow; Makeshift Crossbow): 5 of 5 lines matched or marked as varying
 - **Mjölner** (One Hand Mace; Torment Club): 5 of 5 lines matched or marked as varying
-- **Morior Invictus** (Body Armour; Grand Regalia): 1 of 3 lines matched or marked as varying
-  - no game mod with this text: [3 Random Socket Modifiers]
-  - no game mod with this text: Has 4 Augment Sockets (Hidden)
+- **Morior Invictus** (Body Armour; Grand Regalia): 3 of 3 lines matched or marked as varying
 - **Murkshaft** (Quiver; Toxic Quiver): 5 of 5 lines matched or marked as varying
 - **Myris Uxor** (Helmet; Covert Hood): 4 of 4 lines matched or marked as varying
 - **Nazir's Judgement** (Warstaff; Steelpoint Quarterstaff): 5 of 5 lines matched or marked as varying
 - **Nebuloch** (One Hand Mace; Execratus Hammer): 5 of 5 lines matched or marked as varying
 - **Necromantle** (Body Armour; Bone Raiment): 5 of 5 lines matched or marked as varying
 - **Nightfall** (Shield; Glacial Fortress): 6 of 6 lines matched or marked as varying
-- **Nightscale** (Gloves; Fists of Stone, Pauascale Gloves): 12 of 14 lines matched or marked as varying
-  - no game mod with this text: +2% to Maximum Cold Resistance
-  - no game mod with this text: Unmodifiable
+- **Nightscale** (Gloves; Fists of Stone, Pauascale Gloves): 14 of 14 lines matched or marked as varying
 - **Nocturne** (Buckler; Wooden Buckler): 5 of 5 lines matched or marked as varying
-- **Northpaw** (Gloves; Fists of Stone, Suede Bracers): 7 of 10 lines matched or marked as varying
-  - no game mod with this text: Has +2 to Evasion Rating per player level
-  - no game mod with this text: Has +1 to maximum Energy Shield per player level
-  - no game mod with this text: Unmodifiable
+- **Northpaw** (Gloves; Fists of Stone, Suede Bracers): 10 of 10 lines matched or marked as varying
 - **Oaksworn** (Shield; Sigil Crest Shield): 4 of 4 lines matched or marked as varying
 - **Obern's Bastion** (Boots; Stacked Sabatons): 6 of 6 lines matched or marked as varying
 - **Olrovasara** (One Hand Mace; Torment Club): 4 of 4 lines matched or marked as varying
 - **Original Sin** (Ring; Amethyst Ring): 2 of 2 lines matched or marked as varying
-- **Painter's Servant** (Gloves; Fists of Stone, Torn Gloves): 10 of 11 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
-- **Palm of the Dreamer** (Sceptre; Shrine Sceptre; drops corrupted): 5 of 6 lines matched or marked as varying
-  - no game mod with this text: (-13-13)% reduced Skill Effect Duration
+- **Painter's Servant** (Gloves; Fists of Stone, Torn Gloves): 11 of 11 lines matched or marked as varying
+- **Palm of the Dreamer** (Sceptre; Shrine Sceptre; drops corrupted): 6 of 6 lines matched or marked as varying
 - **Pariah's Embrace** (Body Armour; Cloaked Mail): 5 of 5 lines matched or marked as varying
 - **Perandus Seal** (Ring; Gold Ring): 3 of 3 lines matched or marked as varying
 - **Perfidy** (Body Armour; Knight Armour): 7 of 7 lines matched or marked as varying
 - **Periphery** (Bow; Heartwood Shortbow): 5 of 5 lines matched or marked as varying
 - **Pillar of the Caged God** (Warstaff; Long Quarterstaff): 3 of 3 lines matched or marked as varying
-- **Plaguefinger** (Gloves; Fists of Stone, Gauze Wraps): 13 of 14 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Plaguefinger** (Gloves; Fists of Stone, Gauze Wraps): 14 of 14 lines matched or marked as varying
 - **Polcirkeln** (Ring; Sapphire Ring): 4 of 4 lines matched or marked as varying
 - **Powertread** (Boots; Hunting Shoes): 11 of 11 lines matched or marked as varying
 - **Pragmatism** (Body Armour; Explorer Armour): 4 of 4 lines matched or marked as varying
@@ -370,34 +265,27 @@ Every unique has a poe2db page.
 - **Prized Pain** (Ring; Iron Ring): 4 of 4 lines matched or marked as varying
 - **Quatl's Molt** (Body Armour; Serpentscale Coat): 12 of 12 lines matched or marked as varying
 - **Quecholli** (Two Hand Mace; Crumbling Maul): 9 of 9 lines matched or marked as varying
-- **Queen of the Forest** (Body Armour; Smuggler Coat): 4 of 5 lines matched or marked as varying
-  - no game mod with this text: (-15--10)% to Fire Resistance
+- **Queen of the Forest** (Body Armour; Smuggler Coat): 5 of 5 lines matched or marked as varying
 - **Quill Rain** (Bow; Shortbow): 4 of 4 lines matched or marked as varying
 - **Radiant Grief** (Helmet; Lace Hood): 4 of 4 lines matched or marked as varying
 - **Rampart Raptor** (Crossbow; Tense Crossbow): 4 of 4 lines matched or marked as varying
-- **Rathpith Globe** (Focus; Sacred Focus): 7 of 10 lines matched or marked as varying
-  - no game mod with this text: Non-Channelling Spells cost an additional 6% of your maximum Life / rathpith surge [1]
-  - no game mod with this text: Non-Channelling Spells deal 6% increased Damage per 100 maximum Life / rathpith surge [1]
-  - no game mod with this text: Non-Channelling Spells have 3% increased Critical Hit Chance per 100 maximum Life / rathpith surge [1]
+- **Rathpith Globe** (Focus; Sacred Focus): 10 of 10 lines matched or marked as varying
 - **Rearguard** (Quiver; Blunt Quiver): 8 of 8 lines matched or marked as varying
 - **Redblade Banner** (Shield; Heraldric Tower Shield): 5 of 5 lines matched or marked as varying
-- **Redemption** (Crossbow; Trarthan Cannon): 3 of 4 lines matched or marked as varying
-  - no game mod with this text: Gain 1 Explosive Rhythm every (2-3) times you use a Grenade Skill / Remove all Explosive Rhythm on reaching 10 to gain Explosive Fervour for 10 Seconds
+- **Redemption** (Crossbow; Trarthan Cannon): 4 of 4 lines matched or marked as varying
 - **Redflare Conduit** (Body Armour; Anchorite Garb): 10 of 10 lines matched or marked as varying
 - **Revered Resin** (Amulet; Amber Amulet): 3 of 3 lines matched or marked as varying
 - **Reverie** (Body Armour; Shaman Mantle): 5 of 5 lines matched or marked as varying
 - **Rise of the Phoenix** (Shield; Omen Crest Shield): 10 of 10 lines matched or marked as varying
 - **Rondel de Ezo** (Buckler; Plated Buckler): 5 of 5 lines matched or marked as varying
 - **Rondel of Fragility** (Amulet; Lunar Amulet): 4 of 4 lines matched or marked as varying
-- **Runeseeker's Call** (Wand; Runic Fork): 2 of 3 lines matched or marked as varying
-  - no game mod with this text: Has 5 Augment Sockets (Hidden)
+- **Runeseeker's Call** (Wand; Runic Fork): 3 of 3 lines matched or marked as varying
 - **Ryslatha's Coil** (Belt; Ornate Belt): 4 of 4 lines matched or marked as varying
 - **Sacred Flame** (Sceptre; Shrine Sceptre): 4 of 4 lines matched or marked as varying
 - **Sacrosanctum** (Body Armour; Corvus Mantle): 6 of 6 lines matched or marked as varying
 - **Sadist's Mercy** (One Hand Mace; Flanged Mace): 5 of 5 lines matched or marked as varying
 - **Saffell's Frame** (Shield; Emblem Crest Shield): 5 of 5 lines matched or marked as varying
-- **Safrin's Resolve** (Ring; Ring): 4 of 5 lines matched or marked as varying
-  - no game mod with this text: Has 1 Jewel Socket (Hidden)
+- **Safrin's Resolve** (Ring; Ring): 5 of 5 lines matched or marked as varying
 - **Saitha's Spear** (Spear; Barbed Spear): 10 of 10 lines matched or marked as varying
 - **Sands of Silk** (Body Armour; Shrouded Vest): 6 of 6 lines matched or marked as varying
 - **Sandstorm Visage** (Helmet; Chain Tiara): 4 of 4 lines matched or marked as varying
@@ -409,22 +297,19 @@ Every unique has a poe2db page.
 - **Serle's Grit** (One Hand Mace; Kalguuran Forgehammer): 5 of 5 lines matched or marked as varying
 - **Serpent's Egg** (Amulet; Gold Amulet): 8 of 8 lines matched or marked as varying
 - **Serpent's Lesson** (Focus; Tonal Focus): 8 of 8 lines matched or marked as varying
-- **Shackles of the Wretched** (Gloves; Aged Cuffs, Fists of Stone): 17 of 18 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Shackles of the Wretched** (Gloves; Aged Cuffs, Fists of Stone): 18 of 18 lines matched or marked as varying
 - **Shankgonne** (Boots; Covered Sabatons): 6 of 6 lines matched or marked as varying
 - **Shavronne's Satchel** (Belt; Fine Belt): 4 of 4 lines matched or marked as varying
 - **Shyaba** (Two Hand Mace; Temple Maul): 6 of 6 lines matched or marked as varying
 - **Sierran Inheritance** (Body Armour; Marabout Garb): 6 of 6 lines matched or marked as varying
 - **Silks of Veneration** (Body Armour; Enlightened Robe): 5 of 5 lines matched or marked as varying
 - **Silverthorne** (Buckler; Spiked Buckler): 4 of 4 lines matched or marked as varying
-- **Sine Aequo** (Gloves; Fists of Stone, Grand Manchettes): 8 of 9 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Sine Aequo** (Gloves; Fists of Stone, Grand Manchettes): 9 of 9 lines matched or marked as varying
 - **Sire of Shards** (Staff; Chiming Staff): 5 of 5 lines matched or marked as varying
 - **Skin of the Loyal** (Body Armour; Garment): 5 of 5 lines matched or marked as varying
 - **Skysliver** (Spear; Winged Spear): 5 of 5 lines matched or marked as varying
 - **Slivertongue** (Bow; Zealot Bow): 6 of 6 lines matched or marked as varying
-- **Snakebite** (Gloves; Fists of Stone, Spined Bracers): 16 of 17 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Snakebite** (Gloves; Fists of Stone, Spined Bracers): 17 of 17 lines matched or marked as varying
 - **Snakepit** (Ring; Pearl Ring): 14 of 14 lines matched or marked as varying
 - **Solus Ipse** (Helmet; Grand Visage): 5 of 5 lines matched or marked as varying
 - **Soul Mantle** (Body Armour; Sacrificial Mantle): 12 of 12 lines matched or marked as varying
@@ -437,34 +322,25 @@ Every unique has a poe2db page.
 - **Starkonja's Head** (Helmet; Leatherbound Hood): 5 of 5 lines matched or marked as varying
 - **Stone of Lazhwar** (Amulet; Lapis Amulet): 3 of 3 lines matched or marked as varying
 - **Strugglescream** (Amulet; Stellar Amulet): 1 of 1 lines matched or marked as varying
-- **Sunsplinter** (Buckler; Array Buckler): 3 of 7 lines matched or marked as varying
-  - no game mod with this text: +2 to Level of all Cold Skills
-  - no game mod with this text: +3 to Level of all Lightning Skills
-  - no game mod with this text: +2% to Maximum Cold Resistance
-  - no game mod with this text: +3% to Maximum Lightning Resistance
+- **Sunsplinter** (Buckler; Array Buckler): 7 of 7 lines matched or marked as varying
 - **Surefooted Sigil** (Amulet; Jade Amulet): 4 of 4 lines matched or marked as varying
 - **Surge of the Tide** (Talisman; Lumbering Talisman): 5 of 5 lines matched or marked as varying
 - **Svalinn** (Shield; Crucible Tower Shield): 4 of 4 lines matched or marked as varying
 - **Sylvan's Effigy** (Sceptre; Stoic Sceptre): 5 of 5 lines matched or marked as varying
-- **Tabula Rasa** (Body Armour; Garment): 0 of 1 lines matched or marked as varying
-  - no game mod with this text: Has 6 Jewel Sockets (Hidden)
+- **Tabula Rasa** (Body Armour; Garment): 1 of 1 lines matched or marked as varying
 - **Tangletongue** (Spear; Forked Spear): 5 of 5 lines matched or marked as varying
 - **Taryn's Shiver** (Staff; Gelid Staff): 4 of 4 lines matched or marked as varying
-- **Temporalis** (Body Armour; Silk Robe): 4 of 5 lines matched or marked as varying
-  - no game mod with this text: Skills have (-2--1) seconds to Cooldown
+- **Temporalis** (Body Armour; Silk Robe): 5 of 5 lines matched or marked as varying
 - **Tetzlapokal's Desire** (Body Armour; Votive Raiment): 10 of 10 lines matched or marked as varying
 - **The Adorned** (Jewel; Diamond; drops corrupted): 2 of 2 lines matched or marked as varying
 - **The Anvil** (Amulet; Bloodstone Amulet): 5 of 5 lines matched or marked as varying
 - **The Auspex** (Body Armour; Exquisite Vest): 11 of 11 lines matched or marked as varying
-- **The Barrow Dweller** (Body Armour; Rogue Armour): 4 of 5 lines matched or marked as varying
-  - no game mod with this text: (-20--10)% to Fire Resistance
+- **The Barrow Dweller** (Body Armour; Rogue Armour): 5 of 5 lines matched or marked as varying
 - **The Black Doubt** (Body Armour; Hexer's Robe): 4 of 4 lines matched or marked as varying
 - **The Black Insignia** (Helmet; Corsair Cap): 5 of 5 lines matched or marked as varying
 - **The Blood Thorn** (Warstaff; Wrapped Quarterstaff): 4 of 4 lines matched or marked as varying
-- **The Brass Dome** (Body Armour; Champion Cuirass): 3 of 4 lines matched or marked as varying
-  - no game mod with this text: (-5--1)% to all Maximum Elemental Resistances
-- **The Bringer of Rain** (Helmet; Decorated Helm): 7 of 8 lines matched or marked as varying
-  - no game mod with this text: Has 4 Augment Sockets (Hidden)
+- **The Brass Dome** (Body Armour; Champion Cuirass): 4 of 4 lines matched or marked as varying
+- **The Bringer of Rain** (Helmet; Decorated Helm): 8 of 8 lines matched or marked as varying
 - **The Burden of Shadows** (Staff; Chiming Staff): 3 of 3 lines matched or marked as varying
 - **The Burrower** (Ring; Topaz Ring): 4 of 4 lines matched or marked as varying
 - **The Coming Calamity** (Body Armour; Heroic Armour): 3 of 3 lines matched or marked as varying
@@ -488,9 +364,7 @@ Every unique has a poe2db page.
 - **The Mutable Star** (Body Armour; Cleric Vestments): 6 of 6 lines matched or marked as varying
 - **The Ordained** (Spear; Grand Spear): 5 of 5 lines matched or marked as varying
 - **The Pandemonius** (Amulet; Lapis Amulet): 3 of 3 lines matched or marked as varying
-- **The Prisoner's Manacles** (Gloves; Fists of Stone, Kalguuran Cuffs): 14 of 16 lines matched or marked as varying
-  - no game mod with this text: +(2-3)% to Maximum Lightning Resistance
-  - no game mod with this text: Unmodifiable
+- **The Prisoner's Manacles** (Gloves; Fists of Stone, Kalguuran Cuffs): 16 of 16 lines matched or marked as varying
 - **The Rat Cage** (Body Armour; Scout's Vest): 4 of 4 lines matched or marked as varying
 - **The Raven's Flock** (Staff; Perching Staff): 5 of 5 lines matched or marked as varying
 - **The Road Warrior** (Body Armour; Raider Plate): 5 of 5 lines matched or marked as varying
@@ -499,9 +373,7 @@ Every unique has a poe2db page.
 - **The Smiling Knight** (Helmet; Cowled Helm): 4 of 4 lines matched or marked as varying
 - **The Sunken Vessel** (Body Armour; Knight Armour): 6 of 6 lines matched or marked as varying
 - **The Surrender** (Shield; Vaal Tower Shield): 4 of 4 lines matched or marked as varying
-- **The Taming** (Ring; Prismatic Ring): 2 of 4 lines matched or marked as varying
-  - no game mod with this text: Wind Skills which can be boosted by Elemental Ground Surfaces can be boosted by multiple Elemental Ground Surfaces
-  - no game mod with this text: Wind Skills which can be boosted by Elemental Ground Surfaces count / as being boosted by Ignited, Shocked, and Chilled Ground
+- **The Taming** (Ring; Prismatic Ring): 4 of 4 lines matched or marked as varying
 - **The Three Dragons** (Helmet; Solid Mask): 5 of 5 lines matched or marked as varying
 - **The Unborn Lich** (Staff; Ravenous Staff): 5 of 5 lines matched or marked as varying
 - **The Unleashed** (Body Armour; Revered Vestments): 4 of 4 lines matched or marked as varying
@@ -513,15 +385,12 @@ Every unique has a poe2db page.
 - **Thief's Torment** (Ring; Emerald Ring): 6 of 6 lines matched or marked as varying
 - **Threaded Light** (Focus; Woven Focus): 4 of 4 lines matched or marked as varying
 - **Thrillsteel** (Helmet; Spired Greathelm): 1 of 1 lines matched or marked as varying
-- **Thunderfist** (Gloves; Fists of Stone, Utility Wraps): 10 of 12 lines matched or marked as varying
-  - no game mod with this text: +(10-25)% to Cold Resistance
-  - no game mod with this text: Unmodifiable
+- **Thunderfist** (Gloves; Fists of Stone, Utility Wraps): 12 of 12 lines matched or marked as varying
 - **Thunderstep** (Boots; Steeltoe Boots): 4 of 4 lines matched or marked as varying
 - **Tidebreaker** (Two Hand Mace; Pointed Maul): 5 of 5 lines matched or marked as varying
 - **Titanrot Cataphract** (Body Armour; Maraketh Cuirass): 5 of 5 lines matched or marked as varying
 - **Trampletoe** (Boots; Trimmed Greaves): 4 of 4 lines matched or marked as varying
-- **Treefingers** (Gloves; Fists of Stone, Riveted Mitts): 12 of 13 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Treefingers** (Gloves; Fists of Stone, Riveted Mitts): 13 of 13 lines matched or marked as varying
 - **Trenchtimbre** (One Hand Mace; Spiked Club): 4 of 4 lines matched or marked as varying
 - **Trephina** (Two Hand Mace; Forge Maul): 4 of 4 lines matched or marked as varying
 - **Twisted Empyrean** (Two Hand Mace; Aberrant Sledge): 7 of 7 lines matched or marked as varying
@@ -529,16 +398,11 @@ Every unique has a poe2db page.
 - **Umbilicus Immortalis** (Belt; Linen Belt): 6 of 6 lines matched or marked as varying
 - **Undying Hate** (Jewel; Timeless Jewel): 2 of 2 lines matched or marked as varying
 - **Ungil's Harmony** (Amulet; Azure Amulet): 5 of 5 lines matched or marked as varying
-- **Valako's Vice** (Gloves; Fists of Stone, Plate Gauntlets): 12 of 13 lines matched or marked as varying
-  - no game mod with this text: Unmodifiable
+- **Valako's Vice** (Gloves; Fists of Stone, Plate Gauntlets): 13 of 13 lines matched or marked as varying
 - **Veil of the Night** (Helmet; Martyr Crown): 4 of 4 lines matched or marked as varying
 - **Veilpiercer** (Ring; Amethyst Ring): 6 of 6 lines matched or marked as varying
 - **Venopuncture** (Ring; Iron Ring): 6 of 6 lines matched or marked as varying
-- **Ventor's Gamble** (Ring; Gold Ring): 2 of 6 lines matched or marked as varying
-  - no game mod with this text: (-25-25)% reduced Rarity of Items found
-  - no game mod with this text: (-40-40)% to Fire Resistance
-  - no game mod with this text: (-40-40)% to Cold Resistance
-  - no game mod with this text: (-40-40)% to Lightning Resistance
+- **Ventor's Gamble** (Ring; Gold Ring): 6 of 6 lines matched or marked as varying
 - **Vestige of Darkness** (Helmet; Tenebrous Crown): 5 of 5 lines matched or marked as varying
 - **Vigilant View** (Ring; Emerald Ring): 6 of 6 lines matched or marked as varying
 - **Vis Mortis** (Body Armour; Plated Raiment): 4 of 4 lines matched or marked as varying
@@ -563,11 +427,6 @@ Every unique has a poe2db page.
 - **Xoph's Blood** (Amulet; Amber Amulet): 3 of 3 lines matched or marked as varying
 - **Yoke of Suffering** (Amulet; Bloodstone Amulet): 4 of 4 lines matched or marked as varying
 - **Yriel's Fostering** (Body Armour; Strider Vest): 6 of 6 lines matched or marked as varying
-- **Zaida's Longevity** (Ring; Ring): 4 of 5 lines matched or marked as varying
-  - no game mod with this text: Has 1 Jewel Socket (Hidden)
+- **Zaida's Longevity** (Ring; Ring): 5 of 5 lines matched or marked as varying
 - **Zerphi's Genesis** (Belt; Heavy Belt): 10 of 10 lines matched or marked as varying
-- **Zerphi's Serape** (Body Armour; Scalper's Jacket): 7 of 11 lines matched or marked as varying
-  - no game mod with this text: (-30-30)% reduced Life Regeneration rate
-  - no game mod with this text: (-30-30)% reduced Mana Regeneration Rate
-  - no game mod with this text: (-30-30)% reduced Life Regeneration rate
-  - no game mod with this text: (-30-30)% reduced Mana Regeneration Rate
+- **Zerphi's Serape** (Body Armour; Scalper's Jacket): 11 of 11 lines matched or marked as varying
