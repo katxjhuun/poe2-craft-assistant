@@ -1601,6 +1601,24 @@
       "how": "Try a Preserved Jawbone on a Rare sceptre. No desecrated modifier in the game data can roll on sceptres (none carries a sceptre or weapon tag they have), so the planner does not offer it.",
       "claims": [],
       "found": "game data"
+    },
+    {
+      "id": "t24",
+      "question": "Do Rare jewels allow at most 2 prefixes and 2 suffixes?",
+      "how": "Try an Exalted Orb on a Rare jewel with 2 prefixes and 2 suffixes; the game should refuse it. The game's help text only gives the general 3 + 3. The planner uses 2 + 2 for jewels, as a 0.5 jewel guide (IGGM) says.",
+      "claims": []
+    },
+    {
+      "id": "t25",
+      "question": "When the side of the new modifier is full, does a Perfect essence or a liquid emotion remove a modifier of that side?",
+      "how": "Without an omen, use a cheap Perfect essence on a Rare whose side for the essence modifier is full (or a liquid emotion on such a jewel), and see which modifier goes. Players report that it removes one of that side. The planner plans it that way and uses an Omen of Crystallisation only to remove from the other side.",
+      "claims": []
+    },
+    {
+      "id": "t26",
+      "question": "Which modifier does Potent Liquid Contempt or Ferocity add: the prefix or the suffix one?",
+      "how": "Use one on a full Rare jewel and note which side lost a modifier and which modifier came in. The game table lists a prefix and a suffix modifier for each jewel. The planner assumes the one on the side the removal opened, at random when both sides have room.",
+      "claims": []
     }
   ]
 }

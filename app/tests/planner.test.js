@@ -560,3 +560,109 @@ test('essences with several outcomes (game table EssenceMods.OutcomeMods) roll a
   const r = P.apply(hctx, P.toState(hctx, helm), { op: 'essence', item: 'Essence of Enhancement', mod: fit[0] }, rng);
   assert.equal(r.added[0].id, fit[0]);
 });
+
+test('liquid emotions add the crafted mod of the game table LiquidEmotionOutcomes; Rare jewels allow 2 + 2', () => {
+  assert.deepEqual(E.slotLimits({ rarity: 'Rare', slotDelta: { prefix: 0, suffix: 0 } }, 'Jewel'), { prefix: 2, suffix: 2 });
+  assert.deepEqual(E.slotLimits({ rarity: 'Rare', slotDelta: { prefix: 0, suffix: 0 } }, 'Ring'), { prefix: 3, suffix: 3 });
+  const white = E.parseItem(ix, 'Item Class: Jewels\nRarity: Normal\nRuby\n--------\nItem Level: 82').item;
+  const ctx = ctxOf(white);
+  const ire = kb.liquid_emotions['Diluted Liquid Ire'].by_base.Ruby;
+  assert.equal(ire.length, 1);
+  assert.match(kb.mods[ire[0]].txt, /increased Armour/);
+  const mk = (id) => ({ id, fam: kb.mods[id].fam, side: kb.mods[id].gen === 'p' ? 'prefix' : 'suffix', lvl: kb.mods[id].lvl, grp: kb.mods[id].grp, tier: 1, frac: false, des: false, crafted: false, lock: false });
+  const taken = new Set(kb.mods[ire[0]].grp);
+  const pick = (side) => kb.pools[kb.bases.Ruby.sig][side].map(([id]) => id).filter((id) => {
+    if (kb.mods[id].grp.some((g) => taken.has(g))) return false;
+    kb.mods[id].grp.forEach((g) => taken.add(g));
+    return true;
+  }).slice(0, 2);
+  const st = Object.assign(P.toState(ctx, white), { rarity: 'Rare' });
+  st.mods = pick('prefix').concat(pick('suffix')).map(mk);
+  assert.equal(st.mods.length, 4);
+  assert.ok(P.validate(ctx, st, { op: 'exalt' }), 'a Rare jewel with 2 prefixes and 2 suffixes is full');
+  // the prefix side is full: one of the prefixes goes (R_SWAP_REMOVAL), the armour mod comes in as a crafted mod
+  const rng = P.rngFrom(3);
+  for (let i = 0; i < 40; i++) {
+    const r = P.apply(ctx, st, { op: 'liquid', item: 'Diluted Liquid Ire' }, rng);
+    assert.equal(r.removed.length, 1);
+    assert.equal(r.removed[0].side, 'prefix');
+    assert.deepEqual(r.added.map((m) => [m.id, m.crafted]), [[ire[0], true]]);
+  }
+  const once = P.apply(ctx, st, { op: 'liquid', item: 'Diluted Liquid Ire' }, rng).state;
+  assert.match(P.validate(ctx, once, { op: 'liquid', item: 'Liquid Paranoia' }), /one crafted modifier/);
+  assert.match(P.validate(ctx, st, { op: 'liquid', item: 'Ancient Diluted Liquid Ire' }), /Time-Lost/);
+  assert.deepEqual(P.actionNames({ op: 'liquid', item: 'Diluted Liquid Ire' }), ['Diluted Liquid Ire']);
+  // Diamond jewels get nothing from Diluted Liquid Ire in the game table
+  const dia = E.parseItem(ix, 'Item Class: Jewels\nRarity: Normal\nDiamond\n--------\nItem Level: 82').item;
+  const dctx = ctxOf(dia);
+  const dst = Object.assign(P.toState(dctx, dia), { rarity: 'Rare', mods: st.mods.slice(0, 1).map((m) => Object.assign({}, m)) });
+  assert.match(P.validate(dctx, dst, { op: 'liquid', item: 'Diluted Liquid Ire' }), /no modifier for a Diamond jewel/);
+  // Potent Liquid Contempt: "+1 Prefix Modifier allowed" (a suffix) or "+1 Suffix Modifier allowed" (a prefix), on the
+  // side the removal opened; that side's limit then grows by one
+  const seen = new Set();
+  for (let i = 0; i < 60; i++) {
+    const r = P.apply(ctx, st, { op: 'liquid', item: 'Potent Liquid Contempt' }, rng);
+    assert.equal(r.added.length, 1);
+    const cap = kb.mods[r.added[0].id].cap;
+    assert.ok(cap, 'a prefix/suffix allowance mod');
+    assert.equal(r.added[0].side, r.removed[0].side, 'added on the side the removal opened');
+    assert.equal(P.validate(ctx, r.state, { op: 'exalt', side: cap.prefix ? 'prefix' : 'suffix' }), null, 'room on the grown side');
+    seen.add(r.added[0].id);
+  }
+  assert.equal(seen.size, 2, 'both outcomes happen');
+  // the stat picker lists liquid emotion mods as their own group
+  const item = Object.assign({}, white, { rarity: 'Rare', mods: [] });
+  const opts = E.pickerOptions(ix, item, { side: 'prefix', essences: P.liquidFor(kb, 'Ruby') });
+  assert.ok(opts.some((o) => o.group === 'liquid' && o.tiers.some((t) => t.via === 'Diluted Liquid Ire')));
+  // a liquid target is a crafted-slot goal, and the policy finishes it with the emotion
+  const { goals } = P.goalsFromTargets(ctx, { 'prefix-0': { fam: kb.mods[ire[0]].fam, group: 'liquid', required: true, label: 'armour' } });
+  assert.equal(goals.length, 1);
+  assert.ok(goals[0].essenceOnly);
+  goals.forEach((g) => { g.eff = g.tier; });
+  const a = P.makePolicy(ctx, goals, { tier: 'base', essence: true, removal: 'annul' })(st);
+  assert.deepEqual([a.op, a.item], ['liquid', 'Diluted Liquid Ire']);
+});
+
+test('a Perfect or special essence on a full side removes one of that side without an omen (R_SWAP_REMOVAL)', () => {
+  const W = require('../data/weights_0.5.5.json');
+  const helmBase = Object.entries(kb.bases).find(([, b]) => b.cls === 'Helmet' && b.tags.includes('str_armour') && b.tl)[0];
+  const helm = E.parseItem(ix, `Item Class: Helmets\nRarity: Normal\n${helmBase}\n--------\nItem Level: 82`).item;
+  const ctx = P.makeContext(ix, helm, { essences: P.essencesForBase(ix, kb.bases[helm.base], W.essences.Helmet) });
+  const rec = ctx.essences.find((r) => r.item === 'Essence of Hysteria');
+  assert.ok(rec && kb.mods[rec.mod].gen === 's');
+  const taken = new Set(kb.mods[rec.mod].grp);
+  const pool = [...ctx.pool.entries()].filter(([id]) => {
+    if (kb.mods[id].grp.some((g) => taken.has(g)) || kb.mods[id].lvl > 82) return false;
+    kb.mods[id].grp.forEach((g) => taken.add(g));
+    return true;
+  });
+  const mk = ([id, pe]) => ({ id, fam: kb.mods[id].fam, side: pe.side, lvl: kb.mods[id].lvl, grp: kb.mods[id].grp, tier: pe.tier, frac: false, des: false, crafted: false, lock: false });
+  const st = Object.assign(P.toState(ctx, helm), { rarity: 'Rare' });
+  st.mods = pool.filter(([, pe]) => pe.side === 'suffix').slice(0, 3).concat(pool.filter(([, pe]) => pe.side === 'prefix').slice(0, 1)).map(mk);
+  assert.equal(P.validate(ctx, st, { op: 'pessence', item: rec.item, mod: rec.mod }), null, 'no omen needed');
+  assert.match(P.validate(ctx, st, { op: 'pessence', item: rec.item, mod: rec.mod, side: 'prefix' }), /suffixes are full/);
+  const rng = P.rngFrom(11);
+  for (let i = 0; i < 40; i++) {
+    const r = P.apply(ctx, st, { op: 'pessence', item: rec.item, mod: rec.mod }, rng);
+    assert.equal(r.removed[0].side, 'suffix');
+    assert.equal(r.added[0].id, rec.mod);
+  }
+  // with room on the essence side, any modifier can go
+  const room = Object.assign({}, st, { mods: st.mods.slice(1) });
+  const sides = new Set();
+  for (let i = 0; i < 60; i++) sides.add(P.apply(ctx, room, { op: 'pessence', item: rec.item, mod: rec.mod }, rng).removed[0].side);
+  assert.deepEqual([...sides].sort(), ['prefix', 'suffix']);
+});
+
+test('catalyst quality types (game table AlternateQualityTypes) map to the tags the planner favours', () => {
+  assert.equal(kb.catalyst_qualities.length, 26);
+  for (const q of kb.catalyst_qualities) {
+    assert.equal(P.catalystTag(q.quality.slice('Quality ('.length, -1)), q.tag, q.quality);
+    assert.ok(q.classes.every((c) => ['Ring', 'Amulet', 'Jewel'].includes(c)), q.catalyst);
+    assert.equal(q.classes.includes('Jewel'), q.catalyst.startsWith('Refined '), q.catalyst);
+    assert.ok(kb.item_descriptions[q.catalyst], 'a PoE2 currency: ' + q.catalyst);
+  }
+  // jewel mods carry the game's mod tags, so Refined catalysts have something to favour
+  const ruby = kb.pools[kb.bases.Ruby.sig];
+  assert.ok(ruby.prefix.concat(ruby.suffix).some(([id]) => kb.mods[id].mt.includes('life')));
+});

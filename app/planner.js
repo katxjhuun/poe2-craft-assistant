@@ -159,10 +159,27 @@
       ix, kb, item, base, cls: base.cls, ilvl, pool, desPool, weights: opts.weights || null,
       floors: floorsFrom(kb), bone: boneFor(base.cls), slotDelta: item.slotDelta || { prefix: 0, suffix: 0 },
       _side: new Map(), _des: new Map(), imputed: new Set(),
-      essences: essencesForBase(ix, base, opts.essences || []),
+      essences: essencesForBase(ix, base, (opts.essences || []).filter((r) => !r.liquid)).concat(liquidFor(kb, item.base)),
       catalystMult: opts.catalystMult > 0 ? +opts.catalystMult : CATALYST_DEFAULT,
+      capMods: ix._capMods || (ix._capMods = new Map(Object.entries(kb.mods).filter(([, m]) => m.cap).map(([id, m]) => [id, m.cap]))),
     };
     return ctx;
+  }
+
+  /**
+   * Liquid emotions for one jewel base (game table LiquidEmotionOutcomes, kb.liquid_emotions), as records like the
+   * Perfect essences' ones: {item, mod, gen, lvl, kind: 'rare', liquid: true}. Potent Liquid Ferocity and Contempt list a
+   * prefix and a suffix mod per jewel and add one of them.
+   */
+  function liquidFor(kb, baseName) {
+    const out = [];
+    for (const [item, e] of Object.entries(kb.liquid_emotions || {})) {
+      for (const id of (e.by_base || {})[baseName] || []) {
+        const m = kb.mods[id];
+        if (m) out.push({ item, mod: id, gen: m.gen, lvl: m.lvl || 1, kind: 'rare', liquid: true });
+      }
+    }
+    return out;
   }
 
   /**
@@ -280,7 +297,23 @@
 
   function limits(ctx, st) {
     const c = ctx._lim || (ctx._lim = {});
-    return c[st.rarity] || (c[st.rarity] = E.slotLimits({ rarity: st.rarity, slotDelta: ctx.slotDelta }));
+    const lim = c[st.rarity] || (c[st.rarity] = E.slotLimits({ rarity: st.rarity, slotDelta: ctx.slotDelta }, ctx.cls));
+    if (st.rarity !== 'Rare' || !ctx.capMods || !ctx.capMods.size) return lim;
+    let p = 0, s = 0;
+    for (const m of st.mods) {
+      const cap = ctx.capMods.get(m.id);
+      if (cap) { p += cap.prefix || 0; s += cap.suffix || 0; }
+    }
+    return p || s ? { prefix: lim.prefix + p, suffix: lim.suffix + s } : lim;
+  }
+  const sideOf = (m) => (m.gen === 'p' ? 'prefix' : 'suffix');
+  /**
+   * Which side a "remove a random modifier, add a guaranteed one" currency (Perfect essence, liquid emotion) removes from
+   * (R_SWAP_REMOVAL): the omen's side when one is used; the new mod's side when that side is full; otherwise any side (null).
+   */
+  function swapSide(ctx, st, sides, omenSide) {
+    if (omenSide) return omenSide;
+    return sides.some((s) => open(ctx, st, s) > 0) ? null : sides.length === 1 ? sides[0] : null;
   }
   function count(st, side) { let n = 0; for (const m of st.mods) if (m.side === side) n++; return n; }
   function open(ctx, st, side) { return limits(ctx, st)[side] - count(st, side); }
@@ -374,9 +407,10 @@
         const taken = groupsOf(st);
         if (a.op === 'essence' && m.grp.some((g) => taken.has(g))) return 'The item already has a modifier of this type; the essence would fail.';
         if (a.op === 'pessence') {
-          const mside = m.gen === 'p' ? 'prefix' : 'suffix';
-          if (!st.mods.some((x) => removable(x) && (!a.side || x.side === a.side))) return 'No removable modifier on that side.';
-          if (open(ctx, st, mside) < 1 && a.side !== mside) return `The essence adds a ${mside}; remove a ${mside} with Omen of ${mside === 'prefix' ? 'Sinistral' : 'Dextral'} Crystallisation.`;
+          const mside = sideOf(m);
+          if (a.side && a.side !== mside && open(ctx, st, mside) < 1) return `The essence adds a ${mside} and the ${mside}es are full; the omen would remove a ${a.side}.`;
+          const from = swapSide(ctx, st, [mside], a.side);
+          if (!st.mods.some((x) => removable(x) && (!from || x.side === from))) return 'No removable modifier on that side.';
         }
         return null;
       }
@@ -418,9 +452,14 @@
       case 'liquid': {
         if (cls !== 'Jewel' || R !== 'Rare') return 'Liquid emotions work on Rare jewels.';
         const timeLost = /^Time-Lost/.test(ctx.item.base || '');
-        if (a.ancient !== undefined && a.ancient !== timeLost) return a.ancient ? 'Ancient liquid emotions work on Time-Lost jewels.' : 'This liquid emotion works on basic jewels; Time-Lost jewels need an Ancient one.';
+        const e = a.item && ctx.kb.liquid_emotions ? ctx.kb.liquid_emotions[a.item] : null;
+        const ancient = e ? e.time_lost : a.ancient;
+        if (ancient !== undefined && ancient !== timeLost) return ancient ? 'Ancient liquid emotions work on Time-Lost jewels.' : 'This liquid emotion works on Basic Jewels; Time-Lost jewels need an Ancient one.';
         if (hasCrafted) return 'Only one crafted modifier per item (0.5+); this item already has one.';
-        return st.mods.some(removable) ? null : 'No removable modifier.';
+        const outs = liquidOutcomes(ctx, a);
+        if (e && !outs.length) return `The game data gives ${a.item} no modifier for a ${ctx.item.base} jewel.`;
+        const from = outs.length ? swapSide(ctx, st, [...new Set(outs.map((id) => sideOf(ctx.kb.mods[id])))], null) : null;
+        return st.mods.some((m) => removable(m) && (!from || m.side === from)) ? null : 'No removable modifier.';
       }
       default:
         return 'Unknown action.';
@@ -533,6 +572,12 @@
     return fit[fit.length - 1].id;
   }
 
+  /** Knowledge base mods a liquid emotion adds on this jewel base (one, or a prefix and a suffix). */
+  function liquidOutcomes(ctx, a) {
+    const e = a.item && ctx.kb.liquid_emotions ? ctx.kb.liquid_emotions[a.item] : null;
+    return ((e && e.by_base[ctx.item.base]) || []).filter((id) => ctx.kb.mods[id]);
+  }
+
   function removeRandom(st, pred, rng) {
     const idx = [];
     st.mods.forEach((m, i) => { if (pred(m)) idx.push(i); });
@@ -641,7 +686,9 @@
       case 'essence': case 'pessence': {
         if (a.op === 'essence') st.rarity = 'Rare';
         else {
-          const r = removeRandom(st, (m) => removable(m) && (!a.side || m.side === a.side), rng);
+          const em = a.mod && ctx.kb.mods[a.mod];
+          const from = swapSide(ctx, st, em ? [sideOf(em)] : [], a.side);
+          const r = removeRandom(st, (m) => removable(m) && (!from || m.side === from), rng);
           if (r) removed.push(r);
         }
         const id = essenceOutcome(ctx, a, rng, st);
@@ -702,9 +749,22 @@
         break;
       }
       case 'liquid': {
-        const r = removeRandom(st, removable, rng);
+        // Game text: "Removes a random modifier and Augments a Rare Basic Jewel with a new guaranteed Crafted modifier";
+        // the modifier per jewel is in the game table LiquidEmotionOutcomes. Two outcomes (a prefix and a suffix): one that fits.
+        const outs = liquidOutcomes(ctx, a);
+        const from = outs.length ? swapSide(ctx, st, [...new Set(outs.map((id) => sideOf(ctx.kb.mods[id])))], null) : null;
+        const r = removeRandom(st, (m) => removable(m) && (!from || m.side === from), rng);
         if (r) removed.push(r);
-        st.unpredictable = true; // which crafted mod each liquid adds is not in the data
+        if (!outs.length) { st.unpredictable = true; break; } // no emotion named: its mod is not known
+        const taken = groupsOf(st);
+        const fit = outs.filter((id) => { const m = ctx.kb.mods[id]; return !m.grp.some((g) => taken.has(g)) && open(ctx, st, sideOf(m)) > 0; });
+        if (fit.length) {
+          const id = fit.length === 1 ? fit[0] : fit[Math.floor(rng() * fit.length)];
+          const m = ctx.kb.mods[id];
+          const pe = ctx.pool.get(id);
+          addRolled(ctx, st, { id, fam: m.fam, side: sideOf(m), lvl: m.lvl, grp: m.grp, tier: pe ? pe.tier : null }, { crafted: true }, rng);
+          added.push(st.mods[st.mods.length - 1]);
+        }
         break;
       }
       default:
@@ -739,7 +799,7 @@
         const minValue = t.minValue > 0 ? +t.minValue : null;
         if (minValue != null) ctx.needValues = true;
         goals.push({ key, fam: t.fam, side, des, grp, tier: minValue != null ? null : t.minTier || null, minValue, required: !!t.required, label: t.label, lich, ess: essencesFor(ctx, t.fam) });
-      } else if ((t.group === 'essence' || t.group === 'alloy') && essencesFor(ctx, t.fam).length) {
+      } else if ((t.group === 'essence' || t.group === 'alloy' || t.group === 'liquid') && essencesFor(ctx, t.fam).length) {
         const rec = essencesFor(ctx, t.fam)[0];
         const m = ctx.kb.mods[rec.mod];
         goals.push({ key, fam: t.fam, side: m.gen === 'p' ? 'prefix' : 'suffix', des: false, grp: m.grp, tier: null, required: !!t.required,
@@ -894,7 +954,13 @@
           if (junkSide(mside) && cleanSide(mside)) side = mside;
           else if (open(ctx, st, mside) > 0 && junkSide(other(mside)) && cleanSide(other(mside))) side = other(mside);
           else if (junkSide(mside)) side = mside;
-          if (side) return { op: 'pessence', item: r.item, mod: r.mod, side: params.sideOmens ? side : (open(ctx, st, mside) > 0 ? null : mside) };
+          if (r.liquid) {
+            // No omen picks the side: a full side of the new mod loses one of its own mods, else any mod can go (R_SWAP_REMOVAL).
+            if (open(ctx, st, mside) < 1 ? junkSide(mside) : st.mods.some((m) => removable(m) && !useful(m, goals))) return { op: 'liquid', item: r.item, mod: r.mod };
+            continue;
+          }
+          // A full essence side loses one of its own mods without an omen (R_SWAP_REMOVAL): the omen only helps the other way.
+          if (side) return { op: 'pessence', item: r.item, mod: r.mod, side: params.sideOmens && !(side === mside && open(ctx, st, mside) < 1) ? side : null };
         }
       }
       if (g.essenceOnly) return { fail: 'needs an essence (none applies now)' };
@@ -1665,7 +1731,7 @@
     if (cls === 'Jewel') {
       const ancient = /^Time-Lost/.test(item.base);
       add('liquid_emotion', 'Swap a mod for a crafted jewel mod', { op: 'liquid', ancient },
-        { cat: 'Delirium', match: ancient ? { include: '^Ancient .*Liquid' } : { include: 'Liquid ', exclude: '^Ancient' }, label: ancient ? 'Ancient liquid emotions' : 'Liquid emotions' });
+        { cat: 'Delirium', match: ancient ? { include: '^Ancient .*Liquid' } : { include: 'Liquid ', exclude: '^Ancient' }, label: ancient ? 'Ancient liquid emotions' : 'Liquid emotions', planned: true });
     }
     // Any rarity
     const hasValues = item.mods.some((m) => m.modId || m.slot === 'unique') || (item.implicits || []).length;
@@ -1694,7 +1760,7 @@
   return {
     ORB, OMEN, TIERS, boneFor, actionNames, makeContext, toState, validate, apply, rngFrom, sidePool, desPoolFor,
     goalsFromTargets, goalMet, meets, nearMiss, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
-    availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, essencesForBase, CATALYST_DEFAULT,
+    availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, essencesForBase, liquidFor, CATALYST_DEFAULT,
     expandStrategy, recipeParams, relevantKeys, SPACE, improvePlan,
   };
 });

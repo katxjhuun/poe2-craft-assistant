@@ -22,6 +22,10 @@ SRC = {
  'EssenceTargetItemCategories.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/EssenceTargetItemCategories.csv',
  'SoulCoreStatCategories.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/SoulCoreStatCategories.csv',
  'ItemClasses.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/ItemClasses.csv',
+ # liquid emotion outcomes per jewel, Greater/Perfect currency floors, catalyst quality types
+ 'LiquidEmotionOutcomes.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/LiquidEmotionOutcomes.csv',
+ 'TieredCurrency.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/TieredCurrency.csv',
+ 'AlternateQualityTypes.csv': 'https://raw.githubusercontent.com/repoe-fork/dat-export/develop/current/poe2/heuristics/csv/AlternateQualityTypes.csv',
  # runes, soul cores, talismans, idols: what each gives per item class (RePoE's reading of the SoulCore tables)
  'poe2_augments.json': 'https://raw.githubusercontent.com/repoe-fork/poe2/master/data/augments.json',
  'poe1_base_items.json': 'https://raw.githubusercontent.com/repoe-fork/repoe-fork.github.io/master/data/base_items.json',
@@ -170,6 +174,8 @@ rules=[
  {'id':'R_CORRUPTED_LOCK','rule':'Corrupted items cannot be modified except by currencies that explicitly target corrupted items (Architect\'s Orb, Orbs of Sacrifice, Vaal Cultivation Orb, ...)','conf':G},
  {'id':'R_SANCTIFIED_LOCK','rule':'Sanctifying multiplies each modifier value by a random 78% to 122%; most methods of crafting and modification cannot be used on Sanctified items','conf':G,'source':'keyword Sanctified'},
  {'id':'R_VALUE_MULT_05','rule':'0.5+: Sanctify and the Vaal value-randomise outcome multiply each mod value from its CURRENT value (Divine to max first)','conf':M2,'patch':'0.5.0'},
+ {'id':'R_JEWEL_SLOTS','rule':'Rare jewels: max 2 prefix + 2 suffix (Magic jewels 1 + 1). The liquid emotion modifiers "+1 Prefix Modifier allowed" and "+1 Suffix Modifier allowed" raise one side by 1','conf':S1,'source':'IGGM 0.5.0 jewel article; the game help text (keyword ItemRarity) only gives the general 3 + 3','test':'t24'},
+ {'id':'R_SWAP_REMOVAL','rule':'Perfect and Corrupted essences and liquid emotions remove a random modifier and add a guaranteed one: when the side of the new modifier is full, the removed modifier is one of that side; otherwise any modifier can go (Omens of Sinistral/Dextral Crystallisation limit essences to one side)','conf':M2,'source':'GGG forum thread 3853903 (player report, 14 Sept 2025) and the Mobalytics essence guide','test':'t25'},
  {'id':'R_WEIGHTS','rule':'Real roll weights are not in client data (spawn weight 0/1). Use community-estimated weights and label outputs as estimates','conf':M2},
 ]
 def op(i,name,**k): d={'id':i,'names':name if isinstance(name,list) else [name]}; d.update(k); return d
@@ -192,14 +198,14 @@ ops=[
  op('essence_replace','Perfect Essence of X + special essences (Abyss, Breach, Horror, Insanity, Delirium, Hysteria)',input='Rare',effect='remove 1 random mod + add guaranteed mod',conf=G,omens=['Omen of Sinistral Crystallisation (removes prefix only)','Omen of Dextral Crystallisation (removes suffix only)'],note='Essence of the Abyss adds "Bears the Mark of the Abyssal Lord", replaced on next desecration'),
  op('alloy','13 Runic Alloys',input='Rare',effect='remove 1 random mod + add alloy-exclusive guaranteed mod (counts as crafted)',conf=G,league_scope='Forbidden Rites, Runes of Aldur and Standard: traded on the official Currency Exchange in each (checked 27 Sept 2026)',scope_conf='official_data'),
  op('desecrate','Bones: Jawbone (Rare weapon/quiver), Rib (Rare armour), Collarbone (Rare amulet/ring/belt), Altered Collarbone (+chance of otherworldly mods), Cranium (Rare jewel), Vertebrae (Rare waystone)',input='Rare',effect='adds 1 unrevealed Desecrated mod; reveal at Well of Souls = choose 1 of 3',conf=G,quality_rules={'Gnawed':'Maximum Item Level 64','Preserved':'any','Ancient':'Minimum Modifier Level 40'},quality_conf=G,full_item='a random modifier is also removed (R_DESECRATE_FULL)',omens=['Omen of Sinistral/Dextral Necromancy (side)','Omen of the Blackblooded (Kurgal) / Liege (Amanamu) / Sovereign (Ulaman) - weapon or jewellery only','Omen of Abyssal Echoes (reroll the options once)','Omen of Putrefaction (replace all mods with up to 6 unrevealed + corrupt; conflicts with 0.5 one-desecrated cap -> verify)'],rule_refs=['R_ONE_DESECRATED']),
- op('catalyst','Catalysts (Flesh=Life, Neural=Mana, Carapace=Armour/Evasion/ES, Uul-Netol\'s=Physical, Xoph\'s=Fire, Tul\'s=Cold, Esh\'s=Lightning, Chayula\'s=Chaos, Reaver=Attack, Sibilant=Caster, Skittering=Speed, Adaptive=Attribute, Necrotic=Minion); Refined = same for jewels',input='ring/amulet (Refined: jewel)',effect='adds quality enhancing that mod type; replaces other quality types',conf=G,note='0.5: catalysts obtained only via Genesis Tree (multi secondary)'),
+ op('catalyst','Catalysts (Flesh=Life, Neural=Mana, Carapace=Armour/Evasion/ES, Uul-Netol\'s=Physical, Xoph\'s=Fire, Tul\'s=Cold, Esh\'s=Lightning, Chayula\'s=Chaos, Reaver=Attack, Sibilant=Caster, Skittering=Speed, Adaptive=Attribute, Necrotic=Minion); Refined = same for jewels',input='ring/amulet (Refined: jewel)',effect='adds quality enhancing that mod type; replaces other quality types',conf=G,source='item texts; types and item classes: game table AlternateQualityTypes (catalyst_qualities)',note='Game text (keyword Catalyst): exclusive drops from the Breach mechanic; 0.5 community sources: from the Genesis Tree'),
  op('quality','Blacksmith\'s Whetstone (martial weapon), Armourer\'s Scrap (armour), Arcanist\'s Etcher (wand/staff/sceptre), Glassblower\'s Bauble (flask)',input='item',effect='+quality',conf=G),
  op('infuser','Vaal Arcanist\'s/Armourer\'s/Blacksmith\'s/Catalysing Infuser',input='wand/staff/sceptre | armour | martial weapon | ring/amulet',effect='quality above max by up to 10%, chance to Corrupt',conf=G),
  op('flux','Blazing/Chilling/Crackling/Void Flux',input='item',effect='convert all elemental resistance mods to Fire/Cold/Lightning (Void: to Chaos) equivalents',conf=G),
  op('sacrifice','Kamasa\'s (amulet/ring/belt), Kopec\'s (armour), Yaomac\'s (weapon/quiver), Yugul\'s (jewel) Orb of Sacrifice',input='Rare with corruption enchantment',effect='upgrade corruption enchantment + remove 1 random mod',conf=G),
  op('architect','Architect\'s Orb',input='Corrupted equipment or jewel',effect='modify unpredictably or destroy',conf=G),
  op('cultivation','Vaal Cultivation Orb',input='Corrupted Vaal Unique / other Unique',effect='replace up to 2 mods / turn into corrupted Unique of same class',conf=G),
- op('liquid_emotion','Liquid emotions (e.g. Liquid Despair)',input='Rare basic jewel',effect='remove 1 random mod + add guaranteed crafted mod',conf=G),
+ op('liquid_emotion','Liquid emotions (Diluted, plain, Concentrated and Potent; the Ancient ones are for Time-Lost jewels)',input='Rare Basic Jewel (Ancient: Rare Time-Lost Jewel)',effect='removes a random modifier and adds the guaranteed crafted modifier the game lists for that jewel (liquid_emotions)',conf=G,source='item texts; outcomes: game table LiquidEmotionOutcomes',rule_refs=['R_ONE_CRAFTED','R_SWAP_REMOVAL']),
 ]
 legacy=[{'name':'Omen of Homogenising Exaltation / Coronation','status':'drops disabled since 0.4 (Standard legacy)','conf':M2},
         {'name':'Omen of Corruption','status':'unobtainable since 0.5.0 (legacy)','conf':M2},
@@ -252,7 +258,59 @@ for meta,v in json.load(open(get('poe2_augments.json'),encoding='utf-8')).items(
     AUG[name]={'type':v.get('type_id'),'lvl':v.get('required_level'),'limit':clean(v.get('limit')) or None,'by_class':by}
 kb['augments']=AUG
 kb['meta']['counts']['augments']=len(AUG)
+# ---- catalyst quality types (game table AlternateQualityTypes): the catalyst that adds each type, its item classes and the mod
+# tag the planner reads as "the corresponding type of Modifier" (Omen of Catalysing Exaltation). Every tag must exist on mods.
+_tagword={'Life':'life','Mana':'mana','Defence':'defences','Physical':'physical','Fire':'fire','Cold':'cold','Lightning':'lightning',
+          'Chaos':'chaos','Attack':'attack','Caster':'caster','Speed':'speed','Attribute':'attribute','Minion':'minion'}
+CQ=[]
+for r in _table('AlternateQualityTypes.csv'):
+    b=bases[_item_keys[int(r['Item'])]]
+    CQ.append({'quality':r['Description'],'catalyst':b['name'],'classes':_cls(r['ItemClass']),
+               'tag':_tagword[re.match(r'Quality \((\w+) Modifiers\)',r['Description']).group(1)],
+               'text':clean((b.get('properties') or {}).get('description')).replace('\r','').split('\n')[0]})
+_alltags={t for m in M.values() for t in m['mt']}
+assert CQ and all(q['tag'] in _alltags for q in CQ), [q['tag'] for q in CQ if q['tag'] not in _alltags]
+kb['catalyst_qualities']=CQ
+kb['meta']['rules'].append('catalyst_qualities = catalyst quality types from the game table AlternateQualityTypes with the catalyst that adds each, the item classes it works on and the mod tag it favours.')
 kb['meta']['rules'].append('augments = runes, soul cores, talismans and idols with their stats per item class (RePoE augments.json from the game tables; categories resolved with SoulCoreStatCategories). They go into augment sockets, not affix slots.')
+# ---- Greater/Perfect currency floors: the game table TieredCurrency (Tier, MinimumModLevel) must agree with crafting_ops
+_floor={bases[_item_keys[int(r['BaseItemType'])]]['name']:int(r['MinimumModLevel']) for r in _table('TieredCurrency.csv')}
+_seen=set()
+for o in ops:
+    for tier,lvl in (o.get('min_mod_level') or {}).items():
+        for n in o['names']:
+            if n.startswith(tier+' '):
+                assert _floor.get(n)==lvl, ('TieredCurrency disagrees', n, _floor.get(n), lvl)
+                _seen.add(n)
+    if o.get('min_mod_level'): o['floor_conf']='game_data'; o['floor_source']='game table TieredCurrency'
+assert _seen==set(_floor), sorted(set(_floor)^_seen)
+# ---- liquid emotions: the crafted modifier each adds on each jewel (game table LiquidEmotionOutcomes). A row with both a
+# prefix and a suffix mod for one jewel adds one of the two. RadiusJewel rows are the Ancient ones, for Time-Lost jewels.
+# Natural jewel outcomes keep their game ids here; scripts/augment_jewels.py points them at the knowledge base's jewel mods.
+LQ={}
+for r in _table('LiquidEmotionOutcomes.csv'):
+    tl=r['RadiusJewel']=='1'
+    by={}
+    for j in ('Ruby','Emerald','Sapphire','Diamond'):
+        ids=[_mod_keys[int(r[j+s])] for s in ('Prefix','Suffix') if r[j+s]]
+        if ids: by[('Time-Lost '+j) if tl else j]=ids
+        for mid in ids:
+            m=mods[mid]
+            if mid in M or (m.get('spawn_weights') and any(s['weight'] for s in m['spawn_weights'])): continue
+            # crafted-only jewel mods (no spawn weight anywhere): kept so plans and pasted items can name them
+            M[mid]={'fam':'+'.join(m.get('groups') or [m.get('type')]),'gen':m['generation_type'][0],'lvl':m.get('required_level'),
+                    'txt':clean(m.get('text')),'st':[[s['id'],s.get('min'),s.get('max')] for s in (m.get('stats') or [])],
+                    'mt':m.get('implicit_tags') or [],'grp':m.get('groups') or [],'sw':[],'dom':'i','src':'liquid'}
+    LQ[bases[_item_keys[int(r['BaseItemType'])]]['name']]={'time_lost':tl,'by_base':by}
+kb['liquid_emotions']=LQ
+kb['meta']['counts']['liquid_emotions']=len(LQ); kb['meta']['counts']['mods']=len(M)
+# mods that change how many prefixes or suffixes an item allows ("+1 Prefix Modifier allowed")
+for m in M.values():
+    if 'MaxPrefixMaxSuffix' in m['grp']:
+        cap={}
+        for x in re.finditer(r'([+-]\d+) (Prefix|Suffix) Modifiers? allowed', m['txt']): cap[x.group(2).lower()]=int(x.group(1))
+        if cap: m['cap']=cap
+kb['meta']['rules'].append('liquid_emotions = the crafted modifier each liquid emotion adds per jewel base (game table LiquidEmotionOutcomes; two ids = a prefix or a suffix, one of them is added). src:liquid mods are crafted-only; cap = change to the prefix/suffix limit.')
 kb['meta']['rules'].append('essence_outcomes = essences that add one of several mods (game table EssenceMods.OutcomeMods, with OutcomeModWeights when the table has them; none = not in the files).')
 _kw = json.load(open(get('poe2_keywords.json'), encoding='utf-8'))
 KEYWORDS = ['ItemRarity','Rarity','Crafted','Fracture','Abyssalify','UnstableDesecration','Sanctified','Corrupted','Mirrored',

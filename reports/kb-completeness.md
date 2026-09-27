@@ -36,12 +36,16 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 | 5 | Corruption (Vaal Orb) outcomes and corrupted implicits | RePoE mods generation_type corrupted | game data (list); outcome chances open | **verified**: 119 Corruption Enhancements in the KB (dom 'c'; equipment item-domain, jewels misc-domain), per-base lists identical to RePoE for all 1,617 bases; shown under Vaal Orb. Outcome chances: not in the files |
 | 6 | Runes, soul cores, talismans (augments) per item class | game tables SoulCores, SoulCoreStats, SoulCoreStatCategories, SoulCoreLimits / RePoE augments.json | game data | **done**: 313 augments in kb.augments with stats per item class (categories resolved with the game tables); a target row shows the augments that give the same stat |
 | 7 | Runic Alloy mods | EssenceMods (alloys are essences in the game tables) | game data | **verified** with row 3 (same table) |
-| 8 | Liquid emotions (jewels) | game table LiquidEmotionOutcomes | game data | not in the KB yet |
-| 9 | Catalyst quality types and the mods they favour | game table AlternateQualityTypes | game data | tags known; check pending |
-| 10 | Currency and omen rules (conditions, limits, tiers) | item texts, keywords, TieredCurrency, CurrencyPerItemClassConditions | game data | keywords and texts done; tier table check pending |
-| 11 | Mechanics that the files do not state | in-game tests (page) | open until tested | 12 open (see In-game tests) |
+| 8 | Liquid emotions (jewels) | game table LiquidEmotionOutcomes | game data | **verified**: all 26 emotions in kb.liquid_emotions with the crafted mod they add per jewel (Potent Ferocity and Contempt: a prefix or a suffix one; Diamond only takes 4 of them); 16 crafted-only mods added (e.g. "+1 Prefix Modifier allowed", which raises the limit). Planned like Perfect essences; which of the two Potent outcomes comes in is test t26 |
+| 9 | Catalyst quality types and the mods they favour | game table AlternateQualityTypes | game data | **verified**: 26 quality types (13 catalysts for rings and amulets, 13 Refined for jewels) in kb.catalyst_qualities; each maps to a mod tag the planner favours (test). Jewel mods now carry the game's mod tags and stats (all 320 linked to their game mod) |
+| 10 | Currency and omen rules (conditions, limits, tiers) | item texts, keywords, TieredCurrency, CurrencyPerItemClassConditions | game data | **verified**: Greater/Perfect minimum modifier levels identical to TieredCurrency (10 of 10; the build asserts it). CurrencyPerItemClassConditions: columns not identified, not used. Rare jewels 2 + 2 (community source, test t24): the engine used 3 + 3 before, fixed. Removal side of Perfect essences and liquid emotions (players' reports, test t25) |
+| 11 | Mechanics that the files do not state | in-game tests (page) | open until tested | 15 open (see In-game tests; t24-t26 added) |
 
 ## Log
+
+- 27 Sept 2026: rows 8-10 done (scripts/gamedata_extras.py, reports/gamedata-extras.md). Liquid emotions are planned from
+  the game table; Rare jewels are limited to 2 + 2 (the engine allowed 3 + 3); Perfect essences no longer buy an Omen of
+  Crystallisation when the essence side is full (players report the game removes from that side, test t25).
 
 - 27 Sept 2026: augments (runes, soul cores, talismans, idols) added from the game data; target rows show them.
 

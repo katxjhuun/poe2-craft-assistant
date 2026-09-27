@@ -27,7 +27,8 @@ function candidates(ctx, st, r) {
     A.push({ op: 'bone', quality: q, side, lich: LICH[Math.floor(r() * 4)], echoes: r() < 0.5 });
   }
   for (const e of ctx.essences) {
-    if (e.kind === 'magic') A.push({ op: 'essence', item: e.item, mod: e.mod });
+    if (e.liquid) A.push({ op: 'liquid', item: e.item, mod: e.mod });
+    else if (e.kind === 'magic') A.push({ op: 'essence', item: e.item, mod: e.mod });
     else A.push({ op: 'pessence', item: e.item, mod: e.mod, side: SIDES[Math.floor(r() * 3)] });
   }
   return A.filter((a) => !P.validate(ctx, st, a));
@@ -45,10 +46,18 @@ function checkStep(ctx, before, a, r) {
   const after = r.state;
   const bad = [];
   const fail = (id, msg) => bad.push({ id, msg });
-  const lim = E.slotLimits({ rarity: after.rarity, slotDelta: ctx.slotDelta });
+  // limits: rarity and item class (Rare jewels 2 + 2), plus "+1 Prefix/Suffix Modifier allowed" mods on the item
+  const limOf = (s) => {
+    const l = E.slotLimits({ rarity: s.rarity, slotDelta: ctx.slotDelta }, ctx.cls);
+    if (s.rarity === 'Rare') for (const m of s.mods) { const c = m.id && kb.mods[m.id] && kb.mods[m.id].cap; if (c) { l.prefix += c.prefix || 0; l.suffix += c.suffix || 0; } }
+    return l;
+  };
+  const lim = limOf(after);
   const cnt = (s, side) => s.mods.filter((m) => m.side === side).length;
   if (after.rarity === 'Normal' && after.mods.length) fail('slots', 'Normal item with modifiers');
-  if (cnt(after, 'prefix') > lim.prefix || cnt(after, 'suffix') > lim.suffix) fail('slots', `${cnt(after, 'prefix')}p/${cnt(after, 'suffix')}s on ${after.rarity}`);
+  // a side over its limit is legal only when it did not grow (removing a "+1 Prefix Modifier allowed" mod leaves it over)
+  const over = (side) => cnt(after, side) > lim[side] && cnt(after, side) > cnt(before, side);
+  if (over('prefix') || over('suffix')) fail('slots', `${cnt(after, 'prefix')}p/${cnt(after, 'suffix')}s on ${after.rarity}`);
   if (after.mods.filter((m) => m.crafted).length > 1) fail('crafted', 'two crafted modifiers');
   if (after.mods.filter((m) => m.des).length > 1) fail('desecrated', 'two desecrated modifiers');
   const g = groupsOf(after);
@@ -73,7 +82,7 @@ function checkStep(ctx, before, a, r) {
   }
   // what each operator does to the modifier count
   const dn = after.mods.length - before.mods.length;
-  const limB = E.slotLimits({ rarity: before.rarity, slotDelta: ctx.slotDelta });
+  const limB = limOf(before);
   const fullBefore = cnt(before, 'prefix') >= limB.prefix && cnt(before, 'suffix') >= limB.suffix;
   const n = a.greater ? 2 : 1;
   const expect = {
@@ -86,6 +95,9 @@ function checkStep(ctx, before, a, r) {
     annul: () => r.added.length === 0 && r.removed.length >= 1 && r.removed.length <= n,
     essence: () => after.rarity === 'Rare' && r.added.length === 1 && r.added[0].crafted,
     pessence: () => r.removed.length === 1 && r.added.length <= 1 && r.added.every((m) => m.crafted),
+    // game text: removes a random modifier and adds the guaranteed crafted modifier the game lists for this jewel
+    liquid: () => r.removed.length === 1 && r.added.length <= 1 && r.added.every((m) => m.crafted
+      && (kb.liquid_emotions[a.item].by_base[ctx.item.base] || []).includes(m.id)),
     // game text: desecrating a full item also removes a random modifier
     bone: () => r.added.length === 1 && r.added[0].des && r.removed.length === (fullBefore ? 1 : 0),
     fracture: () => after.mods.filter((m) => m.frac).length === before.mods.filter((m) => m.frac).length + 1,
@@ -96,6 +108,12 @@ function checkStep(ctx, before, a, r) {
   // omen side restrictions
   if (a.side && ['exalt', 'regal'].includes(a.op) && r.added.some((m) => m.side !== a.side)) fail('side', `${a.op} with a ${a.side} omen added a ${r.added.find((m) => m.side !== a.side).side}`);
   if (a.side && ['chaos', 'annul', 'pessence'].includes(a.op) && r.removed.some((m) => m.side !== a.side)) fail('side', `${a.op} with a ${a.side} omen removed a ${r.removed.find((m) => m.side !== a.side).side}`);
+  // R_SWAP_REMOVAL: without an omen, a full side of the one new mod loses one of its own mods
+  if (!a.side && (a.op === 'pessence' || a.op === 'liquid')) {
+    const ids = a.op === 'liquid' ? kb.liquid_emotions[a.item].by_base[ctx.item.base] || [] : [a.mod];
+    const sides = [...new Set(ids.map((id) => (kb.mods[id].gen === 'p' ? 'prefix' : 'suffix')))];
+    if (sides.length === 1 && cnt(before, sides[0]) >= limB[sides[0]] && r.removed.some((m) => m.side !== sides[0])) fail('side', `${a.op} removed a ${r.removed[0].side} although its ${sides[0]}es were full`);
+  }
   if (a.op === 'alchemy' && a.side && cnt(after, a.side) < Math.min(3, lim[a.side]) && after.mods.length === 4) fail('side', `alchemy with a ${a.side} omen gave ${cnt(after, a.side)} ${a.side}es`);
   if (a.op === 'bone' && a.lich && r.added.some((m) => E.lichOf(kb.mods[m.id]) !== a.lich)) fail('lich', `lich omen ${a.lich} gave ${r.added[0].id}`);
   // added modifiers must be able to spawn on this base
@@ -171,8 +189,8 @@ function walkBase(base, opts) {
   for (let w = 0; w < opts.walks; w++) {
     const ilvl = opts.ilvl || [82, 75, 64, 45][w % 4];
     const white = E.parseItem(ix, renderItem({ base, cls, rarity: 'Normal', ilvl, mods: [] }, r, 'adv').text).item;
-    // a Rare with catalyst quality sometimes, so the catalysing omen is exercised on rings and amulets
-    if ((cls === 'Ring' || cls === 'Amulet') && r() < 0.5) { white.quality = 20; white.qualityType = 'Life Modifiers'; }
+    // a Rare with catalyst quality sometimes, so the catalysing omen is exercised on rings, amulets and jewels
+    if ((cls === 'Ring' || cls === 'Amulet' || cls === 'Jewel') && r() < 0.5) { white.quality = 20; white.qualityType = 'Life Modifiers'; }
     const ctx = P.makeContext(ix, white, { weights: weightsFor(base), essences: essencesFor(cls), catalystMult: 3 });
     let st = P.toState(ctx, white);
     for (let s = 0; s < opts.steps; s++) {

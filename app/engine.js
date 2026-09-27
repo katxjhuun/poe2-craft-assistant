@@ -522,17 +522,34 @@
 
   // ---------------------------------------------------------------- validation
 
-  function slotLimits(item) {
-    const base = item.rarity === 'Magic' ? 1 : item.rarity === 'Rare' ? 3 : item.rarity === 'Normal' ? 0 : 3;
+  /**
+   * Affix limits per side. Game text (keyword ItemRarity): Magic 1 + 1, Rare 3 + 3. Rare jewels: 2 + 2 (R_JEWEL_SLOTS,
+   * community source, in-game test t24). cls: the item class, when the item object does not carry it.
+   */
+  function slotLimits(item, cls) {
+    const rare = (cls || item.cls || item.itemClass) === 'Jewel' ? 2 : 3;
+    const base = item.rarity === 'Magic' ? 1 : item.rarity === 'Rare' ? rare : item.rarity === 'Normal' ? 0 : rare;
     return {
       prefix: Math.max(0, base + (item.rarity === 'Rare' ? item.slotDelta.prefix : 0)),
       suffix: Math.max(0, base + (item.rarity === 'Rare' ? item.slotDelta.suffix : 0)),
     };
   }
 
+  /** Limits of a parsed item: its class, implicit/rune slot changes and explicit "+1 Prefix Modifier allowed" mods. */
+  function itemLimits(ix, item) {
+    const b = item.base ? ix.kb.bases[item.base] : null;
+    const lim = slotLimits(item, b && b.cls);
+    if (item.rarity !== 'Rare') return lim;
+    for (const m of item.mods || []) {
+      const cap = m.modId && ix.kb.mods[m.modId] ? ix.kb.mods[m.modId].cap : null;
+      if (cap) { lim.prefix += cap.prefix || 0; lim.suffix += cap.suffix || 0; }
+    }
+    return lim;
+  }
+
   function validateItem(ix, item, warnings) {
     if (!item) return warnings;
-    const lim = slotLimits(item);
+    const lim = itemLimits(ix, item);
     const count = { prefix: 0, suffix: 0 };
     for (const m of item.mods) if (m.slot === 'prefix' || m.slot === 'suffix') count[m.slot]++;
     if (item.rarity === 'Normal' && item.mods.length) warnings.push({ level: 'error', msg: 'A Normal item cannot have explicit mods; check the Rarity line.' });
@@ -611,7 +628,7 @@
     for (const rec of opts.essences || []) {
       if (rec.gen !== gl || !ix.kb.mods[rec.mod] || !ix.kb.mods[rec.mod].txt) continue;
       listed.add(rec.mod);
-      const grp = rec.alloy ? 'alloy' : 'essence';
+      const grp = rec.liquid ? 'liquid' : rec.alloy ? 'alloy' : 'essence';
       add(rec.mod, null, grp, null, rec.item);
     }
 
@@ -636,7 +653,7 @@
     for (const f of fams.values()) {
       f.tiers.sort((a, b) => (a.tier || 99) - (b.tier || 99) || b.lvl - a.lvl);
       if (f.group === 'desecrated' && hasDes) for (const t of f.tiers) if (t.ok) { t.ok = false; t.reason = 'item already has a Desecrated mod'; }
-      if (['essence', 'alloy', 'genesis'].includes(f.group) && hasCrafted) for (const t of f.tiers) { t.ok = false; t.reason = t.reason || 'item already has a crafted mod'; }
+      if (['essence', 'alloy', 'genesis', 'liquid'].includes(f.group) && hasCrafted) for (const t of f.tiers) { t.ok = false; t.reason = t.reason || 'item already has a crafted mod'; }
       f.ok = f.tiers.some((t) => t.ok);
       f.reason = f.ok ? null : (f.tiers[f.tiers.length - 1] || {}).reason || f.baseReason;
       if (!f.ok && !opts.showImpossible) continue;
@@ -805,7 +822,7 @@
   return {
     cleanLine, normalize, template, templateRanges, lineValues, valuesFit,
     buildIndex, poolFor, desecratedPoolFor, swEligible, familyTiersByTags, applyFloor,
-    parseItem, validateItem, slotLimits, pickerOptions, searchOptions, searchScore, resolveTemplateTarget,
+    parseItem, validateItem, slotLimits, itemLimits, pickerOptions, searchOptions, searchScore, resolveTemplateTarget,
     leakScan, legacyScan, explanationProblems, lichOf, diffItems,
   };
 });

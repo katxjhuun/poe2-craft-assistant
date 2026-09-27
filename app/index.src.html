@@ -693,9 +693,9 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   const FALLBACK_LEAGUES = ['Forbidden Rites', 'Runes of Aldur', 'Standard', 'HC Forbidden Rites'];
   const LOCK = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.2" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>';
   const UNLOCK = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.2" fill="currentColor" opacity=".5"/><path d="M5 7V5a3 3 0 0 1 5.6-1.5" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>';
-  const GROUP_LABEL = { prefix: 'Prefix', suffix: 'Suffix', desecrated: 'Desecrated', essence: 'Essence', genesis: 'Genesis Tree', alloy: 'Alloy' };
-  const GROUP_ORDER = ['prefix', 'suffix', 'desecrated', 'essence', 'genesis', 'alloy'];
-  const groupCls = (g) => (g === 'desecrated' ? 'g-desecrated' : ['essence', 'genesis', 'alloy'].includes(g) ? 'g-crafted' : '');
+  const GROUP_LABEL = { prefix: 'Prefix', suffix: 'Suffix', desecrated: 'Desecrated', essence: 'Essence', genesis: 'Genesis Tree', alloy: 'Alloy', liquid: 'Liquid emotion' };
+  const GROUP_ORDER = ['prefix', 'suffix', 'desecrated', 'essence', 'liquid', 'genesis', 'alloy'];
+  const groupCls = (g) => (g === 'desecrated' ? 'g-desecrated' : ['essence', 'genesis', 'alloy', 'liquid'].includes(g) ? 'g-crafted' : '');
 
   const TEMPLATES = [
     { id: 'minion-sceptre', label: 'Minion sceptre', cls: ['Sceptre'], stats: [
@@ -1481,8 +1481,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
    */
   function craftLimits(it) {
     const f = it.flags || {};
-    if (it.rarity === 'Unique' || f.corrupted || f.sanctified || f.mirrored) return E.slotLimits(it);
-    return E.slotLimits({ rarity: 'Rare', slotDelta: it.slotDelta || { prefix: 0, suffix: 0 } });
+    if (it.rarity === 'Unique' || f.corrupted || f.sanctified || f.mirrored) return E.itemLimits(S.ix, it);
+    return E.itemLimits(S.ix, Object.assign({}, it, { rarity: 'Rare', slotDelta: it.slotDelta || { prefix: 0, suffix: 0 } }));
   }
   /**
    * A new state of the same item: rows follow the order of the pasted text, which changes as mods come and go, so move
@@ -1986,7 +1986,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     projCache = it && !it.unsupported && obsState.ready ? projected() : null;
     if (!it) { el.innerHTML = '<h2>Stats</h2>'; return; }
     if (it.unsupported) { el.innerHTML = `<div class="panel-head"><h2>Stats</h2></div><p class="sub">${esc(it.unsupported)}</p>`; return; }
-    const lim = E.slotLimits(it), cap = craftLimits(it);
+    const lim = E.itemLimits(S.ix, it), cap = craftLimits(it);
     const tpl = TEMPLATES.filter((t) => t.cls.includes(it.itemClass));
     const mine = (S.userTemplates || []).filter((t) => t.cls === it.itemClass);
     const hasTargets = Object.values(S.targets).some((t) => t && t.fam);
@@ -2056,7 +2056,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       const reach = Math.max(0, ...tiers.filter((x) => x.ok && x.txt).map((x) => { const r = E.templateRanges(x.txt.split('\n')[0])[0]; return r ? Math.max(Math.abs(r[0]), Math.abs(r[1])) : 0; }));
       let bad = fam && !fam.ok ? `<span class="bad-note">${esc(fam.reason || 'Not possible on this item')}</span>` : '';
       if (!bad && byValue && t.minValue > reach && reach > 0) bad = `<span class="bad-note">No tier rolls ${esc(fmtVal(t.minValue))} here (max ${esc(fmtVal(reach))})</span>`;
-      const canValue = fam && fam.group !== 'essence' && fam.group !== 'alloy' && reach > 0;
+      const canValue = fam && !['essence', 'alloy', 'liquid'].includes(fam.group) && reach > 0;
       opts = `<div class="srow-opts">
         <select data-tier="${key}" aria-label="Minimum tier or value">${tiers.map((x) => `<option value="${x.tier || ''}" ${!byValue && x.tier === t.minTier ? 'selected' : ''} ${x.ok ? '' : 'disabled'}>${x.via ? esc(x.via) : x.tier ? 'T' + x.tier + ' or better' : 'Any tier'} · ${esc(x.txt.replace(/\n/g, ' / '))} · lvl ${x.lvl}</option>`).join('')}${canValue ? `<option value="v" ${byValue ? 'selected' : ''}>At least a value…</option>` : ''}</select>
         ${byValue && canValue ? `<input class="minval" data-minval="${key}" inputmode="decimal" value="${t.minValue > 0 ? esc(t.minValue) : ''}" placeholder="max ${esc(fmtVal(reach))}" aria-label="Minimum value of the first number">` : ''}
@@ -2294,13 +2294,13 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   function catMult() { return +S.catMult >= 1 ? +S.catMult : P.CATALYST_DEFAULT; }
   /** White bases the player will use for one finished item (plans that start over keep to it). */
   function baseLimit() { return Math.max(1, parseInt(S.baseLimit, 10) || 100); }
-  /** Ring or amulet with catalyst quality (the only items Omen of Catalysing Exaltation works on). */
-  function hasCatalyst(it) { return !!(it && (it.itemClass === 'Ring' || it.itemClass === 'Amulet') && it.quality > 0 && P.catalystTag(it.qualityType)); }
+  /** Ring, amulet or jewel with catalyst quality (catalyst_qualities: catalysts for jewellery, Refined ones for jewels). */
+  function hasCatalyst(it) { return !!(it && ['Ring', 'Amulet', 'Jewel'].includes(it.itemClass) && it.quality > 0 && P.catalystTag(it.qualityType)); }
   /** Essences and alloys poe2db lists for this item class (alloys trade in every league's Currency Exchange). */
   function itemEssences() {
     const list = (S.essences && S.item && S.essences[S.item.itemClass]) || [];
     const base = S.item && S.ix.kb.bases[S.item.base];
-    return (base ? P.essencesForBase(S.ix, base, list) : list);
+    return base ? P.essencesForBase(S.ix, base, list).concat(P.liquidFor(S.ix.kb, S.item.base)) : list;
   }
   /** poe2db weights of the page that matches this base (class + armour attribute), or null. */
   function itemWeights() {
@@ -2386,6 +2386,22 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (fit.length < 2) return "this essence's mod for certain";
     return `one of ${fit.length} mods at random (${fit.map((id) => S.ix.kb.mods[id].txt.replace(/\n/g, ' / ')).join('; ')})${o.weights ? '' : ', evenly as far as the game files say'}`;
   }
+  /** Mods a liquid emotion adds on this jewel (game table LiquidEmotionOutcomes). */
+  function liquidMods(a) {
+    const e = a.item && S.ix && S.ix.kb.liquid_emotions && S.ix.kb.liquid_emotions[a.item];
+    return ((e && S.item && e.by_base[S.item.base]) || []).filter((id) => S.ix.kb.mods[id]);
+  }
+  function liquidAdds(a) {
+    const ids = liquidMods(a);
+    const t = (id) => `"${S.ix.kb.mods[id].txt.replace(/\n/g, ' / ')}"`;
+    if (!ids.length) return 'its crafted mod';
+    return ids.length === 1 ? t(ids[0]) : `${ids.map(t).join(' or ')} (a prefix or a suffix, whichever fits)`;
+  }
+  /** R_SWAP_REMOVAL: a full side of the new mod loses one of its own mods (community rule, in-game test t25). */
+  function swapNote(ids) {
+    const sides = [...new Set(ids.filter((id) => id && S.ix.kb.mods[id]).map((id) => (S.ix.kb.mods[id].gen === 'p' ? 'prefix' : 'suffix')))];
+    return sides.length === 1 ? ` (one of the ${sides[0]}es when they are full)` : '';
+  }
   function stepHelp(a, params) {
     switch (a.op) {
       case 'newbase': return 'A mod missed the goals and fixing it would cost more: start again on a fresh white base.';
@@ -2400,7 +2416,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
         : a.side ? `Removes a random ${a.side} (fractured mods are safe) and adds a random mod.` : 'Removes one random mod and adds a random mod. It can hit a mod you want.';
       case 'annul': return a.light ? 'Removes only the Desecrated mod.' : a.side ? `Removes a random ${a.side}.` : 'Removes one random mod.';
       case 'essence': return `Makes the Magic item Rare and adds ${essenceAdds(a)}. Uses the crafted slot.`;
-      case 'pessence': return `Removes a random ${a.side || 'modifier'} and adds ${essenceAdds(a)}. Uses the crafted slot.`;
+      case 'pessence': return `Removes a random ${a.side || 'modifier'}${a.side ? '' : swapNote([a.mod])} and adds ${essenceAdds(a)}. Uses the crafted slot.`;
+      case 'liquid': return `Removes a random modifier${swapNote(liquidMods(a))} and adds ${liquidAdds(a)} as a crafted mod. Uses the crafted slot.`;
       case 'bone': return `Adds a hidden Desecrated mod${a.side ? ' as a ' + a.side : ''}. Reveal it at the Well of Souls and pick 1 of 3${a.echoes ? '; Abyssal Echoes lets you reroll the three once' : ''}.`;
       case 'fracture': return 'Locks one random mod for good. It cannot be undone; the plan uses it only when a finished goal is among 4 mods (or 5 with two goals).';
       case 'divine': return 'Rerolls the values of every mod except fractured ones; the mods themselves stay. Comes last, because later currency does not change existing values.';
@@ -2422,8 +2439,11 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       ? `<span class="badge" title="${esc(wm.note)} Page: ${esc(S.weightsData.base_page[S.item.base] || '')}. ${pl.imputed ? pl.imputed + ' mods on this base had no poe2db weight and use the lowest weight of their family.' : ''}">Chances: poe2db weights, ${esc(wm.fetched)}</span>`
       : '<span class="badge verify" title="Mod weights are not in the game data. Every mod tier that can roll is treated as equally likely.">Chances: estimate, equal weights</span>',
       '<span class="badge" title="Currency and omen effects come from in-game descriptions.">Effects: game text</span>'];
-    if (tiers.size) b.push('<span class="badge" title="Minimum modifier levels of Greater and Perfect orbs come from several community sources.">Greater/Perfect floors: several sources</span>');
+    if (tiers.size) b.push('<span class="badge" title="Minimum modifier levels of Greater and Perfect orbs come from the game table TieredCurrency.">Greater/Perfect floors: game data</span>');
     if (ops.has('essence') || ops.has('pessence')) b.push('<span class="badge" title="Which essence gives which mod on this item class comes from poe2db.">Essence mods: poe2db</span>');
+    if (ops.has('liquid')) b.push('<span class="badge" title="Which crafted mod each liquid emotion adds on each jewel comes from the game table LiquidEmotionOutcomes.">Liquid emotion mods: game data</span>');
+    if (ops.has('liquid') || ops.has('pessence')) b.push('<span class="badge verify" title="When the side of the new mod is full, the removed mod is one of that side (players report it; in-game test t25).">Removal side: verify in game</span>');
+    if (S.item && S.item.itemClass === 'Jewel') b.push('<span class="badge verify" title="Rare jewels allow 2 prefixes and 2 suffixes (community source; in-game test t24).">Jewel limit 2 + 2: verify in game</span>');
     if (ops.has('bone')) b.push('<span class="badge verify" title="Gnawed, Preserved and Ancient bone rules come from a single source.">Bone rules: verify in game</span>', '<span class="badge" title="No weights are published for Desecrated mods.">Desecrated options: equal weights</span>');
     if (pl.steps.some((s) => s.action.whittle)) b.push('<span class="badge verify">Whittling: hover-check the mod</span>');
     if (ops.has('flux')) b.push('<span class="badge verify" title="Game text: transforms the resistance mods to equivalent ones. The planner keeps the tier number (the value ranges match).">Flux: same tier assumed</span>');
@@ -2528,7 +2548,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const tiers = [p.exaltTier || p.tier, p.chaosTier || p.tier];
     if (tiers.includes('perfect')) used.push('perfect');
     if (tiers.includes('greater')) used.push('greater');
-    if (ops.has('essence') || ops.has('pessence')) used.push('essence');
+    if (ops.has('essence') || ops.has('pessence') || ops.has('liquid')) used.push('essence');
     if (ops.has('flux')) used.push('flux');
     if (ops.has('fracture')) used.push('fracture');
     if (pl.steps.some((s) => s.action.catalyse)) used.push('catalyse');
@@ -2630,7 +2650,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       return `<div class="goal"><span class="tchip ${t.minTier === 1 && !(t.minValue > 0) ? 't1' : ''}">${goalTag(t)}</span><span class="modtxt ${groupCls(t.group) === 'g-desecrated' ? 'desecrated' : groupCls(t.group) ? 'crafted' : ''}">${esc(t.label)}</span><span class="state ${met ? 'met' : ''}">${met ? 'Done' : t.required ? 'Required' : 'Nice to have'}</span></div>`;
     }).join('') : '<div class="sub">No goals yet.</div>';
     html += '</div>';
-    const lim = E.slotLimits(it);
+    const lim = E.itemLimits(S.ix, it);
     const pc = sideMods(it, 'prefix').length, sc = sideMods(it, 'suffix').length;
     const crafted = it.mods.some((m) => m.crafted), des = it.mods.some((m) => m.desecrated);
     const locked = Object.values(S.locks).filter(Boolean).length + it.mods.filter((m) => m.fractured).length;
@@ -2869,7 +2889,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     crash: 'No currency crashed the simulator', slots: 'Prefix and suffix limits per rarity', crafted: 'At most one crafted modifier',
     desecrated: 'At most one desecrated modifier', groups: 'No two modifiers of one group', ilvl: 'Natural tiers respect item level',
     fractured: 'Fractured modifiers are never removed or changed', floor: 'Greater and Perfect minimum modifier levels',
-    effect: 'Each currency adds and removes what its game text says', side: 'Side omens keep to their side', lich: 'Lich omens give their lich\'s modifiers',
+    effect: 'Each currency adds and removes what its game text says', side: 'Side omens keep to their side; a full side loses its own modifier (essences, liquid emotions)', lich: 'Lich omens give their lich\'s modifiers',
     pool: 'Added modifiers can spawn on the base', whittle: 'Whittling removes the lowest level modifier', light: 'Omen of Light removes only the desecrated modifier',
     'parse-adv': 'Alt+Ctrl+C text reads back exactly', 'parse-adv-flagged': 'Alt+Ctrl+C text needs no "Pick"', 'parse-simple': 'Ctrl+C text reads back (family, side, markers)', 'parse-simple-exact': 'Ctrl+C text reads back the exact tier',
   };

@@ -22,7 +22,9 @@ CACHE = os.path.join(ROOT, '.kb_cache')
 CAND_DIR = os.path.join(CACHE, 'candidate')
 CANDIDATE = os.path.join(CAND_DIR, 'poe2_kb_candidate.json')
 REPORTS = os.path.join(ROOT, 'reports')
-SOURCES = ['poe2_mods.json', 'poe2_base_items.json', 'poe2_version.txt', 'poe2_keywords.json', 'poe1_base_items.json', 'items.ndjson', 'stats.ndjson']
+SOURCES = ['poe2_mods.json', 'poe2_base_items.json', 'poe2_version.txt', 'poe2_keywords.json', 'poe1_base_items.json', 'items.ndjson', 'stats.ndjson',
+           'poe2_augments.json', 'EssenceMods.csv', 'Essences.csv', 'EssenceTargetItemCategories.csv', 'SoulCoreStatCategories.csv',
+           'ItemClasses.csv', 'LiquidEmotionOutcomes.csv', 'TieredCurrency.csv', 'AlternateQualityTypes.csv']
 
 
 def run(cmd, env=None, cwd=ROOT):
@@ -46,7 +48,7 @@ def build(fresh):
     print(out.strip()[-2000:])
     if code:
         print('build failed'); return code
-    code, out = run([sys.executable, os.path.join('scripts', 'augment_jewels.py')], env={'POE2_KB': CANDIDATE})
+    code, out = run([sys.executable, os.path.join('scripts', 'augment_jewels.py')], env={'POE2_KB': CANDIDATE, 'KB_CACHE': CACHE})
     print(out.strip()[-1500:])
     if code:
         print('jewel augmentation failed (the candidate has no jewel data)'); return code
