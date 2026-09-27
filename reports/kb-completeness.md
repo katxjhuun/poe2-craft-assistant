@@ -1,0 +1,51 @@
+# Knowledge base completeness plan (started 27 Sept 2026)
+
+Goal (user, 27 Sept 2026): a knowledge base that knows every stat of every craftable item class in scope, with its
+weight, every stat that can come from outside the default pool (with its weight, how it is obtained, its limits and
+conditions) and how each currency and omen works on it, every fact verified; then plans come from millions of
+simulated crafts on that data. Keep going across sessions until every row below is done.
+
+Scope: Helmet, Body Armour, Gloves, Boots, all weapon classes (maces, spears, bows, crossbows, quarterstaves,
+wands, staves, sceptres, talismans; swords, axes, daggers and flails are not obtainable in 0.5.x), off hands
+(Shield, Buckler, Focus, Quiver), Ring, Amulet, Belt, Jewel. Out of scope: flasks and charms (user decision);
+their stats on other items are ordinary stats.
+
+## What "verified" can mean
+
+| Level | Meaning |
+|---|---|
+| game data | read from the game's own files (RePoE exports, raw tables, game texts): exact for 0.5.5 |
+| official data | GGG's official Currency Exchange or patch notes |
+| cross-checked estimate | not in the game files; two independent community sources agree |
+| estimate | one community source |
+| open | only an in-game test can settle it (list in the page's In-game tests) |
+
+Roll weights are **not in the game files** (Mods table: SpawnWeight_Values holds 0/1 eligibility only, checked on
+the raw 0.5.5 table). Craft of Exile says its PoE2 weights come from Recombinator data (community, Prohibited Library)
+and, for bases without it, from trade listings; the Recombinator was disabled in 0.5.0. So weights can reach
+"cross-checked estimate" at best, unless the page learns them from logged in-game results.
+
+## Work list
+
+| # | Area | Source | Target level | Status |
+|---|---|---|---|---|
+| 1 | Natural mod pools per base: tiers, levels, groups, tags, texts, value ranges | RePoE mods.json (have); cross-check RePoE mods_by_base.json | game data | **verified**: all 1,617 in-scope bases (22 classes) identical to RePoE's per-base game-data lists (scripts/kb_verify.py). Jewels keep poe2db ids and in-game radius wording; texts and ranges match the game data; the Small/Notable split of radius mods still needs Mods.RadiusJewelType (raw Mods table, 7.4 MB, not downloaded yet) |
+| 2 | Roll weights of natural mods | poe2db DropChance (have); Craft of Exile | cross-checked estimate | poe2db only; comparison pending |
+| 3 | Essence mods per item class | game tables EssenceMods, Essences, EssenceTargetItemCategories | game data | from poe2db pages; check against game tables pending |
+| 4 | Desecrated mods per class, levels, lich tags, reveal rules | RePoE desecrated domain + keywords | game data | done (all equipment desecrated mods are level 65; none on sceptres) |
+| 5 | Corruption (Vaal Orb) outcomes and corrupted implicits | RePoE mods generation_type corrupted | game data (list); outcome chances open | **verified**: 119 Corruption Enhancements in the KB (dom 'c'; equipment item-domain, jewels misc-domain), per-base lists identical to RePoE for all 1,617 bases; shown under Vaal Orb. Outcome chances: not in the files |
+| 6 | Runes, soul cores, talismans (augments) per item class | game tables SoulCores, SoulCoreStats, SoulCoreStatCategories, SoulCoreLimits / RePoE augments.json | game data | not in the KB yet |
+| 7 | Runic Alloy mods | crafted-domain mods; Expedition2VerisiumCrafts | game data | alloy mods known from poe2db pages; check pending |
+| 8 | Liquid emotions (jewels) | game table LiquidEmotionOutcomes | game data | not in the KB yet |
+| 9 | Catalyst quality types and the mods they favour | game table AlternateQualityTypes | game data | tags known; check pending |
+| 10 | Currency and omen rules (conditions, limits, tiers) | item texts, keywords, TieredCurrency, CurrencyPerItemClassConditions | game data | keywords and texts done; tier table check pending |
+| 11 | Mechanics that the files do not state | in-game tests (page) | open until tested | 12 open (see In-game tests) |
+
+## Log
+
+- 27 Sept 2026: corruption enhancements added and verified (all bases); jewel texts verified against the game data.
+
+- 27 Sept 2026: downloaded the game tables (scripts/fetch_gamedata.py, user OK). kb_verify: natural pools identical to RePoE for all non-jewel classes; corruption mods per class found (4-15), not in the KB yet.
+
+- 27 Sept 2026: plan written. Findings so far: real weights are server-side; RePoE keywords.json added (game texts);
+  alloys trade in every league; desecrated equipment mods are level 65 only.

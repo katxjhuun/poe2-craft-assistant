@@ -1658,7 +1658,10 @@
     if (!validate(ctx, st, { op: 'flux', to: 'chaos' })) fluxes.push('Void Flux');
     add('flux', 'Change a resistance element', fluxes.length ? { op: 'flux', to: 'chaos' } : 'The item has no Fire, Cold or Lightning Resistance modifier.',
       { cur: fluxes, planned: true, note: 'Blazing, Chilling and Crackling Flux are planned (same tier of the new element). Void Flux is listed only: Chaos tiers have other values.' });
-    add('vaal', 'Corrupt', { op: 'vaal' }, { cur: ['Vaal Orb'] });
+    // Corruption Enhancements this base can get (game data: kb.pools[sig].corrupted); the outcome chances are not in the files.
+    const enh = ((ix.kb.pools[ctx.base.sig] || {}).corrupted || []).map((id) => ix.kb.mods[id].txt.replace(/\n/g, ' / '));
+    add('vaal', 'Corrupt', { op: 'vaal' }, { cur: ['Vaal Orb'],
+      note: enh.length ? `Can add one of ${enh.length} Corruption Enhancements on this base (game data), e.g. ${enh.slice(0, 3).join('; ')}. How often each outcome happens is not in the game files.` : null });
     add('hinekora', 'Preview the next currency', { op: 'hinekora' }, { cur: ["Hinekora's Lock"] });
     add('mirror', 'Copy the item', { op: 'mirror' }, { cur: ['Mirror of Kalandra'] });
     // Corrupted items

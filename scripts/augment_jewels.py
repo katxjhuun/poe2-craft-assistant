@@ -151,6 +151,8 @@ def main():
         kb['pools'][sid] = {
             'prefix': tiers([k for k, m in nat if m['gen'] == 'p' and eligible(b['tags'], m['sw'])]),
             'suffix': tiers([k for k, m in nat if m['gen'] == 's' and eligible(b['tags'], m['sw'])]),
+            # Corruption Enhancements of jewels are the misc-domain ones (see poe2_kb_build.py)
+            'corrupted': sorted(k for k, m in kb['mods'].items() if m['dom'] == 'c' and m.get('cdom') == 'misc' and eligible(b['tags'], m['sw'])),
         }
 
     c = kb['meta']['counts']

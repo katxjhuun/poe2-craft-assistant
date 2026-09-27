@@ -80,7 +80,9 @@
   function buildIndex(kb) {
     const lineIndex = new Map(); // normalized line -> [{id, li, n}]
     const famMods = new Map();   // fam -> [modId]
+    const corruptionMods = [];   // Corruption Enhancements (dom 'c'): implicits a Vaal Orb can add, not affixes
     for (const [id, m] of Object.entries(kb.mods)) {
+      if (m.dom === 'c') { corruptionMods.push(id); continue; }
       if (!famMods.has(m.fam)) famMods.set(m.fam, []);
       famMods.get(m.fam).push(id);
       if (!m.txt) continue;
@@ -99,7 +101,7 @@
     const statByNorm = new Map();
     for (const s of kb.stat_index || []) for (const p of s.m || [s.r]) statByNorm.set(normalize(p), s);
     return {
-      kb, lineIndex, famMods, blNames, baseNames, statByNorm,
+      kb, lineIndex, famMods, blNames, baseNames, statByNorm, corruptionMods,
       _pool: new Map(), _desPool: new Map(), _opts: new Map(),
     };
   }

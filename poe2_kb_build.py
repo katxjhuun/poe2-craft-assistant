@@ -55,6 +55,12 @@ M={}
 JEWEL_DOMAINS=set()
 for k,m in mods.items():
     g=m.get('generation_type'); dom=m.get('domain')
+    # Corruption Enhancements (what a Vaal Orb can add): item domain, and misc for jewels. dom 'c', gen 'c'.
+    if g=='corrupted' and dom in ('item','misc'):
+        M[k]={'fam':m.get('type'),'gen':'c','lvl':m.get('required_level'),'txt':clean(m.get('text')),
+              'st':[[s['id'],s.get('min'),s.get('max')] for s in (m.get('stats') or [])],
+              'mt':m.get('implicit_tags') or [],'grp':m.get('groups') or [],'sw':[[s['tag'],s['weight']] for s in (m.get('spawn_weights') or [])],'dom':'c','cdom':dom}
+        continue
     if g not in ('prefix','suffix'): continue
     sw=[[s['tag'],s['weight']] for s in (m.get('spawn_weights') or [])]
     # Only the "desecrated" domain is desecrated; every other kept domain holds natural mods.
@@ -102,7 +108,10 @@ for n,b in B.items():
                 lst.sort(key=lambda i:-(M[i]['lvl'] or 0))
                 out+= [[i,t+1] for t,i in enumerate(lst)]
             return out
-        pools[sid]={'prefix':tiers(pref),'suffix':tiers(suf)}
+        # a mod's domain must match the item's: equipment takes item-domain enhancements, jewels the misc-domain ones
+        cdom='misc' if b['cls']=='Jewel' else 'item'
+        cor=[k for k,m in M.items() if m['dom']=='c' and m['cdom']==cdom and weight_for(b['tags'],m['sw'])>0]
+        pools[sid]={'prefix':tiers(pref),'suffix':tiers(suf),'corrupted':sorted(cor)}
     b['sig']=sigs[key]
 # ---- stat index (trade-site style search)
 SI=[{'r':s['ref'],'ids':(s.get('trade') or {}).get('ids') or {},'m':[x.get('string') for x in s.get('matchers',[]) if x.get('string')]} for s in ee_stats]
