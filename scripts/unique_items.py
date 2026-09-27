@@ -98,6 +98,13 @@ def main():
         html = fetch(name.replace(' ', '_'))
         pops = [p for p in popups(html or '') if p['name'] == name]
         if not pops:
+            # poe2db splits some uniques into forms with their own pages (Guiding Palm of the Eye, of the Heart, of the Mind)
+            forms = [f[:-5] for f in os.listdir(bw.CACHE) if f.startswith(name.replace(' ', '_') + '_of_') and f.endswith('.html')]
+            if not forms and not OFFLINE:
+                forms = [name.replace(' ', '_') + suffix for suffix in ('_of_the_Eye', '_of_the_Heart', '_of_the_Mind')]
+            for form in forms:
+                pops += [p for p in popups(fetch(form) or '') if (p['name'] or '').startswith(name)]
+        if not pops:
             missing.append(name); continue
         variants, seen = [], set()
         for p in pops:

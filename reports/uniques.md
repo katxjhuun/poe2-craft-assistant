@@ -3,9 +3,9 @@
 Sources: RePoE uniques.json (names), Exiled Exchange 2 (base types), poe2db unique pages (lines),
 RePoE mods.json unique mods (text and range check). Flasks and charms are out of scope.
 
-422 of 423 uniques read; 2321 of 2462 lines match a game mod or vary per item.
-By class: Body Armour 73, Helmet 53, Ring 39, Gloves 37, Amulet 26, Boots 25, Shield 21, Belt 21, Jewel 13, Two Hand Mace 12, One Hand Mace 12, Bow 11, Spear 10, Staff 10, Buckler 9, Wand 8, Focus 8, Quiver 8, Sceptre 8, Warstaff 7, Talisman 6, Crossbow 5.
-No poe2db page: Guiding Palm
+423 of 423 uniques read; 2339 of 2480 lines match a game mod or vary per item.
+By class: Body Armour 73, Helmet 53, Ring 39, Gloves 37, Amulet 26, Boots 25, Shield 21, Belt 21, Jewel 13, Two Hand Mace 12, One Hand Mace 12, Bow 11, Spear 10, Staff 10, Buckler 9, Sceptre 9, Wand 8, Focus 8, Quiver 8, Warstaff 7, Talisman 6, Crossbow 5.
+Every unique has a poe2db page.
 
 - **Ab Aeterno** (Boots; Grand Cuisses): 5 of 5 lines matched or marked as varying
 - **Adonia's Ego** (Wand; Siphoning Wand): 4 of 5 lines matched or marked as varying
@@ -229,6 +229,7 @@ No poe2db page: Guiding Palm
 - **Grip of Kulemak** (Ring; Abyssal Signet): 14 of 14 lines matched or marked as varying
 - **Grip of Winter** (Gloves; Firm Bracers, Fists of Stone): 11 of 12 lines matched or marked as varying
   - no game mod with this text: Unmodifiable
+- **Guiding Palm** (Sceptre; Shrine Sceptre): 18 of 18 lines matched or marked as varying
 - **Guiding Palm of the Eye** (Sceptre; Shrine Sceptre): 6 of 6 lines matched or marked as varying
 - **Guiding Palm of the Heart** (Sceptre; Shrine Sceptre): 6 of 6 lines matched or marked as varying
 - **Guiding Palm of the Mind** (Sceptre; Shrine Sceptre): 6 of 6 lines matched or marked as varying
