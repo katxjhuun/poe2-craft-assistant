@@ -1,6 +1,6 @@
 {
  "meta": {
-  "date": "2026-09-28T10:59:40.827Z",
+  "date": "2026-09-28T14:11:41.441Z",
   "quick": false,
   "bases": 56,
   "scenarios": 777,
@@ -8,8 +8,8 @@
   "strategyRuns": 48532,
   "trials": 300,
   "maxSteps": 400,
-  "walkSteps": 1086035,
-  "roundTrips": 217261,
+  "walkSteps": 1085996,
+  "roundTrips": 217235,
   "prices": {
    "league": "Forbidden Rites",
    "hourTo": 1790470800,
@@ -17,118 +17,117 @@
    "feed": "Exiled Exchange 2 price feed (poe.ninja data, unofficial)"
   },
   "weights": "2026-09-28",
-  "workers": 30,
-  "seconds": 1134,
+  "workers": 28,
+  "seconds": 1618,
   "skipped": [],
-  "errors": 0,
-  "checksRun": "2026-09-28T11:05:18.615Z"
+  "errors": 0
  },
  "checks": [
   {
    "id": "crash",
-   "n": 1086035,
+   "n": 1085996,
    "fail": 0,
    "examples": []
   },
   {
    "id": "slots",
-   "n": 1086035,
+   "n": 1085996,
    "fail": 0,
    "examples": []
   },
   {
    "id": "crafted",
-   "n": 1086035,
+   "n": 1085996,
    "fail": 0,
    "examples": []
   },
   {
    "id": "desecrated",
-   "n": 1086035,
+   "n": 1085996,
    "fail": 0,
    "examples": []
   },
   {
    "id": "groups",
-   "n": 1086035,
+   "n": 1085996,
    "fail": 0,
    "examples": []
   },
   {
    "id": "ilvl",
-   "n": 1086035,
+   "n": 1085996,
    "fail": 0,
    "examples": []
   },
   {
    "id": "fractured",
-   "n": 1086035,
+   "n": 1085996,
    "fail": 0,
    "examples": []
   },
   {
    "id": "floor",
-   "n": 1086035,
+   "n": 1085996,
    "fail": 0,
    "examples": []
   },
   {
    "id": "effect",
-   "n": 1086035,
+   "n": 1085996,
    "fail": 0,
    "examples": []
   },
   {
    "id": "side",
-   "n": 1086035,
+   "n": 1085996,
    "fail": 0,
    "examples": []
   },
   {
    "id": "lich",
-   "n": 1086035,
+   "n": 1085996,
    "fail": 0,
    "examples": []
   },
   {
    "id": "pool",
-   "n": 1086035,
+   "n": 1085996,
    "fail": 0,
    "examples": []
   },
   {
    "id": "whittle",
-   "n": 1086035,
+   "n": 1085996,
    "fail": 0,
    "examples": []
   },
   {
    "id": "light",
-   "n": 1086035,
+   "n": 1085996,
    "fail": 0,
    "examples": []
   },
   {
    "id": "tags",
-   "n": 1086035,
+   "n": 1085996,
    "fail": 0,
    "examples": []
   },
   {
    "id": "homog",
-   "n": 1086035,
+   "n": 1085996,
    "fail": 0,
    "examples": []
   },
   {
    "id": "parse-adv",
-   "n": 217261,
+   "n": 217235,
    "fail": 0,
    "examples": []
   },
   {
    "id": "parse-adv-flagged",
-   "n": 217261,
+   "n": 217235,
    "fail": 26,
    "examples": [
     "Permafrost Staff: EssenceSpellSkillLevel2H1 read as GlobalSpellGemsLevelTwoHandWeapon4 (ambiguous), right mod listed as a candidate",
@@ -138,41 +137,41 @@
   },
   {
    "id": "parse-simple",
-   "n": 217261,
+   "n": 217235,
    "fail": 0,
    "examples": []
   },
   {
    "id": "parse-simple-exact",
-   "n": 217261,
-   "fail": 14467,
+   "n": 217235,
+   "fail": 15935,
    "examples": [
-    "Fanatic Bow: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate",
-    "Fanatic Bow: LocalAddedPhysicalDamage8 read as LocalAddedPhysicalDamage9, right mod listed as a candidate",
-    "Fanatic Bow: LocalAddedPhysicalDamage6 read as LocalAddedPhysicalDamage7, right mod listed as a candidate",
-    "Aegis Quarterstaff: LocalAddedPhysicalDamageTwoHand6 read as LocalAddedPhysicalDamageTwoHand7, right mod listed as a candidate",
-    "Aegis Quarterstaff: LocalAddedPhysicalDamageTwoHand6 read as LocalAddedPhysicalDamageTwoHand7, right mod listed as a candidate"
+    "Fortified Hammer: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate",
+    "Fortified Hammer: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate",
+    "Fortified Hammer: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate",
+    "Grand Spear: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate",
+    "Grand Spear: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate"
    ]
   }
  ],
  "ops": {
-  "alchemy": 25591,
+  "rune_rule": 38879,
+  "transmute": 19241,
+  "regal": 5848,
+  "exalt": 235808,
+  "chaos": 340105,
+  "pessence": 80695,
+  "divine": 33160,
+  "annul": 177258,
   "aldur": 6453,
-  "exalt": 235096,
-  "chaos": 339089,
-  "annul": 176958,
-  "pessence": 80441,
-  "rune_rule": 42007,
-  "fracture": 15113,
-  "divine": 32890,
-  "transmute": 19150,
-  "augment": 1563,
-  "essence": 10320,
-  "bone": 19237,
-  "regal": 5864,
-  "catalyst": 23910,
+  "bone": 19373,
+  "fracture": 15187,
+  "essence": 10412,
+  "alchemy": 25596,
+  "augment": 1540,
+  "catalyst": 23887,
   "liquid": 19278,
-  "flux": 33075
+  "flux": 33276
  },
  "freq": {
   "tests": 112,
@@ -200,7 +199,7 @@
      "name": "base",
      "n": 4343,
      "ratio": 1.062,
-     "cheaper": 0.12
+     "cheaper": 0.13
     },
     {
      "name": "greater",
@@ -226,7 +225,7 @@
      "name": "catalyst-life · rare",
      "n": 32,
      "ratio": 1.039,
-     "cheaper": 0.03
+     "cheaper": 0.06
     }
    ],
    "hurtsMost": [
@@ -860,38 +859,38 @@
    "scenarios": 2,
    "comparisons": 6,
    "verdict": "too little data",
-   "cheaper": 0.17,
+   "cheaper": 0.67,
    "costlier": 0.33,
    "likelier": 0,
    "lessLikely": 0,
-   "medianCostRatio": 0.982,
-   "medianSuccessDelta": 0.002,
+   "medianCostRatio": 0.847,
+   "medianSuccessDelta": 0,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "base",
      "n": 6,
-     "ratio": 0.982,
-     "cheaper": 0.17
+     "ratio": 0.847,
+     "cheaper": 0.67
     }
    ],
    "helpsMost": [
     {
      "name": "catalyst-life · rare",
      "n": 6,
-     "ratio": 0.982,
-     "cheaper": 0.17
+     "ratio": 0.847,
+     "cheaper": 0.67
     }
    ],
    "hurtsMost": [
     {
      "name": "catalyst-life · rare",
      "n": 6,
-     "ratio": 0.982,
-     "cheaper": 0.17
+     "ratio": 0.847,
+     "cheaper": 0.67
     }
    ],
-   "text": "Cheaper per success in 17% of 6 comparisons (median x0.98), more likely to finish in 0%, less likely in 0%."
+   "text": "Cheaper per success in 67% of 6 comparisons (median x0.85), more likely to finish in 0%, less likely in 0%."
   },
   {
    "id": "flux",
@@ -1039,8 +1038,8 @@
    "bestRoute": "basic orbs, side omens, Chaos Orb, catalysing",
    "share": 1,
    "runnerUp": null,
-   "medianCostPerSuccess": 3810.8,
-   "medianUses": 76.5,
+   "medianCostPerSuccess": 3251,
+   "medianUses": 65.8,
    "medianSuccess": 0.998
   },
   {
@@ -2058,11 +2057,7 @@
   }
  ],
  "sincePrevious": {
-  "previous": "2026-09-27T22:46:07.813Z",
-  "changes": [
-   "Bones for base-modifier goals (keep the goal at the Well of Souls): cost ratio x4.923 -> x3.756.",
-   "catalyst-life · rare: best route \"basic orbs, Chaos Orb\" -> \"basic orbs, side omens, Chaos Orb, catalysing\".",
-   "pair-prefix-suffix-T2 · rare: best route \"basic orbs, Chaos Orb\" -> \"Greater orbs, Chaos Orb\"."
-  ]
+  "previous": "2026-09-28T10:59:40.827Z",
+  "changes": []
  }
 }
