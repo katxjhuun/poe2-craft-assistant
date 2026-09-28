@@ -1230,8 +1230,8 @@
     {
       "id": "k19",
       "claim": "Catalysing Exaltation gives about five times the chance at 20% quality",
-      "verdict": "plausible",
-      "reason": "No rate in game text; keep it as an adjustable estimate."
+      "verdict": "rejected",
+      "reason": "Your test t8: at x5 four of four attribute hits would happen only 5-8% of the time; the planner uses x25 now (anything from about x6 fits four of four)."
     },
     {
       "id": "k20",
@@ -1430,6 +1430,12 @@
       "claim": "Essences do not check the item level",
       "verdict": "verified",
       "reason": "Craft of Exile (test t18), accepted as correct at the user's request."
+    },
+    {
+      "id": "k53",
+      "claim": "Omen of Catalysing Exaltation at 20% quality makes the matching modifier type very likely (about x25 its weight)",
+      "verdict": "plausible",
+      "reason": "One in-game test of four rings (t8), all four hits; the exact size needs more tries."
     }
   ],
   "tests": [
@@ -1515,9 +1521,12 @@
       "question": "How big is the Omen of Catalysing Exaltation boost?",
       "how": "With full catalyst quality, slam ten times with and ten times without the omen on similar items and count matching mods.",
       "claims": [
-        "k19"
+        "!k19",
+        "k53"
       ],
-      "note": "Craft of Exile does not model Omen of Catalysing Exaltation, and poe2db, Game8 and the PoE2 crafting codex say the size is not documented. The planner uses x5 at 20% quality, adjustable."
+      "note": "Your test (28 Sept 2026): 4 rings with \"+# to all Attributes\" and 20% Adaptive Catalyst quality; every Omen of Catalysing Exaltation + Exalted Orb gave another attribute modifier (4 of 4). Without the omen that chance is 16-19% on such rings, so the boost is large: 4 of 4 fits any multiplier from about x6 (95%), x25 is the middle estimate. The planner now uses x25; four tries cannot tell x25 from a certainty.",
+      "status": "confirmed",
+      "source": "your in-game test (4 rings), checked against the knowledge base roll weights (poe2db, matched by Craft of Exile)"
     },
     {
       "id": "t9",

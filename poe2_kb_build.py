@@ -191,7 +191,7 @@ rules=[
  {'id':'R_VALUE_MULT_05','rule':'0.5+: Sanctify and the Vaal value-randomise outcome multiply each mod value from its CURRENT value (Divine to max first)','conf':M2,'patch':'0.5.0'},
  {'id':'R_JEWEL_SLOTS','rule':'Rare jewels: 2 prefix + 2 suffix by default (Magic jewels 1 + 1). The liquid emotion modifiers "+1 Prefix Modifier allowed" and "+1 Suffix Modifier allowed" raise one side by 1 (game data: +1 on that side, +0 on the other). With the allowance mod a jewel holds 4 regular mods + the crafted one (two trade jewels, 27 Sept 2026). Open: whether a fifth regular mod fits after the allowance mod is removed (guides say yes, the player says no)','conf':M2,'source':'player (27 Sept 2026); IGGM and MMOexp 0.5 jewel guides; game data stats of CraftedJewelAdditionalPrefixAllowed','test':'t24'},
  {'id':'R_SWAP_REMOVAL','rule':'Perfect and Corrupted essences and liquid emotions remove a random modifier and add a guaranteed one: when the side of the new modifier is full, the removed modifier is one of that side; otherwise any modifier can go (Omens of Sinistral/Dextral Crystallisation limit essences to one side)','conf':M2,'source':'GGG forum thread 3853903 (player report, 14 Sept 2025) and the Mobalytics essence guide','test':'t25'},
- {'id':'R_SOUL_MODS','rule':'The Soul modifiers (Medved\'s prefixes, of the Soul suffixes; spawn tag soul, level 65) roll on a body armour while the rune Medved\'s Tending is socketed (it gives the item the soul tag); the rune cannot be taken out or replaced','conf':G,'source':'rune text Can roll Soul modifiers (stat warping_rune_add_item_tag_2); Craft of Exile lists it the same'},
+ {'id':'R_SOUL_MODS','rule':'Soul modifiers (Medved\'s Tending, body armour) are not supported (user, 28 Sept 2026: their count can only be rerolled with an omen and a Divine Orb; not checked against a second source). The planner does not roll or target them; pasted items still read them','conf':S1,'source':'the player'},
  {'id':'R_WEIGHTS','rule':'Real roll weights are not in client data (spawn weight 0/1). Weights come from poe2db; Craft of Exile gives the same chances for 8,929 of its 8,987 tiers (jewels as a fixed multiple) and differs on 58 (weapon skill level tiers, cast speed on jewellery, a few others), where the page lets the player choose','conf':M2,'source':'poe2db DropChance, Craft of Exile poec_data.json (scripts/coe_crosscheck.py, reports/coe-crosscheck.md)'},
 ]
 def op(i,name,**k): d={'id':i,'names':name if isinstance(name,list) else [name]}; d.update(k); return d
@@ -273,7 +273,10 @@ for meta,v in json.load(open(get('poe2_augments.json'),encoding='utf-8')).items(
             e['txt']+= [clean(t) for t in c.get('stat_text') or []]
             e['st']+= [s['id'] for s in c.get('stats') or []]
             if c.get('bonded_stat_text'): e.setdefault('bonded',[]).extend(clean(t) for t in c['bonded_stat_text'])
-    AUG[name]={'type':v.get('type_id'),'lvl':v.get('required_level'),'limit':clean(v.get('limit')) or None,'by_class':by}
+    # socket-bound (keyword SocketBound: "cannot be removed, replaced or extracted by any means"): the rune's own text says so
+    desc=((b.get('properties') or {}).get('description') or '')
+    bound=bool(re.search(r'cannot be retrieved or replaced|Socket-?Bound',desc,re.I))
+    AUG[name]={'type':v.get('type_id'),'lvl':v.get('required_level'),'limit':clean(v.get('limit')) or None,'by_class':by,**({'bound':True} if bound else {})}
 kb['augments']=AUG
 kb['meta']['counts']['augments']=len(AUG)
 # ---- catalyst quality types (game table AlternateQualityTypes): the catalyst that adds each type, its item classes and the mod

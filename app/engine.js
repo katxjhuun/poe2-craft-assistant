@@ -738,7 +738,7 @@
     const base = ix.kb.bases[item.base];
     const ilvl = item.ilvl == null ? 100 : item.ilvl;
     const side = opts.side;
-    const pool = poolForItem(ix, item);
+    const pool = poolFor(ix, base.sig); // Soul modifiers are not offered (not supported)
     const others = item.mods.filter((m) => m.modId && m.modId !== opts.exclude);
     const takenGroups = new Map();
     for (const m of others) for (const g of ix.kb.mods[m.modId].grp) takenGroups.set(g, m.text);
@@ -766,11 +766,6 @@
     };
 
     for (const [id, pe] of pool) if (pe.side === side) add(id, pe.tier, side, null);
-    // body armour without Medved's Tending: the Soul modifiers become possible once the rune is socketed (the planner adds it)
-    if (base.cls === 'Body Armour' && !runeRules(item).soul) {
-      const soul = poolForItem(ix, Object.assign({}, item, { runes: (item.runes || []).concat([{ text: 'Can roll Soul modifiers', kind: 'rune' }]) }));
-      for (const [id, pe] of soul) if (pe.side === side && !pool.has(id)) add(id, pe.tier, side, null, "Medved's Tending");
-    }
     for (const [id, pe] of desecratedPoolFor(ix, item.base)) if (pe.side === side) add(id, pe.tier, 'desecrated', null);
 
     const hasCrafted = item.mods.filter((m) => m.crafted && m.modId !== opts.exclude).length >= 1 + runeRules(item).extraCrafted;

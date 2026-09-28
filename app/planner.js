@@ -70,8 +70,13 @@
   // Catalyst quality type (as the item text writes it, "Quality (Life Modifiers)") -> mod tag it favours.
   const CATALYST_TAG = { life: 'life', mana: 'mana', defence: 'defences', defences: 'defences', physical: 'physical', fire: 'fire', cold: 'cold',
     lightning: 'lightning', chaos: 'chaos', attack: 'attack', caster: 'caster', speed: 'speed', attribute: 'attribute', minion: 'minion' };
-  /** Default boost of Omen of Catalysing Exaltation at 20% quality (single community source, guide log decision 21). */
-  const CATALYST_DEFAULT = 5;
+  /**
+   * Default boost of Omen of Catalysing Exaltation at 20% quality. The player's test (28 Sept 2026, test t8): four rings
+   * with "+# to all Attributes" and 20% Adaptive Catalyst quality, each Catalysing Exaltation gave another attribute
+   * modifier. Without the omen that chance is 16-19% on such rings; four of four fits any boost from about x6 (95%) and
+   * x25 is the middle estimate (four of four then happens half the time). Replaces the earlier single-source x5.
+   */
+  const CATALYST_DEFAULT = 25;
   function catalystTag(qualityType) {
     const w = String(qualityType || '').trim().split(/\s+/)[0].toLowerCase();
     return CATALYST_TAG[w] || null;
@@ -97,6 +102,8 @@
       case 'catalyst': return [a.item || 'Catalyst'];
       case 'rune_rule': case 'aldur': return [a.item || 'Rune'];
       case 'verisium': return ['Verisium Anvil'];
+      case 'artificer': return ["Artificer's Orb"];
+      case 'extraction': return ['Orb of Extraction'];
       case 'newbase': return ['New base'];
       case 'fracture': return ['Fracturing Orb'];
       case 'divine': return ['Divine Orb'];
@@ -169,7 +176,8 @@
     const base = kb.bases[item.base];
     if (!base) throw new Error('unknown base');
     const ilvl = item.ilvl == null ? 100 : item.ilvl;
-    const pool = E.poolForItem(ix, item); // Medved's Tending adds the Soul modifiers
+    // the base's natural pool; Soul modifiers (Medved's Tending) are not supported (R_SOUL_MODS)
+    const pool = E.poolFor(ix, base.sig);
     const desPool = E.desecratedPoolFor(ix, item.base);
     const ctx = {
       ix, kb, item, base, cls: base.cls, ilvl, pool, desPool, weights: opts.weights || null,
@@ -178,24 +186,14 @@
       essences: essencesForBase(ix, base, (opts.essences || []).filter((r) => !r.liquid)).concat(liquidFor(kb, item.base)),
       catalystMult: opts.catalystMult > 0 ? +opts.catalystMult : CATALYST_DEFAULT,
       capMods: ix._capMods || (ix._capMods = new Map(Object.entries(kb.mods).filter(([, m]) => m.cap).map(([id, m]) => [id, m.cap]))),
-      baseTags: new Set((base.tags || []).concat(E.runeRules(item).soul ? ['soul'] : [])),
+      baseTags: new Set(base.tags || []),
       craftedCap: 1 + E.runeRules(item).extraCrafted, // Astrid's Creativity socketed: one more crafted modifier
       opts,
     };
     return ctx;
   }
-  /**
-   * The context modifiers roll from: the item's own, or, once a simulated step socketed Medved's Tending (st.soul) on an
-   * item that did not have it, the same item with the rune (its pool adds the Soul modifiers).
-   */
-  function poolCtx(ctx, st) {
-    if (!st.soul || ctx.baseTags.has('soul')) return ctx;
-    if (!ctx._soul) {
-      const item = Object.assign({}, ctx.item, { runes: (ctx.item.runes || []).concat([{ text: 'Can roll Soul modifiers', kind: 'rune' }]) });
-      ctx._soul = makeContext(ctx.ix, item, ctx.opts);
-    }
-    return ctx._soul;
-  }
+  /** The context modifiers roll from (one pool per item: Soul modifiers are not supported, R_SOUL_MODS). */
+  function poolCtx(ctx) { return ctx; }
 
   /**
    * Liquid emotions for one jewel base (game table LiquidEmotionOutcomes, kb.liquid_emotions), as records like the
@@ -528,6 +526,7 @@
       case 'rune_rule': {
         const rune = ctx.kb.augments && ctx.kb.augments[a.item];
         if (!rune || !rune.by_class[cls]) return `${a.item || 'This rune'} does not go on ${cls} items.`;
+        if ((rune.by_class[cls].txt || []).some((t) => /Soul modifiers/i.test(t))) return 'Soul modifiers are not supported.';
         const has = (st.runes || []).includes(a.item) || (ctx.item.runes || []).some((r) => (rune.by_class[cls].txt || []).includes(r.text));
         return has && rune.limit === '1' ? `${a.item} is already socketed (one per item).` : null;
       }
@@ -541,8 +540,13 @@
           : (ctx.kb.verisium_upgrades || {})[ctx.item.base] || [];
         return vu.length ? null : 'The Verisium Anvil has no upgrade for this item.';
       }
-      case 'artificer':
-        return MARTIAL.includes(cls) || cls === 'Wand' || cls === 'Staff' || ARMOUR.includes(cls) ? null : "Artificer's Orb works on martial weapons, wands, staves and armour.";
+      case 'artificer': {
+        if (!(MARTIAL.includes(cls) || cls === 'Wand' || cls === 'Staff' || ARMOUR.includes(cls))) return "Artificer's Orb works on martial weapons, wands, staves and armour.";
+        return socketsOf(ctx, st) >= maxSockets(cls) ? `The item already has ${socketsOf(ctx, st)} augment socket${socketsOf(ctx, st) === 1 ? '' : 's'}, the most for ${cls}.` : null;
+      }
+      case 'extraction':
+        if (!(WEAPON.includes(cls) || ARMOUR.includes(cls) || JEWELLERY.includes(cls) || cls === 'Quiver')) return 'Orb of Extraction works on equipment.';
+        return (ctx.item.runes || []).length || (st.runes || []).length ? null : 'No augment is socketed in the item.';
       case 'catalyst':
         if (a.refined ? cls !== 'Jewel' : !(cls === 'Ring' || cls === 'Amulet' || catalystBase(ctx.base))) return a.refined ? 'Refined catalysts work on jewels.' : 'Catalysts work on rings and amulets (Refined ones on jewels).';
         return a.tag && st.catTag === a.tag && st.catQ >= 20 ? 'The catalyst quality is already 20%.' : null;
@@ -581,6 +585,9 @@
         return 'Unknown action.';
     }
   }
+  /** Augment sockets the item has now, and the most a base of the class gets without corruption. */
+  function socketsOf(ctx, st) { return (ctx.item.sockets || []).length + (st.sockets || 0); }
+  function maxSockets(cls) { return cls === 'Body Armour' || /^Two Hand/.test(cls) || ['Bow', 'Staff', 'Warstaff', 'Crossbow', 'Talisman'].includes(cls) ? 2 : 1; }
   function sacrificeFor(cls) {
     return JEWELLERY.includes(cls) ? "Kamasa's Orb of Sacrifice" : ARMOUR.includes(cls) ? "Kopec's Orb of Sacrifice"
       : WEAPON.includes(cls) ? "Yaomac's Orb of Sacrifice" : cls === 'Jewel' ? "Yugul's Orb of Sacrifice" : null;
@@ -990,12 +997,11 @@
         }
         break;
       case 'rune_rule': {
-        // runes that change crafting (game data augments): Medved's Tending lets Soul modifiers roll, Astrid's Creativity
-        // allows one more crafted modifier, Serle's Triumph allows one more suffix
+        // runes that change crafting (game data augments): Astrid's Creativity allows one more crafted modifier, Serle's
+        // Triumph one more suffix (Medved's Tending and its Soul modifiers are not supported, R_SOUL_MODS)
         const txt = ((ctx.kb.augments[a.item] || {}).by_class || {})[ctx.cls];
         const t = txt ? (txt.txt || []).join('\n') : '';
         st.runes = (st.runes || []).concat([a.item]);
-        if (/Can roll Soul modifiers/i.test(t)) st.soul = true;
         if (/additional Crafted Modifier/i.test(t)) st.xCrafted = (st.xCrafted || 0) + 1;
         const sx = /\+(\d+) Suffix Modifiers? allowed/i.exec(t);
         if (sx) st.xSuffix = (st.xSuffix || 0) + +sx[1];
@@ -1027,6 +1033,12 @@
         break;
       case 'vaal':
         vaalOutcome(ctx, st, a, rng, removed, added);
+        break;
+      case 'artificer':
+        st.sockets = (st.sockets || 0) + 1; st.outcome = 'socketed';
+        break;
+      case 'extraction':
+        st.destroyed = true; st.outcome = 'extracted';
         break;
       case 'architect': {
         // Maxroll: 50/50, a second Corruption Enchantment or the item is destroyed
@@ -1162,8 +1174,7 @@
       return (g.ess || []).length ? null : 'no essence gives this mod on this item class';
     }
     const viaEssence = essenceOptions(ctx, g, 'magic').length + essenceOptions(ctx, g, 'rare').length > 0;
-    const soul = ctx.cls === 'Body Armour' ? poolCtx(ctx, { soul: true }) : ctx; // Medved's Tending can be socketed first
-    const ok = sidePool(soul, g.side, 0).some((e) => e.fam === g.fam && (!g.eff || e.tier <= g.eff) && reaches(soul, e.id, g)) || viaEssence;
+    const ok = sidePool(ctx, g.side, 0).some((e) => e.fam === g.fam && (!g.eff || e.tier <= g.eff) && reaches(ctx, e.id, g)) || viaEssence;
     if (!ok) return g.minValue != null ? `no tier reaches ${g.minValue} at this item level` : 'this tier cannot roll at this item level';
     const blocker = st.mods.find((m) => (m.frac || m.lock) && !meets(m, g, g.eff) && m.grp.some((x) => (g.grp || []).includes(x)));
     if (blocker) return 'blocked by a kept or fractured mod of the same group';
@@ -1211,11 +1222,6 @@
     /** Runes that change crafting, socketed when a goal needs them (game data augments; test t30 for Aldur). */
     function runeStep(st, left) {
       if (params.runes === false) return null;
-      // Medved's Tending: a Soul modifier goal on body armour
-      if (ctx.cls === 'Body Armour' && !st.soul && !ctx.baseTags.has('soul') && left.some((g) => !g.des && !g.essenceOnly && !sidePool(ctx, g.side, 0).some((e) => e.fam === g.fam))) {
-        const r = runeFor(ctx, /Can roll Soul modifiers/i);
-        if (r && !validate(ctx, st, { op: 'rune_rule', item: r })) return { op: 'rune_rule', item: r };
-      }
       // Astrid's Creativity: more crafted-modifier goals than crafted slots
       const cap = (ctx.craftedCap || 1) + (st.xCrafted || 0);
       if (goals.filter((g) => g.essenceOnly).length > cap) {
@@ -2041,6 +2047,14 @@
     if (S2.unpredictable) return { reason: 'The planner does not model what this does to the item, so the emulator cannot show it.' };
     const txt = (m) => (m.id && ctx.kb.mods[m.id] ? ctx.kb.mods[m.id].txt.replace(/\n/g, ' / ') : '?');
     const outcome = OUTCOME_TEXT[S2.outcome] || null;
+    if (S2.destroyed && action.op === 'extraction') {
+      // the augments that come back: every socketed one but the socket-bound (the rune's text: "cannot be retrieved or replaced")
+      const bound = (t) => Object.values(ctx.kb.augments || {}).some((au) => au.bound && (((au.by_class || {})[ctx.cls] || {}).txt || []).includes(t));
+      const lines = (item.runes || []).filter((x) => x.kind !== 'enchant').map((x) => x.text);
+      const back = lines.filter((t) => !bound(t)), lost = lines.filter(bound);
+      return { destroyed: true, text: null, added: [], removed: [], seed,
+        outcome: `${outcome} Back to you: ${back.length ? back.join('; ') : 'nothing'}${lost.length ? `. Lost (socket-bound): ${lost.join('; ')}` : ''}.` };
+    }
     if (S2.destroyed) return { destroyed: true, text: null, added: [], removed: [], seed, outcome: outcome || 'The item was destroyed.' };
     if (S2.unique || (action.op === 'cultivation')) {
       const name = S2.unique || cultivate(ctx, rng);
@@ -2093,7 +2107,7 @@
   const OUTCOME_TEXT = {
     nothing: 'Vaal Orb: nothing changed; the item is corrupted.', reroll: 'Vaal Orb: 1-3 modifiers randomised.', enchant: 'Vaal Orb: a Corruption Enchantment was added.',
     socket: 'Vaal Orb: +1 socket (wands and staves: quality).', addremove: 'Vaal Orb: a modifier added or removed, ignoring the limits.',
-    destroyed: "Architect's Orb destroyed the item.", enchant2: "Architect's Orb: a second Corruption Enchantment was added.",
+    destroyed: "Architect's Orb destroyed the item.", extracted: 'Orb of Extraction destroyed the item.', socketed: "Artificer's Orb: +1 augment socket.", enchant2: "Architect's Orb: a second Corruption Enchantment was added.",
   };
   /** Vaal Cultivation Orb on a non-Vaal unique: another unique of the same class (game text); a Vaal unique: null (not modelled). */
   function cultivate(ctx, rng) {
@@ -2481,12 +2495,13 @@
       { cur: ['Divine Orb'], omens: ['Omen of the Blessed'].concat(R === 'Rare' ? ['Omen of Sanctification'] : []), planned: true });
     if (qualityCurrencyFor(cls)) add('quality', 'Add quality', { op: 'quality' }, { cur: [qualityCurrencyFor(cls)] });
     if (infuserFor(cls)) add('infuser', 'Quality past the maximum', { op: 'infuser' }, { cur: [infuserFor(cls)] });
-    add('artificer', 'Add an augment socket', { op: 'artificer' }, { cur: ["Artificer's Orb"] });
+    add('artificer', 'Add an augment socket', { op: 'artificer' }, { cur: ["Artificer's Orb"], note: 'Game text: "Adds an Augment Socket to a Martial Weapon, wand, staff or Armour". Up to the base\'s usual number (2 on body armour and two-handed weapons, else 1); a Vaal Orb can add one more.' });
+    add('extraction', 'Destroy the item for its runes', { op: 'extraction' }, { cur: ['Orb of Extraction'],
+      note: 'Game text: "Destroys an Equipment item, returning any non Socket-Bound Augments socketed in it". Socket-bound ones are lost.' });
     // Runes that change crafting (game data augments): listed, not planned
     const RUNE_NOTES = {
       "Astrid's Creativity": 'The item can then have 2 crafted modifiers (essences, alloys, liquid emotions); the planner counts it once the rune is on the item. Once socketed it cannot be taken out, but another augment can replace it.',
       "Serle's Triumph": 'It raises the suffix limit and the modifier total by 1. Once socketed it cannot be taken out or replaced.',
-      "Medved's Tending": 'The body armour can then roll the Soul modifiers ("Medved\'s" prefixes and "of the Soul" suffixes, level 65); the planner rolls them once the rune is on the item. Once socketed it cannot be taken out or replaced.',
     };
     for (const [rune, why] of Object.entries(RUNE_NOTES)) {
       const r = ix.kb.augments && ix.kb.augments[rune];
@@ -2502,20 +2517,7 @@
           + 'Transformed lines show no tier when the base cannot roll them. The planner does not plan it.',
       });
     }
-    // Verisium Anvil (game tables Expedition2VerisiumCrafts, ArmourTypes): listed, not planned
-    const defs = (d) => ['Armour', 'Evasion', 'EnergyShield'].filter((k) => d.from[k] || d.to[k])
-      .map((k) => `${k === 'EnergyShield' ? 'Energy Shield' : k} ${d.from[k]}${d.to[k] !== d.from[k] ? ' -> ' + d.to[k] : ''}`).join(', ');
-    const upgrades = R === 'Unique' ? ((ix.kb.verisium_unique_upgrades || {})[item.name] || []).filter((u) => u.from === item.base)
-      : (ix.kb.verisium_upgrades || {})[item.base] || [];
-    for (const u of upgrades) {
-      const b = ix.kb.bases[u.to] || {};
-      add('verisium', `Runeforge: ${u.to} (Verisium Anvil)`, { op: 'verisium', to: u.to }, {
-        cur: Object.keys(u.cost), note: `Costs ${Object.entries(u.cost).map(([n, c]) => c + ' ' + n).join(' and ')}. `
-          + (u.def ? `Base: ${defs(u.def)}, Runic Ward +${u.def.to.Ward - u.def.from.Ward}. ` : '')
-          + (R === 'Unique' ? 'The item stays the same unique on the new base. ' : 'The modifiers stay (fractured ones too). ')
-          + (b.imp && b.imp.length ? `The new base has: ${b.imp.join('; ')}. ` : '') + 'The planner does not plan it.',
-      });
-    }
+    // (the Verisium Anvil is outside this tool, user 28 Sept 2026)
     const fluxes = ['fire', 'cold', 'lightning'].filter((to) => !validate(ctx, st, { op: 'flux', to })).map((to) => FLUX[to]);
     if (!validate(ctx, st, { op: 'flux', to: 'chaos' })) fluxes.push('Void Flux');
     add('flux', 'Change a resistance element', fluxes.length ? { op: 'flux', to: 'chaos' } : 'The item has no Fire, Cold or Lightning Resistance modifier.',

@@ -726,23 +726,9 @@ test('a base whose implicit adds tags ("Can roll Ring Modifiers") rolls ring mod
   assert.ok(!other.prefix.some(([id]) => id === 'AddedColdDamage1'), 'other body armours do not');
 });
 
-test('the Verisium Anvil upgrade of a base is listed with its cost (game table Expedition2VerisiumCrafts)', () => {
-  const up = kb.verisium_upgrades['Rusted Cuirass'];
-  assert.deepEqual(up, [{ to: 'Runeforged Rusted Cuirass', cost: { Verisium: 20 },
-    def: { from: { Armour: 45, Evasion: 0, EnergyShield: 0, Ward: 0 }, to: { Armour: 45, Evasion: 0, EnergyShield: 0, Ward: 29 } } }]);
-  assert.ok(kb.bases['Runeforged Rusted Cuirass'].tags.includes('runeforged'));
+test('the Verisium Anvil is outside the tool (user, 28 Sept 2026): not listed among the currency that can be used', () => {
   const item = E.parseItem(ix, 'Item Class: Body Armours\nRarity: Normal\nRusted Cuirass\n--------\nItem Level: 82').item;
-  const op = P.availableOps(ix, item).find((o) => o.id === 'verisium');
-  assert.ok(op && op.ok && !op.planned && /20 Verisium/.test(op.note) && /Runic Ward \+29/.test(op.note), JSON.stringify(op));
-  // a level 59 base gives up part of its Armour for the Ward (game table ArmourTypes)
-  const heavy = kb.verisium_upgrades['Heavy Plate'][0].def;
-  assert.ok(heavy.to.Armour < heavy.from.Armour && heavy.to.Ward > 0);
-  // a unique moves to its Runeforged base with a crest
-  const [name, ups] = Object.entries(kb.verisium_unique_upgrades).find(([, l]) => l.some((u) => kb.bases[u.from]));
-  const u0 = ups.find((u) => kb.bases[u.from]);
-  const uniq = Object.assign(E.parseItem(ix, `Item Class: X\nRarity: Normal\n${u0.from}\n--------\nItem Level: 82`).item, { rarity: 'Unique', name, mods: [] });
-  const uop = P.availableOps(ix, uniq).find((o) => o.id === 'verisium');
-  assert.ok(uop && uop.ok && /same unique/.test(uop.note), name + ' ' + JSON.stringify(uop));
+  assert.ok(!P.availableOps(ix, item).some((o) => o.id === 'verisium'));
 });
 
 test('Orb of Chance does not work on jewels (game table Chanceableitemclasses); a pasted unique jewel says what it is', () => {
@@ -780,34 +766,19 @@ test('Omens of Crystallisation are for Perfect and Corrupted essences, not Runic
   assert.equal(P.validate(ctx, st, { op: 'pessence', item: alloy.item, mod: alloy.mod }), null);
 });
 
-test('runes that change crafting: Medved\'s Tending opens the Soul modifiers, Astrid\'s Creativity a second crafted modifier', () => {
-  const text = (rune, mods) => ['Item Class: Body Armours', 'Rarity: Rare', 'Test Name', 'Heavy Plate', '--------', 'Item Level: 82', '--------',
-    ...(rune ? [rune + ' (rune)', '--------'] : []), ...mods].join('\n');
-  const soulCount = (item) => {
-    const ctx = ctxOf(item);
-    const st = P.toState(ctx, item);
-    const rng = P.rngFrom(4);
-    let n = 0;
-    for (let i = 0; i < 3000; i++) if (P.apply(ctx, st, { op: 'exalt' }, rng).added.some((m) => /^SoulInfluence/.test(m.id))) n++;
-    return n;
-  };
-  const withRune = E.parseItem(ix, text('Can roll Soul modifiers', ['+100 to maximum Life'])).item;
-  const without = E.parseItem(ix, text(null, ['+100 to maximum Life'])).item;
-  assert.ok(E.runeRules(withRune).soul && !E.runeRules(without).soul);
-  assert.ok(soulCount(withRune) > 0, 'Soul modifiers roll with the rune');
-  assert.equal(soulCount(without), 0, 'and never without it');
-  // Astrid's Creativity: a second crafted modifier is allowed
-  const W = require('../data/weights_0.5.5.json');
-  const one = (rune) => {
-    const it = E.parseItem(ix, text(rune, ['+100 to maximum Life'])).item;
-    const ctx = P.makeContext(ix, it, { essences: P.essencesForBase(ix, kb.bases[it.base], W.essences['Body Armour']) });
-    const st = P.toState(ctx, it);
-    st.mods[0].crafted = true;
-    const rec = ctx.essences.find((r) => r.kind === 'rare' && !r.alloy && !kb.mods[r.mod].grp.some((g) => st.mods[0].grp.includes(g)));
-    return P.validate(ctx, st, { op: 'pessence', item: rec.item, mod: rec.mod });
-  };
-  assert.match(one(null), /one crafted modifier/);
-  assert.equal(one('Can have 1 additional Crafted Modifier'), null);
+test("runes that change crafting: Astrid's Creativity a second crafted modifier; Soul modifiers are not supported", () => {
+  const armour = E.parseItem(ix, 'Item Class: Body Armours\nRarity: Rare\nTest\nHeavy Plate\n--------\nItem Level: 82\n--------\n+120 to maximum Life').item;
+  const ctx = ctxOf(armour);
+  assert.match(P.validate(ctx, P.toState(ctx, armour), { op: 'rune_rule', item: "Medved's Tending" }), /not supported/);
+  assert.ok(!P.availableOps(ix, armour).some((o) => o.id === 'rune_rule' && /Medved/.test(o.label)));
+  // no Soul modifier in the stat picker
+  const soul = new Set(Object.entries(kb.mods).filter(([, m]) => m.dom === 'i' && m.sw.some(([t, w]) => t === 'soul' && w > 0)).map(([id]) => id));
+  for (const side of ['prefix', 'suffix']) assert.ok(!E.pickerOptions(ix, armour, { side }).some((o) => o.tiers.some((t) => soul.has(t.id))));
+  const sword = E.parseItem(ix, 'Item Class: One Hand Maces\nRarity: Rare\nTest\nMarauding Mace\n--------\nItem Level: 82\n--------\n+20% to Fire Resistance').item;
+  const sc = ctxOf(sword);
+  const st = P.toState(sc, sword);
+  assert.equal(P.validate(sc, st, { op: 'rune_rule', item: "Astrid's Creativity" }), null);
+  assert.equal(P.apply(sc, st, { op: 'rune_rule', item: "Astrid's Creativity" }, P.rngFrom(1)).state.xCrafted, 1);
 });
 
 test('workbench: the emulator keeps the modifiers that stay, the calculator and the stat shares agree', () => {
@@ -1040,7 +1011,7 @@ test('corruption: Vaal Orb outcomes (Omen of Corruption never leaves it unchange
   assert.match(sac.outcome, /upgraded/);
 });
 
-test('Void Flux, Omen of Putrefaction, Homogenising omens, Altered Collarbone, catalysts, runes, Aldur, Verisium, Chance, Cultivation', () => {
+test('Void Flux, Omen of Putrefaction, Homogenising omens, Altered Collarbone, catalysts, Artificer, Extraction, Aldur, Chance, Cultivation', () => {
   const it = (lines) => E.parseItem(ix, lines.join('\n')).item;
   const armour = it(['Item Class: Body Armours', 'Rarity: Rare', 'Test Robe', 'Heavy Plate', '--------', 'Item Level: 82', '--------',
     '+120 to maximum Life', '35% increased Armour', '+30% to Fire Resistance', '+25% to Cold Resistance']);
@@ -1072,25 +1043,24 @@ test('Void Flux, Omen of Putrefaction, Homogenising omens, Altered Collarbone, c
     r2 = E.parseItem(ix, e.text).item;
   }
   assert.equal(r2.quality, 20);
-  // runes: Medved's Tending makes Soul modifiers roll; the policy sockets it for a Soul goal
-  const med = E.parseItem(ix, P.emulate(ix, armour, { op: 'rune_rule', item: "Medved's Tending" }, { seed: 1 }).text).item;
-  assert.ok(P.makeContext(ix, med).baseTags.has('soul'));
-  const soul = Object.values(kb.mods).find((m) => m.dom === 'i' && m.gen === 'p' && m.sw.some(([t, w]) => t === 'soul' && w > 0));
-  const plate = it(['Item Class: Body Armours', 'Rarity: Rare', 'Test', 'Heavy Plate', '--------', 'Item Level: 82', '--------', '+120 to maximum Life']);
-  const c = P.makeContext(ix, plate), st = P.toState(c, plate);
-  const { goals } = P.goalsFromTargets(c, { 'prefix-1': { fam: soul.fam, group: 'prefix', label: 'soul' } });
-  assert.equal(P.goalFeasible(c, st, goals[0]), null);
-  const sim = P.simulate(c, st, goals, P.expandStrategy({ sideOmens: true }), { trials: 100, seed: 2 });
-  assert.ok(sim.p > 0.9 && sim.steps[0].key === "Medved's Tending" && Math.abs(sim.steps[0].avg - 1) < 1e-9, JSON.stringify(sim.steps.slice(0, 2)));
+  // Artificer's Orb adds an augment socket up to the base's usual number; Orb of Extraction destroys the item and returns
+  // the runes that are not socket-bound
+  const art = E.parseItem(ix, P.emulate(ix, armour, { op: 'artificer' }, { seed: 1 }).text).item;
+  assert.equal((art.sockets || []).length, 1);
+  const art2 = E.parseItem(ix, P.emulate(ix, art, { op: 'artificer' }, { seed: 1 }).text).item;
+  assert.equal((art2.sockets || []).length, 2);
+  assert.match(P.emulate(ix, art2, { op: 'artificer' }).reason, /the most for Body Armour/);
+  assert.match(P.emulate(ix, armour, { op: 'extraction' }).reason, /No augment is socketed/);
+  const runed = it(['Item Class: Body Armours', 'Rarity: Rare', 'Test Robe', 'Heavy Plate', '--------', 'Sockets: S S', '--------', 'Item Level: 82', '--------',
+    '+15% to Fire Resistance (rune)', 'Can roll Soul modifiers (rune)', '--------', '+120 to maximum Life']);
+  const ex = P.emulate(ix, runed, { op: 'extraction' }, { seed: 1 });
+  assert.ok(ex.destroyed && /Back to you: \+15% to Fire Resistance/.test(ex.outcome) && /Lost \(socket-bound\): Can roll Soul modifiers/.test(ex.outcome), ex.outcome);
+  assert.ok(kb.augments["Medved's Tending"].bound);
   // Rune of Aldur: Cold modifiers turn into the same tier of Fire ones
   const staff = it(['Item Class: Staves', 'Rarity: Rare', 'Test', 'Chiming Staff', '--------', 'Item Level: 82', '--------', '120% increased Cold Damage', '+4 to Level of all Cold Spell Skills']);
   const al = E.parseItem(ix, P.emulate(ix, staff, { op: 'aldur', item: 'Passion of Aldur' }, { seed: 1 }).text).item;
   assert.equal(al.mods.length, 2);
   assert.ok(al.mods.every((m) => /Fire/.test(m.fam) && !/Cold/.test(m.fam)), JSON.stringify(al.mods.map((m) => m.fam)));
-  // Verisium Anvil: the Runeforged base, modifiers kept
-  const vr = E.parseItem(ix, P.emulate(ix, armour, { op: 'verisium' }, { seed: 1 }).text).item;
-  assert.equal(vr.base, 'Runeforged Heavy Plate');
-  assert.equal(vr.mods.length, 4);
   // Orb of Chance: the uniques of the base, odds not in the data; Vaal Cultivation Orb: another unique of the class
   assert.match(P.emulate(ix, it(['Item Class: Rings', 'Rarity: Normal', 'Ruby Ring', '--------', 'Item Level: 82']), { op: 'chance' }).reason, /odds per base are not/);
   const uq = it(['Item Class: Rings', 'Rarity: Unique', "Ventor's Gamble", 'Gold Ring', '--------', 'Item Level: 82', '--------', '12% increased Rarity of Items found', '--------', 'Corrupted']);

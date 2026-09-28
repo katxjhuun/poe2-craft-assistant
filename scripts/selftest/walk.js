@@ -29,7 +29,7 @@ function candidates(ctx, st, r) {
     const c = (aug.by_class || {})[ctx.cls];
     if (!c) continue;
     if (/of Aldur$/.test(name)) A.push({ op: 'aldur', item: name });
-    else if ((c.txt || []).some((t) => /Soul modifiers|additional Crafted Modifier|Modifiers? allowed/i.test(t))) A.push({ op: 'rune_rule', item: name });
+    else if ((c.txt || []).some((t) => /additional Crafted Modifier|Modifiers? allowed/i.test(t))) A.push({ op: 'rune_rule', item: name });
   }
   for (const q of ['Gnawed', 'Preserved', 'Ancient']) {
     const side = SIDES[Math.floor(r() * 3)];

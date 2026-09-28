@@ -1822,10 +1822,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     for (const [name, a] of Object.entries(S.ix.kb.augments || {})) {
       const c = (a.by_class || {})[cls];
       if (!c) continue;
-      if (/of Aldur$/.test(name)) L.push({ k: 'aldur:' + name, g: 'Runes and Verisium', label: `${name}: ${(c.txt || []).join('; ')}` });
-      else if ((c.txt || []).some((t) => /Soul modifiers|additional Crafted Modifier|Modifiers? allowed/i.test(t))) L.push({ k: 'rune:' + name, g: 'Runes and Verisium', label: `${name}: ${(c.txt || []).join('; ')}` });
+      if (/of Aldur$/.test(name)) L.push({ k: 'aldur:' + name, g: 'Runes and sockets', label: `${name}: ${(c.txt || []).join('; ')}` });
+      else if ((c.txt || []).some((t) => /additional Crafted Modifier|Modifiers? allowed/i.test(t))) L.push({ k: 'rune:' + name, g: 'Runes and sockets', label: `${name}: ${(c.txt || []).join('; ')}` });
     }
-    L.push({ k: 'verisium', g: 'Runes and Verisium', label: 'Verisium Anvil (Runeforge)' });
+    L.push({ k: 'artificer', g: 'Runes and sockets', label: "Artificer's Orb (adds an augment socket)" }, { k: 'extraction', g: 'Runes and sockets', label: 'Orb of Extraction (destroys the item, returns its runes)' });
     for (const r of itemEssences()) {
       const g = r.liquid ? 'Liquid emotions' : r.alloy ? 'Runic Alloys' : r.kind === 'magic' ? 'Essences (Magic item)' : 'Perfect and special essences';
       const mt = S.ix.kb.mods[r.mod] ? S.ix.kb.mods[r.mod].txt.replace(/\n/g, ' / ') : r.mod;
@@ -1847,7 +1847,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (m.cat) return Object.assign({ op: 'catalyst' }, m.cat);
     if (m.k.startsWith('rune:')) return { op: 'rune_rule', item: m.k.slice(5) };
     if (m.k.startsWith('aldur:')) return { op: 'aldur', item: m.k.slice(6) };
-    if (['architect', 'sacrifice', 'cultivation', 'verisium'].includes(m.k)) return { op: m.k };
+    if (['architect', 'sacrifice', 'cultivation', 'artificer', 'extraction'].includes(m.k)) return { op: m.k };
     const a = { op: m.k };
     if (m.tiers) a.tier = sel.tier || 'base';
     if (sideOf) a.side = sideOf;
@@ -1888,7 +1888,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const pre = item.runes.map((r) => plainRow('', false, kw(esc(r.text)), 'pale', '')).concat(item.implicits.map((m, i) => plainRow('Implicit', i === 0, kw(esc(m.text)), m.corruption ? 'vaal' : '', m.corruption ? 'V' : 'I')));
     const st = [item.flags.sanctified ? '<div class="tt-status sanct">Sanctified</div>' : '', item.flags.corrupted ? '<div class="tt-status corrupted">Corrupted</div>' : ''].join('');
     const blocks = [`<div class="tt-prop w"><span class="kw">${esc(item.itemClass || 'Item')}</span>: Item Level ${item.ilvl == null ? '?' : item.ilvl}</div>`
-      + (item.quality ? `<div class="tt-prop">Quality${item.qualityType ? ` (${esc(item.qualityType)})` : ''}: <span class="kw">+${esc(item.quality)}%</span></div>` : '')];
+      + (item.quality ? `<div class="tt-prop">Quality${item.qualityType ? ` (${esc(item.qualityType)})` : ''}: <span class="kw">+${esc(item.quality)}%</span></div>` : '')
+      + ((item.sockets || []).length ? `<div class="tt-prop">Augment sockets: <span class="kw">${item.sockets.length}</span></div>` : '')];
     if (pre.length) blocks.push(`<div class="tt-rows">${pre.join('')}</div>`);
     blocks.push(rows.length ? `<div class="tt-rows">${rows.join('')}</div>` : '<div class="tt-prop">No explicit modifiers</div>');
     if (st) blocks.push(st);
@@ -3116,7 +3117,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       <label for="planBudget">Budget <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBudget" inputmode="decimal" placeholder="none" value="${esc(S.budget)}"></span></label>
       <label for="planBuy" title="Price of a finished item with your goals, seen on the official trade site">Buy instead <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBuy" inputmode="decimal" placeholder="price" value="${esc(S.buyPrice)}"></span></label>
       ${weightsDisagree() ? `<label for="planWsrc" title="poe2db and Craft of Exile agree on ${esc(coeAgreeText())}; on ${weightsDisagree()} tiers of this item class they give different roll weights. Pick whose to use.">Weights <select id="planWsrc"><option value="poe2db" ${S.weightSource !== 'coe' ? 'selected' : ''}>poe2db</option><option value="coe" ${S.weightSource === 'coe' ? 'selected' : ''}>Craft of Exile</option></select></label>` : ''}
-      ${hasCatalyst(it) ? `<label for="planCat" title="How much Omen of Catalysing Exaltation raises the chance of ${esc(it.qualityType)} at 20% quality. The game gives no number. The default 5 comes from a single community source (guide log); set your own estimate, or settle in-game test t8.">Catalyst boost <span class="price-in">×<input id="planCat" inputmode="decimal" value="${esc(catMult())}"></span></label>` : ''}
+      ${hasCatalyst(it) ? `<label for="planCat" title="How much Omen of Catalysing Exaltation raises the weight of ${esc(it.qualityType)} at 20% quality. The game gives no number. The default 25 comes from your test t8 (4 of 4 rings got the attribute modifier; anything from about x6 fits); set your own estimate.">Catalyst boost <span class="price-in">×<input id="planCat" inputmode="decimal" value="${esc(catMult())}"></span></label>` : ''}
       ${it.rarity !== 'Rare' ? `<label for="planBase" title="Price of one white base of this type">White base <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBase" inputmode="decimal" value="${esc(S.baseCost)}"></span></label>
       <label for="planBases" title="White bases you will use for one finished item. Starting over on a fresh base is often far cheaper than fixing a wrong mod, but each try takes a base.">Bases per item <span class="price-in"><input id="planBases" inputmode="numeric" value="${esc(S.baseLimit)}"></span></label>` : ''}
     </div>`;

@@ -43,9 +43,17 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 | 13 | Unique items (all classes but flasks and charms) | RePoE uniques.json, EE2 bases, poe2db unique pages, game unique mods | game data + poe2db | **done**: 423 of 423 in kb.uniques (scripts/unique_items.py, reports/uniques.md); all 2,479 lines match a game mod, vary per item or are item properties (Unmodifiable, hidden sockets). Pasted uniques read their lines with ranges. Jewels cannot be chanced (Chanceableitemclasses), so unique jewels only drop |
 | 15 | Runes of Aldur (element transform) | rune texts (augments), two trade staves | game data + confirmed | **done**: Passion/Breath/Ire/Betrayal of Aldur turn the other elements' modifiers into Fire/Cold/Lightning/Chaos ones while socketed; fractured ones stay; listed under What you can use now (t30) |
 | 14 | Verisium Anvil (Runeforging) | Expedition2VerisiumCrafts, ArmourTypes, Words; player; runeforging guides | game data + confirmed | **done**: 387 base upgrades with Armour/Evasion/ES and Runic Ward before and after (bases from level 55 give up about 12-20% of their defence; all get Ward), 269 uniques moved to their Runeforged/Runemastered base with crests. Modifiers stay (player; fractured ones too since 0.5.1) |
-| 11 | Mechanics that the files do not state | in-game tests (page), guides, the player's items, Craft of Exile | open until tested | 1 open of 31 (t8 Catalysing Exaltation size: no source has it); 25 confirmed, 5 refuted. Settled 28 Sept 2026: t1, t3, t12, t14, t20-t23 from sources, t18, t24, t25, t31 from Craft of Exile |
+| 11 | Mechanics that the files do not state | in-game tests (page), guides, the player's items, Craft of Exile | open until tested | 0 open of 31; 26 confirmed, 5 refuted (t8 by the player's test, 28 Sept 2026). Settled 28 Sept 2026: t1, t3, t12, t14, t20-t23 from sources, t18, t24, t25, t31 from Craft of Exile |
 
 ## Log
+
+- 28 Sept 2026 (evening): test t8 settled by the player: 4 rings with all-attributes and 20% Adaptive Catalyst, every
+  Catalysing Exaltation gave another attribute modifier (no-omen chance 16-19%); planner default x25 (x6+ fits). All 31
+  in-game tests are closed. Out of scope now (user): anointing, Verisium Anvil (hidden from the tool), live listings, Soul
+  modifiers (user: their count only rerolls with an omen + Divine Orb; planner no longer rolls or offers them). Added
+  Artificer's Orb (augment socket up to the base's usual number) and Orb of Extraction: game text and poe2db say it
+  destroys the item and returns non socket-bound augments (the user described it as removing a rune; the game text is
+  followed). Socket-bound flag from the augments' own text: 17 of 313.
 
 - 28 Sept 2026 (later): at the user's request, Craft of Exile (data file and simulator code, downloaded with the user's OK)
   was matched with the KB. All 8,987 of its tiers match ours (side, level, text, ranges); 8,929 give the same chances
