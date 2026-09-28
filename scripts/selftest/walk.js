@@ -21,7 +21,16 @@ function candidates(ctx, st, r) {
   }
   for (const side of SIDES) A.push({ op: 'alchemy', side }, { op: 'annul', side }, { op: 'annul', side, greater: true });
   A.push({ op: 'annul', light: true }, { op: 'fracture' }, { op: 'divine' });
-  for (const to of ['fire', 'cold', 'lightning']) A.push({ op: 'flux', to });
+  for (const to of ['fire', 'cold', 'lightning', 'chaos']) A.push({ op: 'flux', to });
+  // Homogenising omens, catalysts, runes that change crafting, Runes of Aldur
+  A.push({ op: 'exalt', tier: 'base', homog: true }, { op: 'regal', tier: 'base', homog: true });
+  for (const tag of ['life', 'fire', 'attack']) A.push({ op: 'catalyst', tag, refined: ctx.cls === 'Jewel' });
+  for (const [name, aug] of Object.entries(ctx.kb.augments || {})) {
+    const c = (aug.by_class || {})[ctx.cls];
+    if (!c) continue;
+    if (/of Aldur$/.test(name)) A.push({ op: 'aldur', item: name });
+    else if ((c.txt || []).some((t) => /Soul modifiers|additional Crafted Modifier|Modifiers? allowed/i.test(t))) A.push({ op: 'rune_rule', item: name });
+  }
   for (const q of ['Gnawed', 'Preserved', 'Ancient']) {
     const side = SIDES[Math.floor(r() * 3)];
     A.push({ op: 'bone', quality: q, side, lich: LICH[Math.floor(r() * 4)], echoes: r() < 0.5 });
@@ -50,6 +59,7 @@ function checkStep(ctx, before, a, r) {
   const limOf = (s) => {
     const l = E.slotLimits({ rarity: s.rarity, slotDelta: ctx.slotDelta }, ctx.cls);
     if (s.rarity === 'Rare') for (const m of s.mods) { const c = m.id && kb.mods[m.id] && kb.mods[m.id].cap; if (c) { l.prefix += c.prefix || 0; l.suffix += c.suffix || 0; } }
+    if (s.rarity === 'Rare' && s.xSuffix) l.suffix += s.xSuffix; // Serle's Triumph socketed during the walk
     return l;
   };
   const lim = limOf(after);
@@ -58,10 +68,12 @@ function checkStep(ctx, before, a, r) {
   // a side over its limit is legal only when it did not grow (removing a "+1 Prefix Modifier allowed" mod leaves it over)
   const over = (side) => cnt(after, side) > lim[side] && cnt(after, side) > cnt(before, side);
   if (over('prefix') || over('suffix')) fail('slots', `${cnt(after, 'prefix')}p/${cnt(after, 'suffix')}s on ${after.rarity}`);
-  if (after.mods.filter((m) => m.crafted).length > 1) fail('crafted', 'two crafted modifiers');
+  // one crafted modifier, one more with Astrid's Creativity socketed (on the item or during the walk)
+  if (after.mods.filter((m) => m.crafted).length > (ctx.craftedCap || 1) + (after.xCrafted || 0)) fail('crafted', 'too many crafted modifiers');
   if (after.mods.filter((m) => m.des).length > 1) fail('desecrated', 'two desecrated modifiers');
-  // a Flux may leave two resistance modifiers of one element (t20): a group may repeat only through flux-converted mods
-  const g = groupsOf({ mods: after.mods.filter((m) => !m.flux) });
+  // a Flux may leave two resistance modifiers of one element (t20), a Rune of Aldur two of one family: a group may repeat
+  // only through converted mods
+  const g = groupsOf({ mods: after.mods.filter((m) => !m.flux && !m.aldur) });
   if (new Set(g).size !== g.length) fail('groups', 'two modifiers of one group: ' + g.filter((x, i) => g.indexOf(x) !== i).join(','));
   // Natural and desecrated mods need their level <= item level. Essence (crafted) mods are left out: whether essences
   // check item level is not in the data (open question t18); the self-test counts them separately.
@@ -104,7 +116,15 @@ function checkStep(ctx, before, a, r) {
     fracture: () => after.mods.filter((m) => m.frac).length === before.mods.filter((m) => m.frac).length + 1,
     divine: () => dn === 0 && r.added.length === 0 && after.mods.every((m, i) => m.id === before.mods[i].id && (!m.frac || m.v === before.mods[i].v)),
     flux: () => dn === 0 && r.added.length === r.removed.length,
+    aldur: () => dn === 0 && r.added.length === r.removed.length,
+    catalyst: () => dn === 0 && after.catQ >= before.catQ - (before.catTag === a.tag ? 0 : before.catQ) && after.catQ <= 20,
+    rune_rule: () => dn === 0,
   }[a.op];
+  // Homogenising: the new modifier shares a type with one that was there
+  if (a.homog && r.added.length) {
+    const have = new Set(before.mods.flatMap((m) => (m.id && kb.mods[m.id].mt) || []));
+    if (!r.added.every((m) => (kb.mods[m.id].mt || []).some((t) => have.has(t)))) fail('homog', `${a.op} with a Homogenising omen added ${r.added.map((m) => m.id).join(', ')}, no shared type`);
+  }
   if (expect && !expect()) fail('effect', `${a.op} ${JSON.stringify(a)}: ${before.mods.length} -> ${after.mods.length} mods, +${r.added.length} -${r.removed.length}`);
   // omen side restrictions
   if (a.side && ['exalt', 'regal'].includes(a.op) && r.added.some((m) => m.side !== a.side)) fail('side', `${a.op} with a ${a.side} omen added a ${r.added.find((m) => m.side !== a.side).side}`);
@@ -126,13 +146,14 @@ function checkStep(ctx, before, a, r) {
   // stop a Physical spell level suffix, but the level suffix stops Ignite, so the order of arrival decides.
   const kept = after.mods.filter((x) => !r.added.includes(x));
   r.added.forEach((m, i) => {
-    if (m.crafted || (m.des && ctx.desPool.has(m.id)) || a.op === 'flux') return; // desecrated base modifiers keep to the tags too
+    if (m.crafted || (m.des && ctx.desPool.has(m.id)) || a.op === 'flux' || a.op === 'aldur') return; // desecrated base modifiers keep to the tags too
     const present = E.addedTags(kb, kept.concat(r.added.slice(0, i)).map((x) => x.id));
     if (E.tagBlocked(kb.mods[m.id], new Set(kb.bases[ctx.item.base].tags), present)) fail('tags', `${m.id} came in although a mod on the item stops it`);
   });
   // added modifiers must be able to spawn on this base
   for (const m of r.added) {
-    if (m.crafted || a.op === 'flux') continue;
+    if (m.crafted || a.op === 'flux' || a.op === 'aldur') continue;
+    if (after.soul && !m.des && !ctx.pool.has(m.id) && P.makeContext(ctx.ix, Object.assign({}, ctx.item, { runes: (ctx.item.runes || []).concat([{ text: 'Can roll Soul modifiers', kind: 'rune' }]) })).pool.has(m.id)) continue;
     // a desecrated modifier is desecrated-only or a base modifier the Well of Souls offered
     if (m.des ? !ctx.desPool.has(m.id) && !ctx.pool.has(m.id) : !ctx.pool.has(m.id)) fail('pool', `${m.id} cannot spawn on ${ctx.item.base}`);
   }
@@ -200,7 +221,7 @@ function walkBase(base, opts) {
     c.n++;
     if (!ok) { c.fail++; if (c.examples.length < (opts.maxExamples || 3)) c.examples.push(base + ': ' + msg); }
   };
-  const ALL = ['slots', 'crafted', 'desecrated', 'groups', 'ilvl', 'fractured', 'floor', 'effect', 'side', 'lich', 'pool', 'whittle', 'light', 'tags'];
+  const ALL = ['slots', 'crafted', 'desecrated', 'groups', 'ilvl', 'fractured', 'floor', 'effect', 'side', 'lich', 'pool', 'whittle', 'light', 'tags', 'homog'];
   for (let w = 0; w < opts.walks; w++) {
     const ilvl = opts.ilvl || [82, 75, 64, 45][w % 4];
     const white = E.parseItem(ix, renderItem({ base, cls, rarity: 'Normal', ilvl, mods: [] }, r, 'adv').text).item;

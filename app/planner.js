@@ -30,6 +30,12 @@
     alchemy: { prefix: 'Omen of Sinistral Alchemy', suffix: 'Omen of Dextral Alchemy' },
     necro: { prefix: 'Omen of Sinistral Necromancy', suffix: 'Omen of Dextral Necromancy' },
     echoes: 'Omen of Abyssal Echoes',
+    putrefy: 'Omen of Putrefaction',
+    homogExalt: 'Omen of Homogenising Exaltation',
+    homogRegal: 'Omen of Homogenising Coronation',
+    corruption: 'Omen of Corruption',
+    chance: 'Omen of Chance',
+    ancients: 'Omen of the Ancients',
     lich: { Kurgal: 'Omen of the Blackblooded', Amanamu: 'Omen of the Liege', Ulaman: 'Omen of the Sovereign' },
     crystal: { prefix: 'Omen of Sinistral Crystallisation', suffix: 'Omen of Dextral Crystallisation' },
     catalyse: 'Omen of Catalysing Exaltation',
@@ -76,20 +82,28 @@
     const t = TIERS.indexOf(a.tier || 'base');
     switch (a.op) {
       case 'transmute': case 'augment': return [ORB[a.op][t]];
-      case 'regal': return [...(a.side ? [OMEN.coronation[a.side]] : []), ORB.regal[t]];
+      case 'regal': return [...(a.side ? [OMEN.coronation[a.side]] : []), ...(a.homog ? [OMEN.homogRegal] : []), ORB.regal[t]];
       case 'alchemy': return [...(a.side ? [OMEN.alchemy[a.side]] : []), 'Orb of Alchemy'];
-      case 'exalt': return [...(a.side ? [OMEN.exalt[a.side]] : []), ...(a.greater ? [OMEN.greaterExalt] : []), ...(a.catalyse ? [OMEN.catalyse] : []), ORB.exalt[t]];
+      case 'exalt': return [...(a.side ? [OMEN.exalt[a.side]] : []), ...(a.greater ? [OMEN.greaterExalt] : []), ...(a.catalyse ? [OMEN.catalyse] : []), ...(a.homog ? [OMEN.homogExalt] : []), ORB.exalt[t]];
       case 'chaos': return [...(a.whittle ? [OMEN.whittling] : a.side ? [OMEN.erasure[a.side]] : []), ORB.chaos[t]];
       case 'annul': return [...(a.light ? [OMEN.light] : a.side ? [OMEN.annul[a.side]] : []), ...(a.greater ? [OMEN.greaterAnnul] : []), 'Orb of Annulment'];
       case 'bone': return [...(a.side ? [OMEN.necro[a.side]] : []), ...(a.lich ? [OMEN.lich[a.lich]] : []), ...(a.echoes ? [OMEN.echoes] : []),
-        `${a.quality} ${ctx ? ctx.bone : 'bone'}`];
+        ...(a.putrefy ? [OMEN.putrefy] : []), `${a.quality} ${a.quality === 'Altered' ? 'Collarbone' : ctx ? ctx.bone : 'bone'}`];
+      case 'vaal': return [...(a.omen ? [OMEN.corruption] : []), 'Vaal Orb'];
+      case 'chance': return [...(a.ancients ? [OMEN.ancients] : a.omen ? [OMEN.chance] : []), 'Orb of Chance'];
+      case 'architect': return ["Architect's Orb"];
+      case 'cultivation': return ['Vaal Cultivation Orb'];
+      case 'sacrifice': return [a.item || 'Orb of Sacrifice'];
+      case 'catalyst': return [a.item || 'Catalyst'];
+      case 'rune_rule': case 'aldur': return [a.item || 'Rune'];
+      case 'verisium': return ['Verisium Anvil'];
       case 'newbase': return ['New base'];
       case 'fracture': return ['Fracturing Orb'];
       case 'divine': return ['Divine Orb'];
       case 'essence': return [a.item || 'Essence'];
       case 'pessence': return [...(a.side ? [OMEN.crystal[a.side]] : []), a.item || 'Perfect Essence'];
       case 'alloy': return ['Runic Alloy'];
-      case 'flux': return [FLUX[a.to] || 'Flux'];
+      case 'flux': return [a.to === 'chaos' ? 'Void Flux' : FLUX[a.to] || 'Flux'];
       default: return a.item ? [a.item] : [a.op];
     }
   }
@@ -166,8 +180,21 @@
       capMods: ix._capMods || (ix._capMods = new Map(Object.entries(kb.mods).filter(([, m]) => m.cap).map(([id, m]) => [id, m.cap]))),
       baseTags: new Set((base.tags || []).concat(E.runeRules(item).soul ? ['soul'] : [])),
       craftedCap: 1 + E.runeRules(item).extraCrafted, // Astrid's Creativity socketed: one more crafted modifier
+      opts,
     };
     return ctx;
+  }
+  /**
+   * The context modifiers roll from: the item's own, or, once a simulated step socketed Medved's Tending (st.soul) on an
+   * item that did not have it, the same item with the rune (its pool adds the Soul modifiers).
+   */
+  function poolCtx(ctx, st) {
+    if (!st.soul || ctx.baseTags.has('soul')) return ctx;
+    if (!ctx._soul) {
+      const item = Object.assign({}, ctx.item, { runes: (ctx.item.runes || []).concat([{ text: 'Can roll Soul modifiers', kind: 'rune' }]) });
+      ctx._soul = makeContext(ctx.ix, item, ctx.opts);
+    }
+    return ctx._soul;
   }
 
   /**
@@ -350,6 +377,10 @@
   function cloneState(s) { return Object.assign({}, s, { mods: s.mods.map((m) => Object.assign({}, m)) }); }
 
   function limits(ctx, st) {
+    if (st.xSuffix && st.rarity === 'Rare') { const l = limitsBase(ctx, st); return { prefix: l.prefix, suffix: l.suffix + st.xSuffix }; }
+    return limitsBase(ctx, st);
+  }
+  function limitsBase(ctx, st) {
     const c = ctx._lim || (ctx._lim = {});
     const lim = c[st.rarity] || (c[st.rarity] = E.slotLimits({ rarity: st.rarity, slotDelta: ctx.slotDelta }, ctx.cls));
     if (st.rarity !== 'Rare' || !ctx.capMods || !ctx.capMods.size) return lim;
@@ -393,13 +424,18 @@
     }
     if (a.op === 'architect') {
       if (!st.corrupted) return "Architect's Orb needs a corrupted item.";
+      if ((st.enchantCount || (st.corruptEnchant ? 1 : 0)) >= 2) return 'The item already has two Corruption Enchantments.';
       return cls === 'Jewel' || WEAPON.includes(cls) || ARMOUR.includes(cls) || JEWELLERY.includes(cls) ? null : "Architect's Orb works on equipment and jewels.";
     }
-    if (a.op === 'cultivation') return R === 'Unique' ? null : 'Vaal Cultivation Orb works on Unique items.';
+    if (a.op === 'cultivation') {
+      if (R !== 'Unique') return 'Vaal Cultivation Orb works on Unique items.';
+      return st.corrupted && !/^Vaal /.test(ctx.item.name || '') ? null : st.corrupted ? null : 'Vaal Cultivation Orb works on corrupted uniques (a Vaal unique, or any unique it replaces).';
+    }
+    if (st.destroyed) return 'The item was destroyed.';
     if (st.mirrored) return 'Mirrored items cannot be modified.';
     if (st.corrupted) return 'Corrupted items only accept corrupted-item currency (Architect\'s Orb, Orbs of Sacrifice, Vaal Cultivation Orb).';
     if (st.sanctified) return 'Sanctified items cannot be crafted further.';
-    const hasCrafted = st.mods.filter((m) => m.crafted).length >= (ctx.craftedCap || 1);
+    const hasCrafted = st.mods.filter((m) => m.crafted).length >= (ctx.craftedCap || 1) + (st.xCrafted || 0);
     const hasDes = st.mods.some((m) => m.des);
     // Game text (keyword "Minimum Modifier Level"): currency with a Minimum Modifier Level cannot be used on items with
     // an item level below it.
@@ -413,6 +449,7 @@
         return open(ctx, st, 'prefix') + open(ctx, st, 'suffix') > 0 ? null : 'The Magic item has no open affix.';
       case 'regal':
         if (R !== 'Magic') return 'Regal Orb needs a Magic item.';
+        if (a.homog && !homogTypes(ctx, st)) return 'Omen of Homogenising Coronation needs a modifier with a type on the item.';
         return null;
       case 'alchemy':
         return R === 'Normal' || R === 'Magic' ? null : 'Orb of Alchemy needs a Normal or Magic item.';
@@ -421,6 +458,7 @@
         const n = a.greater ? 2 : 1;
         const room = a.side ? open(ctx, st, a.side) : open(ctx, st, 'prefix') + open(ctx, st, 'suffix');
         if (room < n) return a.side ? `No room: the item already has ${count(st, a.side)} ${a.side}es.` : 'No open affix for Exalted Orb.';
+        if (a.homog && !homogTypes(ctx, st)) return 'Omen of Homogenising Exaltation needs a modifier with a type on the item.';
         return null;
       }
       case 'chaos': {
@@ -437,6 +475,8 @@
       case 'bone': {
         if (R !== 'Rare') return 'Desecration needs a Rare item.';
         if (!ctx.bone) return 'No bone matches this item class.';
+        if (a.quality === 'Altered' && ctx.bone !== 'Collarbone') return 'Altered Collarbones desecrate Rare amulets, rings and belts.';
+        if (a.putrefy) return null; // Omen of Putrefaction replaces every modifier; the one-Desecrated rule does not apply (claim k11)
         if (hasDes) return 'Only one Desecrated modifier per item (0.5+). Remove it first with Omen of Light + Orb of Annulment.';
         if (a.quality === 'Gnawed' && ctx.ilvl > 64) return 'Gnawed bones only work on item level 64 or lower.';
         if (a.lich && !(WEAPON.includes(ctx.cls) || JEWELLERY.includes(ctx.cls))) return `${OMEN.lich[a.lich]} only works on weapon or jewellery desecration.`;
@@ -477,7 +517,8 @@
       case 'chance':
         // game table Chanceableitemclasses: jewels, for one, are not among the classes an Orb of Chance works on
         if (ctx.kb.chanceable_classes && !ctx.kb.chanceable_classes.includes(cls)) return `An Orb of Chance cannot be used on ${cls === 'Jewel' ? 'jewels' : cls + ' items'}.`;
-        return R === 'Normal' ? null : 'Orb of Chance needs a Normal item.';
+        if (R !== 'Normal') return 'Orb of Chance needs a Normal item.';
+        return chanceUniques(ctx, a).length ? null : 'No unique uses this base.';
       case 'vaal':
         return null;
       case 'hinekora':
@@ -486,11 +527,14 @@
         return null;
       case 'rune_rule': {
         const rune = ctx.kb.augments && ctx.kb.augments[a.item];
-        return rune && rune.by_class[cls] ? null : `${a.item || 'This rune'} does not go on ${cls} items.`;
+        if (!rune || !rune.by_class[cls]) return `${a.item || 'This rune'} does not go on ${cls} items.`;
+        const has = (st.runes || []).includes(a.item) || (ctx.item.runes || []).some((r) => (rune.by_class[cls].txt || []).includes(r.text));
+        return has && rune.limit === '1' ? `${a.item} is already socketed (one per item).` : null;
       }
       case 'aldur': {
         const rune = ctx.kb.augments && ctx.kb.augments[a.item];
-        return rune && rune.by_class[cls] ? null : `${a.item || 'This rune'} does not go on ${cls} items.`;
+        if (!rune || !rune.by_class[cls]) return `${a.item || 'This rune'} does not go on ${cls} items.`;
+        return st.aldur ? 'A Rune of Aldur is already socketed.' : null;
       }
       case 'verisium': {
         const vu = R === 'Unique' ? ((ctx.kb.verisium_unique_upgrades || {})[ctx.item.name] || []).filter((u) => u.from === ctx.item.base)
@@ -500,8 +544,8 @@
       case 'artificer':
         return MARTIAL.includes(cls) || cls === 'Wand' || cls === 'Staff' || ARMOUR.includes(cls) ? null : "Artificer's Orb works on martial weapons, wands, staves and armour.";
       case 'catalyst':
-        if (a.refined) return cls === 'Jewel' ? null : 'Refined catalysts work on jewels.';
-        return cls === 'Ring' || cls === 'Amulet' || catalystBase(ctx.base) ? null : 'Catalysts work on rings and amulets (Refined ones on jewels).';
+        if (a.refined ? cls !== 'Jewel' : !(cls === 'Ring' || cls === 'Amulet' || catalystBase(ctx.base))) return a.refined ? 'Refined catalysts work on jewels.' : 'Catalysts work on rings and amulets (Refined ones on jewels).';
+        return a.tag && st.catTag === a.tag && st.catQ >= 20 ? 'The catalyst quality is already 20%.' : null;
       case 'quality': {
         const want = qualityCurrencyFor(cls);
         if (!want) return 'No quality currency works on this item class.';
@@ -571,7 +615,8 @@
   }
 
   /** Pick one eligible mod for the allowed sides, honouring mod groups. Returns null when nothing fits. */
-  function rollMod(ctx, st, sides, floor, rng, boost) {
+  function rollMod(ctx0, st, sides, floor, rng, boost, homog) {
+    const ctx = poolCtx(ctx0, st);
     const taken = groupsOf(st);
     const added = E.addedTags(ctx.kb, st.mods.map((m) => m.id));
     const lists = sides.map((s) => sidePool(ctx, s, floor));
@@ -579,6 +624,7 @@
     let total = 0;
     for (const l of lists) for (const e of l) {
       if (e.grp.some((g) => taken.has(g))) continue;
+      if (homog && !typesOf(ctx, e.id).some((t) => homog.has(t))) continue;
       if (added && E.tagBlocked(ctx.kb.mods[e.id], ctx.baseTags, added)) continue;
       const w = boost && ctx.kb.mods[e.id].mt.includes(boost.tag) ? e.w * boost.mult : e.w;
       cands.push(e); ws.push(w); total += w;
@@ -587,6 +633,19 @@
     let r = rng() * total;
     for (let i = 0; i < cands.length; i++) { r -= ws[i]; if (r <= 0) return cands[i]; }
     return cands[cands.length - 1];
+  }
+  // Modifier types for the Homogenising omens ("a Modifier of the same type as an existing Modifier"): the mod's game tags
+  // that Craft of Exile also uses as types (it ignores 'drop'); tags it does not have, like 'resource', are left out.
+  const HOMOG_TYPES = new Set(['ailment', 'armour', 'attack', 'attribute', 'aura', 'bleed', 'caster', 'caster_critical', 'caster_speed', 'chaos',
+    'chaos_damage', 'chaos_resistance', 'cold', 'cold_resistance', 'critical', 'curse', 'damage', 'defences', 'elemental', 'elemental_resistance',
+    'energy_shield', 'evasion', 'fire', 'fire_resistance', 'gem', 'gem_level', 'life', 'flat_life_regen', 'lightning', 'lightning_resistance', 'mana',
+    'minion', 'minion_damage', 'minion_resistance', 'minion_speed', 'physical', 'physical_damage', 'poison', 'resistance', 'runic_ward', 'speed']);
+  function typesOf(ctx, id) { const m = id && ctx.kb.mods[id]; return m ? (m.mt || []).filter((t) => HOMOG_TYPES.has(t)) : []; }
+  /** The types of the modifiers on the item (Homogenising omens), or null when none has one. */
+  function homogTypes(ctx, st) {
+    const s = new Set();
+    for (const m of st.mods) for (const t of typesOf(ctx, m.id)) s.add(t);
+    return s.size ? s : null;
   }
   /** Weight boost of Omen of Catalysing Exaltation: the player's multiplier at 20% quality, linear below it. */
   function catalystBoost(ctx, st) {
@@ -664,6 +723,113 @@
     return st.mods.splice(i, 1)[0];
   }
 
+  /** A Corruption Enchantment of this base's corrupted pool (kb pools) the item does not have yet, evenly (no weights are published). */
+  function corruptionEnchant(ctx, st, rng) {
+    const pool = ((ctx.kb.pools[ctx.base.sig] || {}).corrupted || []).filter((id) => !(st.enchants || []).includes(id));
+    return pool.length ? pool[Math.floor(rng() * pool.length)] : null;
+  }
+  /**
+   * Vaal Orb (Maxroll corruption table; Game8 and Gamerant: about 25% each; not in the game files): nothing, 1-3 modifiers
+   * randomised (a modifier removed and a random one added, like a Chaos Orb, once to three times), a Corruption Enchantment,
+   * or +1 socket (wands and staves: quality up to 23%); on jewels the last is a modifier added or removed ignoring the
+   * limits. Omen of Corruption: "your next Vaal Orb will always result in change".
+   */
+  function vaalOutcome(ctx, st, a, rng, removed, added) {
+    const jewel = ctx.cls === 'Jewel';
+    const outs = ['nothing', 'reroll', 'enchant', jewel ? 'addremove' : 'socket'].filter((o) => !(a.omen && o === 'nothing'));
+    const o = outs[Math.floor(rng() * outs.length)];
+    st.corrupted = true; st.outcome = o;
+    if (o === 'reroll' && st.mods.some(removable)) {
+      const n = 1 + Math.floor(rng() * 3);
+      for (let i = 0; i < n; i++) {
+        const r = removeRandom(st, removable, rng);
+        if (!r) break;
+        removed.push(r);
+        const e = rollMod(ctx, st, openSides(ctx, st), 0, rng);
+        if (e) { addRolled(ctx, st, e, null, rng); added.push(st.mods[st.mods.length - 1]); }
+      }
+    } else if (o === 'enchant') {
+      const id = corruptionEnchant(ctx, st, rng);
+      if (id) { st.enchants = (st.enchants || []).concat([id]); st.corruptEnchant = true; st.enchantCount = (st.enchantCount || 0) + 1; }
+    } else if (o === 'socket') {
+      if (ctx.cls === 'Wand' || ctx.cls === 'Staff') st.quality = Math.min(23, Math.max(st.quality || 0, 20) + 1 + Math.floor(rng() * 3));
+      else st.sockets = (st.sockets || 0) + 1;
+    } else if (o === 'addremove') {
+      if (rng() < 0.5 && st.mods.some(removable)) { const r = removeRandom(st, removable, rng); if (r) removed.push(r); }
+      else {
+        const s = SIDES[Math.floor(rng() * 2)];
+        const e = rollMod(ctx, st, [s], 0, rng); // ignores the limits
+        if (e) { addRolled(ctx, st, e, null, rng); added.push(st.mods[st.mods.length - 1]); }
+      }
+    }
+  }
+  /**
+   * Omen of Putrefaction: "replace all modifiers on the item creating an item with up to 6 Unrevealed modifiers and
+   * Corrupting the item". Every modifier that can be removed goes (fractured ones stay, R_FRACTURED_LOCK); each open slot
+   * gets a desecrated modifier revealed like any other (the player's focus: six, three a side). Omen of Abyssal Echoes
+   * rerolls the first reveal's options.
+   */
+  function putrefy(ctx, st, a, rng, pick, removed, added) {
+    for (const m of st.mods.slice()) if (removable(m)) { removed.push(m); st.mods.splice(st.mods.indexOf(m), 1); }
+    const floor = a.quality === 'Ancient' ? 40 : 0;
+    let first = true;
+    for (const side of SIDES) {
+      while (open(ctx, st, side) > 0) {
+        let opts = revealOptions(ctx, st, side, floor, null, rng);
+        if (!opts.length) break;
+        let choice = pick ? pick(opts, false) : null;
+        if (first && a.echoes && !choice) { opts = revealOptions(ctx, st, side, floor, null, rng); choice = pick ? pick(opts, true) : null; }
+        first = false;
+        if (!choice) choice = opts.slice().sort((x, y) => y.lvl - x.lvl)[0];
+        addRolled(ctx, st, choice, { des: true }, rng);
+        added.push(st.mods[st.mods.length - 1]);
+      }
+    }
+    st.corrupted = true;
+  }
+  /** Void Flux: the Chaos Resistance tier of the highest level not above the converted modifier's (else the lowest). */
+  function chaosResFor(ctx, lvl) {
+    const tiers = [...ctx.pool.entries()].filter(([id]) => ctx.kb.mods[id].fam === 'ChaosResistance').map(([id]) => id)
+      .sort((x, y) => ctx.kb.mods[x].lvl - ctx.kb.mods[y].lvl);
+    if (!tiers.length) return null;
+    const fit = tiers.filter((id) => ctx.kb.mods[id].lvl <= lvl && ctx.kb.mods[id].lvl <= ctx.ilvl);
+    return fit.length ? fit[fit.length - 1] : tiers[0];
+  }
+  /** The rune (kb.augments) for this item class whose text matches, e.g. Medved's Tending for "Can roll Soul modifiers". */
+  function runeFor(ctx, re) {
+    for (const [name, a] of Object.entries(ctx.kb.augments || {})) {
+      const c = (a.by_class || {})[ctx.cls];
+      if (c && (c.txt || []).some((t) => re.test(t)) && !/of Aldur$/.test(name)) return name;
+    }
+    return null;
+  }
+  // catalyst per modifier tag (item texts: Flesh = Life, Neural = Mana, ...); Refined ones for jewels
+  const CATALYST_NAME = { life: 'Flesh Catalyst', mana: 'Neural Catalyst', defences: 'Carapace Catalyst', physical: "Uul-Netol's Catalyst",
+    fire: "Xoph's Catalyst", cold: "Tul's Catalyst", lightning: "Esh's Catalyst", chaos: "Chayula's Catalyst", attack: 'Reaver Catalyst',
+    caster: 'Sibilant Catalyst', speed: 'Skittering Catalyst', attribute: 'Adaptive Catalyst', minion: 'Necrotic Catalyst' };
+  const ALDUR_ELEMENT = { 'Passion of Aldur': 'Fire', 'Breath of Aldur': 'Cold', 'Ire of Aldur': 'Lightning', 'Betrayal of Aldur': 'Chaos' };
+  const ELEMENT_WORDS = ['Fire', 'Cold', 'Lightning', 'Chaos'];
+  /** The modifier a Rune of Aldur turns this one into: its id with the element named the rune's way (same tier), if it exists. */
+  function aldurTwin(ctx, id, to) {
+    const m = ctx.kb.mods[id];
+    for (const el of ELEMENT_WORDS) {
+      if (el === to || !id.includes(el)) continue;
+      const twin = id.split(el).join(to);
+      if (ctx.kb.mods[twin]) return twin;
+      // ids are not always parallel (a trailing "_"): the same tier of the family named the other way on this base
+      const fam = m && m.fam ? m.fam.split(el).join(to) : null;
+      const pe = ctx.pool.get(id);
+      const hit = fam && pe && [...ctx.pool.entries()].find(([x, e]) => ctx.kb.mods[x].fam === fam && e.side === pe.side && e.tier === pe.tier);
+      if (hit) return hit[0];
+    }
+    return null;
+  }
+  /** Uniques an Orb of Chance can make from this base (kb.uniques variants on it); Omen of the Ancients: any of the class. */
+  function chanceUniques(ctx, a) {
+    const U = ctx.kb.uniques || {};
+    return Object.keys(U).filter((n) => a && a.ancients ? U[n].cls === ctx.cls : (U[n].variants || []).some((v) => v.base === ctx.item.base) || U[n].trade_base === ctx.item.base);
+  }
+
   /**
    * Apply an action. Returns { state, removed: [mods], added: [mods] } — the input state is not changed.
    * pick(options) chooses the revealed desecrated mod (default: highest level).
@@ -680,7 +846,9 @@
     };
     switch (a.op) {
       case 'newbase':
-        st.rarity = 'Normal'; st.mods = [];
+        // a fresh white base: nothing socketed, no catalyst quality, not runeforged
+        st.rarity = 'Normal'; st.mods = []; st.runes = []; st.soul = false; st.xCrafted = 0; st.xSuffix = 0; st.aldur = null;
+        st.catQ = 0; st.catTag = null; st.quality = 0; st.verisium = false;
         break;
       case 'transmute':
         st.rarity = 'Magic';
@@ -689,10 +857,13 @@
       case 'augment':
         addOne(openSides(ctx, st), floorFor(ctx, 'augment', tier));
         break;
-      case 'regal':
+      case 'regal': {
+        const homog = a.homog ? homogTypes(ctx, st) : null;
         st.rarity = 'Rare';
-        addOne(openSides(ctx, st, a.side), floorFor(ctx, 'regal', tier));
+        const e = rollMod(ctx, st, openSides(ctx, st, a.side), floorFor(ctx, 'regal', tier), rng, null, homog);
+        if (e) { addRolled(ctx, st, e, null, rng); added.push(st.mods[st.mods.length - 1]); }
         break;
+      }
       case 'alchemy': {
         st.rarity = 'Rare';
         const lim = limits(ctx, st);
@@ -708,7 +879,11 @@
       }
       case 'exalt': {
         const n = a.greater ? 2 : 1;
-        for (let i = 0; i < n; i++) addOne(openSides(ctx, st, a.side), floorFor(ctx, 'exalt', tier));
+        const homog = a.homog ? homogTypes(ctx, st) : null; // types of the modifiers already there (Craft of Exile's rule)
+        for (let i = 0; i < n; i++) {
+          const e = rollMod(ctx, st, openSides(ctx, st, a.side), floorFor(ctx, 'exalt', tier), rng, boost, homog);
+          if (e) { addRolled(ctx, st, e, null, rng); added.push(st.mods[st.mods.length - 1]); }
+        }
         if (a.catalyse) st.catQ = 0; // the omen consumes all catalyst quality
         break;
       }
@@ -745,6 +920,7 @@
           const cand = fit.filter((x) => open(ctx, st, x) > 0);
           side = cand.length ? cand[Math.floor(rng() * cand.length)] : null;
         }
+        if (a.putrefy) { putrefy(ctx, st, a, rng, pick, removed, added); break; }
         if (!side) break;
         const draw = () => revealOptions(ctx, st, side, floor, a.lich || null, rng);
         let opts = draw();
@@ -787,8 +963,8 @@
         // Fractured mods stay as they are (R_FRACTURED_LOCK: they cannot be changed).
         for (const m of st.mods) {
           const r = resElement(m.id);
-          if (!r || r.el === a.to || a.to === 'chaos' || m.frac) continue;
-          const id = RES[a.to] + r.n;
+          if (!r || r.el === a.to || m.frac) continue;
+          const id = a.to === 'chaos' ? chaosResFor(ctx, m.lvl) : RES[a.to] + r.n;
           const km = ctx.kb.mods[id];
           if (!km) continue;
           const pe = ctx.pool.get(id);
@@ -801,23 +977,77 @@
         break;
       }
       case 'catalyst':
-        if (a.tag) { st.catTag = a.tag; } // replaces other quality types; the amount per catalyst is not modelled
+        // "Adds quality that enhances X modifiers ... Replaces other quality types"; guides: 1-2% per catalyst, more on low
+        // item levels (Gamerant, Timesaver). Modelled as 1% per catalyst (2% below item level 50), up to 20%.
+        if (a.tag) {
+          if (st.catTag !== a.tag) { st.catTag = a.tag; st.catQ = 0; }
+          st.catQ = Math.min(20, (st.catQ || 0) + (a.per || (ctx.ilvl < 50 ? 2 : 1)));
+          st.quality = st.catQ;
+        }
+        break;
+      case 'rune_rule': {
+        // runes that change crafting (game data augments): Medved's Tending lets Soul modifiers roll, Astrid's Creativity
+        // allows one more crafted modifier, Serle's Triumph allows one more suffix
+        const txt = ((ctx.kb.augments[a.item] || {}).by_class || {})[ctx.cls];
+        const t = txt ? (txt.txt || []).join('\n') : '';
+        st.runes = (st.runes || []).concat([a.item]);
+        if (/Can roll Soul modifiers/i.test(t)) st.soul = true;
+        if (/additional Crafted Modifier/i.test(t)) st.xCrafted = (st.xCrafted || 0) + 1;
+        const sx = /\+(\d+) Suffix Modifiers? allowed/i.exec(t);
+        if (sx) st.xSuffix = (st.xSuffix || 0) + +sx[1];
+        break;
+      }
+      case 'aldur': {
+        // "Transforms all Cold and Lightning modifiers on the item into equivalent Fire modifiers" while socketed; fractured
+        // ones stay (t30). Equivalent: the same modifier with the element named the other way, same tier.
+        const to = ALDUR_ELEMENT[a.item];
+        st.aldur = to;
+        for (const m of st.mods) {
+          if (m.frac || !m.id) continue;
+          const id = aldurTwin(ctx, m.id, to);
+          if (!id || id === m.id) continue;
+          const km = ctx.kb.mods[id], pe = ctx.pool.get(id);
+          removed.push(Object.assign({}, m));
+          Object.assign(m, { id, fam: km.fam, grp: km.grp, lvl: km.lvl, tier: pe ? pe.tier : m.tier, aldur: true });
+          added.push(m);
+        }
+        break;
+      }
+      case 'verisium':
+        st.verisium = true; // the base becomes its Runeforged form; modifiers stay (t28)
         break;
       case 'hinekora':
         break;
       case 'mirror':
         st.mirrored = true;
         break;
-      case 'vaal': case 'architect': case 'cultivation':
-        st.corrupted = true; st.unpredictable = true;
+      case 'vaal':
+        vaalOutcome(ctx, st, a, rng, removed, added);
         break;
-      case 'chance':
-        st.unpredictable = true;
+      case 'architect': {
+        // Maxroll: 50/50, a second Corruption Enchantment or the item is destroyed
+        if (rng() < 0.5) { st.destroyed = true; st.outcome = 'destroyed'; break; }
+        const id = corruptionEnchant(ctx, st, rng);
+        if (id) { st.enchants = (st.enchants || []).concat([id]); st.enchantCount = (st.enchantCount || (st.corruptEnchant ? 1 : 0)) + 1; st.corruptEnchant = true; }
+        st.outcome = 'enchant2';
         break;
+      }
+      case 'cultivation':
+        st.corrupted = true; st.outcome = 'cultivation';
+        break;
+      case 'chance': {
+        // Orb of Chance: a unique that uses this base, or the base is destroyed (Omen of Chance: kept instead). The odds
+        // per base are not in the data; a.success (the player's estimate) or unknown.
+        const list = chanceUniques(ctx, a);
+        if (a.success == null) { st.unpredictable = true; break; }
+        if (rng() < a.success) { st.rarity = 'Unique'; st.unique = list[Math.floor(rng() * list.length)]; st.mods = []; }
+        else if (!a.omen && !a.ancients) st.destroyed = true;
+        break;
+      }
       case 'sacrifice': {
         const r = removeRandom(st, removable, rng);
         if (r) removed.push(r);
-        st.unpredictable = true; // the upgraded enchantment is not modelled
+        st.enchantUpgraded = true; // "Upgrades a Corruption Enchantment": the upgraded value is not in the data
         break;
       }
       case 'liquid': {
@@ -923,11 +1153,13 @@
         : g.minValue != null ? `no tier reaches ${g.minValue} at this item level` : 'cannot roll at this item level';
     }
     if (g.essenceOnly) {
-      if (st.mods.filter((m) => m.crafted && !meets(m, g, g.eff)).length >= (ctx.craftedCap || 1)) return 'the crafted slot is already used';
+      const astrid = runeFor(ctx, /additional Crafted Modifier/i) ? 1 : 0; // Astrid's Creativity can add a crafted slot
+      if (st.mods.filter((m) => m.crafted && !meets(m, g, g.eff)).length >= (ctx.craftedCap || 1) + astrid) return 'the crafted slot is already used';
       return (g.ess || []).length ? null : 'no essence gives this mod on this item class';
     }
     const viaEssence = essenceOptions(ctx, g, 'magic').length + essenceOptions(ctx, g, 'rare').length > 0;
-    const ok = sidePool(ctx, g.side, 0).some((e) => e.fam === g.fam && (!g.eff || e.tier <= g.eff) && reaches(ctx, e.id, g)) || viaEssence;
+    const soul = ctx.cls === 'Body Armour' ? poolCtx(ctx, { soul: true }) : ctx; // Medved's Tending can be socketed first
+    const ok = sidePool(soul, g.side, 0).some((e) => e.fam === g.fam && (!g.eff || e.tier <= g.eff) && reaches(soul, e.id, g)) || viaEssence;
     if (!ok) return g.minValue != null ? `no tier reaches ${g.minValue} at this item level` : 'this tier cannot roll at this item level';
     const blocker = st.mods.find((m) => (m.frac || m.lock) && !meets(m, g, g.eff) && m.grp.some((x) => (g.grp || []).includes(x)));
     if (blocker) return 'blocked by a kept or fractured mod of the same group';
@@ -972,12 +1204,59 @@
       }
       return null;
     }
+    /** Runes that change crafting, socketed when a goal needs them (game data augments; test t30 for Aldur). */
+    function runeStep(st, left) {
+      if (params.runes === false) return null;
+      // Medved's Tending: a Soul modifier goal on body armour
+      if (ctx.cls === 'Body Armour' && !st.soul && !ctx.baseTags.has('soul') && left.some((g) => !g.des && !g.essenceOnly && !sidePool(ctx, g.side, 0).some((e) => e.fam === g.fam))) {
+        const r = runeFor(ctx, /Can roll Soul modifiers/i);
+        if (r && !validate(ctx, st, { op: 'rune_rule', item: r })) return { op: 'rune_rule', item: r };
+      }
+      // Astrid's Creativity: more crafted-modifier goals than crafted slots
+      const cap = (ctx.craftedCap || 1) + (st.xCrafted || 0);
+      if (goals.filter((g) => g.essenceOnly).length > cap) {
+        const r = runeFor(ctx, /additional Crafted Modifier/i);
+        if (r && !validate(ctx, st, { op: 'rune_rule', item: r })) return { op: 'rune_rule', item: r };
+      }
+      // Serle's Triumph: more suffix goals than suffix slots on the Rare item
+      if (goals.filter((g) => g.side === 'suffix').length > limitsBase(ctx, Object.assign({}, st, { rarity: 'Rare' })).suffix + (st.xSuffix || 0)) {
+        const r = runeFor(ctx, /Suffix Modifiers? allowed/i);
+        if (r && !validate(ctx, st, { op: 'rune_rule', item: r })) return { op: 'rune_rule', item: r };
+      }
+      // a Rune of Aldur that finishes element goals from the other elements' modifiers, keeping every finished goal
+      if (!st.aldur && (st.rarity === 'Magic' || st.rarity === 'Rare')) {
+        for (const item of Object.keys(ALDUR_ELEMENT)) {
+          const a = { op: 'aldur', item };
+          if (validate(ctx, st, a)) continue;
+          const after = apply(ctx, st, a, () => 0.5).state;
+          if (left.some((g) => goalMet(after, g)) && goals.every((x) => !goalMet(st, x) || goalMet(after, x))) return a;
+        }
+      }
+      return null;
+    }
+    /** Catalyst quality for Omen of Catalysing Exaltation: a catalyst of a tag an unmet goal's family carries, up to 20%. */
+    function catalystStep(st, left) {
+      if (!params.catalyse || st.rarity !== 'Rare') return null;
+      const jewel = ctx.cls === 'Jewel';
+      if (!(jewel || ctx.cls === 'Ring' || ctx.cls === 'Amulet' || catalystBase(ctx.base))) return null;
+      for (const g of left) {
+        if (g.des || g.essenceOnly || open(ctx, st, g.side) < 1) continue;
+        const tag = Object.keys(CATALYST_NAME).find((t) => famHasTag(ctx, g.fam, t));
+        if (!tag || (st.catTag === tag && st.catQ >= 20)) continue;
+        return { op: 'catalyst', tag, refined: jewel, item: (jewel ? 'Refined ' : '') + CATALYST_NAME[tag] };
+      }
+      return null;
+    }
     return function next(st) {
       const left = unmet(st);
       if (!left.length) return { done: true };
       if (st.corrupted || st.sanctified) return { fail: 'item is locked' };
+      const rs = runeStep(st, left);
+      if (rs) return rs;
       const fx = fluxStep(st, left);
       if (fx) return fx;
+      const cs = catalystStep(st, left);
+      if (cs) return cs;
       const R = st.rarity;
       const sideNeed = (s) => left.filter((g) => g.side === s).length;
       const lean = sideNeed('prefix') > sideNeed('suffix') ? 'prefix' : sideNeed('suffix') > sideNeed('prefix') ? 'suffix' : null;
@@ -1003,7 +1282,7 @@
           if (junk && left.some((x) => x.side === junk.side && !x.des && !x.essenceOnly)) return { op: 'newbase' };
         }
         if (open(ctx, st, 'prefix') + open(ctx, st, 'suffix') > 0 && st.mods.length < 2) return { op: 'augment', tier: params.magicTier || params.tier };
-        return { op: 'regal', tier: params.magicTier || params.tier, side: params.sideOmens ? lean : null };
+        return { op: 'regal', tier: params.magicTier || params.tier, side: params.sideOmens ? lean : null, homog: homogHelps(st, left.filter((x) => !x.des && !x.essenceOnly)) };
       }
       if (R !== 'Rare') return { fail: 'unsupported rarity' };
       const desJunk = st.mods.find((m) => m.des && !useful(m, goals) && !m.frac);
@@ -1067,12 +1346,18 @@
         }
         const two = params.greaterExalt && open(ctx, st, g.side) >= 2 && left.filter((x) => x.side === g.side && !x.des).length >= 2;
         const catalyse = !!(params.catalyse && st.catQ > 0 && st.catTag && famHasTag(ctx, g.fam, st.catTag));
-        return { op: 'exalt', tier: params.exaltTier || params.tier, side: params.sideOmens ? g.side : null, greater: two, catalyse };
+        return { op: 'exalt', tier: params.exaltTier || params.tier, side: params.sideOmens ? g.side : null, greater: two, catalyse, homog: homogHelps(st, [g]) };
       }
       if (params.slamOnly && params.restart && !g.des && !st.mods.some((m) => m.frac || m.lock)) return { op: 'newbase' };
       return removal(st, g.side, desJunk);
     };
 
+    /** Omen of Homogenising: when every goal the slam is for shares a modifier type with the item, the pool narrows to those types. */
+    function homogHelps(st, gs) {
+      if (!params.homog || !gs.length) return false;
+      const have = homogTypes(ctx, st);
+      return !!have && gs.every((g) => (ctx.ix.famMods.get(g.fam) || []).some((id) => typesOf(ctx, id).some((t) => have.has(t))));
+    }
     function removal(st, side, desJunk, target) {
       const junk = st.mods.filter((m) => m.side === side && removable(m) && !useful(m, goals));
       if (!junk.length) {
@@ -1229,7 +1514,9 @@
      * in bulk, because such loops can run thousands of times per run. run: {cost, steps, early}, updated in place.
      */
     function restartLoop(run, white, a) {
-      const kT = actionKey(a, ctx), kB = actionKey(NEWBASE, ctx), cT = costOf(a), cB = costOf(NEWBASE);
+      // every new base needs the runes the plan socketed on the white base again
+      const runeCost = (white.runes || []).reduce((t, n) => t + ((opts.priceOf && opts.priceOf(n)) || 0), 0);
+      const kT = actionKey(a, ctx), kB = actionKey(NEWBASE, ctx), cT = costOf(a), cB = costOf(NEWBASE) + runeCost;
       const tab = !opts.budget && !ctx.needValues ? keepTable(white, a) : null;
       if (tab) {
         // Draw the number of Transmutations until one is kept (geometric), then the kept mod by weight.
@@ -1413,14 +1700,14 @@
     exaltTier: TIERS, chaosTier: TIERS, magicTier: TIERS, sideOmens: [false, true], greaterExalt: [false, true],
     removal: ['chaos', 'erasure', 'whittle', 'annul'], start: ['transmute', 'alchemy'], restart: [true, false], pair: [false, true], slamOnly: [false, true],
     essence: [false, true], fracture: [false, true], catalyse: [false, true], flux: [true, false],
-    bone: ['Gnawed', 'Preserved', 'Ancient'], echoes: [false, true], lich: [false, true], desSlam: [false, true],
+    bone: ['Gnawed', 'Preserved', 'Ancient'], echoes: [false, true], lich: [false, true], desSlam: [false, true], homog: [false, true],
   };
   const BEAM_WIDTH = 6, BEAM_DEPTH = 8;
   /** A complete strategy: the per-operation orb tiers filled from `tier`, every setting present. */
   function expandStrategy(p) {
     const t = p.tier || 'base';
     const out = Object.assign({ exaltTier: t, chaosTier: t, magicTier: t, sideOmens: false, greaterExalt: false, removal: 'chaos', start: 'transmute',
-      restart: true, pair: false, slamOnly: false, essence: false, fracture: false, catalyse: false, flux: true, bone: 'Preserved', echoes: false, lich: false, desSlam: false }, p);
+      restart: true, pair: false, slamOnly: false, essence: false, fracture: false, catalyse: false, flux: true, bone: 'Preserved', echoes: false, lich: false, desSlam: false, homog: false, runes: true }, p);
     delete out.tier;
     return out;
   }
@@ -1430,7 +1717,9 @@
     keys.push('exaltTier', 'chaosTier', 'sideOmens', 'greaterExalt', 'removal', 'flux');
     if (goals.some((g) => (g.ess || []).length)) keys.push('essence');
     if (goals.length >= 2) keys.push('fracture');
-    if (st.catTag && st.catQ > 0) keys.push('catalyse');
+    // catalysts can be added during the plan on rings, amulets, jewels and catalyst bases
+    if (st.catTag && st.catQ > 0 || goals.some((g) => !g.des && !g.essenceOnly)) keys.push('catalyse');
+    if (goals.some((g) => !g.des && !g.essenceOnly)) keys.push('homog');
     if (goals.some((g) => g.des)) keys.push('bone', 'echoes', 'lich');
     // bones for base-modifier goals (the Well of Souls offers base modifiers too)
     if (goals.some((g) => !g.des && !g.essenceOnly)) keys.push('desSlam', ...(goals.some((g) => g.des) ? [] : ['bone', 'echoes']));
@@ -1739,15 +2028,43 @@
       return list[i] || null;
     } : undefined;
     const r = apply(ctx, st, action, rng, pick);
-    if (r.state.unpredictable) return { reason: 'The planner does not model what this does to the item, so the emulator cannot show it.' };
-    const out = [`Item Class: ${CLASS_TEXT[ctx.cls] || ctx.cls + 's'}`, `Rarity: ${r.state.rarity}`];
-    if (r.state.rarity === 'Rare' || r.state.rarity === 'Unique') out.push(item.name || 'Emulated Item');
-    out.push(item.base, '--------');
-    if (r.state.quality) out.push(`Quality${item.qualityType ? ` (${item.qualityType})` : ''}: +${r.state.quality}% (augmented)`, '--------');
+    const S2 = r.state;
+    if (action.op === 'chance' && S2.unpredictable) {
+      const list = chanceUniques(ctx, action);
+      return { reason: `Orb of Chance: the base becomes one of ${list.length} unique${list.length === 1 ? '' : 's'} (${list.slice(0, 8).join(', ')}${list.length > 8 ? ', ...' : ''})`
+        + `${action.omen || action.ancients ? '' : ' or is destroyed'}. The odds per base are not in the game data or Craft of Exile, so the emulator does not pick one.` };
+    }
+    if (S2.unpredictable) return { reason: 'The planner does not model what this does to the item, so the emulator cannot show it.' };
+    const txt = (m) => (m.id && ctx.kb.mods[m.id] ? ctx.kb.mods[m.id].txt.replace(/\n/g, ' / ') : '?');
+    const outcome = OUTCOME_TEXT[S2.outcome] || null;
+    if (S2.destroyed) return { destroyed: true, text: null, added: [], removed: [], seed, outcome: outcome || 'The item was destroyed.' };
+    if (S2.unique || (action.op === 'cultivation')) {
+      const name = S2.unique || cultivate(ctx, rng);
+      if (!name) return { reason: 'Vaal Cultivation Orb: the modifiers it replaces on a Vaal unique are not in the data.' };
+      return { text: uniqueText(ctx, name, rng, S2.corrupted), added: [name], removed: [], seed, outcome: action.op === 'chance' ? `Became ${name}.` : `Replaced by ${name}, corrupted.` };
+    }
+    // the base after the Verisium Anvil: its Runeforged (or Runemastered) form, with that base's implicits
+    const upg = S2.verisium ? (((ctx.kb.verisium_upgrades || {})[item.base] || [])[0] || null) : null;
+    const baseName = upg ? upg.to : item.base;
+    const out = [`Item Class: ${CLASS_TEXT[ctx.cls] || ctx.cls + 's'}`, `Rarity: ${S2.rarity}`];
+    if (S2.rarity === 'Rare' || S2.rarity === 'Unique') out.push(item.name || 'Emulated Item');
+    out.push(baseName, '--------');
+    // catalyst quality names its modifier type, "Quality (Life Modifiers)"
+    const qType = S2.catTag ? `${S2.catTag === 'defences' ? 'Defence' : S2.catTag[0].toUpperCase() + S2.catTag.slice(1)} Modifiers` : item.qualityType;
+    if (S2.quality) out.push(`Quality${qType ? ` (${qType})` : ''}: +${S2.quality}% (augmented)`, '--------');
+    const sockets = (item.sockets || []).length + (S2.sockets || 0);
+    if (sockets) out.push(`Sockets: ${Array(sockets).fill('S').join(' ')}`, '--------');
     out.push(`Item Level: ${item.ilvl == null ? 82 : item.ilvl}`);
     const pre = [];
     for (const x of item.runes || []) pre.push(`${x.text} (${x.kind === 'enchant' ? 'enchant' : 'rune'})`);
-    for (const x of item.implicits || []) pre.push(`${x.text} (implicit)`);
+    for (const name of S2.runes || []) for (const t of (((ctx.kb.augments[name] || {}).by_class || {})[ctx.cls] || {}).txt || []) pre.push(`${t} (rune)`);
+    if (S2.aldur) pre.push(`Forged by the ${Object.keys(ALDUR_ELEMENT).find((k) => ALDUR_ELEMENT[k] === S2.aldur).replace(' of Aldur', '')} of Aldur (rune)`);
+    if (upg) for (const l of (ctx.kb.bases[baseName] || {}).imp || []) for (const t of l.split('\n')) pre.push(`${t} (implicit)`);
+    for (const x of item.implicits || []) {
+      if (x.corruption) pre.push('{ Corruption Implicit Modifier }', x.text);
+      else if (!upg) pre.push(`${x.text} (implicit)`);
+    }
+    for (const id of S2.enchants || []) pre.push('{ Corruption Implicit Modifier }', ...rolledLines(ctx.kb.mods[id].txt, rng));
     if (pre.length) out.push('--------', ...pre);
     const reroll = action.op === 'divine';
     const lines = [];
@@ -1762,11 +2079,38 @@
     // unique and other lines the planner does not track stay as they were
     for (const m of item.mods.filter((x) => x.slot !== 'prefix' && x.slot !== 'suffix')) lines.push(...m.text.split('\n'));
     if (lines.length) out.push('--------', ...lines);
-    if (r.state.mods.some((m) => m.frac)) out.push('--------', 'Fractured Item');
-    if (r.state.corrupted) out.push('--------', 'Corrupted');
-    if (r.state.sanctified) out.push('--------', 'Sanctified');
-    const txt = (m) => (m.id && ctx.kb.mods[m.id] ? ctx.kb.mods[m.id].txt.replace(/\n/g, ' / ') : '?');
-    return Object.assign({ text: out.join('\n'), added: r.added.map(txt), removed: r.removed.map(txt), seed }, reveal ? { reveal } : {});
+    if (S2.mods.some((m) => m.frac)) out.push('--------', 'Fractured Item');
+    if (S2.corrupted) out.push('--------', 'Corrupted');
+    if (S2.sanctified) out.push('--------', 'Sanctified');
+    const extra = [outcome, S2.enchantUpgraded ? 'The Corruption Enchantment is upgraded; the upgraded value is not in the data, so its line stays as it was.' : null,
+      (S2.enchants || []).length ? 'Added Corruption Enchantment: ' + S2.enchants.map((id) => txt({ id })).join('; ') : null].filter(Boolean);
+    return Object.assign({ text: out.join('\n'), added: r.added.map(txt), removed: r.removed.map(txt), seed }, reveal ? { reveal } : {}, extra.length ? { outcome: extra.join(' ') } : {});
+  }
+  const OUTCOME_TEXT = {
+    nothing: 'Vaal Orb: nothing changed; the item is corrupted.', reroll: 'Vaal Orb: 1-3 modifiers randomised.', enchant: 'Vaal Orb: a Corruption Enchantment was added.',
+    socket: 'Vaal Orb: +1 socket (wands and staves: quality).', addremove: 'Vaal Orb: a modifier added or removed, ignoring the limits.',
+    destroyed: "Architect's Orb destroyed the item.", enchant2: "Architect's Orb: a second Corruption Enchantment was added.",
+  };
+  /** Vaal Cultivation Orb on a non-Vaal unique: another unique of the same class (game text); a Vaal unique: null (not modelled). */
+  function cultivate(ctx, rng) {
+    if (/^Vaal /.test(ctx.item.name || '')) return null;
+    const U = ctx.kb.uniques || {};
+    const list = Object.keys(U).filter((n) => U[n].cls === ctx.cls && n !== ctx.item.name);
+    return list.length ? list[Math.floor(rng() * list.length)] : null;
+  }
+  /** Item text of a unique from kb.uniques (the variant on this base when there is one), values rolled inside their ranges. */
+  function uniqueText(ctx, name, rng, corrupted) {
+    const u = ctx.kb.uniques[name];
+    const v = u.variants.find((x) => x.base === ctx.item.base) || u.variants[0];
+    const out = [`Item Class: ${CLASS_TEXT[ctx.cls] || ctx.cls + 's'}`, 'Rarity: Unique', name, v.base || u.trade_base || ctx.item.base, '--------',
+      `Item Level: ${ctx.item.ilvl == null ? 82 : ctx.item.ilvl}`];
+    const plain = (l) => l.replace(RE_RANGE, (all, lo, hi) => String(rollIn(+lo, +hi, rng)));
+    if ((v.implicit || []).length) out.push('--------', ...v.implicit.map((l) => `${plain(l)} (implicit)`));
+    const lines = [];
+    for (const m of v.mods) lines.push(...rolledLines(m.txt, rng).map((l) => l.replace(/(-?\d+(?:\.\d+)?)\((-?\d+(?:\.\d+)?)-(-?\d+(?:\.\d+)?)\)/g, '$1')));
+    if (lines.length) out.push('--------', ...lines);
+    if (corrupted) out.push('--------', 'Corrupted');
+    return out.join('\n');
   }
 
   /**
@@ -1894,6 +2238,7 @@
           if (opts.budget && cost + costs[i] > opts.budget) { why = 'over budget'; break; }
           const r = apply(ctx, s, step.action, rng, pick);
           if (r.state.unpredictable) { bad = `The planner does not model what step ${i + 1} does to the item.`; return; }
+          if (r.state.destroyed) { s = r.state; cost += costs[i]; n++; per[i]++; uses[i]++; why = `the item was destroyed at step ${i + 1}`; break; }
           s = r.state; cost += costs[i]; n++; per[i]++; uses[i]++;
           if (goal.length && groupsMet(ctx, s, goal)) { why = 'goal met'; break; }
           const rule = (step.rules || []).find((r2) => r2.groups && r2.groups.length && groupsMet(ctx, s, r2.groups.filter((g) => g.reqs.length)));

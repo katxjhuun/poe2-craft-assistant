@@ -1008,3 +1008,92 @@ test('Flux: every other-element resistance converts at its tier, values rolled a
   assert.equal((out.text.match(/to Fire Resistance/g) || []).length, 2);
   assert.ok(!/Cold Resistance/.test(out.text));
 });
+
+test('corruption: Vaal Orb outcomes (Omen of Corruption never leaves it unchanged), Architect 50/50, Orb of Sacrifice', () => {
+  const armour = E.parseItem(ix, ['Item Class: Body Armours', 'Rarity: Rare', 'Test Robe', 'Heavy Plate', '--------', 'Item Level: 82', '--------',
+    '+120 to maximum Life', '35% increased Armour', '+30% to Fire Resistance', '+25% to Cold Resistance'].join('\n')).item;
+  const seen = {};
+  const kind = (o) => o.split(':')[1].split('.')[0].trim();
+  for (let s = 1; s <= 400; s++) {
+    const r = P.emulate(ix, armour, { op: 'vaal' }, { seed: s });
+    seen[kind(r.outcome)] = 1 + (seen[kind(r.outcome)] || 0);
+    assert.ok(E.parseItem(ix, r.text).item.flags.corrupted);
+  }
+  assert.equal(Object.keys(seen).length, 4, JSON.stringify(seen));
+  for (const n of Object.values(seen)) assert.ok(n > 60 && n < 140, JSON.stringify(seen));
+  for (let s = 1; s <= 100; s++) assert.ok(!/nothing changed/.test(P.emulate(ix, armour, { op: 'vaal', omen: true }, { seed: s }).outcome));
+  // an added Corruption Enchantment reads back as a corruption implicit
+  let ench;
+  for (let s = 1; !ench; s++) { const r = P.emulate(ix, armour, { op: 'vaal', omen: true }, { seed: s }); if (/Enchantment was added/.test(r.outcome)) ench = r; }
+  const ci = E.parseItem(ix, ench.text).item;
+  assert.equal(ci.implicits.filter((m) => m.corruption).length, 1);
+  assert.match(P.emulate(ix, ci, { op: 'exalt' }).reason, /Corrupted/);
+  let destroyed = 0;
+  for (let s = 1; s <= 200; s++) {
+    const r = P.emulate(ix, ci, { op: 'architect' }, { seed: s });
+    if (r.destroyed) destroyed++;
+    else assert.equal(E.parseItem(ix, r.text).item.implicits.filter((m) => m.corruption).length, 2);
+  }
+  assert.ok(destroyed > 70 && destroyed < 130, String(destroyed));
+  const sac = P.emulate(ix, ci, { op: 'sacrifice' }, { seed: 2 });
+  assert.equal(sac.removed.length, 1);
+  assert.match(sac.outcome, /upgraded/);
+});
+
+test('Void Flux, Omen of Putrefaction, Homogenising omens, Altered Collarbone, catalysts, runes, Aldur, Verisium, Chance, Cultivation', () => {
+  const it = (lines) => E.parseItem(ix, lines.join('\n')).item;
+  const armour = it(['Item Class: Body Armours', 'Rarity: Rare', 'Test Robe', 'Heavy Plate', '--------', 'Item Level: 82', '--------',
+    '+120 to maximum Life', '35% increased Armour', '+30% to Fire Resistance', '+25% to Cold Resistance']);
+  const vf = E.parseItem(ix, P.emulate(ix, armour, { op: 'flux', to: 'chaos' }, { seed: 1 }).text).item;
+  assert.equal(vf.mods.filter((m) => m.fam === 'ChaosResistance').length, 2);
+  assert.equal(vf.mods.filter((m) => /Fire|Cold/.test(m.fam || '')).length, 0);
+  const pu = E.parseItem(ix, P.emulate(ix, armour, { op: 'bone', quality: 'Preserved', putrefy: true }, { seed: 3 }).text).item;
+  assert.equal(pu.mods.filter((m) => m.desecrated).length, 6);
+  assert.ok(pu.flags.corrupted);
+  // Homogenising: the added modifier shares a type with the one already there
+  const one = it(['Item Class: Body Armours', 'Rarity: Rare', 'Test Robe', 'Heavy Plate', '--------', 'Item Level: 82', '--------', '+30% to Fire Resistance']);
+  const fireId = one.mods[0].modId;
+  const types = new Set(kb.mods[fireId].mt);
+  for (let s = 1; s <= 30; s++) {
+    const r = P.emulate(ix, one, { op: 'exalt', homog: true }, { seed: s });
+    const add = E.parseItem(ix, r.text).item.mods.find((m) => m.modId !== fireId);
+    assert.ok((kb.mods[add.modId].mt || []).some((t) => types.has(t)), add.text);
+  }
+  assert.ok(P.actionNames({ op: 'exalt', homog: true }).includes('Omen of Homogenising Exaltation'));
+  // Altered Collarbone only on jewellery
+  const ring = it(['Item Class: Rings', 'Rarity: Rare', 'Test Loop', 'Ruby Ring', '--------', 'Item Level: 82', '--------', '+60 to maximum Life']);
+  assert.ok(P.emulate(ix, ring, { op: 'bone', quality: 'Altered' }, { seed: 1 }).text);
+  assert.match(P.emulate(ix, armour, { op: 'bone', quality: 'Altered' }).reason, /amulets, rings and belts/);
+  // catalysts: 1% a catalyst at item level 50+, up to 20%
+  let r2 = ring;
+  for (let i = 0; i < 25; i++) {
+    const e = P.emulate(ix, r2, { op: 'catalyst', tag: 'life', item: 'Flesh Catalyst' }, { seed: i });
+    if (e.reason) break;
+    r2 = E.parseItem(ix, e.text).item;
+  }
+  assert.equal(r2.quality, 20);
+  // runes: Medved's Tending makes Soul modifiers roll; the policy sockets it for a Soul goal
+  const med = E.parseItem(ix, P.emulate(ix, armour, { op: 'rune_rule', item: "Medved's Tending" }, { seed: 1 }).text).item;
+  assert.ok(P.makeContext(ix, med).baseTags.has('soul'));
+  const soul = Object.values(kb.mods).find((m) => m.dom === 'i' && m.gen === 'p' && m.sw.some(([t, w]) => t === 'soul' && w > 0));
+  const plate = it(['Item Class: Body Armours', 'Rarity: Rare', 'Test', 'Heavy Plate', '--------', 'Item Level: 82', '--------', '+120 to maximum Life']);
+  const c = P.makeContext(ix, plate), st = P.toState(c, plate);
+  const { goals } = P.goalsFromTargets(c, { 'prefix-1': { fam: soul.fam, group: 'prefix', label: 'soul' } });
+  assert.equal(P.goalFeasible(c, st, goals[0]), null);
+  const sim = P.simulate(c, st, goals, P.expandStrategy({ sideOmens: true }), { trials: 100, seed: 2 });
+  assert.ok(sim.p > 0.9 && sim.steps[0].key === "Medved's Tending" && Math.abs(sim.steps[0].avg - 1) < 1e-9, JSON.stringify(sim.steps.slice(0, 2)));
+  // Rune of Aldur: Cold modifiers turn into the same tier of Fire ones
+  const staff = it(['Item Class: Staves', 'Rarity: Rare', 'Test', 'Chiming Staff', '--------', 'Item Level: 82', '--------', '120% increased Cold Damage', '+4 to Level of all Cold Spell Skills']);
+  const al = E.parseItem(ix, P.emulate(ix, staff, { op: 'aldur', item: 'Passion of Aldur' }, { seed: 1 }).text).item;
+  assert.equal(al.mods.length, 2);
+  assert.ok(al.mods.every((m) => /Fire/.test(m.fam) && !/Cold/.test(m.fam)), JSON.stringify(al.mods.map((m) => m.fam)));
+  // Verisium Anvil: the Runeforged base, modifiers kept
+  const vr = E.parseItem(ix, P.emulate(ix, armour, { op: 'verisium' }, { seed: 1 }).text).item;
+  assert.equal(vr.base, 'Runeforged Heavy Plate');
+  assert.equal(vr.mods.length, 4);
+  // Orb of Chance: the uniques of the base, odds not in the data; Vaal Cultivation Orb: another unique of the class
+  assert.match(P.emulate(ix, it(['Item Class: Rings', 'Rarity: Normal', 'Ruby Ring', '--------', 'Item Level: 82']), { op: 'chance' }).reason, /odds per base are not/);
+  const uq = it(['Item Class: Rings', 'Rarity: Unique', "Ventor's Gamble", 'Gold Ring', '--------', 'Item Level: 82', '--------', '12% increased Rarity of Items found', '--------', 'Corrupted']);
+  const cu = E.parseItem(ix, P.emulate(ix, uq, { op: 'cultivation' }, { seed: 3 }).text).item;
+  assert.ok(cu.rarity === 'Unique' && cu.name !== "Ventor's Gamble" && kb.uniques[cu.name].cls === 'Ring' && cu.flags.corrupted);
+});

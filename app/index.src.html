@@ -1780,16 +1780,33 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const L = [
       { k: 'transmute', g: 'Orbs', label: 'Orb of Transmutation', tiers: true },
       { k: 'augment', g: 'Orbs', label: 'Orb of Augmentation', tiers: true },
-      { k: 'regal', g: 'Orbs', label: 'Regal Orb', tiers: true, omens: side('Coronation') },
+      { k: 'regal', g: 'Orbs', label: 'Regal Orb', tiers: true, omens: side('Coronation').concat([['homog', 'Homogenising Coronation (same type)']]) },
       { k: 'alchemy', g: 'Orbs', label: 'Orb of Alchemy', omens: side('Alchemy') },
-      { k: 'exalt', g: 'Orbs', label: 'Exalted Orb', tiers: true, omens: side('Exaltation').concat([['greater', 'Greater Exaltation (2 mods)'], ['catalyse', 'Catalysing Exaltation']]) },
+      { k: 'exalt', g: 'Orbs', label: 'Exalted Orb', tiers: true, omens: side('Exaltation').concat([['greater', 'Greater Exaltation (2 mods)'], ['catalyse', 'Catalysing Exaltation'], ['homog', 'Homogenising Exaltation (same type)']]) },
       { k: 'chaos', g: 'Orbs', label: 'Chaos Orb', tiers: true, omens: side('Erasure').concat([['whittle', 'Whittling']]) },
       { k: 'annul', g: 'Orbs', label: 'Orb of Annulment', omens: side('Annulment').concat([['greater', 'Greater Annulment (2 mods)'], ['light', 'Light (the Desecrated mod)']]) },
       { k: 'divine', g: 'Orbs', label: 'Divine Orb' },
       { k: 'fracture', g: 'Orbs', label: 'Fracturing Orb' },
     ];
-    for (const q of ['Gnawed', 'Preserved', 'Ancient']) L.push({ k: 'bone:' + q, g: 'Desecrate', label: `${q} bone`, omens: side('Necromancy') });
-    for (const [to, n] of [['fire', 'Blazing Flux'], ['cold', 'Chilling Flux'], ['lightning', 'Crackling Flux']]) L.push({ k: 'flux:' + to, g: 'Flux', label: n });
+    const cls = it && it.base && S.ix.kb.bases[it.base] ? S.ix.kb.bases[it.base].cls : '';
+    for (const q of ['Gnawed', 'Preserved', 'Ancient'].concat(['Ring', 'Amulet', 'Belt'].includes(cls) ? ['Altered'] : [])) L.push({ k: 'bone:' + q, g: 'Desecrate', label: q === 'Altered' ? 'Altered Collarbone' : `${q} bone`, omens: side('Necromancy') });
+    for (const [to, n] of [['fire', 'Blazing Flux'], ['cold', 'Chilling Flux'], ['lightning', 'Crackling Flux'], ['chaos', 'Void Flux']]) L.push({ k: 'flux:' + to, g: 'Flux', label: n });
+    // corruption and uniques
+    L.push({ k: 'vaal', g: 'Corruption', label: 'Vaal Orb', omens: [['', 'No omen'], ['corruption', 'Omen of Corruption (always a change)']] },
+      { k: 'architect', g: 'Corruption', label: "Architect's Orb" }, { k: 'sacrifice', g: 'Corruption', label: 'Orb of Sacrifice' },
+      { k: 'cultivation', g: 'Corruption', label: 'Vaal Cultivation Orb' },
+      { k: 'chance', g: 'Corruption', label: 'Orb of Chance', omens: [['', 'No omen'], ['chance', 'Omen of Chance (not destroyed)'], ['ancients', 'Omen of the Ancients (any unique of the class)']] });
+    // catalysts (rings, amulets, Grasping Mail; Refined ones for jewels)
+    const jewel = cls === 'Jewel';
+    for (const [tag, name] of Object.entries(CATALYST_NAMES)) L.push({ k: 'cat:' + tag, g: 'Catalysts', label: (jewel ? 'Refined ' : '') + name, cat: { tag, refined: jewel, item: (jewel ? 'Refined ' : '') + name } });
+    // runes that change crafting, Runes of Aldur, the Verisium Anvil
+    for (const [name, a] of Object.entries(S.ix.kb.augments || {})) {
+      const c = (a.by_class || {})[cls];
+      if (!c) continue;
+      if (/of Aldur$/.test(name)) L.push({ k: 'aldur:' + name, g: 'Runes and Verisium', label: `${name}: ${(c.txt || []).join('; ')}` });
+      else if ((c.txt || []).some((t) => /Soul modifiers|additional Crafted Modifier|Modifiers? allowed/i.test(t))) L.push({ k: 'rune:' + name, g: 'Runes and Verisium', label: `${name}: ${(c.txt || []).join('; ')}` });
+    }
+    L.push({ k: 'verisium', g: 'Runes and Verisium', label: 'Verisium Anvil (Runeforge)' });
     for (const r of itemEssences()) {
       const g = r.liquid ? 'Liquid emotions' : r.alloy ? 'Runic Alloys' : r.kind === 'magic' ? 'Essences (Magic item)' : 'Perfect and special essences';
       const mt = S.ix.kb.mods[r.mod] ? S.ix.kb.mods[r.mod].txt.replace(/\n/g, ' / ') : r.mod;
@@ -1804,8 +1821,14 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       const r = m.rec;
       return r.liquid ? { op: 'liquid', item: r.item, mod: r.mod } : r.kind === 'magic' ? { op: 'essence', item: r.item, mod: r.mod } : { op: 'pessence', item: r.item, mod: r.mod, side: sideOf };
     }
-    if (m.k.startsWith('bone:')) return { op: 'bone', quality: m.k.slice(5), side: sideOf, echoes: !!sel.echoes, lich: sel.lich || null };
+    if (m.k.startsWith('bone:')) return { op: 'bone', quality: m.k.slice(5), side: sideOf, echoes: !!sel.echoes, lich: sel.lich || null, putrefy: !!sel.putrefy };
     if (m.k.startsWith('flux:')) return { op: 'flux', to: m.k.slice(5) };
+    if (m.k === 'vaal') return { op: 'vaal', omen: o === 'corruption' };
+    if (m.k === 'chance') return { op: 'chance', omen: o === 'chance', ancients: o === 'ancients' };
+    if (m.cat) return Object.assign({ op: 'catalyst' }, m.cat);
+    if (m.k.startsWith('rune:')) return { op: 'rune_rule', item: m.k.slice(5) };
+    if (m.k.startsWith('aldur:')) return { op: 'aldur', item: m.k.slice(6) };
+    if (['architect', 'sacrifice', 'cultivation', 'verisium'].includes(m.k)) return { op: m.k };
     const a = { op: m.k };
     if (m.tiers) a.tier = sel.tier || 'base';
     if (sideOf) a.side = sideOf;
@@ -1813,13 +1836,17 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (o === 'catalyse') a.catalyse = true;
     if (o === 'whittle') a.whittle = true;
     if (o === 'light') a.light = true;
+    if (o === 'homog') a.homog = true;
     return a;
   }
+  const CATALYST_NAMES = { life: 'Flesh Catalyst', mana: 'Neural Catalyst', defences: 'Carapace Catalyst', physical: "Uul-Netol's Catalyst", fire: "Xoph's Catalyst",
+    cold: "Tul's Catalyst", lightning: "Esh's Catalyst", chaos: "Chayula's Catalyst", attack: 'Reaver Catalyst', caster: 'Sibilant Catalyst',
+    speed: 'Skittering Catalyst', attribute: 'Adaptive Catalyst', minion: 'Necrotic Catalyst' };
   function benchCur() { return S.bench.hist[S.bench.idx]; }
   /** A workbench history entry from an emulated use; a bone use keeps its seed so another offered modifier can be taken. */
   function benchEntry(r, action, reveal) {
     const pr = E.parseItem(S.ix, r.text);
-    const note = `${P.actionNames(action).join(' + ')}: ${r.added.length ? 'added ' + r.added.join('; ') : 'nothing added'}${r.removed.length ? ' · removed ' + r.removed.join('; ') : ''}`;
+    const note = `${P.actionNames(action).join(' + ')}: ${r.added.length ? 'added ' + r.added.join('; ') : 'nothing added'}${r.removed.length ? ' · removed ' + r.removed.join('; ') : ''}${r.outcome ? ' · ' + r.outcome : ''}`;
     return { text: r.text, item: pr.item, note, reveal: r.reveal || null, replay: { seed: r.seed, action, reroll: !!(reveal && reveal.reroll) } };
   }
   function openBench() {
@@ -1871,7 +1898,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const omenSel = m.omens ? `<select id="bOmen" aria-label="Omen">${m.omens.map(([v, l]) => `<option value="${v}" ${B.sel.omen === v ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>` : '';
     const LICH = [['Kurgal', 'Omen of the Blackblooded (Kurgal)'], ['Amanamu', 'Omen of the Liege (Amanamu)'], ['Ulaman', 'Omen of the Sovereign (Ulaman)']];
     const boneSel = m.k.startsWith('bone:') ? `<div class="b-row"><select id="bLich" aria-label="Lich omen"><option value="">No lich omen</option>${LICH.map(([v, l]) => `<option value="${v}" ${B.sel.lich === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-      <label class="b-chk"><input type="checkbox" id="bEchoes" ${B.sel.echoes ? 'checked' : ''}>Omen of Abyssal Echoes</label></div>` : '';
+      <label class="b-chk"><input type="checkbox" id="bEchoes" ${B.sel.echoes ? 'checked' : ''}>Omen of Abyssal Echoes</label>
+      <label class="b-chk"><input type="checkbox" id="bPutrefy" ${B.sel.putrefy ? 'checked' : ''}>Omen of Putrefaction</label></div>` : '';
     const action = benchAction(m, B.sel);
     const names = P.actionNames(action);
     const price = names.reduce((t, n) => t + (priceEx(n) || 0), 0);
@@ -1968,6 +1996,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     else if (t.id === 'bOmen') { B.sel.omen = t.value; B.calc = null; }
     else if (t.id === 'bLich') { B.sel.lich = t.value; B.calc = null; }
     else if (t.id === 'bEchoes') { B.sel.echoes = t.checked; B.calc = null; }
+    else if (t.id === 'bPutrefy') { B.sel.putrefy = t.checked; B.calc = null; }
     else if (t.dataset.btype != null) { B.groups[+t.dataset.btype].type = t.value; B.calc = null; stratReset(B); }
     else if (t.dataset.bn != null) { B.groups[+t.dataset.bn].n = Math.max(1, parseInt(t.value, 10) || 1); B.calc = null; stratReset(B); }
     else if (t.dataset.breq != null) { const [gi, ri] = t.dataset.breq.split(':').map(Number); Object.assign(B.groups[gi].reqs[ri], benchParse(t.value), { minTier: null, label: t.selectedOptions[0].textContent }); B.calc = null; stratReset(B); }
@@ -2045,6 +2074,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (b.id === 'bApply') {
       const r = P.emulate(S.ix, cur.item, action, opts);
       if (r.reason) B.msg = { bad: true, text: r.reason };
+      else if (r.destroyed) B.msg = { bad: true, text: `${P.actionNames(action).join(' + ')}: ${r.outcome} Undo is not possible in game; the workbench keeps the item before it.` };
       else {
         const h = benchEntry(r, action, null);
         B.hist = B.hist.slice(0, B.idx + 1).concat([h]);
@@ -3284,6 +3314,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     desecrated: 'At most one desecrated modifier', groups: 'No two modifiers of one group', ilvl: 'Natural tiers respect item level',
     fractured: 'Fractured modifiers are never removed or changed', floor: 'Greater and Perfect minimum modifier levels',
     effect: 'Each currency adds and removes what its game text says', side: 'Side omens keep to their side; a full side loses its own modifier (essences, liquid emotions)', lich: 'Lich omens give their lich\'s modifiers',
+    homog: 'Homogenising omens add a modifier of a type already on the item',
     pool: 'Added modifiers can spawn on the base', tags: 'A modifier that stops others (spell modifiers of other elements) is respected', whittle: 'Whittling removes the lowest level modifier', light: 'Omen of Light removes only the desecrated modifier',
     'parse-adv': 'Alt+Ctrl+C text reads back exactly', 'parse-adv-flagged': 'Alt+Ctrl+C text needs no "Pick"', 'parse-simple': 'Ctrl+C text reads back (family, side, markers)', 'parse-simple-exact': 'Ctrl+C text reads back the exact tier',
   };
