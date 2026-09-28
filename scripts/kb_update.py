@@ -114,6 +114,9 @@ def approve(path):
     shutil.copyfile(os.path.join(ROOT, 'app', 'data', 'weights_0.5.5.json'), backup.replace('poe2_kb_backup', 'weights_backup'))
     w_code, w_out = run([sys.executable, os.path.join('scripts', 'build_weights.py'), '--offline'])
     print(w_out.strip()[-600:])
+    if os.path.exists(os.path.join(CACHE, 'coe', 'poec_data.json')):
+        c_code, c_out = run([sys.executable, os.path.join('scripts', 'coe_crosscheck.py'), '--write'])
+        print(c_out.strip()[-400:])
     code, out = run(['node', os.path.join('app', 'build.js')])
     print(out.strip())
     print(f'knowledge base replaced and poe2db weights remapped from the cached pages (backups: {backup}).'

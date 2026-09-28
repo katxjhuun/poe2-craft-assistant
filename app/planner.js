@@ -249,29 +249,34 @@
     return (a.side ? [a.side] : SIDES).filter((s) => (full ? opens(s) : open(ctx, st, s) > 0) && revealPool(ctx, st, s, floor, a.lich || null).any);
   }
 
+  // How many of the three Well of Souls options are desecrated-only: 1, 2 or 3 with these chances (Craft of Exile's
+  // desecrationModSpawnRate; test t31). The rest are base modifiers of the side.
+  const DES_OPTIONS = [0.8, 0.15, 0.05];
+
   /**
-   * What the Well of Souls can offer for a desecrated modifier on this side: the side's desecrated-only modifiers (with a
-   * lich omen only that lich's) and, without a lich omen, the base modifiers that could roll there. poe2db: "Reveal
-   * desecrated modifiers may include base modifiers. Unless you use Omen to guarantee named modifiers"; Game8 and Sift
-   * agree, and two of the player's staves carry a Desecrated base modifier (T1 "Gain % of Damage as Extra Fire Damage").
-   * Groups on the item and the tags its mods add are respected; the bone's floor applies to both kinds.
+   * What the Well of Souls can offer for a desecrated modifier on this side: the side's desecrated-only modifiers, the
+   * base modifiers that could roll there, and with a lich omen that lich's. poe2db: "Reveal desecrated modifiers may
+   * include base modifiers. Unless you use Omen to guarantee named modifiers"; Game8, Sift and Craft of Exile agree, and
+   * two of the player's staves carry a Desecrated base modifier (T1 "Gain % of Damage as Extra Fire Damage"). Groups on the
+   * item and the tags its mods add are respected; the bone's floor applies to every kind.
    */
   function revealPool(ctx, st, side, floor, lich) {
     const taken = groupsOf(st);
     const added = E.addedTags(ctx.kb, st.mods.map((m) => m.id));
     const free = (e) => !e.grp.some((g) => taken.has(g));
-    const excl = desPoolFor(ctx, side, floor, lich).filter(free);
-    const norm = lich ? [] : sidePool(ctx, side, floor).filter((e) => free(e) && !(added && E.tagBlocked(ctx.kb.mods[e.id], ctx.baseTags, added)));
-    return { excl, norm, any: excl.length + norm.length > 0 };
+    const excl = desPoolFor(ctx, side, floor, null).filter(free);
+    const lichList = lich ? desPoolFor(ctx, side, floor, lich).filter(free) : null;
+    const norm = sidePool(ctx, side, floor).filter((e) => free(e) && !(added && E.tagBlocked(ctx.kb.mods[e.id], ctx.baseTags, added)));
+    return { excl, norm, lichList, any: lich ? lichList.length > 0 : excl.length + norm.length > 0 };
   }
   /**
-   * The three modifiers the Well of Souls offers. At least one is desecrated-only when one can roll (Game8, Sift; for
-   * equipment that means item level 65+); Sift estimates each of the other two is desecrated-only about half the time.
-   * Base modifiers are drawn by their spawn weight, desecrated-only ones evenly (no weights are published). No two share a
-   * group.
+   * The three modifiers the Well of Souls offers, as Craft of Exile draws them: 1, 2 or 3 desecrated-only ones (DES_OPTIONS)
+   * and base modifiers for the rest; with a lich omen the first is that lich's ("will guarantee a random Kurgal modifier").
+   * Base modifiers by their spawn weight, desecrated-only ones evenly (Craft of Exile gives them all weight 1). No two share
+   * a group. Without a desecrated-only modifier (sceptres, equipment below item level 65) all three are base modifiers.
    */
   function revealOptions(ctx, st, side, floor, lich, rng) {
-    const { excl, norm } = revealPool(ctx, st, side, floor, lich);
+    const { excl, norm, lichList } = revealPool(ctx, st, side, floor, lich);
     const opts = [], used = new Set();
     const take = (list) => {
       const ok = list.filter((e) => !e.grp.some((g) => used.has(g)));
@@ -284,8 +289,11 @@
       opts.push(Object.assign({}, e, { des: true }));
       return e;
     };
-    for (let k = 0; k < 3; k++) {
-      const wantExcl = excl.length > 0 && (k === 0 || !norm.length || rng() < 0.5);
+    let nEx = 1;
+    for (let r = rng(), acc = 0, i = 0; i < DES_OPTIONS.length; i++) { acc += DES_OPTIONS[i]; if (r <= acc) { nEx = i + 1; break; } }
+    if (lichList && !take(lichList)) return opts;
+    for (let k = opts.length; k < 3; k++) {
+      const wantExcl = excl.length > 0 && k < nEx;
       if (!(wantExcl ? take(excl) : take(norm)) && !(wantExcl ? take(norm) : take(excl))) break;
     }
     return opts;
@@ -2180,7 +2188,7 @@
     ORB, OMEN, TIERS, boneFor, actionNames, makeContext, toState, validate, apply, rngFrom, sidePool, desPoolFor,
     goalsFromTargets, goalMet, meets, nearMiss, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
     availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, goalClash, essencesForBase, liquidFor, CATALYST_DEFAULT,
-    emulate, chanceOf, familyChances, runStrategy, runStrategyAsync, groupsMet,
+    emulate, chanceOf, familyChances, runStrategy, runStrategyAsync, groupsMet, revealOptions, desSides, DES_OPTIONS,
     expandStrategy, recipeParams, relevantKeys, SPACE, improvePlan,
   };
 });

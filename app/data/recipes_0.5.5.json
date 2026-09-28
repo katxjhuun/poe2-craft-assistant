@@ -1169,9 +1169,9 @@
     },
     {
       "id": "k9",
-      "claim": "Omen of the Blackblooded, Liege and Sovereign guarantee Kurgal, Amanamu and Ulaman mods on weapon or jewellery desecration",
+      "claim": "Omen of the Blackblooded, Liege and Sovereign guarantee a Kurgal, Amanamu or Ulaman modifier on weapon or jewellery desecration",
       "verdict": "verified",
-      "reason": "Game text; weapon and jewellery only."
+      "reason": "Game text (\"will guarantee a random Kurgal modifier\"); Craft of Exile: the first of the three options is that lich's. Weapon and jewellery only."
     },
     {
       "id": "k10",
@@ -1412,6 +1412,24 @@
       "claim": "Jewels can be crafted with Transmutation, Augmentation, Regal and Exalted Orbs",
       "verdict": "verified",
       "reason": "Maxroll crafting guide (test t21)."
+    },
+    {
+      "id": "k50",
+      "claim": "Roll weights of natural modifiers (poe2db) match Craft of Exile",
+      "verdict": "verified",
+      "reason": "8,929 of 8,987 Craft of Exile tiers give the same chances (jewels as the same multiple); 58 differ and the page lets you pick whose weights to use there (reports/coe-crosscheck.md)."
+    },
+    {
+      "id": "k51",
+      "claim": "Desecrated-only modifiers all roll with the same weight",
+      "verdict": "verified",
+      "reason": "Craft of Exile gives every desecrated tier weight 1 (925 tiers); no other weights are published."
+    },
+    {
+      "id": "k52",
+      "claim": "Essences do not check the item level",
+      "verdict": "verified",
+      "reason": "Craft of Exile (test t18), accepted as correct at the user's request."
     }
   ],
   "tests": [
@@ -1499,7 +1517,7 @@
       "claims": [
         "k19"
       ],
-      "note": "Guides agree the size of the boost is not documented (Game8, PoE2 crafting codex); the planner uses x5 at 20% quality, adjustable."
+      "note": "Craft of Exile does not model Omen of Catalysing Exaltation, and poe2db, Game8 and the PoE2 crafting codex say the size is not documented. The planner uses x5 at 20% quality, adjustable."
     },
     {
       "id": "t9",
@@ -1590,7 +1608,10 @@
       "question": "Do essences check item level (for example a level 72 essence modifier on an item level 64 item)?",
       "how": "Use a Greater or Perfect Essence whose modifier level is above the item level of a cheap item and see whether the game allows it. Found by the self-test: the data does not say.",
       "claims": [],
-      "found": "self-test"
+      "found": "self-test",
+      "status": "refuted",
+      "note": "No: an essence adds its modifier whatever the item level (a level 72 essence modifier can go on an item level 64 item). The planner already works that way.",
+      "source": "Craft of Exile (its PoE2 emulator enables an essence for every base it applies to and never compares its modifier level with the item level; accepted as correct at your request, 28 Sept 2026)"
     },
     {
       "id": "t19",
@@ -1653,14 +1674,18 @@
       "question": "After the \"+1 Prefix/Suffix Modifier allowed\" mod is removed, can a Rare jewel take a fifth regular modifier?",
       "how": "Settled so far (two trade jewels you pasted, 27 Sept 2026): with the allowance mod a jewel holds 4 regular modifiers and the crafted one, 5 in total (3 prefixes + 2 suffixes, or 2 + 3). Open: guides say a side stays at 3 after the allowance mod is removed, so the other side can be filled for 5 regular modifiers. Test: remove the allowance mod (Orb of Annulment with the side omen of its side) and try an Exalted Orb with the omen of the other side. The planner follows the game data and the guides until then.",
       "claims": [],
-      "note": "With the allowance mod: 4 regular modifiers + 1 crafted (Blight Joy 2 + 3, Loath Ornament 3 + 2). Game data hint: the rune Serle's Triumph raises the suffix limit and a separate modifier total (local_maximum_mods_allowed_+), while the jewel allowance mods raise only their side, so a total limit may still hold. Maxroll: \"Jewels have a limit of four modifiers — two prefixes and two suffixes.\""
+      "note": "No: a Rare jewel holds 2 prefixes and 2 suffixes; a \"+1 Prefix/Suffix Modifier allowed\" mod raises one side only while it is on the jewel. Once it is removed no fifth regular modifier can be added (the modifiers already there stay).",
+      "status": "refuted",
+      "source": "Craft of Exile (jewels: 4 modifiers, 2 + 2), Maxroll (\"Jewels have a limit of four modifiers — two prefixes and two suffixes\") and your report"
     },
     {
       "id": "t25",
       "question": "When the side of the new modifier is full, does a Perfect essence or a liquid emotion remove a modifier of that side?",
       "how": "Without an omen, use a cheap Perfect essence on a Rare whose side for the essence modifier is full (or a liquid emotion on such a jewel), and see which modifier goes. Players report that it removes one of that side. The planner plans it that way and uses an Omen of Crystallisation only to remove from the other side.",
       "claims": [],
-      "note": "Players report it; the Mobalytics essence guide advises filling the essence's side first so the other side is not touched, which agrees. Not yet seen in game here."
+      "note": "Yes: without an Omen of Crystallisation, a Perfect essence (or Runic Alloy) whose modifier side is full removes a modifier of that side; otherwise any modifier can go. The omens pick the side. The planner does exactly this.",
+      "status": "confirmed",
+      "source": "Craft of Exile (its Perfect essence code removes from the essence modifier's side when that side is full), players' reports, the Mobalytics essence guide"
     },
     {
       "id": "t26",
@@ -1712,9 +1737,13 @@
       "id": "t31",
       "question": "How many of the three Well of Souls options are desecrated-only?",
       "how": "Reveal a few desecrated modifiers on item level 65+ gear without a lich omen and count options that name a lich (Amanamu's, Kurgal's, Ulaman's) against base modifiers.",
-      "claims": [],
+      "claims": [
+        "k47"
+      ],
       "found": "guides",
-      "note": "Game8 and Sift: at least one desecrated-only when one can roll; Sift estimates each of the other two is desecrated-only about half the time. The planner uses that estimate."
+      "note": "One, two or three of the three options are desecrated-only with chances 80%, 15% and 5%; the rest are base modifiers of the side. With a lich omen the first option is that lich's. Without a desecrated-only modifier (sceptres, equipment below item level 65) all three are base modifiers. The planner uses these numbers.",
+      "status": "confirmed",
+      "source": "Craft of Exile (poe2.js: desecrationModSpawnRate = [0.8, 0.15, 0.05]); Game8 and Sift agree on at least one"
     }
   ]
 }

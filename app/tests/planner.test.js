@@ -967,10 +967,20 @@ test('Well of Souls: three options from one side, base modifiers and desecrated-
   const rs = P.emulate(ix, armour, { op: 'bone', quality: 'Preserved', side: 'suffix' }, { seed: 7 });
   assert.ok(rs.reveal.options.every((x) => x.side === 'suffix'));
   const ring = E.parseItem(ix, ['Item Class: Rings', 'Rarity: Rare', 'Test Loop', 'Ruby Ring', '--------', 'Item Level: 82', '--------', '+60 to maximum Life'].join('\n')).item;
-  for (let seed = 1; seed <= 20; seed++) {
-    const rl = P.emulate(ix, ring, { op: 'bone', quality: 'Preserved', lich: 'Kurgal' }, { seed });
-    assert.ok(rl.reveal.options.length && rl.reveal.options.every((x) => x.only), JSON.stringify(rl.reveal.options));
+  // a lich omen guarantees one of that lich's modifiers: the first option (Craft of Exile, game text "a random Kurgal modifier")
+  const kb2 = ix.kb;
+  let counts = [0, 0, 0, 0];
+  for (let seed = 1; seed <= 400; seed++) {
+    const rl = P.emulate(ix, ring, { op: 'bone', quality: 'Preserved', lich: 'Kurgal', side: 'suffix' }, { seed });
+    const o = rl.reveal.options;
+    assert.equal(o.length, 3);
+    const first = kb2.mods[Object.keys(kb2.mods).find((id) => kb2.mods[id].txt.replace(/\n/g, ' / ') === o[0].text && kb2.mods[id].dom === 'd')];
+    assert.equal(E.lichOf(first), 'Kurgal', o[0].text);
+    counts[o.filter((x) => x.only).length]++;
   }
+  // how many desecrated-only: 1, 2 or 3 at 80/15/5% (Craft of Exile); never 0 when one can roll
+  assert.equal(counts[0], 0);
+  assert.ok(counts[1] > 280 && counts[2] > 30 && counts[3] > 5, JSON.stringify(counts));
   // a base-modifier goal is met by a Desecrated base modifier of that family, and the Well keeps it when offered
   const lifeGoal = { fam: 'IncreasedLife', side: 'prefix', des: false, grp: ['IncreasedLife'], tier: null };
   assert.ok(P.meets({ fam: 'IncreasedLife', des: true, tier: 3 }, lifeGoal));

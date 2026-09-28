@@ -116,7 +116,11 @@ function checkStep(ctx, before, a, r) {
     if (sides.length === 1 && cnt(before, sides[0]) >= limB[sides[0]] && r.removed.some((m) => m.side !== sides[0])) fail('side', `${a.op} removed a ${r.removed[0].side} although its ${sides[0]}es were full`);
   }
   if (a.op === 'alchemy' && a.side && cnt(after, a.side) < Math.min(3, lim[a.side]) && after.mods.length === 4) fail('side', `alchemy with a ${a.side} omen gave ${cnt(after, a.side)} ${a.side}es`);
-  if (a.op === 'bone' && a.lich && r.added.some((m) => E.lichOf(kb.mods[m.id]) !== a.lich)) fail('lich', `lich omen ${a.lich} gave ${r.added[0].id}`);
+  // a lich omen guarantees one of that lich's modifiers among the three offered (the first)
+  if (a.op === 'bone' && a.lich) for (const s of P.desSides(ctx, before, a)) {
+    const o = P.revealOptions(ctx, before, s, a.quality === 'Ancient' ? 40 : 0, a.lich, P.rngFrom(7));
+    if (!o.length || E.lichOf(kb.mods[o[0].id]) !== a.lich) fail('lich', `lich omen ${a.lich} offered ${o.length ? o[0].id : 'nothing'} first on the ${s}`);
+  }
   // a natural mod that came in must not be one the mods on the item at that moment stop (game data adds_tags, e.g.
   // no_cold_spell_mods): the kept mods and the ones this step added before it. Not symmetric: an Ignite suffix does not
   // stop a Physical spell level suffix, but the level suffix stops Ignite, so the order of arrival decides.
