@@ -16,6 +16,8 @@ This product isn't affiliated with or endorsed by Grinding Gear Games in any way
 | `app/planner.js` | Kurallar, 26 craft operatörü, Monte Carlo, profiller, tarif adayları ve beam search |
 | `app/guide.js` | Rehber iddialarını denetleme, kaynak katmanları, tarif kütüphanesi, lig kuralları |
 | `app/value.js` | Kaydedilen fiyatlardan item değeri tahmini |
+| `app/pricecheck.js` | Fiyat kontrolü: Exiled Exchange 2'nin trade araması (MIT lisansı, kaynak başlıkta) |
+| `scripts/coe_crosscheck.py` | Craft of Exile verisiyle karşılaştırma (tier'lar, ağırlıklar, desecrated), `reports/coe-crosscheck.md` |
 | `app/data/` | Tarifler ve karar kaydı, poe2db ağırlıkları, ikonlar, self-test sonuçları |
 | `app/tests/` | JS testleri (kabul testleri 10.1–10.5 dahil) |
 | `scripts/fetch_prices.py` | Resmi Currency Exchange özeti + Exiled Exchange 2 (poe.ninja) fiyatları |
@@ -47,6 +49,13 @@ python scripts/fetch_icons.py              # yeni fiyatlı eşyaların ikonları
 4. Paket yüklenemezse sayfa artifact veritabanındaki son kopyayı ya da sayfayla gelen `prices-snapshot.json` dosyasını kullanır.
 5. Paket, bilgi tabanının kaynağı olan RePoE PoE2 dışa aktarımının güncel oyun verisi sürümünü de taşır (`meta.gameData`). Bu sürüm bilgi tabanınınkinden yeniyse sayfada "veri eski olabilir" bandı çıkar; bilgi tabanı `scripts/kb_update.py` ile yeniden üretilince kaybolur.
 
+## Fiyat kontrolü (Exiled Exchange 2'den uyarlandı)
+
+- Value panelindeki **Price check**, Exiled Exchange 2'nin (MIT, © 2020 Alexander Drozdov ve katkıda bulunanlar) arama kurma kodunun uyarlamasıdır (`app/pricecheck.js`): hazır ayarlar (bitmiş Magic/Rare/Unique için "Pseudo", Normal ve craft değeri olan eşyalar için "Base item"), item filtreleri (kategori ya da base, rarity, item level, corrupted, mirrored, sanctified, fractured, rune soketi, kalite, gerekli seviye, açılmamış desecrated), pseudo toplamlar (direnç, attribute, can, mana, ES, hareket hızı), %20 kaliteye göre armour/evasion/ES ve DPS, ±%10 arama aralığı (unique'lerde roll aralığının payı), "# Empty Modifier" sayısı ve trade2 sorgusu.
+- Uyarlamalar: sayfa trade sitesini okuyamaz (Artifact CSP'si ve GGG ToS 7i), arama resmi sitede açılır; Corruption Enchantment'lar varsayılan açıktır (iki kez corrupted eşyalar bunlarla fiyatlanır); sanctified eşya sanctified eşyalarla karşılaştırılır. PoE Overlay II kapalı kaynak olduğu için yalnızca aynı tür arama davranışı alındı.
+- Her türde çalışır: unique (ad + base, değişken satırlar), normal base, magic (jewel'larda "magic" rarity), rare, corrupted, iki kez corrupted, sanctified, desecrated (açılmış ve açılmamış), fractured.
+- Fiyat listesi yalnızca giyilebilir eşyaların craft malzemelerini gösterir (fragment, gem, tablet, waystone, flask/charm malzemeleri yok).
+
 ## Workbench (Craft of Exile'dan esinlenildi)
 
 - Item panelindeki **Workbench** düğmesi, item'in bir kopyası üzerinde çalışır: **Emulator** (currency, orb tier'ı ve omen seçip rastgele sonucu görmek, geri almak, istenirse "Use as my item" ile ana item'e aktarmak) ve **Calculator** (All/Any/At least N/None gereksinim grupları, tek kullanımın olasılığı; gruplar hedeflerden başlar).
@@ -64,10 +73,10 @@ python scripts/fetch_icons.py              # yeni fiyatlı eşyaların ikonları
 - Flux (R_FLUX, t20): diğer elementlerin bütün direnç modları aynı tier'da hedef elemente döner, değer yeniden atılır; item'de o element zaten varsa ikisi birden kalır.
 - Topluluk kaynaklı, oyun içinde doğrulanacak: Rare jewel 4 modu geçebilir mi (t24: oyuncu ve Maxroll 4 diyor, rehberler 5 modlu jewel anlatıyor); Perfect essence ve liquid emotion dolu tarafta o taraftan mod siler (t25); Catalysing Exaltation'ın gücü (t8); essence'ların item level kontrolü (t18); Well of Souls seçeneklerinin kaçı özel (t31). Kaynakla kapananlar: T1 en iyi tier (t1, oyuncunun 25 modu), ikinci essence girmez (t3), Catalysing ile yan omen birleşir (t12, Maxroll), Alt+Ctrl+C mod tag'lerini içerir (t14), jewel'lar Transmutation/Regal ile craft edilir (t21, Maxroll). Doğrulananlar: Potent Contempt/Ferocity modu silinen tarafa ekler (t26), Runeforging modları korur, Runic Ward ekler ve 55+ base'lerde savunmayı düşürür (t28), Grasping Mail yüzük catalyst'lerini alır (t29), jewel'lara Orb of Chance kullanılamaz.
 - Unique jewel'lar (13) bilgi tabanında: base, sınır, bozuk düşme, satırları; her item'de değişen satırlar işaretli.
-- Expedition Tablet'in ikonu yok; Exiled Exchange 2 listesinde adresi bulunmuyor. Diğer bütün fiyatlı eşyaların ikonu var.
 - Beyaz bazdan başlayan planlarda yeni baza dönmek (Magic aşamasında iki hedef tutmazsa ya da Rare'de taraf dolunca) çoğu zaman pahalı omen'lerle düzeltmekten çok daha ucuzdur ama çok sayıda baz ister. Baz fiyatı (varsayılan 1 ex) ve eşya başına baz sınırı (varsayılan 100) oyuncunun girdisidir; piyasada o kadar baz bulunmayabilir. Sınırın ötesinde çok daha ucuz bir yol varsa plan bunu söyler.
 - Olasılıklar tahmindir: mod ağırlıkları poe2db'nin topluluk verisi (base-mod çiftlerinin %99,8'inde var; kalanlar ailenin en düşük ağırlığını alır), desecrated modlar eşit ağırlıklı, Catalysing Exaltation çarpanı (varsayılan ×5) tek kaynaklı ve ayarlanabilir.
-- Rare item değeri yalnızca kullanıcının kaydettiği fiyatlardan tahmin edilir; resmi fiyat geçmişi yok ve trade sitesine otomatik istek yasak (ToS 7i).
+- Rare item değeri yalnızca kullanıcının kaydettiği fiyatlardan tahmin edilir; resmi fiyat geçmişi yok ve trade sitesine otomatik istek yasak (ToS 7i). Price check aramayı kurar, sonuçları resmi sitede açar.
+- Oyun verisinde ve kaynaklarda olmayanlar (emülatörde tahminle ya da açıklamayla): Vaal Orb sonuçlarının oranı (~%25'er, Maxroll/Game8), Architect's Orb 50/50, Orb of Sacrifice'ın yükselttiği enchantment değeri, Orb of Chance'in taban başına oranları (emülatör olası unique'leri listeler), Altered Collarbone'un "otherworldly" modları, catalyst başına kalite (%1, 50 altı item level'da %2), Catalysing Exaltation'ın gücü (t8).
 - Unique fiyatları poe.ninja'dan gelir; ilan sayısı olmadığı için nadir unique'lerde gerçek satıştan uzak olabilir.
 - Ctrl+C (basit) metninde tier yoktur; aynı metne uyan hibrit ve yerel/genel modlar seçim için işaretlenir.
 - Standard ligde EE2 ile resmi özet arasındaki fark koruma sınırına yakın; lig kaynağı çalışmadan çalışmaya değişebilir.

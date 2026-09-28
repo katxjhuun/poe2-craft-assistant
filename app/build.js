@@ -12,6 +12,7 @@ html = html.replace('/*__ENGINE__*/', () => fs.readFileSync(path.join(here, 'eng
 html = html.replace('/*__PLANNER__*/', () => fs.readFileSync(path.join(here, 'planner.js'), 'utf8'));
 html = html.replace('/*__GUIDE__*/', () => fs.readFileSync(path.join(here, 'guide.js'), 'utf8'));
 html = html.replace('/*__VALUE__*/', () => fs.readFileSync(path.join(here, 'value.js'), 'utf8'));
+html = html.replace('/*__PRICECHECK__*/', () => fs.readFileSync(path.join(here, 'pricecheck.js'), 'utf8'));
 html = html.replace('/*__SAMPLES__*/', () => fs.readFileSync(path.join(here, 'samples.js'), 'utf8'));
 fs.writeFileSync(path.join(dist, 'index.html'), html);
 

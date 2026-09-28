@@ -225,6 +225,17 @@ details.notes[open] summary { margin-bottom: 6px; }
 .dd-opt { display: flex; gap: 10px; align-items: baseline; }
 .dd-opt .dd-t { flex: 1; min-width: 0; }
 .dd-p { font: 12px/1.3 var(--f-ui, system-ui); color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pc { display: grid; gap: 8px; margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; }
+.pc-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.pc-item { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 13px; align-items: center; }
+.pc-item label { display: inline-flex; gap: 5px; align-items: center; }
+.pc-item input[type=number], .pc-row input[type=number] { width: 70px; }
+.pc-stats { display: grid; gap: 4px; }
+.pc-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: 6px; align-items: center; font-size: 13px; }
+.pc-row .t { min-width: 0; overflow-wrap: anywhere; }
+.pc-row .tag { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-left: 6px; }
+.pc-row.off .t { color: var(--muted); }
+@media (max-width: 520px) { .pc-row { grid-template-columns: auto minmax(0, 1fr); } .pc-row input { grid-column: 2; } }
 .bench { display: grid; grid-template-columns: minmax(280px, 380px) 1fr; gap: 18px; align-items: start; }
 .bench h3 { margin: 0 0 8px; font-size: 13px; }
 .bench .b-col { display: grid; gap: 14px; min-width: 0; }
@@ -709,6 +720,9 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
 /*__VALUE__*/
 </script>
 <script>
+/*__PRICECHECK__*/
+</script>
+<script>
 /*__SAMPLES__*/
 </script>
 <script>
@@ -718,6 +732,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   const P = window.PoE2Planner;
   const G = window.PoE2Guide;
   const V = window.PoE2Value;
+  const PC = window.PoE2PriceCheck;
   const SAMPLES = window.PoE2Samples;
   const $ = (s, r = document) => r.querySelector(s);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -727,7 +742,11 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   };
 
   const EX = 'CurrencyAddModToRare', DIV = 'CurrencyModValues', CHAOS = 'CurrencyRerollRare';
-  const CATS = ['Currency', 'Omens', 'Essences', 'Abyss', 'Catalysts', 'Delirium', 'Verisium', 'Runes & Cores', 'Fragments', 'Gems'];
+  // Crafting materials for wearable gear only (user, 28 Sept 2026): no fragments, gems, tablets, waystones, flask or charm currency.
+  const CATS = ['Currency', 'Omens', 'Essences', 'Abyss', 'Catalysts', 'Delirium', 'Verisium', 'Runes & Cores'];
+  const OUT_OF_SCOPE = /Jeweller's Orb|Gemcutter's Prism|Glassblower's Bauble|Splinter|Tablet|Waystone|Logbook|Reliquary Key|Crisis Fragment|Breachstone|Simulacrum|Thaumaturgic Flux|Perfect Flux|Uncut .* Gem/;
+  /** Is this price row a crafting material for wearable gear? */
+  const inScope = (r) => r && CATS.includes(r.cat || r[1]) && !OUT_OF_SCOPE.test(r.name || r[0] || '');
   const CAT_ICON = { Currency: EX, Omens: 'OmenOnExaltConsumeQuality', Abyss: 'AbyssalBenchTicketArmour' };
   const FALLBACK_LEAGUES = ['Forbidden Rites', 'Runes of Aldur', 'Standard', 'HC Forbidden Rites'];
   const LOCK = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.2" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>';
@@ -2233,26 +2252,6 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const c = v > 0.5 ? 'up' : v < -0.5 ? 'down' : 'muted';
     return `<span class="${c} money">${v > 0 ? '+' : v < 0 ? '−' : ''}${icon(EX, 'Exalted Orb', 'sm')}${fmtShort(Math.abs(v))}</span>`;
   }
-  function tradeUrl(item) {
-    const stats = [];
-    for (const m of item.mods) {
-      if (!m.modId) continue;
-      for (const ln of m.text.split('\n')) {
-        const st = S.ix.statByNorm.get(E.normalize(ln));
-        if (!st || !st.ids) continue;
-        const kind = m.fractured ? 'fractured' : m.desecrated ? 'desecrated' : m.crafted ? 'crafted' : 'explicit';
-        const ids = st.ids[kind] || st.ids.explicit;
-        if (!ids) continue;
-        const v = E.lineValues(ln);
-        stats.push({ id: ids[0], value: v.length ? { min: Math.floor(Math.abs(v[0]) * 0.85 * 100) / 100 } : {}, disabled: false });
-      }
-    }
-    const query = { status: { option: 'online' }, stats: [{ type: 'and', filters: stats }] };
-    if (item.rarity === 'Unique' && item.name) { query.name = item.name; query.type = item.base; }
-    else { query.type = item.base; query.filters = { type_filters: { filters: { rarity: { option: 'nonunique' } } } }; }
-    const q = { query, sort: { price: 'asc' } };
-    return `https://www.pathofexile.com/trade2/search/poe2/${encodeURIComponent(S.league || 'Standard')}?q=${encodeURIComponent(JSON.stringify(q))}`;
-  }
   function toEx(amount, cur) {
     const a = parseFloat(amount);
     if (!(a > 0)) return null;
@@ -2295,12 +2294,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
         <dt>To reach goals</dt><dd>${toGoalHtml()}</dd>
       </dl>
       <p class="sub" style="margin:10px 0 0">${how}${top.length ? ` Most value: ${top.map((c) => esc(c.text)).join('; ')}.` : ''}</p>
-      <div class="price-foot">
-        <a class="btn small primary" href="${esc(tradeUrl(it))}" target="_blank" rel="noopener" title="Opens the official trade search with this item's mods (min 85% of each value)">Check on trade ↗</a>
-        <button class="btn small" id="copyRecipe" type="button">Copy search</button>
-        <button class="linkish" id="showRecipe" type="button">${S.showRecipe ? 'Hide' : 'Show'} search</button>
-      </div>
-      ${S.showRecipe ? `<pre class="recipe" id="recipe">${esc(tradeRecipe())}</pre>` : ''}
+      ${pcHtml(it)}
       <div class="logrow">
         <label for="logAmt" class="sub">Log a price for this item</label>
         <div class="logctl"><input id="logAmt" inputmode="decimal" placeholder="amount" value="${esc(S.logAmt || '')}">
@@ -2315,6 +2309,60 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       ${S.showObs ? `<div class="obs-list">${obs.slice().sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 30).map((o) => `<div class="obs"><span>${esc(o.name || o.base)} · ${o.feats.length} mods · ${esc(o.kind || 'listed')}</span><span class="money">${icon(EX, 'Exalted Orb', 'sm')}${fmtShort(o.ex)}</span><button class="icon-btn" type="button" data-rmobs="${esc(o.id)}" aria-label="Remove this price"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>`).join('')}</div>` : ''}
       ${f ? `<div class="${f.ageH >= 3 ? 'bad-note' : 'sub'}" style="margin-top:10px">Currency: ${esc(f.label)}${f.ageH >= 3 ? ` \u2014 ${Math.floor(f.ageH)} hours old; the hourly update has not run. Costs may be off.` : ''}</div>` : ''}`;
   }
+  // ------------------------------------------------------------ price check (Exiled Exchange 2's search, app/pricecheck.js)
+  /** The price check of the current item: Exiled Exchange 2's presets, rebuilt when the item changes. */
+  function pcState(it) {
+    const key = it ? [it.base, it.rarity, it.name, it.ilvl, (it.mods || []).map((m) => m.text).join('|'), (it.implicits || []).map((m) => m.text).join('|'), JSON.stringify(it.flags || {})].join('#') : '';
+    if (!S.pc || S.pc.key !== key) {
+      let pr = null;
+      try { pr = it && it.base ? PC.createPresets(S.ix, E, it) : null; } catch (e) { pr = null; }
+      S.pc = { key, presets: pr ? pr.presets : [], active: pr ? pr.active : null, showAll: false };
+    }
+    return S.pc;
+  }
+  function pcPreset() { const st = S.pc; return st && (st.presets.find((p) => p.id === st.active) || st.presets[0]); }
+  function pcUrl(it) { const p = pcPreset(); return p ? PC.tradeUrl(S.league, PC.tradeRequest(S.ix, E, p, it)) : null; }
+  function pcHtml(it) {
+    const st = pcState(it);
+    const p = pcPreset();
+    if (!p) return '';
+    const f = p.filters;
+    const tabs = st.presets.length > 1 ? `<div class="pc-tabs">${st.presets.map((x) => `<button type="button" class="chip" data-pcpreset="${esc(x.id)}" aria-pressed="${x.id === p.id}">${esc(x.id === 'exact' ? 'Base item' : 'Pseudo')}</button>`).join('')}</div>` : '';
+    const chk = (id, on, label) => `<label><input type="checkbox" data-pcf="${id}" ${on ? 'checked' : ''}>${label}</label>`;
+    const items = [];
+    if (f.search.name) items.push(`<span>${esc(f.search.name)} · ${esc(f.search.type || '')}</span>`);
+    else if (f.category) items.push(chk('category', !f.category.disabled, `Any ${esc(it.itemClass || 'item')} base`) + (f.category.disabled ? ` <span class="sub">${esc(f.search.type)}</span>` : ''));
+    else items.push(`<span>${esc(f.search.type || '')}</span>`);
+    if (f.rarity) items.push(`<span class="sub">Rarity: ${esc(f.rarity === 'nonunique' ? 'any non-unique' : f.rarity)}</span>`);
+    if (f.itemLevel) items.push(chk('itemLevel', !f.itemLevel.disabled, `Item level ≥ <input type="number" data-pcn="itemLevel" value="${esc(f.itemLevel.value)}">`));
+    if (f.corrupted) {
+      const cur = f.corrupted.force != null ? String(f.corrupted.force) : f.corrupted.value === false || f.corrupted.exact ? String(f.corrupted.value) : 'any';
+      items.push(`<label>Corrupted <select data-pcsel="corrupted"><option value="any" ${cur === 'any' ? 'selected' : ''}>any</option><option value="true" ${cur === 'true' ? 'selected' : ''}>yes</option><option value="false" ${cur === 'false' ? 'selected' : ''}>no</option></select></label>`);
+    }
+    if (f.sanctified) items.push(chk('sanctified', !f.sanctified.disabled, 'Sanctified'));
+    if (f.fractured) items.push(chk('fractured', f.fractured.value === false, 'Not fractured'));
+    if (f.runeSockets) items.push(chk('runeSockets', !f.runeSockets.disabled, `Rune sockets ≥ ${esc(f.runeSockets.value)}`));
+    if (f.quality) items.push(chk('quality', !f.quality.disabled, `Quality ≥ ${esc(f.quality.value)}%`));
+    if (f.requiresLevel) items.push(chk('requiresLevel', !f.requiresLevel.disabled, `Required level ≤ ${esc(f.requiresLevel.value)}`));
+    if (f.veiled) items.push(chk('veiled', !f.veiled.disabled, `${esc(f.veiled.count)} unrevealed`));
+    const tagName = { property: 'property', pseudo: 'pseudo', explicit: '', implicit: 'implicit', corrupted: 'corruption', desecrated: 'desecrated', fractured: 'fractured', crafted: 'crafted', rune: 'rune', enchant: 'enchant' };
+    const rows = p.stats.map((s, i) => ({ s, i })).filter(({ s }) => st.showAll || !s.hidden).map(({ s, i }) => {
+      const r = s.roll;
+      return `<div class="pc-row ${s.disabled ? 'off' : ''}"><input type="checkbox" data-pcs="${i}" ${s.disabled ? '' : 'checked'} aria-label="Use this line">
+        <span class="t">${esc(s.text)}${tagName[s.tag] ? `<span class="tag">${esc(tagName[s.tag])}</span>` : ''}</span>
+        ${r ? `<input type="number" data-pcmin="${i}" value="${r.min != null ? esc(r.min) : ''}" placeholder="min" aria-label="Minimum"><input type="number" data-pcmax="${i}" value="${r.max != null ? esc(r.max) : ''}" placeholder="max" aria-label="Maximum">` : '<span></span><span></span>'}</div>`;
+    }).join('');
+    const hidden = p.stats.filter((s) => s.hidden).length;
+    const url = pcUrl(it);
+    return `<div class="pc"><div class="b-row" style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b style="font-size:13px">Price check</b><span class="sub">Exiled Exchange 2's search, ±${PC.SEARCH_RANGE}%</span></div>
+      ${tabs}<div class="pc-item">${items.join('')}</div>
+      <div class="pc-stats">${rows || '<span class="sub">No modifier lines to search.</span>'}</div>
+      ${hidden ? `<button class="linkish" type="button" id="pcAll">${st.showAll ? 'Hide' : 'Show'} ${hidden} more line${hidden === 1 ? '' : 's'}</button>` : ''}
+      <div class="price-foot" style="border-top:0;margin-top:0;padding-top:0">
+        ${url ? `<a class="btn small primary" id="pcGo" href="${esc(url)}" target="_blank" rel="noopener" title="Opens the official trade site with this search; the page cannot read the results itself">Search on trade ↗</a>` : ''}
+        <button class="btn small" id="copyRecipe" type="button">Copy search</button></div></div>`;
+  }
+  function pcRefreshLink() { const a = $('#pcGo'); if (a && S.item) a.href = pcUrl(S.item); }
   function toGoalHtml() {
     const pl = S.plans && S.plans.profiles[S.planTab];
     if (!pl || !pl.steps) return '<span class="muted" style="font-weight:400;font-size:15px">—</span>';
@@ -2336,11 +2384,30 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     }
     return lines.join('\n');
   }
-  $('#pricePanel').addEventListener('input', (e) => { if (e.target.id === 'logAmt') S.logAmt = e.target.value; });
-  $('#pricePanel').addEventListener('change', (e) => { if (e.target.id === 'logCur') S.logCur = e.target.value; });
+  $('#pricePanel').addEventListener('input', (e) => {
+    if (e.target.id === 'logAmt') S.logAmt = e.target.value;
+    const p = pcPreset(), t = e.target, num = (v) => (v === '' ? undefined : +v);
+    if (!p) return;
+    if (t.dataset.pcmin != null) { p.stats[+t.dataset.pcmin].roll.min = num(t.value); pcRefreshLink(); }
+    else if (t.dataset.pcmax != null) { p.stats[+t.dataset.pcmax].roll.max = num(t.value); pcRefreshLink(); }
+    else if (t.dataset.pcn === 'itemLevel') { p.filters.itemLevel.value = +t.value || 1; pcRefreshLink(); }
+  });
+  $('#pricePanel').addEventListener('change', (e) => {
+    if (e.target.id === 'logCur') S.logCur = e.target.value;
+    const p = pcPreset(), t = e.target;
+    if (!p) return;
+    if (t.dataset.pcs != null) { p.stats[+t.dataset.pcs].disabled = !t.checked; renderPrice(); }
+    else if (t.dataset.pcf) {
+      const k = t.dataset.pcf, f = p.filters[k];
+      if (k === 'fractured') f.value = t.checked ? false : undefined; else f.disabled = !t.checked;
+      renderPrice();
+    } else if (t.dataset.pcsel === 'corrupted') { p.filters.corrupted.force = t.value === 'any' ? null : t.value === 'true'; if (t.value === 'any') { p.filters.corrupted.exact = false; p.filters.corrupted.value = true; } renderPrice(); }
+  });
   $('#pricePanel').addEventListener('click', async (e) => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.id === 'showRecipe') { S.showRecipe = !S.showRecipe; renderPrice(); }
+    if (b.dataset.pcpreset) { S.pc.active = b.dataset.pcpreset; renderPrice(); return; }
+    if (b.id === 'pcAll') { S.pc.showAll = !S.pc.showAll; renderPrice(); return; }
     if (b.id === 'showObs') { S.showObs = !S.showObs; renderPrice(); }
     if (b.dataset.rmobs) { removeObservation(b.dataset.rmobs); }
     if (b.id === 'logSave') {
@@ -2352,9 +2419,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     }
     if (b.id === 'addComparable') openPaste(false, 'comparable');
     if (b.id === 'copyRecipe') {
-      const txt = tradeRecipe();
+      const p = pcPreset();
+      const txt = p ? JSON.stringify(PC.tradeRequest(S.ix, E, p, S.item), null, 2) : tradeRecipe();
       const done = () => { b.textContent = 'Copied'; setTimeout(() => { b.textContent = 'Copy search'; }, 1500); };
-      const fail = () => { S.showRecipe = true; renderPrice(); const r = document.createRange(); r.selectNodeContents($('#recipe')); const s = getSelection(); s.removeAllRanges(); s.addRange(r); };
+      const fail = () => { b.textContent = 'Copy failed'; };
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, fail); else fail();
     }
   });
@@ -3454,7 +3522,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const sids = S.prices ? Object.keys(S.prices.items)
       : [...S.ix.kb.currency_roster.Currency, ...S.ix.kb.currency_roster.Omen].map((n) => S.sidByName[n]).filter(Boolean);
     let rows = sids.map((sid) => priceRow(sid) || { sid, name: S.nameBySid[sid] || sid, cat: /^Omen/.test(S.nameBySid[sid] || '') ? 'Omens' : 'Currency', ex: null, vol: 0 })
-      .filter((r) => (r.ex != null || !S.prices) && (S.ex.cat === 'All' || r.cat === S.ex.cat) && q.every((t) => r.name.toLowerCase().includes(t)));
+      .filter((r) => (r.ex != null || !S.prices) && inScope(r) && (S.ex.cat === 'All' || r.cat === S.ex.cat) && q.every((t) => r.name.toLowerCase().includes(t)));
     const k = S.ex.sort;
     rows.sort((a, b) => k === 'name' || !S.prices ? a.name.localeCompare(b.name) : k === 'price' ? b.ex - a.ex : k === 'chg' ? Math.abs(b.ch || 0) - Math.abs(a.ch || 0) : b.ex * b.vol - a.ex * a.vol);
     return rows;
@@ -3476,7 +3544,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       return;
     }
     const counts = {};
-    for (const r of Object.values(S.prices.items)) if (r[2] != null) counts[r[1]] = (counts[r[1]] || 0) + 1;
+    for (const r of Object.values(S.prices.items)) if (r[2] != null && inScope(r)) counts[r[1]] = (counts[r[1]] || 0) + 1;
     const total = Object.values(counts).reduce((a, b) => a + b, 0);
     const tabIcon = (c) => {
       const sid = CAT_ICON[c] || (Object.entries(S.prices.items).find(([s, r]) => r[1] === c && S.icons[s]) || [])[0];
