@@ -1887,7 +1887,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (prev) prev.mods.filter((m) => !now.has(modKey(m))).forEach((m) => rows.push(plainRow('', false, esc(m.text), 'removed', '')));
     const pre = item.runes.map((r) => plainRow('', false, kw(esc(r.text)), 'pale', '')).concat(item.implicits.map((m, i) => plainRow('Implicit', i === 0, kw(esc(m.text)), m.corruption ? 'vaal' : '', m.corruption ? 'V' : 'I')));
     const st = [item.flags.sanctified ? '<div class="tt-status sanct">Sanctified</div>' : '', item.flags.corrupted ? '<div class="tt-status corrupted">Corrupted</div>' : ''].join('');
-    const blocks = [`<div class="tt-prop w"><span class="kw">${esc(item.itemClass || 'Item')}</span>: Item Level ${item.ilvl == null ? '?' : item.ilvl}</div>`];
+    const blocks = [`<div class="tt-prop w"><span class="kw">${esc(item.itemClass || 'Item')}</span>: Item Level ${item.ilvl == null ? '?' : item.ilvl}</div>`
+      + (item.quality ? `<div class="tt-prop">Quality${item.qualityType ? ` (${esc(item.qualityType)})` : ''}: <span class="kw">+${esc(item.quality)}%</span></div>` : '')];
     if (pre.length) blocks.push(`<div class="tt-rows">${pre.join('')}</div>`);
     blocks.push(rows.length ? `<div class="tt-rows">${rows.join('')}</div>` : '<div class="tt-prop">No explicit modifiers</div>');
     if (st) blocks.push(st);

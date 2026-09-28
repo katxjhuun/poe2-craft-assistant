@@ -812,15 +812,19 @@
   /** The modifier a Rune of Aldur turns this one into: its id with the element named the rune's way (same tier), if it exists. */
   function aldurTwin(ctx, id, to) {
     const m = ctx.kb.mods[id];
+    const pe = ctx.pool.get(id);
     for (const el of ELEMENT_WORDS) {
       if (el === to || !id.includes(el)) continue;
-      const twin = id.split(el).join(to);
-      if (ctx.kb.mods[twin]) return twin;
-      // ids are not always parallel (a trailing "_"): the same tier of the family named the other way on this base
+      // the same tier of the family named the other way on this base; when that family has fewer tiers, its lowest one
+      // (ids are not parallel across elements: LocalAddedChaosDamage1 is level 83, LocalAddedFireDamage1 level 1)
       const fam = m && m.fam ? m.fam.split(el).join(to) : null;
-      const pe = ctx.pool.get(id);
-      const hit = fam && pe && [...ctx.pool.entries()].find(([x, e]) => ctx.kb.mods[x].fam === fam && e.side === pe.side && e.tier === pe.tier);
-      if (hit) return hit[0];
+      const same = fam && pe ? [...ctx.pool.entries()].filter(([x, e]) => ctx.kb.mods[x].fam === fam && e.side === pe.side) : [];
+      if (same.length) {
+        const hit = same.find(([, e]) => e.tier === pe.tier) || same.sort((a, b) => ctx.kb.mods[a[0]].lvl - ctx.kb.mods[b[0]].lvl)[0];
+        return hit[0];
+      }
+      const twin = id.split(el).join(to); // not on this base's pool: the twin by id
+      if (ctx.kb.mods[twin]) return twin;
     }
     return null;
   }

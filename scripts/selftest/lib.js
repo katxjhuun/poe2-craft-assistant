@@ -89,6 +89,9 @@ function renderItem(item, r, mode) {
   out.push(item.base, '--------');
   if (item.quality) out.push(`Quality${item.qualityType ? ` (${item.qualityType})` : ''}: +${item.quality}% (augmented)`, '--------');
   out.push(`Item Level: ${item.ilvl}`);
+  // runes socketed during a walk (Medved's Tending, Astrid's Creativity, Serle's Triumph): their lines, so the parser knows
+  const runeLines = (item.runes || []).flatMap((n) => ((((kb.augments[n] || {}).by_class || {})[item.cls] || {}).txt || []).map((t) => `${t} (rune)`));
+  if (runeLines.length) out.push('--------', ...runeLines);
   const rolled = [];
   if (item.mods.length) {
     out.push('--------');

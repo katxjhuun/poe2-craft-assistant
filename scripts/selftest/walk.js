@@ -77,7 +77,8 @@ function checkStep(ctx, before, a, r) {
   if (new Set(g).size !== g.length) fail('groups', 'two modifiers of one group: ' + g.filter((x, i) => g.indexOf(x) !== i).join(','));
   // Natural and desecrated mods need their level <= item level. Essence (crafted) mods are left out: whether essences
   // check item level is not in the data (open question t18); the self-test counts them separately.
-  for (const m of after.mods) if (m.id && !m.crafted && kb.mods[m.id].lvl > ctx.ilvl) fail('ilvl', `${m.id} level ${kb.mods[m.id].lvl} > item level ${ctx.ilvl}`);
+  // (a Rune of Aldur's transformed modifiers are shown whatever their level: the rune changes them, nothing rolls)
+  for (const m of after.mods) if (m.id && !m.crafted && !m.aldur && kb.mods[m.id].lvl > ctx.ilvl) fail('ilvl', `${m.id} level ${kb.mods[m.id].lvl} > item level ${ctx.ilvl}`);
   if (a.op !== 'newbase') {
     for (const m of before.mods) if (m.frac && !after.mods.some((x) => x.frac && key(x) === key(m))) fail('fractured', `fractured ${m.id} removed or changed by ${a.op}`);
     if (r.removed.some((m) => m.frac)) fail('fractured', 'a fractured modifier was removed');
@@ -175,8 +176,11 @@ function checkStep(ctx, before, a, r) {
 function roundTrip(ctx, st, r) {
   const { ix, kb } = load();
   const out = [];
-  if (st.rarity === 'Normal' || st.mods.some((m) => !m.id)) return out;
-  const item = { base: ctx.item.base, cls: ctx.cls, rarity: st.rarity, ilvl: ctx.ilvl, mods: st.mods };
+  // a Rune of Aldur shows transformed modifiers only while socketed; Soul modifiers (Medved's Tending socketed during the
+  // walk) share their text with natural ones, so without the mod name a plain copy cannot tell them apart (the page asks
+  // with "Pick"): skip both
+  if (st.rarity === 'Normal' || st.mods.some((m) => !m.id) || st.aldur || st.soul) return out;
+  const item = { base: ctx.item.base, cls: ctx.cls, rarity: st.rarity, ilvl: ctx.ilvl, mods: st.mods, runes: st.runes };
   for (const mode of ['adv', 'simple']) {
     const t = renderItem(item, r, mode);
     const p = E.parseItem(ix, t.text).item;

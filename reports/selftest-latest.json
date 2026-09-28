@@ -1,6 +1,6 @@
 {
  "meta": {
-  "date": "2026-09-27T22:46:07.813Z",
+  "date": "2026-09-28T10:59:40.827Z",
   "quick": false,
   "bases": 56,
   "scenarios": 777,
@@ -8,121 +8,128 @@
   "strategyRuns": 48532,
   "trials": 300,
   "maxSteps": 400,
-  "walkSteps": 1086228,
-  "roundTrips": 217297,
+  "walkSteps": 1086035,
+  "roundTrips": 217261,
   "prices": {
    "league": "Forbidden Rites",
    "hourTo": 1790470800,
    "source": ".kb_cache/out",
    "feed": "Exiled Exchange 2 price feed (poe.ninja data, unofficial)"
   },
-  "weights": "2026-09-27",
+  "weights": "2026-09-28",
   "workers": 30,
-  "seconds": 645,
+  "seconds": 1134,
   "skipped": [],
-  "errors": 0
+  "errors": 0,
+  "checksRun": "2026-09-28T11:05:18.615Z"
  },
  "checks": [
   {
    "id": "crash",
-   "n": 1086228,
+   "n": 1086035,
    "fail": 0,
    "examples": []
   },
   {
    "id": "slots",
-   "n": 1086228,
+   "n": 1086035,
    "fail": 0,
    "examples": []
   },
   {
    "id": "crafted",
-   "n": 1086228,
+   "n": 1086035,
    "fail": 0,
    "examples": []
   },
   {
    "id": "desecrated",
-   "n": 1086228,
+   "n": 1086035,
    "fail": 0,
    "examples": []
   },
   {
    "id": "groups",
-   "n": 1086228,
+   "n": 1086035,
    "fail": 0,
    "examples": []
   },
   {
    "id": "ilvl",
-   "n": 1086228,
+   "n": 1086035,
    "fail": 0,
    "examples": []
   },
   {
    "id": "fractured",
-   "n": 1086228,
+   "n": 1086035,
    "fail": 0,
    "examples": []
   },
   {
    "id": "floor",
-   "n": 1086228,
+   "n": 1086035,
    "fail": 0,
    "examples": []
   },
   {
    "id": "effect",
-   "n": 1086228,
+   "n": 1086035,
    "fail": 0,
    "examples": []
   },
   {
    "id": "side",
-   "n": 1086228,
+   "n": 1086035,
    "fail": 0,
    "examples": []
   },
   {
    "id": "lich",
-   "n": 1086228,
+   "n": 1086035,
    "fail": 0,
    "examples": []
   },
   {
    "id": "pool",
-   "n": 1086228,
+   "n": 1086035,
    "fail": 0,
    "examples": []
   },
   {
    "id": "whittle",
-   "n": 1086228,
+   "n": 1086035,
    "fail": 0,
    "examples": []
   },
   {
    "id": "light",
-   "n": 1086228,
+   "n": 1086035,
    "fail": 0,
    "examples": []
   },
   {
    "id": "tags",
-   "n": 1086228,
+   "n": 1086035,
+   "fail": 0,
+   "examples": []
+  },
+  {
+   "id": "homog",
+   "n": 1086035,
    "fail": 0,
    "examples": []
   },
   {
    "id": "parse-adv",
-   "n": 217297,
+   "n": 217261,
    "fail": 0,
    "examples": []
   },
   {
    "id": "parse-adv-flagged",
-   "n": 217297,
-   "fail": 302,
+   "n": 217261,
+   "fail": 26,
    "examples": [
     "Permafrost Staff: EssenceSpellSkillLevel2H1 read as GlobalSpellGemsLevelTwoHandWeapon4 (ambiguous), right mod listed as a candidate",
     "Permafrost Staff: EssenceSpellSkillLevel2H1 read as GlobalSpellGemsLevelTwoHandWeapon4 (ambiguous), right mod listed as a candidate",
@@ -131,38 +138,41 @@
   },
   {
    "id": "parse-simple",
-   "n": 217297,
+   "n": 217261,
    "fail": 0,
    "examples": []
   },
   {
    "id": "parse-simple-exact",
-   "n": 217297,
-   "fail": 16795,
+   "n": 217261,
+   "fail": 14467,
    "examples": [
-    "Diamond: P2DB_ColdDamagePercentage_p1 read as AbyssModJewelPrefixColdDamageAndPen (ambiguous), right mod listed as a candidate; P2DB_ColdResistancePenetration_p1 read as AbyssModJewelPrefixColdDamageAndPen (ambiguous), right mod listed as a candidate",
-    "Feathered Raiment: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate",
-    "Feathered Raiment: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate",
-    "Feathered Raiment: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate",
-    "Aegis Quarterstaff: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate"
+    "Fanatic Bow: EssenceAbyssSuffix read as EssenceAbyssPrefix, right mod listed as a candidate",
+    "Fanatic Bow: LocalAddedPhysicalDamage8 read as LocalAddedPhysicalDamage9, right mod listed as a candidate",
+    "Fanatic Bow: LocalAddedPhysicalDamage6 read as LocalAddedPhysicalDamage7, right mod listed as a candidate",
+    "Aegis Quarterstaff: LocalAddedPhysicalDamageTwoHand6 read as LocalAddedPhysicalDamageTwoHand7, right mod listed as a candidate",
+    "Aegis Quarterstaff: LocalAddedPhysicalDamageTwoHand6 read as LocalAddedPhysicalDamageTwoHand7, right mod listed as a candidate"
    ]
   }
  ],
  "ops": {
-  "transmute": 19405,
-  "augment": 1632,
-  "annul": 200712,
-  "regal": 5697,
-  "liquid": 22507,
-  "exalt": 238385,
-  "chaos": 389386,
-  "bone": 22371,
-  "divine": 38416,
-  "fracture": 15837,
-  "alchemy": 25907,
-  "pessence": 69379,
-  "flux": 25814,
-  "essence": 10780
+  "alchemy": 25591,
+  "aldur": 6453,
+  "exalt": 235096,
+  "chaos": 339089,
+  "annul": 176958,
+  "pessence": 80441,
+  "rune_rule": 42007,
+  "fracture": 15113,
+  "divine": 32890,
+  "transmute": 19150,
+  "augment": 1563,
+  "essence": 10320,
+  "bone": 19237,
+  "regal": 5864,
+  "catalyst": 23910,
+  "liquid": 19278,
+  "flux": 33075
  },
  "freq": {
   "tests": 112,
@@ -175,8 +185,8 @@
   {
    "id": "sideOmens",
    "label": "Sinistral/Dextral omens (aim the side)",
-   "scenarios": 771,
-   "comparisons": 7768,
+   "scenarios": 770,
+   "comparisons": 7762,
    "verdict": "mixed",
    "cheaper": 0.14,
    "costlier": 0.52,
@@ -188,14 +198,14 @@
    "byTier": [
     {
      "name": "base",
-     "n": 4347,
-     "ratio": 1.063,
-     "cheaper": 0.13
+     "n": 4343,
+     "ratio": 1.062,
+     "cheaper": 0.12
     },
     {
      "name": "greater",
-     "n": 3387,
-     "ratio": 1.053,
+     "n": 3384,
+     "ratio": 1.052,
      "cheaper": 0.15
     }
    ],
@@ -203,20 +213,20 @@
     {
      "name": "desecrated · rare",
      "n": 16,
-     "ratio": 0.767,
+     "ratio": 0.706,
      "cheaper": 1
     },
     {
      "name": "pair-prefix-suffix-T2 · white",
      "n": 1150,
-     "ratio": 1.035,
-     "cheaper": 0.14
+     "ratio": 1.031,
+     "cheaper": 0.15
     },
     {
      "name": "catalyst-life · rare",
      "n": 32,
      "ratio": 1.039,
-     "cheaper": 0.06
+     "cheaper": 0.03
     }
    ],
    "hurtsMost": [
@@ -233,13 +243,13 @@
      "cheaper": 0.12
     },
     {
-     "name": "single-prefix-rare-T1 · rare",
-     "n": 450,
-     "ratio": 1.073,
-     "cheaper": 0.15
+     "name": "single-prefix-rare-T1 · rare-low",
+     "n": 451,
+     "ratio": 1.076,
+     "cheaper": 0.1
     }
    ],
-   "text": "Cheaper per success in 14% of 7734 comparisons (median x1.06), more likely to finish in 14%, less likely in 1%. By orb tier: base x1.06, greater x1.05."
+   "text": "Cheaper per success in 14% of 7727 comparisons (median x1.06), more likely to finish in 14%, less likely in 1%. By orb tier: base x1.06, greater x1.05."
   },
   {
    "id": "greaterExalt",
@@ -283,47 +293,47 @@
   {
    "id": "erasure",
    "label": "Erasure omen on Chaos Orbs (vs plain Chaos)",
-   "scenarios": 777,
-   "comparisons": 8026,
+   "scenarios": 776,
+   "comparisons": 8012,
    "verdict": "con",
    "cheaper": 0.03,
-   "costlier": 0.96,
-   "likelier": 0.29,
+   "costlier": 0.97,
+   "likelier": 0.28,
    "lessLikely": 0,
-   "medianCostRatio": 13.589,
+   "medianCostRatio": 13.611,
    "medianSuccessDelta": 0,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "base",
-     "n": 2342,
-     "ratio": 39.8,
+     "n": 2338,
+     "ratio": 39.835,
      "cheaper": 0
     },
     {
      "name": "greater",
-     "n": 3356,
-     "ratio": 13.807,
+     "n": 3350,
+     "ratio": 13.819,
      "cheaper": 0
     },
     {
      "name": "perfect",
-     "n": 2240,
-     "ratio": 1.281,
-     "cheaper": 0.1
+     "n": 2236,
+     "ratio": 1.286,
+     "cheaper": 0.09
     }
    ],
    "helpsMost": [
     {
      "name": "pair-prefix-suffix-T2 · white",
      "n": 1260,
-     "ratio": 8.938,
+     "ratio": 8.874,
      "cheaper": 0.11
     },
     {
      "name": "pair-prefix-suffix-T2 · rare",
      "n": 630,
-     "ratio": 10.426,
+     "ratio": 10.376,
      "cheaper": 0.09
     },
     {
@@ -335,50 +345,50 @@
    ],
    "hurtsMost": [
     {
+     "name": "single-prefix-rare-T1 · white",
+     "n": 413,
+     "ratio": 19.793,
+     "cheaper": 0
+    },
+    {
      "name": "essence-reachable · white",
      "n": 430,
      "ratio": 19.786,
      "cheaper": 0
     },
     {
-     "name": "single-prefix-rare-T1 · white",
+     "name": "single-prefix-rare-T1 · rare",
      "n": 413,
-     "ratio": 19.724,
-     "cheaper": 0
-    },
-    {
-     "name": "catalyst-life · rare",
-     "n": 28,
-     "ratio": 19.701,
+     "ratio": 19.756,
      "cheaper": 0
     }
    ],
-   "text": "Cheaper per success in 3% of 7938 comparisons (median x14), more likely to finish in 29%, less likely in 0%. By orb tier: base x40, greater x14, perfect x1.28."
+   "text": "Cheaper per success in 3% of 7924 comparisons (median x14), more likely to finish in 28%, less likely in 0%. By orb tier: base x40, greater x14, perfect x1.29."
   },
   {
    "id": "whittle",
    "label": "Omen of Whittling (vs Erasure)",
-   "scenarios": 771,
-   "comparisons": 3406,
+   "scenarios": 770,
+   "comparisons": 3400,
    "verdict": "con",
-   "cheaper": 0.21,
+   "cheaper": 0.2,
    "costlier": 0.72,
-   "likelier": 0.01,
-   "lessLikely": 0.31,
-   "medianCostRatio": 1.668,
+   "likelier": 0,
+   "lessLikely": 0.3,
+   "medianCostRatio": 1.634,
    "medianSuccessDelta": 0,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "greater",
-     "n": 1109,
-     "ratio": 1.588,
+     "n": 1107,
+     "ratio": 1.579,
      "cheaper": 0.29
     },
     {
      "name": "perfect",
-     "n": 2216,
-     "ratio": 1.706,
+     "n": 2212,
+     "ratio": 1.686,
      "cheaper": 0.16
     }
    ],
@@ -386,20 +396,20 @@
     {
      "name": "pair-prefix-suffix-T2 · white",
      "n": 516,
-     "ratio": 0.963,
-     "cheaper": 0.47
+     "ratio": 0.97,
+     "cheaper": 0.46
+    },
+    {
+     "name": "pair-prefix-suffix-T2 · rare",
+     "n": 270,
+     "ratio": 0.981,
+     "cheaper": 0.46
     },
     {
      "name": "single-prefix-rare-T1 · rare-low",
      "n": 174,
      "ratio": 0.985,
      "cheaper": 0.43
-    },
-    {
-     "name": "pair-prefix-suffix-T2 · rare",
-     "n": 270,
-     "ratio": 0.994,
-     "cheaper": 0.45
     }
    ],
    "hurtsMost": [
@@ -407,52 +417,52 @@
      "name": "single-suffix-rare-T1 · rare-low",
      "n": 198,
      "ratio": 14.82,
-     "cheaper": 0.04
+     "cheaper": 0.01
     },
     {
      "name": "single-suffix-rare-T1 · rare",
      "n": 195,
      "ratio": 14.781,
-     "cheaper": 0.04
+     "cheaper": 0.01
     },
     {
      "name": "single-suffix-rare-T1 · white",
      "n": 183,
      "ratio": 14.462,
-     "cheaper": 0.04
+     "cheaper": 0.03
     }
    ],
-   "text": "Cheaper per success in 21% of 3325 comparisons (median x1.67), more likely to finish in 1%, less likely in 31%. By orb tier: greater x1.59, perfect x1.71."
+   "text": "Cheaper per success in 20% of 3319 comparisons (median x1.63), more likely to finish in 0%, less likely in 30%. By orb tier: greater x1.58, perfect x1.69."
   },
   {
    "id": "annul",
    "label": "Annulment instead of Chaos + Erasure",
-   "scenarios": 771,
-   "comparisons": 8052,
+   "scenarios": 770,
+   "comparisons": 8038,
    "verdict": "mixed",
    "cheaper": 0.65,
    "costlier": 0.23,
    "likelier": 0.01,
    "lessLikely": 0.25,
-   "medianCostRatio": 0.87,
+   "medianCostRatio": 0.872,
    "medianSuccessDelta": 0,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "base",
-     "n": 2331,
-     "ratio": 0.623,
-     "cheaper": 0.66
+     "n": 2327,
+     "ratio": 0.611,
+     "cheaper": 0.65
     },
     {
      "name": "greater",
-     "n": 3355,
-     "ratio": 0.951,
-     "cheaper": 0.5
+     "n": 3349,
+     "ratio": 0.954,
+     "cheaper": 0.49
     },
     {
      "name": "perfect",
-     "n": 2240,
+     "n": 2236,
      "ratio": 0.863,
      "cheaper": 0.89
     }
@@ -468,13 +478,13 @@
      "name": "single-prefix-rare-T1 · rare-low",
      "n": 412,
      "ratio": 0.806,
-     "cheaper": 0.82
+     "cheaper": 0.81
     },
     {
      "name": "single-prefix-rare-T1 · rare",
      "n": 412,
-     "ratio": 0.818,
-     "cheaper": 0.81
+     "ratio": 0.821,
+     "cheaper": 0.8
     }
    ],
    "hurtsMost": [
@@ -497,17 +507,17 @@
      "cheaper": 0.55
     }
    ],
-   "text": "Cheaper per success in 65% of 7926 comparisons (median x0.87), more likely to finish in 1%, less likely in 25%. By orb tier: base x0.62, greater x0.95, perfect x0.86."
+   "text": "Cheaper per success in 65% of 7912 comparisons (median x0.87), more likely to finish in 1%, less likely in 25%. By orb tier: base x0.61, greater x0.95, perfect x0.86."
   },
   {
    "id": "greater",
    "label": "Greater orbs (vs basic)",
-   "scenarios": 771,
-   "comparisons": 9798,
+   "scenarios": 770,
+   "comparisons": 9789,
    "verdict": "pro",
    "cheaper": 0.71,
    "costlier": 0.23,
-   "likelier": 0.26,
+   "likelier": 0.25,
    "lessLikely": 0,
    "medianCostRatio": 0.56,
    "medianSuccessDelta": 0,
@@ -515,7 +525,7 @@
    "byTier": [
     {
      "name": "base",
-     "n": 9732,
+     "n": 9723,
      "ratio": 0.56,
      "cheaper": 0.71
     }
@@ -542,59 +552,59 @@
    ],
    "hurtsMost": [
     {
-     "name": "single-prefix-rare-T1 · rare",
-     "n": 462,
-     "ratio": 1.001,
-     "cheaper": 0.48
-    },
-    {
      "name": "single-suffix-rare-T1 · rare",
-     "n": 491,
+     "n": 494,
      "ratio": 1.001,
      "cheaper": 0.48
     },
     {
      "name": "single-suffix-rare-T1 · rare-low",
      "n": 507,
-     "ratio": 0.999,
+     "ratio": 1.001,
+     "cheaper": 0.47
+    },
+    {
+     "name": "single-prefix-rare-T1 · rare-low",
+     "n": 477,
+     "ratio": 0.993,
      "cheaper": 0.48
     }
    ],
-   "text": "Cheaper per success in 71% of 9732 comparisons (median x0.56), more likely to finish in 26%, less likely in 0%."
+   "text": "Cheaper per success in 71% of 9723 comparisons (median x0.56), more likely to finish in 25%, less likely in 0%."
   },
   {
    "id": "perfect",
    "label": "Perfect orbs (vs Greater)",
-   "scenarios": 771,
-   "comparisons": 7670,
+   "scenarios": 770,
+   "comparisons": 7660,
    "verdict": "con",
    "cheaper": 0.22,
    "costlier": 0.7,
    "likelier": 0.09,
    "lessLikely": 0.01,
-   "medianCostRatio": 1.521,
+   "medianCostRatio": 1.52,
    "medianSuccessDelta": 0,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "greater",
-     "n": 7574,
-     "ratio": 1.521,
+     "n": 7564,
+     "ratio": 1.52,
      "cheaper": 0.22
     }
    ],
    "helpsMost": [
     {
+     "name": "single-prefix-common-T2 · rare",
+     "n": 400,
+     "ratio": 0.994,
+     "cheaper": 0.44
+    },
+    {
      "name": "single-prefix-rare-T1 · rare",
      "n": 293,
      "ratio": 1.005,
-     "cheaper": 0.45
-    },
-    {
-     "name": "single-prefix-common-T2 · rare",
-     "n": 410,
-     "ratio": 1.005,
-     "cheaper": 0.42
+     "cheaper": 0.44
     },
     {
      "name": "single-prefix-rare-T1 · rare-low",
@@ -623,7 +633,7 @@
      "cheaper": 0.19
     }
    ],
-   "text": "Cheaper per success in 22% of 7574 comparisons (median x1.52), more likely to finish in 9%, less likely in 1%."
+   "text": "Cheaper per success in 22% of 7564 comparisons (median x1.52), more likely to finish in 9%, less likely in 1%."
   },
   {
    "id": "alchemy",
@@ -635,14 +645,14 @@
    "costlier": 0.99,
    "likelier": 0,
    "lessLikely": 0.16,
-   "medianCostRatio": 85.269,
+   "medianCostRatio": 85.585,
    "medianSuccessDelta": 0,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "base",
-     "n": 2612,
-     "ratio": 27.537,
+     "n": 2613,
+     "ratio": 27.43,
      "cheaper": 0.01
     },
     {
@@ -661,8 +671,8 @@
    "helpsMost": [
     {
      "name": "pair-prefix-suffix-T2 · white",
-     "n": 2280,
-     "ratio": 1.522,
+     "n": 2281,
+     "ratio": 1.557,
      "cheaper": 0.01
     },
     {
@@ -682,13 +692,13 @@
     {
      "name": "single-suffix-rare-T1 · white",
      "n": 1550,
-     "ratio": 351.759,
+     "ratio": 354.096,
      "cheaper": 0
     },
     {
      "name": "single-prefix-rare-T1 · white",
      "n": 1470,
-     "ratio": 221.384,
+     "ratio": 222.381,
      "cheaper": 0
     },
     {
@@ -698,7 +708,7 @@
      "cheaper": 0
     }
    ],
-   "text": "Cheaper per success in 0% of 9832 comparisons (median x85), more likely to finish in 0%, less likely in 16%. By orb tier: base x28, greater x118, perfect x120."
+   "text": "Cheaper per success in 0% of 9833 comparisons (median x86), more likely to finish in 0%, less likely in 16%. By orb tier: base x27, greater x118, perfect x120."
   },
   {
    "id": "essence",
@@ -778,16 +788,16 @@
   {
    "id": "fracture",
    "label": "Fracture a finished goal",
-   "scenarios": 81,
-   "comparisons": 232,
+   "scenarios": 80,
+   "comparisons": 231,
    "verdict": "mixed",
-   "cheaper": 0.2,
-   "costlier": 0.63,
-   "likelier": 0.18,
+   "cheaper": 0.18,
+   "costlier": 0.64,
+   "likelier": 0.16,
    "lessLikely": 0.04,
-   "medianCostRatio": 1.158,
+   "medianCostRatio": 1.167,
    "medianSuccessDelta": 0,
-   "medianLostDelta": -0.15,
+   "medianLostDelta": -0.143,
    "byTier": [
     {
      "name": "base",
@@ -797,9 +807,9 @@
     },
     {
      "name": "greater",
-     "n": 158,
-     "ratio": 1.209,
-     "cheaper": 0.16
+     "n": 157,
+     "ratio": 1.242,
+     "cheaper": 0.13
     }
    ],
    "helpsMost": [
@@ -811,29 +821,29 @@
     },
     {
      "name": "pair-prefix-suffix-T2 · rare",
-     "n": 41,
+     "n": 40,
      "ratio": 1.048,
-     "cheaper": 0.29
+     "cheaper": 0.28
     },
     {
      "name": "pair-prefix-suffix-T2 · white",
      "n": 168,
-     "ratio": 1.189,
-     "cheaper": 0.18
+     "ratio": 1.21,
+     "cheaper": 0.16
     }
    ],
    "hurtsMost": [
     {
      "name": "pair-prefix-suffix-T2 · white",
      "n": 168,
-     "ratio": 1.189,
-     "cheaper": 0.18
+     "ratio": 1.21,
+     "cheaper": 0.16
     },
     {
      "name": "pair-prefix-suffix-T2 · rare",
-     "n": 41,
+     "n": 40,
      "ratio": 1.048,
-     "cheaper": 0.29
+     "cheaper": 0.28
     },
     {
      "name": "pair-two-suffixes · rare",
@@ -842,7 +852,7 @@
      "cheaper": 0.13
     }
    ],
-   "text": "Cheaper per success in 20% of 232 comparisons (median x1.16), more likely to finish in 18%, less likely in 4%. By orb tier: base x1.05, greater x1.21."
+   "text": "Cheaper per success in 18% of 231 comparisons (median x1.17), more likely to finish in 16%, less likely in 4%. By orb tier: base x1.05, greater x1.24."
   },
   {
    "id": "catalyse",
@@ -850,38 +860,38 @@
    "scenarios": 2,
    "comparisons": 6,
    "verdict": "too little data",
-   "cheaper": 0,
+   "cheaper": 0.17,
    "costlier": 0.33,
    "likelier": 0,
    "lessLikely": 0,
-   "medianCostRatio": 1.009,
+   "medianCostRatio": 0.982,
    "medianSuccessDelta": 0.002,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "base",
      "n": 6,
-     "ratio": 1.009,
-     "cheaper": 0
+     "ratio": 0.982,
+     "cheaper": 0.17
     }
    ],
    "helpsMost": [
     {
      "name": "catalyst-life · rare",
      "n": 6,
-     "ratio": 1.009,
-     "cheaper": 0
+     "ratio": 0.982,
+     "cheaper": 0.17
     }
    ],
    "hurtsMost": [
     {
      "name": "catalyst-life · rare",
      "n": 6,
-     "ratio": 1.009,
-     "cheaper": 0
+     "ratio": 0.982,
+     "cheaper": 0.17
     }
    ],
-   "text": "Cheaper per success in 0% of 6 comparisons (median x1.01), more likely to finish in 0%, less likely in 0%."
+   "text": "Cheaper per success in 17% of 6 comparisons (median x0.98), more likely to finish in 0%, less likely in 0%."
   },
   {
    "id": "flux",
@@ -955,83 +965,83 @@
   {
    "id": "desSlam",
    "label": "Bones for base-modifier goals (keep the goal at the Well of Souls)",
-   "scenarios": 462,
-   "comparisons": 1378,
+   "scenarios": 461,
+   "comparisons": 1375,
    "verdict": "con",
    "cheaper": 0,
    "costlier": 0.99,
-   "likelier": 0.12,
-   "lessLikely": 0.08,
-   "medianCostRatio": 4.923,
+   "likelier": 0.19,
+   "lessLikely": 0.04,
+   "medianCostRatio": 3.756,
    "medianSuccessDelta": 0,
    "medianLostDelta": 0,
    "byTier": [
     {
      "name": "base",
-     "n": 870,
-     "ratio": 5.365,
+     "n": 874,
+     "ratio": 4.554,
      "cheaper": 0
     },
     {
      "name": "greater",
-     "n": 498,
-     "ratio": 4.402,
-     "cheaper": 0
+     "n": 494,
+     "ratio": 3.476,
+     "cheaper": 0.01
     }
    ],
    "helpsMost": [
     {
      "name": "pair-two-suffixes · rare",
      "n": 108,
-     "ratio": 1.884,
+     "ratio": 1.796,
      "cheaper": 0
     },
     {
      "name": "single-prefix-common-T2 · rare",
-     "n": 144,
-     "ratio": 2.543,
+     "n": 141,
+     "ratio": 2.478,
      "cheaper": 0
     },
     {
      "name": "pair-prefix-suffix-T2 · white",
-     "n": 159,
-     "ratio": 3.536,
+     "n": 160,
+     "ratio": 2.847,
      "cheaper": 0
     }
    ],
    "hurtsMost": [
     {
      "name": "single-suffix-rare-T1 · rare-low",
-     "n": 141,
-     "ratio": 12.791,
+     "n": 144,
+     "ratio": 8.153,
      "cheaper": 0
     },
     {
      "name": "catalyst-life · rare",
      "n": 6,
-     "ratio": 12.68,
+     "ratio": 7.872,
      "cheaper": 0
     },
     {
      "name": "single-suffix-rare-T1 · rare",
      "n": 144,
-     "ratio": 10.984,
-     "cheaper": 0
+     "ratio": 7.066,
+     "cheaper": 0.01
     }
    ],
-   "text": "Cheaper per success in 0% of 1369 comparisons (median x4.92), more likely to finish in 12%, less likely in 8%. By orb tier: base x5.37, greater x4.40."
+   "text": "Cheaper per success in 0% of 1369 comparisons (median x3.76), more likely to finish in 19%, less likely in 4%. By orb tier: base x4.55, greater x3.48."
   }
  ],
  "routes": [
   {
    "group": "catalyst-life · rare",
    "scenarios": 2,
-   "bestRoute": "basic orbs, Chaos Orb",
-   "share": 0.5,
-   "runnerUp": "basic orbs, side omens, Chaos Orb, catalysing",
-   "medianCostPerSuccess": 3986.8,
-   "medianUses": 65,
-   "medianSuccess": 0.997
+   "bestRoute": "basic orbs, side omens, Chaos Orb, catalysing",
+   "share": 1,
+   "runnerUp": null,
+   "medianCostPerSuccess": 3810.8,
+   "medianUses": 76.5,
+   "medianSuccess": 0.998
   },
   {
    "group": "desecrated · rare",
@@ -1039,8 +1049,8 @@
    "bestRoute": "Perfect orbs, side omens, Annulment",
    "share": 1,
    "runnerUp": null,
-   "medianCostPerSuccess": 11572.3,
-   "medianUses": 4.8,
+   "medianCostPerSuccess": 11846.6,
+   "medianUses": 4.9,
    "medianSuccess": 1
   },
   {
@@ -1066,9 +1076,9 @@
   {
    "group": "pair-prefix-suffix-T2 · rare",
    "scenarios": 56,
-   "bestRoute": "basic orbs, Chaos Orb",
-   "share": 0.25,
-   "runnerUp": "Greater orbs, Chaos Orb",
+   "bestRoute": "Greater orbs, Chaos Orb",
+   "share": 0.27,
+   "runnerUp": "basic orbs, Chaos Orb",
    "medianCostPerSuccess": 21167.4,
    "medianUses": 161.4,
    "medianSuccess": 0.888
@@ -1077,11 +1087,11 @@
    "group": "pair-prefix-suffix-T2 · white",
    "scenarios": 56,
    "bestRoute": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
-   "share": 0.34,
+   "share": 0.32,
    "runnerUp": "Greater orbs, side omens, Chaos Orb, start with Transmutation, new base on a miss",
-   "medianCostPerSuccess": 17752.5,
-   "medianUses": 158.8,
-   "medianSuccess": 0.91
+   "medianCostPerSuccess": 16573.6,
+   "medianUses": 138.4,
+   "medianSuccess": 0.933
   },
   {
    "group": "pair-two-suffixes · rare",
@@ -1119,15 +1129,15 @@
    "bestRoute": "basic orbs, Chaos Orb",
    "share": 0.63,
    "runnerUp": "basic orbs, side omens, Chaos Orb",
-   "medianCostPerSuccess": 3526.5,
-   "medianUses": 57.2,
+   "medianCostPerSuccess": 3515.7,
+   "medianUses": 56.8,
    "medianSuccess": 1
   },
   {
    "group": "single-prefix-rare-T1 · rare",
    "scenarios": 56,
    "bestRoute": "basic orbs, Chaos Orb",
-   "share": 0.45,
+   "share": 0.43,
    "runnerUp": "basic orbs, side omens, Chaos Orb",
    "medianCostPerSuccess": 6004.3,
    "medianUses": 91.7,
@@ -1137,7 +1147,7 @@
    "group": "single-prefix-rare-T1 · rare-low",
    "scenarios": 56,
    "bestRoute": "basic orbs, Chaos Orb",
-   "share": 0.52,
+   "share": 0.54,
    "runnerUp": "basic orbs, side omens, Chaos Orb",
    "medianCostPerSuccess": 6213.9,
    "medianUses": 93.7,
@@ -1149,8 +1159,8 @@
    "bestRoute": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
    "share": 1,
    "runnerUp": null,
-   "medianCostPerSuccess": 154.1,
-   "medianUses": 157.1,
+   "medianCostPerSuccess": 150.7,
+   "medianUses": 153.7,
    "medianSuccess": 1
   },
   {
@@ -1170,8 +1180,8 @@
    "share": 0.46,
    "runnerUp": "basic orbs, side omens, Chaos Orb",
    "medianCostPerSuccess": 15379,
-   "medianUses": 200.5,
-   "medianSuccess": 0.807
+   "medianUses": 198.8,
+   "medianSuccess": 0.817
   },
   {
    "group": "single-suffix-rare-T1 · rare-low",
@@ -1180,8 +1190,8 @@
    "share": 0.48,
    "runnerUp": "basic orbs, side omens, Chaos Orb",
    "medianCostPerSuccess": 15498.2,
-   "medianUses": 201.1,
-   "medianSuccess": 0.807
+   "medianUses": 198.1,
+   "medianSuccess": 0.81
   },
   {
    "group": "single-suffix-rare-T1 · white",
@@ -1189,8 +1199,8 @@
    "bestRoute": "Greater orbs, Chaos Orb, start with Transmutation, new base on a miss",
    "share": 0.91,
    "runnerUp": "Greater orbs, Chaos Orb, start with Alchemy, essences",
-   "medianCostPerSuccess": 244,
-   "medianUses": 248.8,
+   "medianCostPerSuccess": 231.5,
+   "medianUses": 235.6,
    "medianSuccess": 1
   }
  ],
@@ -1666,6 +1676,16 @@
    "cost": 2.8
   },
   {
+   "cls": "Crossbow",
+   "base": "Siege Crossbow",
+   "start": "rare",
+   "goals": "Adds # to # Lightning Damage T2",
+   "route": "Ire of Aldur",
+   "uses": 1,
+   "success": 1,
+   "cost": 2.8
+  },
+  {
    "cls": "Boots",
    "base": "Tasalian Greaves",
    "start": "white",
@@ -1784,16 +1804,6 @@
    "uses": 1.93,
    "success": 1,
    "cost": 2.83
-  },
-  {
-   "cls": "Helmet",
-   "base": "Freebooter Cap",
-   "start": "white",
-   "goals": "#% increased Evasion Rating T4",
-   "route": "Greater Orb of Transmutation > Essence of Enhancement",
-   "uses": 1.94,
-   "success": 1,
-   "cost": 2.84
   }
  ],
  "recipes": [
@@ -2048,12 +2058,11 @@
   }
  ],
  "sincePrevious": {
-  "previous": "2026-09-27T19:26:14.472Z",
+  "previous": "2026-09-27T22:46:07.813Z",
   "changes": [
-   "Annulment instead of Chaos + Erasure: pro -> mixed.",
-   "Fracture a finished goal: con -> mixed.",
-   "New technique measured: Bones for base-modifier goals (keep the goal at the Well of Souls) (con).",
-   "pair-prefix-suffix-T2 · white: best route \"Greater orbs, side omens, Chaos Orb, start with Transmutation, new base on a miss\" -> \"Greater orbs, Chaos Orb, start with Transmutation, new base on a miss\"."
+   "Bones for base-modifier goals (keep the goal at the Well of Souls): cost ratio x4.923 -> x3.756.",
+   "catalyst-life · rare: best route \"basic orbs, Chaos Orb\" -> \"basic orbs, side omens, Chaos Orb, catalysing\".",
+   "pair-prefix-suffix-T2 · rare: best route \"basic orbs, Chaos Orb\" -> \"Greater orbs, Chaos Orb\"."
   ]
  }
 }
