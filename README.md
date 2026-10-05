@@ -24,7 +24,7 @@ This product isn't affiliated with or endorsed by Grinding Gear Games in any way
 | `scripts/build_price_package.py` | Fiyat belgelerinden npm paketi |
 | `scripts/fetch_icons.py`, `build_icons.py` | Fiyatlı eşyaların ikonları (web.poecdn.com, adresler Exiled Exchange 2 listesinden) ve paketi |
 | `scripts/kb_update.py`, `kb_diff.py` | Bilgi tabanı güncelleme hattı (build / check / approve) |
-| `scripts/selftest/` | Ağır self-test: rastgele yürüyüşler, strateji madenciliği, tarif karşılaştırması |
+| `scripts/selftest/` | Ağır self-test: rastgele yürüyüşler, strateji madenciliği, tarif karşılaştırması; `sweep.js` bütün strateji kombinasyonlarını tarar |
 | `.github/workflows/prices.yml` | Fiyat işi (3 saatte bir) |
 
 ## Komutlar
@@ -35,11 +35,23 @@ node --test app/tests/*.test.js            # JS testleri
 python -m unittest discover -s scripts/tests
 python scripts/fetch_prices.py             # fiyatları yerelde günceller (.kb_cache/out)
 node scripts/selftest/run.js               # self-test (~10 dk); --quick kısa sürüm
+scripts\selftest\capped.cmd node scripts/selftest/sweep.js --workers 25   # tam tarama (saatler sürer); CPU'nun 25/32'sinde
 python scripts/kb_update.py build          # yeni bilgi tabanı adayı, sonra check / approve
 python scripts/fetch_icons.py              # yeni fiyatlı eşyaların ikonları, sonra scripts/build_icons.py
 ```
 
 `.kb_cache/` (indirilen oyun verisi, fiyat saatleri, ikonlar) ve `app/dist/` depoya girmez.
+
+## Tam tarama (`scripts/selftest/sweep.js`)
+
+Self-test senaryolarının her birinde (başlangıç item'i + hedefler) planner'ın bütün strateji ayarlarının çarpımını (yaklaşık 10,6 milyon kombinasyon) kapsar ve sayfanın Cheap / Balanced / Premium seçimlerini denetler.
+
+1. **Sınıflar.** Planner ayarları yalnızca sonucu değiştirebilecekleri yerde okur. Tarama hangi ayarların okunduğunu kaydeder; aynı rastgele sayılarla okunan her ayarda aynı değeri taşıyan iki strateji birebir aynı hamleleri yapar. Uzay yalnızca okunan ayarlarda bölünür, her yaprak ("sınıf") kapsadığı bütün kombinasyonları temsil eder.
+2. **Eleme.** Her sınıf kısa bir koşu alır (6 deneme, hepsi aynı rastgele sayılarla); iyimser tahmine göre en iyiler 30, sonra 300 denemeyle yeniden koşulur.
+3. **Eşleştirme.** Cheap = bitmiş item başına en düşük maliyet, Balanced = bitirme şansıyla tartılmış maliyet, Premium = en yüksek bitirme şansı (sayfanın profil skorları). Sınır ayrıca üç maliyet bandına bölünür.
+4. **Doğrulama.** Atanan stratejiler, sayfa planner'ının kendi seçimi ve rakipler yeni rastgele sayılarla 1.000 denemeyle koşulur: aynı sıklıkta bitiren daha ucuzu var mı, daha pahalı olmayan daha garantilisi var mı? Varsa atama değişir ve yeniden denetlenir; son seçimler 4.000 denemeyle bir kez daha koşulur.
+
+Rare başlangıçta item'i atıp yeni base'e geçen stratejiler (slamOnly) dışarıda tutulur: yapıştırılan Rare item bitirilecek item'dir. Beyaz ve Magic başlangıçta yeni base yöntemin parçasıdır. Çıktılar: `reports/sweep-latest.md` (özet), `reports/sweep-latest.json` (tam sonuç, depoya girmez). Yarıda kesilen tarama `reports/sweep-partial.jsonl` dosyasından devam eder; `--fresh` baştan başlatır. `scripts/selftest/watch.sh` ilerlemeyi çubuk olarak gösterir.
 
 ## Fiyat hattı
 

@@ -4,6 +4,8 @@
 # Self-test output: the full runs are ~20 MB each; keep the markdown reports and the latest summary
 reports/*.json
 reports/*.log
+reports/*.jsonl
+reports/sweep-progress.txt
 !reports/selftest-latest.json
 
 # Build output (node app/build.js); the artifact is published from it

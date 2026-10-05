@@ -1204,24 +1204,29 @@
    *  essence: bool     use an essence when one guarantees an unmet goal (and the crafted slot is free)
    */
   function makePolicy(ctx, goals, params) {
+    // Each setting is read only where its value can change the move (state checks come first). The exhaustive sweep
+    // (scripts/selftest/sweep.js) records which settings a run reads to group strategies that behave the same.
     const unmet = (st) => goals.filter((g) => !goalMet(st, g));
     const resGoal = (g) => !g.des && /^(Fire|Cold|Lightning)Resistance$/.test(g.fam || '');
     /** Flux when it finishes an unmet resistance goal from one mod of another element and keeps every finished goal. */
     function fluxStep(st, left) {
-      if (params.flux === false || (st.rarity !== 'Magic' && st.rarity !== 'Rare')) return null;
+      if (st.rarity !== 'Magic' && st.rarity !== 'Rare') return null;
       for (const g of left) {
         if (!resGoal(g)) continue;
         const to = g.fam.replace('Resistance', '').toLowerCase();
         const a = { op: 'flux', to };
         if (validate(ctx, st, a)) continue;
         const after = apply(ctx, st, a, () => 0.5).state;
-        if (goalMet(after, g) && goals.every((x) => !goalMet(st, x) || goalMet(after, x))) return a;
+        if (goalMet(after, g) && goals.every((x) => !goalMet(st, x) || goalMet(after, x))) return params.flux === false ? null : a;
       }
       return null;
     }
     /** Runes that change crafting, socketed when a goal needs them (game data augments; test t30 for Aldur). */
     function runeStep(st, left) {
-      if (params.runes === false) return null;
+      const r = runeCandidate(st, left);
+      return r && params.runes !== false ? r : null;
+    }
+    function runeCandidate(st, left) {
       // Astrid's Creativity: more crafted-modifier goals than crafted slots
       const cap = (ctx.craftedCap || 1) + (st.xCrafted || 0);
       if (goals.filter((g) => g.essenceOnly).length > cap) {
@@ -1246,14 +1251,14 @@
     }
     /** Catalyst quality for Omen of Catalysing Exaltation: a catalyst of a tag an unmet goal's family carries, up to 20%. */
     function catalystStep(st, left) {
-      if (!params.catalyse || st.rarity !== 'Rare') return null;
+      if (st.rarity !== 'Rare') return null;
       const jewel = ctx.cls === 'Jewel';
       if (!(jewel || ctx.cls === 'Ring' || ctx.cls === 'Amulet' || catalystBase(ctx.base))) return null;
       for (const g of left) {
         if (g.des || g.essenceOnly || open(ctx, st, g.side) < 1) continue;
         const tag = Object.keys(CATALYST_NAME).find((t) => famHasTag(ctx, g.fam, t));
         if (!tag || (st.catTag === tag && st.catQ >= 20)) continue;
-        return { op: 'catalyst', tag, refined: jewel, item: (jewel ? 'Refined ' : '') + CATALYST_NAME[tag] };
+        return params.catalyse ? { op: 'catalyst', tag, refined: jewel, item: (jewel ? 'Refined ' : '') + CATALYST_NAME[tag] } : null;
       }
       return null;
     }
@@ -1272,34 +1277,35 @@
       const lean = sideNeed('prefix') > sideNeed('suffix') ? 'prefix' : sideNeed('suffix') > sideNeed('prefix') ? 'suffix' : null;
       const craftedFree = st.mods.filter((m) => m.crafted).length < (ctx.craftedCap || 1);
       const taken = groupsOf(st);
-      const magicEss = params.essence && craftedFree
+      const essHere = R !== 'Rare' && craftedFree
         ? left.map((g) => ({ g, r: essenceOptions(ctx, g, 'magic').find((r) => !ctx.kb.mods[r.mod].grp.some((x) => taken.has(x))) })).find((x) => x.r)
         : null;
+      const magicEss = essHere && params.essence ? essHere : null;
       if (R === 'Normal') {
-        if (params.start === 'alchemy' && !magicEss) return { op: 'alchemy', side: params.sideOmens ? lean : null };
+        if (params.start === 'alchemy' && !magicEss) return { op: 'alchemy', side: lean && params.sideOmens ? lean : null };
         return { op: 'transmute', tier: params.magicTier || params.tier };
       }
       if (R === 'Magic') {
         // An essence turns the Magic item Rare with a guaranteed goal mod; keep a useful first mod for it.
         if (magicEss) {
           const junkOnly = st.mods.length === 1 && !useful(st.mods[0], goals) && !st.mods[0].frac;
-          if (!(params.restart && junkOnly && left.length > 1)) return { op: 'essence', item: magicEss.r.item, mod: magicEss.r.mod };
+          if (!(junkOnly && left.length > 1 && params.restart)) return { op: 'essence', item: magicEss.r.item, mod: magicEss.r.mod };
         }
         const anyHit = st.mods.some((m) => useful(m, goals));
-        if (params.start === 'transmute' && params.restart && st.mods.length === 1 && !anyHit && !st.mods[0].frac) return { op: 'newbase' };
-        if (params.pair && params.restart && st.mods.length === 2) {
+        if (st.mods.length === 1 && !anyHit && !st.mods[0].frac && params.start === 'transmute' && params.restart) return { op: 'newbase' };
+        if (st.mods.length === 2) {
           const junk = st.mods.find((m) => !useful(m, goals) && !m.frac);
-          if (junk && left.some((x) => x.side === junk.side && !x.des && !x.essenceOnly)) return { op: 'newbase' };
+          if (junk && left.some((x) => x.side === junk.side && !x.des && !x.essenceOnly) && params.pair && params.restart) return { op: 'newbase' };
         }
         if (open(ctx, st, 'prefix') + open(ctx, st, 'suffix') > 0 && st.mods.length < 2) return { op: 'augment', tier: params.magicTier || params.tier };
-        return { op: 'regal', tier: params.magicTier || params.tier, side: params.sideOmens ? lean : null, homog: homogHelps(st, left.filter((x) => !x.des && !x.essenceOnly)) };
+        return { op: 'regal', tier: params.magicTier || params.tier, side: lean && params.sideOmens ? lean : null, homog: homogHelps(st, left.filter((x) => !x.des && !x.essenceOnly)) };
       }
       if (R !== 'Rare') return { fail: 'unsupported rarity' };
       const desJunk = st.mods.find((m) => m.des && !useful(m, goals) && !m.frac);
       // Fracture (a plan variant): with 4 mods and a finished goal among them (or 5 and two), lock one at random.
-      if (params.fracture && !st.mods.some((m) => m.frac)) {
+      if (!st.mods.some((m) => m.frac)) {
         const keep = st.mods.filter((m) => goals.some((x) => meets(m, x, x.eff)));
-        if (keep.length && (st.mods.length === 4 || (st.mods.length === 5 && keep.length >= 2))) return { op: 'fracture' };
+        if (keep.length && (st.mods.length === 4 || (st.mods.length === 5 && keep.length >= 2)) && params.fracture) return { op: 'fracture' };
       }
       // Values come last: when every goal left only needs a better roll on a mod that is already there, reroll values.
       if (left.every((x) => st.mods.some((m) => nearMiss(m, x)))) return { op: 'divine' };
@@ -1308,10 +1314,11 @@
       const ready = (g) => !blocks(g) && open(ctx, st, g.side) > 0 && (!g.des || !st.mods.some((m) => m.des));
       const g = left.find((x) => x.required && ready(x)) || left.find((x) => x.required) || left.find(ready) || left[0];
       // Perfect/special essence: removes a random mod (side chosen with Crystallisation) and adds the goal mod.
-      if (params.essence && craftedFree) {
+      if (craftedFree) {
         for (const eg of left) {
           const r = essenceOptions(ctx, eg, 'rare').find((x) => !ctx.kb.mods[x.mod].grp.some((y) => taken.has(y)));
           if (!r) continue;
+          if (!params.essence) break;
           const mside = ctx.kb.mods[r.mod].gen === 'p' ? 'prefix' : 'suffix';
           const junkSide = (s) => st.mods.some((m) => m.side === s && removable(m) && !useful(m, goals));
           const cleanSide = (s) => st.mods.filter((m) => m.side === s && removable(m)).every((m) => !useful(m, goals));
@@ -1330,7 +1337,7 @@
             if (open(ctx, st, mside) < 1 ? junkSide(mside) && cleanSide(mside) : st.mods.every((m) => !removable(m) || !useful(m, goals))) return { op: 'pessence', item: r.item, mod: r.mod, side: null };
             continue;
           }
-          if (side) return { op: 'pessence', item: r.item, mod: r.mod, side: params.sideOmens && !(side === mside && open(ctx, st, mside) < 1) ? side : null };
+          if (side) return { op: 'pessence', item: r.item, mod: r.mod, side: !(side === mside && open(ctx, st, mside) < 1) && params.sideOmens ? side : null };
         }
       }
       if (g.essenceOnly) return { fail: 'needs an essence (none applies now)' };
@@ -1340,7 +1347,7 @@
         if (open(ctx, st, g.side) > 0) {
           return {
             op: 'bone', quality: params.bone || 'Preserved', side: params.sideOmens ? g.side : null,
-            lich: params.lich && g.lich && (WEAPON.includes(ctx.cls) || JEWELLERY.includes(ctx.cls)) ? g.lich : null,
+            lich: g.lich && (WEAPON.includes(ctx.cls) || JEWELLERY.includes(ctx.cls)) && params.lich ? g.lich : null,
             echoes: !!params.echoes,
           };
         }
@@ -1350,23 +1357,23 @@
       const blocking = st.mods.find((m) => removable(m) && !useful(m, goals) && blocksGoal(ctx, m, g));
       if (blocking) return removal(st, blocking.side, desJunk, blocking);
       if (open(ctx, st, g.side) > 0) {
-        if (params.desSlam && ctx.bone && !st.mods.some((m) => m.des) && !left.some((x) => x.des)) {
+        if (ctx.bone && !st.mods.some((m) => m.des) && !left.some((x) => x.des) && params.desSlam) {
           const b = { op: 'bone', quality: params.bone || 'Preserved', side: params.sideOmens ? g.side : null, echoes: !!params.echoes };
           if (!validate(ctx, st, b)) return b;
         }
-        const two = params.greaterExalt && open(ctx, st, g.side) >= 2 && left.filter((x) => x.side === g.side && !x.des).length >= 2;
-        const catalyse = !!(params.catalyse && st.catQ > 0 && st.catTag && famHasTag(ctx, g.fam, st.catTag));
+        const two = open(ctx, st, g.side) >= 2 && left.filter((x) => x.side === g.side && !x.des).length >= 2 && !!params.greaterExalt;
+        const catalyse = !!(st.catQ > 0 && st.catTag && famHasTag(ctx, g.fam, st.catTag) && params.catalyse);
         return { op: 'exalt', tier: params.exaltTier || params.tier, side: params.sideOmens ? g.side : null, greater: two, catalyse, homog: homogHelps(st, [g]) };
       }
-      if (params.slamOnly && params.restart && !g.des && !st.mods.some((m) => m.frac || m.lock)) return { op: 'newbase' };
+      if (!g.des && !st.mods.some((m) => m.frac || m.lock) && params.slamOnly && params.restart) return { op: 'newbase' };
       return removal(st, g.side, desJunk);
     };
 
     /** Omen of Homogenising: when every goal the slam is for shares a modifier type with the item, the pool narrows to those types. */
     function homogHelps(st, gs) {
-      if (!params.homog || !gs.length) return false;
+      if (!gs.length) return false;
       const have = homogTypes(ctx, st);
-      return !!have && gs.every((g) => (ctx.ix.famMods.get(g.fam) || []).some((id) => typesOf(ctx, id).some((t) => have.has(t))));
+      return !!have && gs.every((g) => (ctx.ix.famMods.get(g.fam) || []).some((id) => typesOf(ctx, id).some((t) => have.has(t)))) && !!params.homog;
     }
     function removal(st, side, desJunk, target) {
       const junk = st.mods.filter((m) => m.side === side && removable(m) && !useful(m, goals));
