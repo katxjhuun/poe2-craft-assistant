@@ -1542,11 +1542,14 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const step = !!S.pendingStep;
     if (!same) tryImport(text, 'Hotkey');
     // the official trade site's search for this item, in the trade window (when it is open and the player wants it)
-    if (!same && tradeFollows() && S.item && !S.item.unsupported) { try { tradeOpen(pcUrl(S.item), false); } catch (e) { /* no search for this item */ } }
-    // the price check with every copied item; a route in progress stays in view
+    // (not for the steps of a running route: that item is being crafted, not priced)
+    if (tradeFollows() && !step && S.item && !S.item.unsupported) {
+      if (same) { if (S.tradeWin && !S.tradeWin.closed) overlayAsk('show'); } // the same item again: its search is still there
+      else { try { tradeOpen(pcUrl(S.item), false); } catch (e) { /* no search for this item */ } }
+    }
+    // the price check opens with every copied item; the page stays where the player left it
     const v = $('#valueRow');
     if (v && !v.open) v.open = true;
-    if (v && !step && !S.planArmed) v.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     announce(same ? 'The same item: nothing changed.' : step ? 'Step result loaded.' : 'Item loaded from the game.');
   }
   $('#pasteImport').addEventListener('click', () => (pasteMode === 'comparable' ? saveComparable() : tryImport(pasteArea.value, 'Pasted')));
@@ -2672,15 +2675,20 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (!url) return false;
     const now = Date.now();
     if (S.tradeWin && !S.tradeWin.closed) {
-      if (!fromUser && now - (S.tradeAt || 0) < 2000) return false; // no faster than the site's own searches allow by hand
+      if (!fromUser && now - (S.tradeAt || 0) < 2000) { overlayAsk('show'); return false; } // no faster than searches by hand
       S.tradeAt = now;
-      try { S.tradeWin.location.href = url; return true; } catch (e) { S.tradeWin = null; }
+      try { S.tradeWin.location.href = url; overlayAsk('show'); return true; } catch (e) { S.tradeWin = null; }
     }
-    if (!fromUser) return false; // a new window needs a click: browsers block windows a page opens by itself
+    // A new window: on a click, or by itself in the desktop program (its own browser window lets the page open it;
+    // elsewhere browsers block windows a page opens without a click).
+    if (!fromUser && !S.bridge) return false;
     S.tradeWin = window.open(url, 'poe2trade', 'width=1180,height=920');
     S.tradeAt = now;
+    if (S.tradeWin) overlayAsk('show');
     return !!S.tradeWin;
   }
+  /** Desktop program: the trade window as a panel over the game ('show'), or put away ('hide'). */
+  function overlayAsk(cmd) { if (S.bridge) fetch('/overlay', { method: 'POST', body: cmd }).catch(() => { /* the program is gone */ }); }
   const tradeFollows = () => store.get('tradeFollow', true) !== false;
   document.addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('#pcGo');

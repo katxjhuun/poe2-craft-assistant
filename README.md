@@ -141,5 +141,9 @@ own window (Edge's app mode), kept above the game.
   Grinding Gear Games' developer documentation says "It is against our Terms of Use (section 7i) to reverse-engineer
   endpoints outside of this documentation", and the trade search is not in it; the terms also rule out automated access
   (7c) and data extraction (7f). Log in to pathofexile.com in that window once if the site asks.
+- Price check over the game: the trade window is placed along the right edge of the game window, above it, and the
+  keyboard stays with the game. Pressing the hotkey with nothing under the cursor puts it away (so does the tray menu).
+  `overlay` and `overlayWidth` in `config.json` turn it off or change its width. Items copied as steps of a running
+  route do not open a search.
 - Not tested by the author in game: the hotkey and the copy keys. Tested: the page is served, an item text pushed to
   `POST /push` is loaded, counted as a step result and the route goes on; the window opens and stays on top.

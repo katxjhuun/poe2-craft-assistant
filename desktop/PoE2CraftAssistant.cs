@@ -43,6 +43,8 @@ namespace PoE2CraftAssistant
         public int Port = 47652;
         public bool Topmost = true;        // keep the assistant's window above the game
         public bool AdvancedCopy = true;   // Alt+Ctrl+C (modifier tiers) instead of Ctrl+C
+        public bool Overlay = true;        // the trade search of a copied item as a panel over the game
+        public double OverlayWidth = 0.42; // the panel's share of the game window's width
         public string GameTitle = "Path of Exile 2";
         public string File;
 
@@ -60,6 +62,8 @@ namespace PoE2CraftAssistant
                     if (d.ContainsKey("topmost")) c.Topmost = Convert.ToBoolean(d["topmost"]);
                     if (d.ContainsKey("advancedCopy")) c.AdvancedCopy = Convert.ToBoolean(d["advancedCopy"]);
                     if (d.ContainsKey("gameTitle")) c.GameTitle = Convert.ToString(d["gameTitle"]);
+                    if (d.ContainsKey("overlay")) c.Overlay = Convert.ToBoolean(d["overlay"]);
+                    if (d.ContainsKey("overlayWidth")) c.OverlayWidth = Convert.ToDouble(d["overlayWidth"], System.Globalization.CultureInfo.InvariantCulture);
                 }
                 else c.Save();
             }
@@ -72,7 +76,8 @@ namespace PoE2CraftAssistant
             try
             {
                 string json = "{\r\n  \"hotkey\": " + Json(Hotkey) + ",\r\n  \"port\": " + Port + ",\r\n  \"topmost\": " + (Topmost ? "true" : "false")
-                    + ",\r\n  \"advancedCopy\": " + (AdvancedCopy ? "true" : "false") + ",\r\n  \"gameTitle\": " + Json(GameTitle) + "\r\n}\r\n";
+                    + ",\r\n  \"advancedCopy\": " + (AdvancedCopy ? "true" : "false") + ",\r\n  \"gameTitle\": " + Json(GameTitle)
+                    + ",\r\n  \"overlay\": " + (Overlay ? "true" : "false") + ",\r\n  \"overlayWidth\": " + OverlayWidth.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "\r\n}\r\n";
                 System.IO.File.WriteAllText(File, json);
             }
             catch (Exception) { /* read-only folder: the settings last until exit */ }
@@ -91,6 +96,8 @@ namespace PoE2CraftAssistant
         Thread thread;
         System.Threading.Timer ping;
         public string Url;
+        /// <summary>The page asks for the price panel over the game ("show") or to put it away ("hide").</summary>
+        public Action<string> OnOverlay;
 
         public Server(string appDir, Config c)
         {
@@ -156,6 +163,16 @@ namespace PoE2CraftAssistant
                 string body;
                 using (StreamReader sr = new StreamReader(q.InputStream, Encoding.UTF8)) body = sr.ReadToEnd();
                 Push(body, "push");
+                Text(r, 200, "text/plain", "ok");
+                return;
+            }
+            if (path == "/overlay" && q.HttpMethod == "POST")
+            {
+                string origin = q.Headers["Origin"];
+                if (origin != null && origin.TrimEnd('/') != Url.TrimEnd('/')) { Text(r, 403, "text/plain", "forbidden"); return; }
+                string cmd;
+                using (StreamReader sr = new StreamReader(q.InputStream, Encoding.UTF8)) cmd = sr.ReadToEnd().Trim();
+                if (OnOverlay != null) OnOverlay(cmd);
                 Text(r, 200, "text/plain", "ok");
                 return;
             }
@@ -275,6 +292,22 @@ namespace PoE2CraftAssistant
 
         [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
         [DllImport("user32.dll")] public static extern uint GetClipboardSequenceNumber();
+        [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+        [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
+
+        /// <summary>The visible, titled top-level windows of a process.</summary>
+        public static List<IntPtr> WindowsOf(uint pid)
+        {
+            List<IntPtr> list = new List<IntPtr>();
+            EnumWindows(delegate(IntPtr h, IntPtr l)
+            {
+                uint p;
+                GetWindowThreadProcessId(h, out p);
+                if (p == pid && IsWindowVisible(h) && TitleOf(h).Length > 0) list.Add(h);
+                return true;
+            }, IntPtr.Zero);
+            return list;
+        }
         [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int index);
         [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr w, IntPtr l);
 
@@ -320,8 +353,11 @@ namespace PoE2CraftAssistant
         readonly HotkeyWindow win = new HotkeyWindow();
         readonly System.Windows.Forms.Timer focus = new System.Windows.Forms.Timer();
         readonly System.Windows.Forms.Timer copy = new System.Windows.Forms.Timer();
+        readonly System.Windows.Forms.Timer panel = new System.Windows.Forms.Timer();
         uint seqBefore;
         int copyTicks, seenAt;
+        IntPtr gameWnd = IntPtr.Zero;
+        long panelWanted; // ticks until which the price panel is to be placed over the game (0: nothing asked, -1: hide)
         readonly bool anyWindow, noWindow;
         readonly string dir;
         bool registered;
@@ -356,6 +392,11 @@ namespace PoE2CraftAssistant
             win.Pressed += delegate { OnHotkey(); };
             copy.Interval = 15;
             copy.Tick += delegate { CopyTick(); };
+            // the page asks for the panel from the server's thread; the window work is done here, on the program's own
+            server.OnOverlay = delegate(string cmd) { Interlocked.Exchange(ref panelWanted, cmd == "hide" ? -1 : DateTime.UtcNow.AddSeconds(4).Ticks); };
+            panel.Interval = 120;
+            panel.Tick += delegate { PanelTick(); };
+            panel.Start();
             focus.Interval = 400;
             focus.Tick += delegate { WatchFocus(); };
             focus.Start();
@@ -375,6 +416,11 @@ namespace PoE2CraftAssistant
             });
             topItem.Checked = cfg.Topmost;
             menu.MenuItems.Add(topItem);
+            MenuItem panelItem = null;
+            panelItem = new MenuItem("Price check over the game", delegate { cfg.Overlay = !cfg.Overlay; cfg.Save(); panelItem.Checked = cfg.Overlay; if (!cfg.Overlay) HidePanel(); });
+            panelItem.Checked = cfg.Overlay;
+            menu.MenuItems.Add(panelItem);
+            menu.MenuItems.Add("Hide the price check", delegate { HidePanel(); });
             keyItem = new MenuItem("Hotkey: " + cfg.Hotkey + " (edit config.json)", delegate { try { Process.Start("notepad.exe", "\"" + cfg.File + "\""); } catch (Exception) { } });
             menu.MenuItems.Add(keyItem);
             menu.MenuItems.Add("-");
@@ -448,6 +494,7 @@ namespace PoE2CraftAssistant
         void OnHotkey()
         {
             if (copy.Enabled) return; // the copy of the last press is still under way
+            gameWnd = Native.GetForegroundWindow(); // the game (the hotkey only exists while it is in front)
             seqBefore = Native.GetClipboardSequenceNumber();
             List<Native.INPUT> keys = new List<Native.INPUT>();
             bool hasCtrl = (mods & Native.MOD_CONTROL) != 0, hasAlt = (mods & Native.MOD_ALT) != 0, hasShift = (mods & Native.MOD_SHIFT) != 0;
@@ -471,7 +518,7 @@ namespace PoE2CraftAssistant
             if (seenAt < 0)
             {
                 if (Native.GetClipboardSequenceNumber() != seqBefore) seenAt = copyTicks; // a counter: the clipboard is not opened
-                else if (copyTicks > 40) copy.Stop(); // nothing under the cursor
+                else if (copyTicks > 40) { copy.Stop(); HidePanel(); } // nothing under the cursor: the price panel goes away
                 return;
             }
             if (copyTicks < seenAt + 2) return; // let the game finish writing
@@ -483,6 +530,50 @@ namespace PoE2CraftAssistant
             int reached = server.Push(text, "hotkey");
             if (reached == 0) OpenWindow(false); // the window was closed: open it, the page takes the item on the next press
             else ShowAbove();
+        }
+
+        /// <summary>
+        /// The window with the official trade site's search (the page opens and steers it): any other window of the
+        /// assistant's own browser. Zero when there is none.
+        /// </summary>
+        IntPtr FindTradeWindow()
+        {
+            IntPtr main = Native.FindWindowByTitle(PAGE_TITLE);
+            if (main == IntPtr.Zero) return IntPtr.Zero;
+            uint pid;
+            Native.GetWindowThreadProcessId(main, out pid);
+            foreach (IntPtr h in Native.WindowsOf(pid)) if (h != main && Native.TitleOf(h) != PAGE_TITLE) return h;
+            return IntPtr.Zero;
+        }
+
+        /// <summary>The price panel: the trade window along the right edge of the game, above it, the keyboard left with the game.</summary>
+        void PanelTick()
+        {
+            long want = Interlocked.Read(ref panelWanted);
+            if (want == 0) return;
+            if (want < 0) { Interlocked.Exchange(ref panelWanted, 0); HidePanel(); return; }
+            if (DateTime.UtcNow.Ticks > want || !cfg.Overlay) { Interlocked.Exchange(ref panelWanted, 0); return; }
+            IntPtr t = FindTradeWindow();
+            if (t == IntPtr.Zero) return; // the page is still opening it
+            Interlocked.Exchange(ref panelWanted, 0);
+            Native.RECT g;
+            if (gameWnd == IntPtr.Zero || !Native.GetWindowRect(gameWnd, out g))
+            {
+                Rectangle s = Screen.PrimaryScreen.WorkingArea;
+                g.Left = s.Left; g.Top = s.Top; g.Right = s.Right; g.Bottom = s.Bottom;
+            }
+            int gw = g.Right - g.Left, gh = g.Bottom - g.Top;
+            int w = Math.Min(gw, Math.Max(760, (int)(gw * Math.Max(0.2, Math.Min(1.0, cfg.OverlayWidth)))));
+            if (Native.IsIconic(t)) Native.ShowWindow(t, 4); // SW_SHOWNOACTIVATE
+            Native.SetWindowPos(t, Native.HWND_TOPMOST, g.Right - w, g.Top, w, gh, Native.SWP_NOACTIVATE | Native.SWP_SHOWWINDOW);
+            // a window that was just created takes the keyboard: hand it back to the game
+            if (gameWnd != IntPtr.Zero && Native.GetForegroundWindow() == t) Native.SetForegroundWindow(gameWnd);
+        }
+
+        void HidePanel()
+        {
+            IntPtr t = FindTradeWindow();
+            if (t != IntPtr.Zero && !Native.IsIconic(t)) Native.ShowWindow(t, 7); // SW_SHOWMINNOACTIVE
         }
 
         /// <summary>The assistant's window above the game without taking the keyboard from it.</summary>
@@ -519,7 +610,7 @@ namespace PoE2CraftAssistant
                 if (edge != null)
                 {
                     string profile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"PoE2CraftAssistant\window");
-                    Process.Start(edge, "--app=" + server.Url + " --user-data-dir=\"" + profile + "\" --window-size=560,960 --no-first-run --no-default-browser-check");
+                    Process.Start(edge, "--app=" + server.Url + " --user-data-dir=\"" + profile + "\" --window-size=560,960 --no-first-run --no-default-browser-check --disable-popup-blocking");
                 }
                 else Process.Start(server.Url); // the default browser
             }
@@ -542,7 +633,7 @@ namespace PoE2CraftAssistant
 
         void Quit()
         {
-            try { focus.Stop(); copy.Stop(); if (registered) Native.UnregisterHotKey(win.Handle, 1); } catch (Exception) { }
+            try { focus.Stop(); copy.Stop(); panel.Stop(); if (registered) Native.UnregisterHotKey(win.Handle, 1); } catch (Exception) { }
             // the window goes with the program: without it the page has nothing to load from
             try { IntPtr h = Native.FindWindowByTitle(PAGE_TITLE); if (h != IntPtr.Zero) Native.PostMessage(h, 0x0010, IntPtr.Zero, IntPtr.Zero); } catch (Exception) { }
             if (server != null) server.Stop();
