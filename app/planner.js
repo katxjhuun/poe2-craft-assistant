@@ -940,11 +940,15 @@
   }
   /** The rune (kb.augments) for this item class whose text matches, e.g. Medved's Tending for "Can roll Soul modifiers". */
   function runeFor(ctx, re) {
+    const memo = ctx._runeFor || (ctx._runeFor = new Map());
+    if (memo.has(re.source)) return memo.get(re.source);
+    let hit = null;
     for (const [name, a] of Object.entries(ctx.kb.augments || {})) {
       const c = (a.by_class || {})[ctx.cls];
-      if (c && (c.txt || []).some((t) => re.test(t)) && !/of Aldur$/.test(name)) return name;
+      if (c && (c.txt || []).some((t) => re.test(t)) && !/of Aldur$/.test(name)) { hit = name; break; }
     }
-    return null;
+    memo.set(re.source, hit);
+    return hit;
   }
   // catalyst per modifier tag (item texts: Flesh = Life, Neural = Mana, ...); Refined ones for jewels
   const CATALYST_NAME = { life: 'Flesh Catalyst', mana: 'Neural Catalyst', defences: 'Carapace Catalyst', physical: "Uul-Netol's Catalyst",
@@ -954,6 +958,13 @@
   const ELEMENT_WORDS = ['Fire', 'Cold', 'Lightning', 'Chaos'];
   /** The modifier a Rune of Aldur turns this one into: its id with the element named the rune's way (same tier), if it exists. */
   function aldurTwin(ctx, id, to) {
+    // the same answer for a modifier and an element every time: kept per context (the policy asks on every step)
+    const memo = ctx._twin || (ctx._twin = new Map());
+    const key = id + '|' + to;
+    if (!memo.has(key)) memo.set(key, aldurTwinOf(ctx, id, to));
+    return memo.get(key);
+  }
+  function aldurTwinOf(ctx, id, to) {
     const m = ctx.kb.mods[id];
     const pe = ctx.pool.get(id);
     for (const el of ELEMENT_WORDS) {
@@ -1379,6 +1390,26 @@
       const r = runeCandidate(st, left);
       return r && params.runes !== false ? r : null;
     }
+    // The same on every step of a run: the goals' counts, and the families a Rune of Aldur would have to produce.
+    const nEssGoals = goals.filter((g) => g.essenceOnly).length;
+    const nSuffixGoals = goals.filter((g) => g.side === 'suffix').length;
+    const anyPooled = goals.some((g) => g.rune);
+    const goalFams = new Set(goals.map((g) => g.fam));
+    const ALDUR_RUNES = Object.keys(ALDUR_ELEMENT);
+    /**
+     * The Runes of Aldur that turn this modifier into one of a goal's family (only such a rune can finish a goal), or
+     * null. Worked out once per modifier: the policy asks on every step.
+     */
+    const aldurMemo = new Map();
+    function aldurOf(id) {
+      let v = aldurMemo.get(id);
+      if (v === undefined) {
+        const list = ALDUR_RUNES.filter((item) => { const t = aldurTwin(ctx, id, ALDUR_ELEMENT[item]); return !!t && t !== id && goalFams.has(ctx.kb.mods[t].fam); });
+        v = list.length ? list : null;
+        aldurMemo.set(id, v);
+      }
+      return v;
+    }
     function runeCandidate(st, left) {
       // a rune goes into a free augment socket; where none is free an Artificer's Orb adds one first (if the class takes it)
       const socket = (a) => {
@@ -1389,22 +1420,22 @@
       // A goal from a pool that a rune opens ("Can roll Marksman modifiers"): the rune goes in once the goals that roll
       // from the item's own pool are finished. While it is socketed its modifiers roll as well, so every Exalted or
       // Chaos Orb for the other goals would hit less often; and a base that is thrown away before costs no rune.
-      const pooled = left.find((g) => shut(st, g));
+      const pooled = anyPooled ? left.find((g) => shut(st, g)) : null;
       if (pooled && !left.some((g) => !g.rune && !g.des && !g.essenceOnly)) {
         const a = socket({ op: 'rune_rule', item: pooled.runeItem });
         if (a) return a;
       }
       // Astrid's Creativity: more crafted-modifier goals than crafted slots
       const cap = (ctx.craftedCap || 1) + (st.xCrafted || 0);
-      if (goals.filter((g) => g.essenceOnly).length > cap) {
+      if (nEssGoals > cap) {
         const r = runeFor(ctx, /additional Crafted Modifier/i);
         const a = r && socket({ op: 'rune_rule', item: r });
         if (a) return a;
       }
       // Serle's Triumph (+1 Suffix Modifier allowed): a fourth suffix goal. It is socketed once the Rare item's suffix
       // slots all hold goals, so a base that is thrown away before that costs no rune.
-      const sLim = limitsBase(ctx, Object.assign({}, st, { rarity: 'Rare' })).suffix + (st.xSuffix || 0);
-      if (st.rarity === 'Rare' && goals.filter((g) => g.side === 'suffix').length > sLim && left.some((g) => g.side === 'suffix')) {
+      const sLim = limitsBase(ctx, st.rarity === 'Rare' ? st : { rarity: 'Rare', mods: st.mods }).suffix + (st.xSuffix || 0);
+      if (st.rarity === 'Rare' && nSuffixGoals > sLim && left.some((g) => g.side === 'suffix')) {
         const onS = st.mods.filter((m) => m.side === 'suffix');
         if (onS.length >= sLim && onS.every((m) => useful(m, goals))) {
           const r = runeFor(ctx, /Suffix Modifiers? allowed/i);
@@ -1415,14 +1446,24 @@
       // a Rune of Aldur that finishes element goals from the other elements' modifiers, keeping every finished goal.
       // Sockets go to the runes that open a slot first: with one socket (a spear, a one-hand mace) and a fourth suffix
       // goal, an Aldur rune would leave no socket for Serle's Triumph.
-      const reserve = (goals.some((g) => shut(st, g)) ? 1 : 0)
-        + (goals.filter((g) => g.side === 'suffix').length > sLim && runeFor(ctx, /Suffix Modifiers? allowed/i) ? 1 : 0)
-        + (goals.filter((g) => g.essenceOnly).length > cap && runeFor(ctx, /additional Crafted Modifier/i) ? 1 : 0);
+      if (st.aldur || !(st.rarity === 'Magic' || st.rarity === 'Rare')) return null;
+      // only the runes that can produce a goal's family are worth the checks below (they copy the item to try the rune)
+      let found = null;
+      for (const m of st.mods) {
+        if (m.frac || !m.id) continue;
+        const v = aldurOf(m.id);
+        if (v) { if (!found) found = new Set(); for (const x of v) found.add(x); }
+      }
+      if (!found) return null;
+      const helps = ALDUR_RUNES.filter((item) => found.has(item)); // tried in their usual order
+      const reserve = (anyPooled && goals.some((g) => shut(st, g)) ? 1 : 0)
+        + (nSuffixGoals > sLim && runeFor(ctx, /Suffix Modifiers? allowed/i) ? 1 : 0)
+        + (nEssGoals > cap && runeFor(ctx, /additional Crafted Modifier/i) ? 1 : 0);
       const canAdd = validate(ctx, Object.assign({}, st, { sockets: 0 }), { op: 'artificer' }) === null || socketsOf(ctx, st) < maxSockets(ctx.cls)
         ? Math.max(0, maxSockets(ctx.cls) - socketsOf(ctx, st)) : 0;
       const spare = freeSockets(ctx, st) + (MARTIAL.includes(ctx.cls) || ctx.cls === 'Wand' || ctx.cls === 'Staff' || ARMOUR.includes(ctx.cls) ? canAdd : 0) - reserve;
-      if (spare > 0 && !st.aldur && (st.rarity === 'Magic' || st.rarity === 'Rare')) {
-        for (const item of Object.keys(ALDUR_ELEMENT)) {
+      if (spare > 0) {
+        for (const item of helps) {
           const a = { op: 'aldur', item };
           if (validate(ctx, st, a) === NO_SOCKET) { // the rune would finish a goal: an Artificer's Orb for its socket first
             const art = { op: 'artificer' };
