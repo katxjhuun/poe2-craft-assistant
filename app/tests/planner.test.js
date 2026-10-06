@@ -479,23 +479,54 @@ test('7.4 beam search never returns a worse plan than the screened grid', async 
   assert.ok(score(better) <= score(pl) + 1e-9, `search result ${score(better)} vs grid ${score(pl)}`);
 });
 
-test('an omen without a price is left out of the plan instead of counting as free', async () => {
+test('an omen without a price is left out of the plan instead of counting as free', () => {
   const item = E.parseItem(ix, 'Item Class: Sceptres\nRarity: Normal\nRattling Sceptre\n--------\nItem Level: 82').item;
-  const targets = { // two suffixes need a Rare, so the plan goes through a Regal Orb (where Coronation omens aim)
+  const targets = { // two suffixes need a Rare, so the strategy goes through a Regal Orb (where Coronation omens aim)
     'suffix-0': { fam: 'GlobalIncreaseMinionSpellSkillGemLevelWeapon', group: 'suffix', minTier: 2, required: true, label: 'minion level' },
     'suffix-1': { fam: 'MinionLife', group: 'suffix', minTier: 3, required: true, label: 'minion life' },
   };
+  const ctx = P.makeContext(ix, item);
+  const st = P.toState(ctx, item);
+  const { goals } = P.goalsFromTargets(ctx, targets);
+  goals.forEach((g) => { g.eff = g.tier; });
+  const params = P.expandStrategy({ tier: 'greater', sideOmens: true, start: 'transmute' }); // a strategy that aims with side omens
   const priceOf = (n) => (/Coronation/.test(n) ? null : 5);
-  const out = await P.buildPlans({ ix, item, targets, locks: {}, priceOf, trials: 400, screenTrials: 80, beamBudgetMs: 0 });
-  const bal = out.profiles.balanced;
-  assert.ok(bal.params.sideOmens, 'the balanced grid aims with side omens');
-  assert.ok(!bal.missingPrices.some((n) => /Coronation/.test(n)), 'not counted at 0');
-  assert.ok(bal.skippedUnpriced.some((n) => /Coronation/.test(n)), 'reported as left out');
-  assert.ok(!bal.steps.some((s) => s.names.some((n) => /Coronation/.test(n))), 'no step uses it');
-  assert.ok(bal.steps.some((s) => s.names.includes('Omen of Dextral Exaltation')), 'priced side omens are still used');
+  const r = P.simulate(ctx, st, goals, params, { trials: 400, seed: 5, priceOf, baseCost: 1 });
+  assert.ok(!r.missingPrices.some((n) => /Coronation/.test(n)), 'not counted at 0');
+  assert.ok(r.skippedUnpriced.some((n) => /Coronation/.test(n)), 'reported as left out');
+  assert.ok(!r.steps.some((x) => x.names.some((n) => /Coronation/.test(n))), 'no step uses it');
+  assert.ok(r.steps.some((x) => x.names.includes('Omen of Dextral Exaltation')), 'priced side omens are still used');
   // with a price the omen comes back
-  const priced = await P.buildPlans({ ix, item, targets, locks: {}, priceOf: () => 5, trials: 400, screenTrials: 80, beamBudgetMs: 0 });
-  assert.deepEqual(priced.profiles.balanced.skippedUnpriced, []);
+  const priced = P.simulate(ctx, st, goals, params, { trials: 400, seed: 5, priceOf: () => 5, baseCost: 1 });
+  assert.deepEqual(priced.skippedUnpriced, []);
+  assert.ok(priced.steps.some((x) => x.names.some((n) => /Coronation/.test(n))), 'the priced omen is used');
+});
+
+test('Omen of Homogenising without a price is left out, and a plan that needs an unpriced item ranks last', () => {
+  const item = parse('rare-sceptre-adv');
+  const lvl = item.mods.find((x) => /Level of all Minion/.test(x.text));
+  const ctx = P.makeContext(ix, item);
+  const st = P.toState(ctx, item);
+  const { goals } = P.goalsFromTargets(ctx, { 'suffix-0': { fam: lvl.fam, group: 'suffix', minTier: 1, required: true, label: 'lvl' } });
+  goals.forEach((g) => { g.eff = g.tier; });
+  const params = P.expandStrategy({ tier: 'greater', homog: true });
+  // priced: the omen is part of the exalt steps
+  const withOmen = P.simulate(ctx, st, goals, params, { trials: 300, seed: 5, priceOf: () => 10 });
+  assert.ok(withOmen.steps.some((x) => x.names.includes('Omen of Homogenising Exaltation')), 'the strategy uses the omen when it has a price');
+  // no price: left out and reported, never counted as free
+  const noPrice = (n) => (/Homogenising/.test(n) ? null : 10);
+  const without = P.simulate(ctx, st, goals, params, { trials: 300, seed: 5, priceOf: noPrice });
+  assert.ok(!without.steps.some((x) => x.names.some((n) => /Homogenising/.test(n))), 'no step uses the unpriced omen');
+  assert.deepEqual(without.missingPrices, []);
+  // the same moves as the strategy without the setting
+  const plain = P.simulate(ctx, st, goals, P.expandStrategy({ tier: 'greater' }), { trials: 300, seed: 5, priceOf: noPrice });
+  assert.equal(without.meanCost, plain.meanCost);
+  // a result that counted something at 0 ranks behind a fully priced one in every profile, whatever its cost
+  for (const prof of Object.values(P.PROFILES)) {
+    const priced = { p: 0.3, costPerSuccess: 9e6, basesPerSuccess: 1, baseLimit: 100, missingPrices: [] };
+    const free = { p: 1, costPerSuccess: 1, basesPerSuccess: 1, baseLimit: 100, missingPrices: ['Ancient Cranium'] };
+    assert.ok(prof.score(priced) < prof.score(free), prof.label);
+  }
 });
 
 test('white base: starting over (pair, slamOnly) beats paying for removals, and counts the bases a finished item takes', () => {

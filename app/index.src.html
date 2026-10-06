@@ -2816,7 +2816,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       S.planState = 'searching'; renderPlan();
       for (let i = 0; i < todo.length; i++) {
         const k = todo[i];
-        const imp = await P.improvePlan(Object.assign({}, input, { beamBudgetMs: 1500 }), out.profiles[k], (f) => { if (gen === planGen) { S.planProgress = (i + f) / todo.length; drawProgress(); } });
+        const imp = await P.improvePlan(Object.assign({}, input, { beamBudgetMs: P.SEARCH.budgetMs }), out.profiles[k], (f) => { if (gen === planGen) { S.planProgress = (i + f) / todo.length; drawProgress(); } });
         if (gen !== planGen) return;
         out.profiles[k] = imp;
         renderPlan(); renderPrice();

@@ -126,12 +126,16 @@
     const drop = (name) => { if (priced(name)) return false; if (skipped) skipped.add(name); return true; };
     const b = Object.assign({}, a);
     switch (a.op) {
-      case 'regal': if (a.side && drop(OMEN.coronation[a.side])) b.side = null; break;
+      case 'regal':
+        if (a.side && drop(OMEN.coronation[a.side])) b.side = null;
+        if (a.homog && drop(OMEN.homogRegal)) b.homog = false;
+        break;
       case 'alchemy': if (a.side && drop(OMEN.alchemy[a.side])) b.side = null; break;
       case 'exalt':
         if (a.side && drop(OMEN.exalt[a.side])) b.side = null;
         if (a.greater && drop(OMEN.greaterExalt)) b.greater = false;
         if (a.catalyse && drop(OMEN.catalyse)) b.catalyse = false;
+        if (a.homog && drop(OMEN.homogExalt)) b.homog = false;
         break;
       case 'chaos':
         if (a.whittle && drop(OMEN.whittling)) b.whittle = false;
@@ -145,6 +149,7 @@
         if (a.side && drop(OMEN.necro[a.side])) b.side = null;
         if (a.echoes && drop(OMEN.echoes)) b.echoes = false;
         break;
+      case 'pessence': if (a.side && drop(OMEN.crystal[a.side])) b.side = null; break;
       default: return a;
     }
     return b;
@@ -1203,7 +1208,7 @@
    *                    the side too, and the one the goal asks for is kept (echoes: reroll the three once)
    *  essence: bool     use an essence when one guarantees an unmet goal (and the crafted slot is free)
    */
-  function makePolicy(ctx, goals, params) {
+  function makePolicy(ctx, goals, params, priced) {
     // Each setting is read only where its value can change the move (state checks come first). The exhaustive sweep
     // (scripts/selftest/sweep.js) records which settings a run reads to group strategies that behave the same.
     const unmet = (st) => goals.filter((g) => !goalMet(st, g));
@@ -1298,7 +1303,7 @@
           if (junk && left.some((x) => x.side === junk.side && !x.des && !x.essenceOnly) && params.pair && params.restart) return { op: 'newbase' };
         }
         if (open(ctx, st, 'prefix') + open(ctx, st, 'suffix') > 0 && st.mods.length < 2) return { op: 'augment', tier: params.magicTier || params.tier };
-        return { op: 'regal', tier: params.magicTier || params.tier, side: lean && params.sideOmens ? lean : null, homog: homogHelps(st, left.filter((x) => !x.des && !x.essenceOnly)) };
+        return { op: 'regal', tier: params.magicTier || params.tier, side: lean && params.sideOmens ? lean : null, homog: homogHelps(st, left.filter((x) => !x.des && !x.essenceOnly), OMEN.homogRegal) };
       }
       if (R !== 'Rare') return { fail: 'unsupported rarity' };
       const desJunk = st.mods.find((m) => m.des && !useful(m, goals) && !m.frac);
@@ -1363,15 +1368,15 @@
         }
         const two = open(ctx, st, g.side) >= 2 && left.filter((x) => x.side === g.side && !x.des).length >= 2 && !!params.greaterExalt;
         const catalyse = !!(st.catQ > 0 && st.catTag && famHasTag(ctx, g.fam, st.catTag) && params.catalyse);
-        return { op: 'exalt', tier: params.exaltTier || params.tier, side: params.sideOmens ? g.side : null, greater: two, catalyse, homog: homogHelps(st, [g]) };
+        return { op: 'exalt', tier: params.exaltTier || params.tier, side: params.sideOmens ? g.side : null, greater: two, catalyse, homog: homogHelps(st, [g], OMEN.homogExalt) };
       }
       if (!g.des && !st.mods.some((m) => m.frac || m.lock) && params.slamOnly && params.restart) return { op: 'newbase' };
       return removal(st, g.side, desJunk);
     };
 
     /** Omen of Homogenising: when every goal the slam is for shares a modifier type with the item, the pool narrows to those types. */
-    function homogHelps(st, gs) {
-      if (!gs.length) return false;
+    function homogHelps(st, gs, omen) {
+      if (!gs.length || (priced && !priced(omen))) return false;
       const have = homogTypes(ctx, st);
       return !!have && gs.every((g) => (ctx.ix.famMods.get(g.fam) || []).some((id) => typesOf(ctx, id).some((t) => have.has(t)))) && !!params.homog;
     }
@@ -1467,7 +1472,7 @@
   function createRun(ctx, st0, goals, params, opts) {
     if (goals.some((g) => g.minValue != null)) ctx.needValues = true;
     const rng = rngFrom(opts.seed || 1);
-    const policy = makePolicy(ctx, goals, params);
+    const policy = makePolicy(ctx, goals, params, opts.priceOf ? (n) => opts.priceOf(n) != null : null);
     const skipped = new Set();
     const next = opts.priceOf ? (st) => withoutUnpriced(policy(st), (n) => opts.priceOf(n) != null, skipped) : policy;
     const pick = pickFor(goals, ctx);
@@ -1669,6 +1674,11 @@
 
   /** Does the plan keep to the player's limit of white bases per finished item? */
   const fits = (r) => !(r.baseLimit > 0 && r.basesPerSuccess > r.baseLimit);
+  /**
+   * A plan that needs something without a price (a bone or an essence nobody listed) counts it at 0, so its cost is not
+   * known: such plans rank behind every fully priced plan in each profile, and the page marks them.
+   */
+  const unpriced = (r) => (r.missingPrices && r.missingPrices.length ? 1e17 : 0);
   const PROFILES = {
     cheap: {
       label: 'Cheap',
@@ -1676,7 +1686,7 @@
       grid: () => cross({ tier: ['base', 'greater'], sideOmens: [false, true], greaterExalt: [false], removal: ['chaos', 'erasure', 'annul'],
         start: ['alchemy', 'transmute'], restart: [true], bone: ['Preserved'], echoes: [false], lich: [false], essence: [false, true] }),
       // cheapest per success among strategies that succeed at least one run in five (else the most likely one)
-      score: (r) => (!fits(r) ? 1e16 + r.basesPerSuccess : r.p >= 0.2 ? r.costPerSuccess : 1e15 * (2 - r.p)),
+      score: (r) => unpriced(r) + (!fits(r) ? 1e16 + r.basesPerSuccess : r.p >= 0.2 ? r.costPerSuccess : 1e15 * (2 - r.p)),
     },
     balanced: {
       label: 'Balanced',
@@ -1684,7 +1694,7 @@
       grid: () => cross({ tier: ['greater', 'perfect'], sideOmens: [true], greaterExalt: [false, true], removal: ['chaos', 'erasure', 'whittle', 'annul'],
         start: ['transmute', 'alchemy'], restart: [true], bone: ['Preserved'], echoes: [true], lich: [true], essence: [false, true] }),
       // cost per success, weighed by the chance to finish; strategies that fail more often than not only as a last resort
-      score: (r) => (!fits(r) ? 1e16 + r.basesPerSuccess : r.p >= 0.5 ? r.costPerSuccess * (1 + 0.6 * (1 - r.p)) : 1e15 * (2 - r.p)),
+      score: (r) => unpriced(r) + (!fits(r) ? 1e16 + r.basesPerSuccess : r.p >= 0.5 ? r.costPerSuccess * (1 + 0.6 * (1 - r.p)) : 1e15 * (2 - r.p)),
     },
     premium: {
       label: 'Premium',
@@ -1693,7 +1703,7 @@
         start: ['transmute'], restart: [true], bone: ['Ancient', 'Preserved'], echoes: [true], lich: [true], essence: [false, true] }),
       // Highest success first, but a 10x cost must buy at least 5 points of success; near-certain (98%+) strategies
       // compare on cost alone.
-      score: (r) => (!fits(r) ? 10 + r.basesPerSuccess / 1e9 : -(Math.min(r.p, 0.98) - 0.05 * Math.log10(1 + r.costPerSuccess))),
+      score: (r) => unpriced(r) + (!fits(r) ? 10 + r.basesPerSuccess / 1e9 : -(Math.min(r.p, 0.98) - 0.05 * Math.log10(1 + r.costPerSuccess))),
     },
   };
 
@@ -1710,7 +1720,8 @@
   // ---------------------------------------------------------------- candidate generation (master prompt 7.4)
   // Candidates come from (a) the profile's grid of strategies, (b) recipes of the library whose goals overlap the
   // player's, turned into strategy settings, and (c) a bounded beam search that changes one setting at a time from the
-  // best candidates (width 6, depth up to 8, with a time limit). Every candidate is simulated and scored by the profile.
+  // best candidates (width 3, depth up to 8, with a time limit). Every candidate is simulated and scored by the profile.
+  // The exhaustive sweep (scripts/selftest/sweep.js) measures how often this search ends on the verified best strategy.
 
   /** The strategy settings the beam search moves along, one at a time. */
   const SPACE = {
@@ -1719,7 +1730,18 @@
     essence: [false, true], fracture: [false, true], catalyse: [false, true], flux: [true, false],
     bone: ['Gnawed', 'Preserved', 'Ancient'], echoes: [false, true], lich: [false, true], desSlam: [false, true], homog: [false, true],
   };
-  const BEAM_WIDTH = 6, BEAM_DEPTH = 8;
+  const BEAM_WIDTH = 3, BEAM_DEPTH = 8;
+  /**
+   * The search's run lengths (trials) with their time limits, how many short runs get a long one (keepSeeds after the
+   * seeds, keep per round of the beam search), the shared random seed, the default time for the beam search of one
+   * profile (budgetMs), and the time the pick may spend on settings that only matter on rare paths (tailMs).
+   */
+  const SEARCH = { lo: 40, hi: 200, top: 800, loMs: 150, hiMs: 400, topMs: 1200, keep: 6, keepSeeds: 10, seed: 7, budgetMs: 6000, tailMs: 2500 };
+  /** Settings in the order the pick tries them on rare paths: the ones that leave an expensive dead end first. */
+  const TAIL_ORDER = ['pair', 'slamOnly', 'chaosTier', 'removal', 'exaltTier', 'homog', 'sideOmens', 'desSlam', 'greaterExalt', 'catalyse', 'bone', 'echoes', 'fracture', 'flux'];
+  /** The order the search tries settings in: the ones that most often separate the best strategy in the exhaustive sweep first. */
+  const SEARCH_ORDER = ['homog', 'exaltTier', 'removal', 'sideOmens', 'catalyse', 'chaosTier', 'essence', 'magicTier', 'start', 'slamOnly', 'pair', 'restart',
+    'greaterExalt', 'desSlam', 'bone', 'echoes', 'fracture', 'flux', 'lich'];
   /** A complete strategy: the per-operation orb tiers filled from `tier`, every setting present. */
   function expandStrategy(p) {
     const t = p.tier || 'base';
@@ -1773,6 +1795,10 @@
       if (seen.has(k)) continue;
       seen.add(k);
       for (const v of [{ pair: true, slamOnly: true }, { slamOnly: true }]) extra.push(Object.assign({}, p, v));
+      // From a white base an Orb of Alchemy too, alone and with a new base when the Rare item's sides fill up with
+      // unwanted mods: together a third of the best routes from a white base in the exhaustive sweep, and the search
+      // cannot reach the second by changing one setting at a time (Alchemy alone is usually worse).
+      if (st.rarity === 'Normal') for (const v of [{ start: 'alchemy', slamOnly: true }, { start: 'alchemy' }]) extra.push(Object.assign({}, p, v));
     }
     return grid.concat(extra);
   }
@@ -1791,42 +1817,227 @@
     return alt ? { bases: Math.ceil(alt.basesPerSuccess), cps: alt.costPerSuccess, p: alt.p } : null;
   }
 
-  /** Screening runs of one profile: every candidate simulated once, identical ones (on this item) shared. */
+  /**
+   * The search of one profile. Strategies are simulated with the same random numbers, and the settings a run reads are
+   * recorded: two strategies that agree on every setting read make the same moves, so they share one run (a "class").
+   * Runs come in three lengths (SEARCH.lo, .hi, .top trials); a class is continued, never started again, when it gets a
+   * longer run. Decisions use classes with the long run; the short one only decides who gets a long run, by an
+   * optimistic estimate, so a few unlucky trials do not drop a good strategy.
+   */
   function makeScreen(ctx, st, pg, input) {
-    const keys = relevantKeys(st, pg);
-    const sigOf = (p) => JSON.stringify(keys.map((k) => p[k]));
-    const evaluated = new Map();
-    const opts = { trials: input.screenTrials || 200, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, cancelled: input.cancelled,
-      baseLimit: input.baseLimit, maxSteps: 250, timeBudgetMs: 400, minTrials: 60 };
-    async function screen(p, from) {
+    const rank = (k) => { const i = SEARCH_ORDER.indexOf(k); return i < 0 ? SEARCH_ORDER.length : i; };
+    const keys = relevantKeys(st, pg).sort((a, b) => rank(a) - rank(b));
+    const ALL = Object.keys(SPACE).concat('runes');
+    const sigOf = (p) => ALL.map((k) => p[k]).join('|');
+    const hi = input.screenTrials || SEARCH.hi, lo = Math.min(SEARCH.lo, hi);
+    const LEVELS = [{ n: lo, ms: SEARCH.loMs, min: Math.min(12, lo) }, { n: hi, ms: SEARCH.hiMs, min: Math.min(60, hi) }, { n: Math.max(SEARCH.top, hi), ms: SEARCH.topMs, min: hi }];
+    const base = { seed: SEARCH.seed, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, baseLimit: input.baseLimit };
+    const classes = [], bySig = new Map();
+    function find(full, sig) {
+      const hit = bySig.get(sig);
+      if (hit) return hit;
+      for (const c of classes) {
+        if (!c.run.done) continue;
+        let same = true;
+        for (const k of c.reads) if (full[k] !== c.params[k]) { same = false; break; }
+        if (same) { c.members.push({ sig, full }); bySig.set(sig, c); return c; }
+      }
+      return null;
+    }
+    function create(full, sig, from) {
+      const reads = [], seen = new Set();
+      const px = new Proxy(full, { get(t, k) { if (typeof k === 'string' && !seen.has(k)) { seen.add(k); if (k in SPACE || k === 'runes') reads.push(k); } return t[k]; } });
+      const c = { params: full, sig, reads, known: 0, run: createRun(ctx, st, pg, px, base), r: null, from: from || null, members: [], split: [], level: -1, expanded: false };
+      classes.push(c); bySig.set(sig, c);
+      return c;
+    }
+    /** Continue a class to the run length of `level` (or its time limit). */
+    async function raise(c, level) {
+      if (c.level >= level) return c;
+      const L = LEVELS[level];
+      const t0 = Date.now();
+      let last = t0;
+      while (c.run.done < L.n) {
+        if (input.cancelled && input.cancelled()) throw new Error('cancelled');
+        c.run.step(Math.min(10, L.n - c.run.done));
+        const now = Date.now();
+        if (now - t0 > L.ms && c.run.done >= L.min) break;
+        if (now - last > 30) { await tick(); last = Date.now(); }
+      }
+      c.level = level;
+      const r = c.run.result();
+      r.params = c.params; r.from = c.from;
+      c.r = r;
+      // a setting read for the first time splits the class: members that differ there are on their own again
+      if (c.reads.length > c.known) {
+        const fresh = c.reads.slice(c.known);
+        c.known = c.reads.length;
+        const seenSplit = new Set();
+        c.members = c.members.filter((m) => {
+          if (fresh.every((k) => m.full[k] === c.params[k])) return true;
+          bySig.delete(m.sig);
+          // one of each combination of the new settings is enough: the rest of their settings were not read
+          const combo = fresh.map((k) => m.full[k]).join('|');
+          if (!seenSplit.has(combo)) { seenSplit.add(combo); c.split.push(m); }
+          return false;
+        });
+      }
+      return c;
+    }
+    /**
+     * Strategies that shared a class's run until a longer run read another setting get a run of their own (up to 8 per
+     * class): the one that split off may be the better one, for example the cheaper orb tier on a path that is rare.
+     */
+    async function adopt(c, level) {
+      for (const m of c.split.splice(0).slice(0, 8)) await ensure(m.full, level, c.from);
+    }
+    /** The class of a strategy with at least the run of `level`. */
+    async function ensure(p, level, from) {
       const full = expandStrategy(p);
       const sig = sigOf(full);
-      if (evaluated.has(sig)) return evaluated.get(sig);
-      const r = await simulateAsync(ctx, st, pg, full, Object.assign({ seed: 7 + evaluated.size }, opts));
-      r.from = from || null;
-      evaluated.set(sig, r);
-      return r;
-    }
-    return { keys, sigOf, evaluated, screen };
-  }
-  /** Beam search (width 6, depth up to 8, time limit): change one setting of the best candidates at a time. */
-  async function beamSearch(sc, prof, budgetMs, onProgress) {
-    const rank = () => [...sc.evaluated.values()].filter((r) => r.p > 0).sort((a, b) => prof.score(a) - prof.score(b)).slice(0, BEAM_WIDTH);
-    let beam = rank(), depth = 0;
-    const t0 = Date.now();
-    while (beam.length && depth < BEAM_DEPTH && Date.now() - t0 < budgetMs) {
-      const before = beam.map((r) => sc.sigOf(r.params)).join('|');
-      for (const r of beam) for (const k of sc.keys) for (const v of SPACE[k]) {
-        if (r.params[k] === v || Date.now() - t0 >= budgetMs) continue;
-        await sc.screen(Object.assign({}, r.params, { [k]: v }), r.from && r.from.recipe ? r.from : { search: true });
-        if (onProgress) onProgress(Math.min(1, (Date.now() - t0) / budgetMs));
+      for (;;) {
+        const c = find(full, sig) || create(full, sig, from);
+        await raise(c, level);
+        if (bySig.get(sig) === c) return c;
       }
-      depth++;
-      beam = rank();
-      if (beam.map((r) => sc.sigOf(r.params)).join('|') === before) break; // no better neighbour: converged
     }
-    return { best: beam[0] || null, depth };
+    const optimistic = (r) => {
+      const n = r.trials, pu = Math.min(1, (r.p + 1 / (2 * n) + Math.sqrt(r.p * (1 - r.p) / n + 1 / (4 * n * n))) / (1 + 1 / n));
+      return Object.assign({}, r, { p: pu, costPerSuccess: r.meanCost / pu, basesPerSuccess: r.meanBases / pu });
+    };
+    const top = (prof, level) => classes.filter((c) => c.level >= level && c.r.p > 0).sort((a, b) => prof.score(a.r) - prof.score(b.r));
+    /** Long runs for the classes that only had the short one and may (optimistically) beat `bar`; at most n of them. */
+    async function promote(prof, n, bar) {
+      const cands = classes.filter((c) => c.level === 0).map((c) => ({ c, s: prof.score(optimistic(c.r)) })).sort((a, b) => a.s - b.s);
+      let done = 0;
+      for (const { c, s } of cands) {
+        if (done >= n || (bar != null && s >= bar)) break;
+        if (c.level !== 0) continue;
+        await raise(c, 1);
+        await adopt(c, 0);
+        done++;
+      }
+    }
+    /** Seeds: every candidate with the short run, the best of them with the long one. */
+    async function seed(cands, prof, onEach) {
+      for (const x of cands) { await ensure(x.p, 0, x.from); if (onEach) onEach(); }
+      await promote(prof, SEARCH.keepSeeds, null);
+    }
+    /**
+     * Beam search: from the best classes, change one setting at a time (short runs); neighbours that may beat the
+     * beam get the long run; stop when the best classes have all been expanded, at the depth limit or the time limit.
+     */
+    async function beam(prof, budgetMs, onProgress) {
+      const t0 = Date.now();
+      const left = () => budgetMs - (Date.now() - t0);
+      let depth = 0;
+      while (depth < BEAM_DEPTH && left() > 0) {
+        const front = top(prof, 1).slice(0, BEAM_WIDTH).filter((c) => !c.expanded);
+        if (!front.length) break;
+        for (const c of front) {
+          let whole = true;
+          const from = c.from && c.from.recipe ? c.from : { search: true };
+          const moves = [];
+          for (const k of keys) for (const v of SPACE[k]) {
+            if (c.params[k] === v) continue;
+            if (left() <= 0) { whole = false; break; }
+            const n = await ensure(Object.assign({}, c.params, { [k]: v }), 0, from);
+            if (n !== c) moves.push({ k, v, s: prof.score(optimistic(n.r)) });
+            if (onProgress) onProgress(Math.min(1, (Date.now() - t0) / budgetMs));
+          }
+          // two changes that each look better than the class are tried together as well (the best three, in pairs)
+          const own = prof.score(optimistic(c.r));
+          const good = [];
+          for (const m of moves.filter((x) => x.s < own).sort((a, b) => a.s - b.s)) if (!good.some((g) => g.k === m.k)) { good.push(m); if (good.length === 3) break; }
+          for (let i = 0; i < good.length; i++) for (let j = i + 1; j < good.length; j++) {
+            if (left() <= 0) break;
+            await ensure(Object.assign({}, c.params, { [good[i].k]: good[i].v, [good[j].k]: good[j].v }), 0, from);
+          }
+          if (whole) c.expanded = true;
+        }
+        const beamNow = top(prof, 1).slice(0, BEAM_WIDTH);
+        await promote(prof, SEARCH.keep, beamNow.length >= BEAM_WIDTH ? prof.score(beamNow[beamNow.length - 1].r) : null);
+        depth++;
+      }
+      return depth;
+    }
+    /** The pick: the best class by its long run; `deep` runs the best three once more, longer, and picks among those. */
+    async function pick(prof, deep) {
+      if (!deep) return top(prof, 1)[0] || null;
+      const t0 = Date.now();
+      const tail = (k) => { const i = TAIL_ORDER.indexOf(k); return i < 0 ? TAIL_ORDER.length : i; };
+      // until the best three have all had the longest run
+      for (let round = 0; round < 3; round++) {
+        const best = top(prof, 1).slice(0, 3).filter((c) => c.level < 2);
+        if (!best.length) break;
+        for (const c of best) {
+          const before = c.reads.length;
+          await raise(c, 2);
+          c.split.length = 0;
+          // A setting the longest run read for the first time only matters on a rare path, but such a path can carry much
+          // of the cost (a dead end that takes hundreds of Chaos Orbs): its other values get the longest run too.
+          const fresh = c.reads.slice(before).filter((k) => keys.includes(k)).sort((a, b) => tail(a) - tail(b));
+          for (const k of fresh) for (const v of SPACE[k]) {
+            if (v === c.params[k] || Date.now() - t0 > SEARCH.tailMs) continue;
+            const full = expandStrategy(Object.assign({}, c.params, { [k]: v }));
+            const sig = sigOf(full);
+            let d = bySig.get(sig);
+            if (!d || d.sig !== sig) { // not on its own yet: it shared a shorter run with another class
+              if (d) d.members = d.members.filter((m) => m.sig !== sig);
+              d = create(full, sig, { search: true });
+            }
+            await raise(d, 2);
+          }
+        }
+      }
+      return top(prof, 2)[0] || top(prof, 1)[0] || null;
+    }
+    return {
+      keys, ensure, seed, beam, pick, top, classes,
+      count: () => bySig.size,
+      results: () => classes.filter((c) => c.r).map((c) => c.r),
+      same: (a, b) => { const fa = expandStrategy(a), fb = expandStrategy(b); const ca = find(fa, sigOf(fa)); return !!ca && ca === find(fb, sigOf(fb)); },
+    };
   }
+  /**
+   * Routes the exhaustive sweep found best most often (scripts/selftest/sweep.js, reports/sweep-latest.md), as settings on
+   * top of the defaults. Several pay off only together, such as Greater Exalted Orbs with Omen of Homogenising Exaltation
+   * and Orbs of Annulment, or an Orb of Alchemy with a new base on a miss; a search that changes one setting at a time
+   * does not reach those, so every profile starts from them as well as from its own grid.
+   */
+  const ROUTES_RARE = [
+    {}, { exaltTier: 'greater' }, { homog: true }, { sideOmens: true }, { homog: true, sideOmens: true },
+    { exaltTier: 'greater', homog: true }, { exaltTier: 'greater', sideOmens: true }, { exaltTier: 'greater', homog: true, sideOmens: true },
+    { exaltTier: 'greater', homog: true, removal: 'annul' }, { exaltTier: 'greater', homog: true, removal: 'annul', greaterExalt: true },
+    { exaltTier: 'perfect', homog: true, removal: 'annul' },
+    { exaltTier: 'greater', chaosTier: 'greater' }, { exaltTier: 'greater', chaosTier: 'greater', homog: true }, { exaltTier: 'greater', chaosTier: 'greater', homog: true, sideOmens: true },
+    { desSlam: true, bone: 'Ancient', echoes: true, sideOmens: true },
+  ];
+  /** From a white or Magic item: how the item gets its first mods, each with the main ways to finish the Rare item. */
+  const ROUTES_START = [
+    { magicTier: 'greater' }, {}, { magicTier: 'perfect' }, { pair: true }, { magicTier: 'greater', pair: true },
+    { magicTier: 'greater', slamOnly: true }, { start: 'alchemy' }, { start: 'alchemy', slamOnly: true },
+  ];
+  const ROUTES_FINISH = [{}, { sideOmens: true }, { homog: true }, { exaltTier: 'greater', homog: true }, { exaltTier: 'greater', homog: true, sideOmens: true },
+    { exaltTier: 'greater', homog: true, removal: 'annul' }];
+  /** The sweep's routes for this start item, with and without the settings that only matter on some items. */
+  function verifiedRoutes(st, goals) {
+    const out = [];
+    const extras = [{}];
+    if (goals.some((g) => (g.ess || []).length)) extras.push({ essence: true });
+    if (goals.some((g) => !g.des && /^(Fire|Cold|Lightning)Resistance$/.test(g.fam || ''))) for (const e of extras.slice()) extras.push(Object.assign({ flux: false }, e));
+    const core = st.rarity === 'Rare' ? ROUTES_RARE : [].concat(...ROUTES_START.map((a) => ROUTES_FINISH.map((b) => Object.assign({}, a, b))));
+    for (const r of core) for (const e of extras) {
+      if (st.rarity !== 'Normal' && r.start) continue;
+      out.push(Object.assign({}, r, e));
+      // catalyst quality for Omen of Catalysing Exaltation, where the route uses exalts on a base that takes catalysts
+      if (st.rarity === 'Rare' && r.homog) out.push(Object.assign({ catalyse: true }, r, e));
+    }
+    return out;
+  }
+
+  /** The screens of finished plans, so the search that follows (improvePlan) goes on where the first plans stopped. */
+  const SCREENS = new WeakMap();
 
   /**
    * Build the three plans.
@@ -1851,19 +2062,16 @@
       if (!pg.length) { out.profiles[names[i]] = { label: prof.label, none: 'No required goals. Mark at least one target as Required.' }; done += grids[i].length + 1; continue; }
       if (infeasible.length) { out.profiles[names[i]] = { label: prof.label, impossible: infeasible.map((x) => `${x.g.label}: ${x.why}`) }; done += grids[i].length + 1; continue; }
       const sc = makeScreen(ctx, st, pg, input);
-      // (a) the grid
-      for (const params of grids[i]) {
-        await sc.screen(params, { grid: true });
-        done++;
-        if (input.onProgress) input.onProgress(done / total);
-      }
-      // (b) recipes whose goals overlap: the recipe's settings on top of the profile's first strategy
-      for (const rc of input.recipes || []) await sc.screen(Object.assign({}, grids[i][0], rc.params), { recipe: rc.id, title: rc.title });
+      // (a) the grid and (b) recipes whose goals overlap: the recipe's settings on top of the profile's first strategy
+      const cands = grids[i].map((p) => ({ p, from: { grid: true } }))
+        .concat((input.recipes || []).map((rc) => ({ p: Object.assign({}, grids[i][0], rc.params), from: { recipe: rc.id, title: rc.title } })))
+        .concat(verifiedRoutes(st, pg).map((p) => ({ p, from: { sweep: true } })));
+      let seeded = 0;
+      await sc.seed(cands, prof, () => { if (++seeded <= grids[i].length) { done++; if (input.onProgress) input.onProgress(done / total); } });
       // (c) beam search from the best candidates (the page runs it later with improvePlan, after showing the plans)
-      const budget = input.beamBudgetMs == null ? 2500 : input.beamBudgetMs;
-      const { best: found, depth } = budget > 0 ? await beamSearch(sc, prof, budget) : { best: null, depth: 0 };
-      const ranked = [...sc.evaluated.values()].filter((r) => r.p > 0).sort((a, b) => prof.score(a) - prof.score(b));
-      const best = found || ranked[0] || null;
+      const budget = input.beamBudgetMs == null ? SEARCH.budgetMs : input.beamBudgetMs;
+      const depth = budget > 0 ? await sc.beam(prof, budget) : 0;
+      const best = await sc.pick(prof, budget > 0);
       if (!best) {
         const r = simulate(ctx, st, pg, expandStrategy(grids[i][0]), { trials: 400, seed: 3, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, baseLimit: input.baseLimit });
         out.profiles[names[i]] = { label: prof.label, noSuccess: true, fails: r.fails };
@@ -1880,9 +2088,10 @@
       final.goals = pg;
       final.dropped = goals.filter((g) => !pg.some((x) => x.key === g.key));
       final.from = best.from;
-      final.seeds = ranked.slice(0, BEAM_WIDTH).map((r) => ({ params: r.params, from: r.from }));
-      final.search = { candidates: sc.evaluated.size, beamDepth: depth, recipes: (input.recipes || []).length, searched: budget > 0 };
-      final.moreBases = moreBasesHint(prof, sc.evaluated.values(), final);
+      final.seeds = sc.top(prof, 1).slice(0, BEAM_WIDTH * 2).map((c) => ({ params: c.params, from: c.from }));
+      final.search = { candidates: sc.count(), beamDepth: depth, recipes: (input.recipes || []).length, searched: budget > 0 };
+      final.moreBases = moreBasesHint(prof, sc.results(), final);
+      SCREENS.set(final, sc);
       out.profiles[names[i]] = final;
       done++;
       if (input.onProgress) input.onProgress(done / total);
@@ -1892,27 +2101,34 @@
   }
 
   /**
-   * Beam search from a plan's best screened candidates; returns a better plan (final run of the new best strategy)
-   * or the same plan marked as searched. input as for buildPlans (beamBudgetMs: time for this profile).
+   * The search for a better strategy than a finished plan's: beam search from the plan's best candidates, then the best
+   * three run once more and the best of those is the pick. Returns a better plan (final run of the new strategy) or the
+   * same plan marked as searched. input as for buildPlans (beamBudgetMs: time for this profile).
    */
   async function improvePlan(input, plan, onProgress) {
     if (!plan || !plan.steps || !plan.seeds || !plan.profile) return plan;
     const prof = PROFILES[plan.profile];
     const ctx = makeContext(input.ix, input.item, { weights: input.weights, essences: input.essences, catalystMult: input.catalystMult });
     const st = toState(ctx, input.item, input.locks);
-    const sc = makeScreen(ctx, st, plan.goals, input);
-    for (const s0 of plan.seeds) await sc.screen(s0.params, s0.from);
-    const { best, depth } = await beamSearch(sc, prof, input.beamBudgetMs == null ? 2500 : input.beamBudgetMs, onProgress);
-    const search = { candidates: sc.evaluated.size + (plan.search ? plan.search.candidates : 0), beamDepth: depth, recipes: plan.search ? plan.search.recipes : 0, searched: true };
-    if (!best || sc.sigOf(best.params) === sc.sigOf(plan.params)) return Object.assign({}, plan, { search, moreBases: moreBasesHint(prof, sc.evaluated.values(), plan) });
+    let sc = SCREENS.get(plan);
+    if (!sc) {
+      sc = makeScreen(ctx, st, plan.goals, input);
+      for (const s0 of plan.seeds) await sc.ensure(s0.params, 1, s0.from);
+    }
+    const depth = await sc.beam(prof, input.beamBudgetMs == null ? SEARCH.budgetMs : input.beamBudgetMs, onProgress);
+    const best = await sc.pick(prof, true);
+    const search = { candidates: sc.count(), beamDepth: depth, recipes: plan.search ? plan.search.recipes : 0, searched: true };
+    const keep = () => { const same = Object.assign({}, plan, { search, moreBases: moreBasesHint(prof, sc.results(), plan) }); SCREENS.set(same, sc); return same; };
+    if (!best || sc.same(best.params, plan.params)) return keep();
     const final = await simulateAsync(ctx, st, plan.goals, best.params, {
       trials: input.trials || 4000, seed: 99, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, cancelled: input.cancelled,
       baseLimit: input.baseLimit, timeBudgetMs: input.timeBudgetMs || 2500, minTrials: Math.min(input.trials || 4000, 800),
     });
     // keep the search's pick only when the full run agrees it is better
-    if (prof.score(final) >= prof.score(plan)) return Object.assign({}, plan, { search, moreBases: moreBasesHint(prof, sc.evaluated.values(), plan) });
+    if (prof.score(final) >= prof.score(plan)) return keep();
     Object.assign(final, { label: plan.label, profile: plan.profile, goals: plan.goals, dropped: plan.dropped, from: best.from, seeds: plan.seeds, search, moreBases: plan.moreBases });
-    final.moreBases = moreBasesHint(prof, sc.evaluated.values(), final);
+    final.moreBases = moreBasesHint(prof, sc.results(), final);
+    SCREENS.set(final, sc);
     return final;
   }
 
@@ -2547,6 +2763,6 @@
     goalsFromTargets, goalMet, meets, nearMiss, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
     availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, goalClash, essencesForBase, liquidFor, CATALYST_DEFAULT,
     emulate, chanceOf, familyChances, runStrategy, runStrategyAsync, groupsMet, revealOptions, desSides, DES_OPTIONS,
-    expandStrategy, recipeParams, relevantKeys, SPACE, improvePlan,
+    expandStrategy, recipeParams, relevantKeys, SPACE, SEARCH, improvePlan, searchOf: (plan) => SCREENS.get(plan),
   };
 });

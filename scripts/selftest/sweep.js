@@ -26,7 +26,7 @@
  * (reports/sweep-progress.txt) for a progress bar while it runs.
  */
 'use strict';
-const { Worker, isMainThread, parentPort } = require('worker_threads');
+const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
@@ -41,7 +41,7 @@ const SEEDS = { A: 5101, A2: 5151, B: 5202, C: 5303, D: 5404 };
 const BASE_COST = 1, BASE_LIMIT = 100; // the page's defaults
 
 // ---------------------------------------------------------------- worker
-if (!isMainThread) {
+if (!isMainThread && workerData === 'sweep') {
   parentPort.on('message', async (t) => {
     let res;
     try { res = await sweepScenario(t.sc, t.opts); } catch (e) { res = { id: t.sc.id, error: String(e && e.stack || e) }; }
@@ -61,9 +61,11 @@ function sweepSpace(P) { return Object.assign({}, P.SPACE, { runes: [true, false
 
 function summary(r, lean) {
   // screening runs keep only what ranking needs (hundreds of thousands of classes per goal set)
-  if (lean) return { p: r.p, trials: r.trials, meanCost: r.meanCost, costPerSuccess: r.costPerSuccess, basesPerSuccess: r.basesPerSuccess, baseLimit: r.baseLimit, meanBases: r.meanBases, p90: r.p90, meanSteps: r.meanSteps };
+  // missingPrices: the profile scores rank a strategy that uses something without a price behind the priced ones
+  const missingPrices = r.missingPrices && r.missingPrices.length ? r.missingPrices : undefined;
+  if (lean) return { p: r.p, trials: r.trials, meanCost: r.meanCost, costPerSuccess: r.costPerSuccess, basesPerSuccess: r.basesPerSuccess, baseLimit: r.baseLimit, meanBases: r.meanBases, p90: r.p90, meanSteps: r.meanSteps, missingPrices };
   return {
-    meanBases: r.meanBases,
+    meanBases: r.meanBases, missingPrices,
     p: r.p, pLow: r.pLow, pHigh: r.pHigh, trials: r.trials, meanCost: r.meanCost, costPerSuccess: r.costPerSuccess,
     p50: r.p50, p90: r.p90, meanSteps: r.meanSteps, basesPerSuccess: r.basesPerSuccess, baseLimit: r.baseLimit,
     failDead: r.failDead, unfinished: r.unfinished,
@@ -71,24 +73,16 @@ function summary(r, lean) {
   };
 }
 
-async function sweepScenario(sc, opts) {
+/** Item, context, goals and the planner input of a scenario, with the page's defaults and the library's recipes. */
+function setup(sc) {
   const { E, P, G, load, weightsFor, essencesFor, startItem } = lazy();
   const { ix, kb, lib, priceOf } = load();
-  const SPACE = sweepSpace(P);
-  const KEYS = Object.keys(SPACE);
-  const DEFAULTS = P.expandStrategy({});
-  const sigOf = (p) => KEYS.map((k) => String(p[k])).join('|');
   const item = startItem(sc);
   const cls = kb.bases[sc.base].cls;
   const weights = weightsFor(sc.base), essences = essencesFor(cls);
   const ctx = P.makeContext(ix, item, { weights, essences, catalystMult: P.CATALYST_DEFAULT });
   const st = P.toState(ctx, item);
   const { goals } = P.goalsFromTargets(ctx, sc.targets);
-  const out = { id: sc.id, base: sc.base, cls, start: sc.start, group: sc.group, sets: [], sims: 0 };
-  if (!goals.length) { out.skip = 'no goal resolves on this base'; return out; }
-  const t0 = Date.now();
-
-  // the page planner's picks (same inputs as the page: recipes of the library, beam search after the first plans)
   const L = G.effectiveLibrary(lib, {});
   const fams = new Set(goals.map((g) => g.fam));
   const recipes = G.recipesFor(L, cls, 'Forbidden Rites')
@@ -97,14 +91,21 @@ async function sweepScenario(sc, opts) {
     .map((r) => ({ id: r.id, title: r.title, params: P.recipeParams(r) })).filter((x) => Object.keys(x.params).length);
   const input = { ix, item, targets: sc.targets, priceOf, baseCost: BASE_COST, budget: 0, baseLimit: BASE_LIMIT, weights, essences,
     catalystMult: P.CATALYST_DEFAULT, recipes };
+  return { P, priceOf, cls, ctx, st, goals, input };
+}
+
+/** The three plans as the page builds them: the first plans, then the search for a better strategy for each. */
+async function runPlanner(P, input) {
   const planned = await P.buildPlans(Object.assign({}, input, { beamBudgetMs: 0 }));
   for (const k of Object.keys(planned.profiles || {})) {
     const pl = planned.profiles[k];
-    if (pl && pl.steps && pl.seeds) planned.profiles[k] = await P.improvePlan(Object.assign({}, input, { beamBudgetMs: 1500 }), pl);
+    if (pl && pl.steps && pl.seeds) planned.profiles[k] = await P.improvePlan(Object.assign({}, input, { beamBudgetMs: P.SEARCH.budgetMs }), pl);
   }
-  out.plannerMs = Date.now() - t0;
+  return planned;
+}
 
-  // goal sets of the profiles (profiles with the same goals share one sweep)
+/** Goal sets of the profiles: profiles that ask for the same goals share one. */
+function goalSets(P, goals) {
   const sets = new Map();
   for (const [name, prof] of Object.entries(P.PROFILES)) {
     const pg = prof.goals(goals);
@@ -112,8 +113,32 @@ async function sweepScenario(sc, opts) {
     if (!sets.has(key)) sets.set(key, { pg, profiles: [] });
     sets.get(key).profiles.push(name);
   }
+  return [...sets.values()];
+}
 
-  for (const { pg, profiles } of sets.values()) {
+/** One simulation of a full strategy that records the settings the planner reads (in the order it first reads them). */
+function tracked(P, ctx, st, pg, params, opts, keys) {
+  const reads = [], seenK = new Set();
+  const px = new Proxy(params, { get(t, k) { if (typeof k === 'string' && !seenK.has(k)) { seenK.add(k); reads.push(k); } return t[k]; } });
+  const r = P.simulate(ctx, st, pg, px, opts);
+  return { r, reads: reads.filter((k) => k in keys) };
+}
+
+async function sweepScenario(sc, opts) {
+  const { P, priceOf, cls, ctx, st, goals, input } = setup(sc);
+  const SPACE = sweepSpace(P);
+  const KEYS = Object.keys(SPACE);
+  const DEFAULTS = P.expandStrategy({});
+  const sigOf = (p) => KEYS.map((k) => String(p[k])).join('|');
+  const out = { id: sc.id, base: sc.base, cls, start: sc.start, group: sc.group, sets: [], sims: 0 };
+  if (!goals.length) { out.skip = 'no goal resolves on this base'; return out; }
+  const t0 = Date.now();
+
+  // the page planner's picks (same inputs as the page: recipes of the library, the search after the first plans)
+  const planned = await runPlanner(P, input);
+  out.plannerMs = Date.now() - t0;
+
+  for (const { pg, profiles } of goalSets(P, goals)) {
     const set = { profiles, goals: pg.map((g) => ({ label: g.label, side: g.side, tier: g.tier, eff: g.eff, des: !!g.des })), picks: {} };
     out.sets.push(set);
     if (!pg.length) { set.skip = 'no required goals'; continue; }
@@ -123,11 +148,9 @@ async function sweepScenario(sc, opts) {
     const simOpts = (trials, seed, steps) => ({ trials, seed, priceOf, baseCost: BASE_COST, baseLimit: BASE_LIMIT, maxSteps: steps || CFG.maxSteps });
     /** One simulation of a full strategy, recording the settings the planner reads (in the order it first reads them). */
     const track = (params, trials, seed, steps, lean) => {
-      const reads = [], seenK = new Set();
-      const px = new Proxy(params, { get(t, k) { if (typeof k === 'string' && !seenK.has(k)) { seenK.add(k); reads.push(k); } return t[k]; } });
-      const r = P.simulate(ctx, st, pg, px, simOpts(trials, seed, steps));
+      const { r, reads } = tracked(P, ctx, st, pg, params, simOpts(trials, seed, steps), SPACE);
       out.sims++;
-      return { res: summary(r, lean), reads: reads.filter((k) => k in SPACE) };
+      return { res: summary(r, lean), reads };
     };
     /** Classes under `root` (fixed settings): split on the first setting read that is not fixed yet, until none is left. */
     const enumerate = (root, trials, seed, memo, cap, steps, lean) => {
@@ -161,6 +184,9 @@ async function sweepScenario(sc, opts) {
     set.settingsRead = [...new Set(A.leaves.flatMap((c) => c.reads))];
 
     const scoreOf = (name, res) => P.PROFILES[name].score(res);
+    // equal results (strategies that made the same moves in these runs): the one with the fewest settings off default
+    const plain = (c) => c.reads.reduce((n, k) => n + (c.params[k] !== DEFAULTS[k] ? 1 : 0), 0);
+    const byScore = (name) => (a, b) => scoreOf(name, a.res) - scoreOf(name, b.res) || plain(a) - plain(b);
     const frontier = (cands, n) => {
       const ok = cands.filter((c) => c.res.p > 0 && isFinite(c.res.costPerSuccess)).sort((a, b) => a.res.costPerSuccess - b.res.costPerSuccess || b.res.p - a.res.p);
       const f = [];
@@ -203,7 +229,7 @@ async function sweepScenario(sc, opts) {
 
     // C: assignment from B
     const assigned = {};
-    for (const name of profiles) assigned[name] = B.filter((c) => c.res.p > 0).sort((a, b) => scoreOf(name, a.res) - scoreOf(name, b.res))[0];
+    for (const name of profiles) assigned[name] = B.filter((c) => c.res.p > 0).sort(byScore(name))[0];
 
     // D: verification with fresh random numbers
     const memoC = new Map();
@@ -211,7 +237,7 @@ async function sweepScenario(sc, opts) {
     const addC = (c) => { const ls = enumerate(c.fixed, CFG.tC, SEEDS.C, memoC, Infinity).leaves; for (const leaf of ls) C.set(classSig(leaf), leaf); return ls; };
     for (const c of pickTop(B, CFG.verifyScore, CFG.verifyFront)) addC(c);
     const assignedC = {};
-    for (const name of profiles) assignedC[name] = addC(assigned[name]).filter((c) => c.res.p > 0).sort((a, b) => scoreOf(name, a.res) - scoreOf(name, b.res))[0] || null;
+    for (const name of profiles) assignedC[name] = addC(assigned[name]).filter((c) => c.res.p > 0).sort(byScore(name))[0] || null;
     // the planner's picks: full strategies, placed in their class by the same tracking
     const plannerC = {};
     for (const name of profiles) {
@@ -223,24 +249,31 @@ async function sweepScenario(sc, opts) {
       plannerC[name] = leaf;
       if (!C.has(classSig(leaf))) C.set(classSig(leaf), leaf);
     }
+    // challengers are fully priced strategies (one that uses something without a price is no proof of a cheaper way)
     const cands = [...C.values()].filter((c) => c.res.p > 0);
+    const priced = (c) => !c.res.missingPrices;
     const tolP = (a, b) => 1.96 * Math.sqrt(a.p * (1 - a.p) / a.trials + b.p * (1 - b.p) / b.trials) + 0.005;
     const floorOk = (name, r) => scoreOf(name, r) < 1e15;
     const verify = (name, pick) => {
       const a = pick.res;
-      const cheaper = cands.filter((x) => x.res.costPerSuccess < a.costPerSuccess * 0.95 && x.res.p >= a.p - tolP(a, x.res) && floorOk(name, x.res))
+      const cheaper = cands.filter((x) => priced(x) && x.res.costPerSuccess < a.costPerSuccess * 0.95 && x.res.p >= a.p - tolP(a, x.res) && floorOk(name, x.res))
         .sort((x, y) => x.res.costPerSuccess - y.res.costPerSuccess)[0] || null;
-      const safer = cands.filter((x) => x.res.p > a.p + tolP(a, x.res) && x.res.costPerSuccess <= a.costPerSuccess * 1.02)
+      const safer = cands.filter((x) => priced(x) && x.res.p > a.p + tolP(a, x.res) && x.res.costPerSuccess <= a.costPerSuccess * 1.02)
         .sort((x, y) => y.res.p - x.res.p)[0] || null;
       return { cheaper, safer };
     };
     const brief = (c) => c && ({ params: settingsOf(c), p: +c.res.p.toFixed(4), cps: isFinite(c.res.costPerSuccess) ? +c.res.costPerSuccess.toFixed(2) : null,
       p90: +c.res.p90.toFixed(2), bases: isFinite(c.res.basesPerSuccess) ? +c.res.basesPerSuccess.toFixed(1) : null, steps: +c.res.meanSteps.toFixed(1), route: c.res.route,
+      missing: c.res.missingPrices,
       covers: covered(c.fixed) });
     const settingsOf = (c) => Object.fromEntries(c.reads.map((k) => [k, c.params[k]]));
 
     for (const name of profiles) {
-      const first = assignedC[name] || cands.slice().sort((x, y) => scoreOf(name, x.res) - scoreOf(name, y.res))[0];
+      // the assigned strategy, or an equal one with fewer settings off default
+      const bestC = cands.slice().sort(byScore(name))[0];
+      const mine = assignedC[name];
+      const first = !mine ? bestC : scoreOf(name, mine.res) === scoreOf(name, bestC.res) && plain(bestC) < plain(mine) ? bestC : mine;
+      const firstScore = scoreOf(name, first.res);
       let pick = first, rounds = 0;
       const history = [];
       for (;;) {
@@ -249,13 +282,14 @@ async function sweepScenario(sc, opts) {
         if (!v.cheaper && !v.safer) break;
         if (++rounds > 4) break;
         // replace by the profile's best at this depth of trials, then check that one the same way
-        const next = cands.slice().sort((x, y) => scoreOf(name, x.res) - scoreOf(name, y.res))[0];
+        const next = cands.slice().sort(byScore(name))[0];
         if (classSig(next) === classSig(pick)) break; // the score prefers it despite the challenger (a trade the score accepts)
         pick = next;
       }
       const v = verify(name, pick);
       // once more with other random numbers: does the pick still beat the runner-up?
-      const runner = cands.filter((x) => classSig(x) !== classSig(pick)).sort((x, y) => scoreOf(name, x.res) - scoreOf(name, y.res))[0] || null;
+      // the runner-up: the best strategy that did not make the same moves as the pick
+      const runner = cands.filter((x) => classSig(x) !== classSig(pick) && scoreOf(name, x.res) !== scoreOf(name, pick.res)).sort(byScore(name))[0] || null;
       const reD = (c) => { const r = track(Object.assign({}, c.params), CFG.tD, SEEDS.D); return { res: r.res }; };
       const dPick = reD(pick), dRun = runner ? reD(runner) : null;
       const sp = scoreOf(name, dPick.res), sr = dRun ? scoreOf(name, dRun.res) : Infinity;
@@ -272,7 +306,7 @@ async function sweepScenario(sc, opts) {
           differs: same ? [] : KEYS.filter((k) => (k in pick.fixed || k in pc.fixed) && pick.params[k] !== pc.params[k]) };
       } else planner = { verdict: 'none', why: pc && pc.none };
       set.picks[name] = {
-        assignedFromB: Object.entries(assigned[name].fixed).every(([k, x]) => pick.params[k] === x) ? 'kept' : 'replaced',
+        assignedFromB: scoreOf(name, pick.res) === firstScore || Object.entries(assigned[name].fixed).every(([k, x]) => pick.params[k] === x) ? 'kept' : 'replaced',
         pick: brief(pick), recheck: { p: +dPick.res.p.toFixed(4), cps: isFinite(dPick.res.costPerSuccess) ? +dPick.res.costPerSuccess.toFixed(2) : null, stable, runnerUp: brief(runner) },
         cheaperExists: v.cheaper ? brief(v.cheaper) : null, saferExists: v.safer ? brief(v.safer) : null, rounds: history.length, planner,
       };
@@ -295,7 +329,7 @@ async function sweepScenario(sc, opts) {
   return out;
 }
 
-if (isMainThread) main();
+if (isMainThread && require.main === module) main();
 
 // ---------------------------------------------------------------- main
 function main() {
@@ -311,9 +345,8 @@ function main() {
   if (only) all = all.filter((s) => new RegExp(only).test(s.id));
   const limit = +argv('--limit', 0);
   if (limit) { const step = Math.max(1, Math.floor(all.length / limit)); all = all.filter((s, i) => i % step === 0).slice(0, limit); }
-  // relative run time (measured: a pair of goals takes about 15 times one goal); long ones first, so the pool does not
-  // wait on a slow one at the end
-  const weight = (s) => (Object.keys(s.targets).length > 1 ? 15 : 1);
+  // relative run time (measured on the first full run); long ones first, so the pool does not wait on a slow one at the end
+  const weight = (s) => { const pair = Object.keys(s.targets).length > 1, white = s.start === 'white'; return pair && white ? 8 : pair ? 2.5 : white ? 2 : 1; };
   all.sort((a, b) => weight(b) - weight(a));
   const t0 = Date.now();
   const results = [], errors = [];
@@ -369,7 +402,7 @@ function main() {
     if (done === all.length) finish();
   };
   const spawn = () => {
-    const w = new Worker(__filename, { argv: process.argv.slice(2) });
+    const w = new Worker(__filename, { argv: process.argv.slice(2), workerData: 'sweep' });
     w.on('message', (m) => {
       if (m.res.error) errors.push(m.res); else { results.push(m.res); if (partial) fs.appendFileSync(partial, JSON.stringify(m.res) + '\n'); }
       const sc = w.cur;
@@ -465,3 +498,5 @@ function markdown(rep, results) {
   }
   return L.join('\n');
 }
+
+module.exports = { setup, runPlanner, goalSets, tracked, sweepSpace, summary, CFG, SEEDS, BASE_COST, BASE_LIMIT };
