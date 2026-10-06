@@ -892,6 +892,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     S.targets = store.get('targets', {});
     S.locks = store.get('locks', {});
     S.userTemplates = store.get('userTemplates', []);
+    S.testLog = store.get('testLog', []);
     const sess = store.get('session', null);
     if (!restoreSession(sess)) ingest(last || SAMPLES[0].text, last ? 'Last item' : 'Example', { keep: true });
     if (!sess && !last && !Object.keys(S.targets).length) applyTemplate('minion-sceptre');
@@ -951,6 +952,45 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     store.set('spent', S.spent); store.set('lastText', cur.text);
     return true;
   }
+  // ------------------------------------------------------------ test log (per viewer)
+  // What the player tried: the item, the targets and the three plans that came out, one record per item and target
+  // set. Kept in this browser and in the viewer's private data/users/<id>/testlog document, so a test made in any
+  // browser can be looked at later.
+  const TESTLOG_MAX = 30;
+  function planSummary(pl) {
+    if (!pl) return null;
+    const num = (v, d) => (v == null || isNaN(v) ? null : +(+v).toFixed(d));
+    return {
+      p: num(pl.p, 4), cost: num(pl.meanCost, 0), trials: pl.trials || null,
+      steps: (pl.steps || []).slice(0, 30).map((s) => ({ n: (s.names || P.actionNames(s.action)).join(' + '), x: num(s.avg, 2) })),
+      impossible: (pl.impossible || []).slice(0, 4),
+      fails: (pl.fails || []).slice(0, 4).map((f) => ({ r: f.reason, s: num(f.share, 4) })),
+    };
+  }
+  /** Record the test on screen; state: 'ready' (plans finished) or 'error'. A newer record of the same test replaces the old one. */
+  function logTest(state, err) {
+    if (!S.item || !S.text) return;
+    const targets = {};
+    for (const [k, t] of Object.entries(S.targets)) {
+      if (t && t.fam) targets[k] = { fam: t.fam, group: t.group, label: t.label, minTier: t.minTier || null, minValue: t.minValue || null, required: !!t.required };
+    }
+    if (!Object.keys(targets).length) return;
+    const key = S.text + '|' + JSON.stringify(targets);
+    const rec = {
+      at: Date.now(), key: String(key.length) + ':' + [...key].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7),
+      text: S.text, base: S.item.base || null, cls: S.item.itemClass || null, targets,
+      locks: Object.keys(S.locks || {}).filter((k) => S.locks[k]), league: S.league || null,
+      baseCost: parseFloat(S.baseCost) || 0, baseLimit: baseLimit(), state,
+      error: err || null, kb: (S.ix.kb.meta && S.ix.kb.meta.game_data_version) || null,
+      plans: S.plans && state === 'ready' ? Object.fromEntries(PROFILE_KEYS.map((k) => [k, planSummary(S.plans.profiles[k])])) : null,
+    };
+    S.testLog = (S.testLog || []).filter((r) => r.key !== rec.key).concat([rec]).slice(-TESTLOG_MAX);
+    saveTestLog();
+  }
+  function saveTestLog() {
+    store.set('testLog', S.testLog);
+    if (S.userDb) S.userDb('testlog').set({ list: S.testLog, savedAt: Date.now() }).catch(() => { /* the browser copy stays */ });
+  }
   function saveTemplates() {
     store.set('userTemplates', S.userTemplates);
     if (S.userDb) S.userDb('templates').set({ list: S.userTemplates, savedAt: Date.now() }).catch(() => { /* browser copy stays */ });
@@ -975,6 +1015,15 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       const list = t.exists ? t.data().list : null;
       if (Array.isArray(list)) { S.userTemplates = list; store.set('userTemplates', list); renderStats(); }
       else if ((S.userTemplates || []).length) saveTemplates();
+      // the test log: tests made in another browser and the ones made here before the database answered
+      const tl = await docOf('testlog').get();
+      const remote = tl.exists && Array.isArray(tl.data().list) ? tl.data().list : [];
+      const local = S.testLog || [];
+      const byKey = new Map();
+      for (const r of remote.concat(local)) if (r && r.key && (!byKey.has(r.key) || byKey.get(r.key).at < r.at)) byKey.set(r.key, r);
+      S.testLog = [...byKey.values()].sort((a, b) => a.at - b.at).slice(-TESTLOG_MAX);
+      store.set('testLog', S.testLog);
+      if (local.some((r) => !remote.some((x) => x.key === r.key && x.at >= r.at))) saveTestLog();
     } catch (e) { S.userDb = null; }
   }
 
@@ -2878,11 +2927,13 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       }
       S.planState = 'ready'; renderPlan();
       if (S.preview) renderItem();
+      logTest('ready');
       const cur = out.profiles[S.planTab];
       if (cur && cur.steps && cur.steps.length) announce(`Plans ready. ${cur.label}: ${successFail(cur.p).s} success, expected cost ${fmtShort(cur.meanCost)} Exalted Orbs.`);
     } catch (e) {
       if (e && e.message === 'cancelled') return;
       S.planState = 'error'; S.planError = e && e.message; renderPlan();
+      logTest('error', S.planError || 'error');
     }
   }
   function drawProgress() { const b = $('#planProgress'); if (b) b.style.width = Math.round(S.planProgress * 100) + '%'; }
