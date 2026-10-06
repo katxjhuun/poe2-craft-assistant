@@ -1,0 +1,1708 @@
+{
+ "meta": {
+  "date": "2026-10-06T02:49:56.246Z",
+  "scenarios": 784,
+  "done": 784,
+  "errors": 0,
+  "goalSets": 1803,
+  "skipped": 0,
+  "classes": 15652314,
+  "combinations": 12941918208,
+  "simulations": 17418758,
+  "capped": 0,
+  "workers": 25,
+  "seconds": 21946,
+  "quick": false,
+  "cfg": {
+   "tA": 6,
+   "stepsA": 300,
+   "tA2": 30,
+   "keepA2": 300,
+   "tB": 300,
+   "tC": 1000,
+   "tD": 4000,
+   "keepScore": 25,
+   "keepFront": 40,
+   "verifyScore": 6,
+   "verifyFront": 15,
+   "maxClasses": 400000,
+   "maxSteps": 600
+  },
+  "prices": ".kb_cache/out"
+ },
+ "totals": {
+  "scenarios": 784,
+  "sets": 1803,
+  "skipped": 0,
+  "classes": 15652314,
+  "combinations": 12941918208,
+  "sims": 17418758,
+  "capped": 0,
+  "sameAll": 104,
+  "withAll": 784
+ },
+ "profiles": {
+  "cheap": {
+   "verified": 784,
+   "replaced": 45,
+   "cheaperLeft": 0,
+   "saferLeft": 15,
+   "unstable": 31,
+   "planner": {
+    "same": 336,
+    "equal": 164,
+    "better": 3,
+    "worse": 280,
+    "none": 1
+   },
+   "byStart": {
+    "rare": {
+     "same": 59,
+     "equal": 104,
+     "better": 3,
+     "worse": 197,
+     "none": 1
+    },
+    "white": {
+     "same": 118,
+     "equal": 60,
+     "better": 0,
+     "worse": 82,
+     "none": 0
+    },
+    "rare-low": {
+     "same": 111,
+     "equal": 0,
+     "better": 0,
+     "worse": 1,
+     "none": 0
+    },
+    "magic": {
+     "same": 48,
+     "equal": 0,
+     "better": 0,
+     "worse": 0,
+     "none": 0
+    }
+   },
+   "patterns": [
+    {
+     "change": "homog: default → true",
+     "n": 189
+    },
+    {
+     "change": "exaltTier: default → greater",
+     "n": 102
+    },
+    {
+     "change": "sideOmens: default → true",
+     "n": 65
+    },
+    {
+     "change": "removal: default → annul",
+     "n": 60
+    },
+    {
+     "change": "sideOmens: true → default",
+     "n": 56
+    },
+    {
+     "change": "chaosTier: greater → default",
+     "n": 45
+    },
+    {
+     "change": "magicTier: default → greater",
+     "n": 28
+    },
+    {
+     "change": "slamOnly: default → true",
+     "n": 27
+    },
+    {
+     "change": "start: default → alchemy",
+     "n": 20
+    },
+    {
+     "change": "catalyse: default → true",
+     "n": 16
+    },
+    {
+     "change": "bone: default → Ancient",
+     "n": 14
+    },
+    {
+     "change": "echoes: default → true",
+     "n": 14
+    },
+    {
+     "change": "magicTier: greater → default",
+     "n": 13
+    },
+    {
+     "change": "greaterExalt: default → true",
+     "n": 11
+    }
+   ],
+   "uses": {
+    "essence": {
+     "true": 163
+    },
+    "exaltTier": {
+     "greater": 305,
+     "perfect": 7
+    },
+    "removal": {
+     "annul": 75,
+     "whittle": 4,
+     "erasure": 1
+    },
+    "homog": {
+     "true": 268
+    },
+    "sideOmens": {
+     "true": 183
+    },
+    "magicTier": {
+     "greater": 205,
+     "perfect": 6
+    },
+    "slamOnly": {
+     "true": 75
+    },
+    "catalyse": {
+     "true": 17
+    },
+    "greaterExalt": {
+     "true": 11
+    },
+    "flux": {
+     "false": 74
+    },
+    "fracture": {
+     "true": 11
+    },
+    "pair": {
+     "true": 30
+    },
+    "desSlam": {
+     "true": 11
+    },
+    "chaosTier": {
+     "greater": 20,
+     "perfect": 2
+    },
+    "start": {
+     "alchemy": 99
+    },
+    "restart": {
+     "false": 46
+    },
+    "bone": {
+     "Ancient": 15
+    },
+    "echoes": {
+     "true": 15
+    }
+   },
+   "ratio": {
+    "p50": 1.331,
+    "p90": 3.134,
+    "max": 138.95
+   },
+   "dp": {
+    "p50": 0,
+    "p10": -0.057
+   },
+   "worseExamples": [
+    {
+     "id": "Grasping Mail|single-prefix-rare-T1|white",
+     "costRatio": 138.95,
+     "dp": -0.063,
+     "differs": [
+      "start: alchemy → default",
+      "removal: erasure → annul",
+      "chaosTier: greater → default",
+      "exaltTier: greater → perfect",
+      "magicTier: default → perfect",
+      "restart: default → false",
+      "pair: default → true",
+      "catalyse: default → true",
+      "slamOnly: default → true",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 0.081,
+      "cps": 52248256.03
+     },
+     "best": {
+      "p": 0.144,
+      "cps": 376022.53
+     }
+    },
+    {
+     "id": "Grasping Mail|resistance-T2|rare",
+     "costRatio": 107.894,
+     "dp": -0.519,
+     "differs": [
+      "exaltTier: greater → perfect",
+      "removal: erasure → annul",
+      "chaosTier: greater → default",
+      "catalyse: default → true",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 0.469,
+      "cps": 4727469.03
+     },
+     "best": {
+      "p": 0.988,
+      "cps": 43815.91
+     }
+    },
+    {
+     "id": "Grasping Mail|single-prefix-rare-T1|rare",
+     "costRatio": 47.94,
+     "dp": -0.136,
+     "differs": [
+      "exaltTier: greater → perfect",
+      "removal: erasure → annul",
+      "chaosTier: greater → default",
+      "catalyse: default → true",
+      "sideOmens: default → true",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 0.079,
+      "cps": 53644724.22
+     },
+     "best": {
+      "p": 0.215,
+      "cps": 1119004.97
+     }
+    },
+    {
+     "id": "Grasping Mail|pair-prefix-suffix-T2|white",
+     "costRatio": 31.71,
+     "dp": -0.07,
+     "differs": [
+      "start: alchemy → default",
+      "exaltTier: greater → perfect",
+      "removal: erasure → annul",
+      "chaosTier: greater → default",
+      "magicTier: default → perfect",
+      "homog: default → true",
+      "catalyse: default → true"
+     ],
+     "planner": {
+      "p": 0.082,
+      "cps": 51597135.26
+     },
+     "best": {
+      "p": 0.152,
+      "cps": 1627181.74
+     }
+    },
+    {
+     "id": "Time-Lost Diamond|pair-prefix-suffix-T2|rare",
+     "costRatio": 10.207,
+     "dp": 0.65,
+     "differs": [
+      "removal: erasure → default",
+      "chaosTier: greater → default",
+      "fracture: default → true"
+     ],
+     "planner": {
+      "p": 0.997,
+      "cps": 946784.96
+     },
+     "best": {
+      "p": 0.347,
+      "cps": 92759.43
+     }
+    },
+    {
+     "id": "Ancestral Tiara|single-suffix-rare-T1|white",
+     "costRatio": 10.024,
+     "dp": 0,
+     "differs": [
+      "sideOmens: true → default",
+      "chaosTier: greater → default",
+      "exaltTier: greater → default",
+      "pair: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 92.15
+     },
+     "best": {
+      "p": 1,
+      "cps": 9.19
+     }
+    },
+    {
+     "id": "Siege Crossbow|pair-prefix-suffix-T2|white",
+     "costRatio": 9.039,
+     "dp": -0.091,
+     "differs": [
+      "magicTier: greater → perfect",
+      "chaosTier: greater → default",
+      "sideOmens: default → true",
+      "slamOnly: default → true"
+     ],
+     "planner": {
+      "p": 0.909,
+      "cps": 44572.98
+     },
+     "best": {
+      "p": 1,
+      "cps": 4931.35
+     }
+    },
+    {
+     "id": "Grand Cuisses|pair-prefix-suffix-T2|white",
+     "costRatio": 7.334,
+     "dp": 0,
+     "differs": [
+      "sideOmens: true → default",
+      "pair: default → true",
+      "exaltTier: default → greater",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 2149.13
+     },
+     "best": {
+      "p": 1,
+      "cps": 293.02
+     }
+    },
+    {
+     "id": "recipe|c3",
+     "costRatio": 6.881,
+     "dp": 0,
+     "differs": [
+      "essence: true → default",
+      "slamOnly: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 834.27
+     },
+     "best": {
+      "p": 1,
+      "cps": 121.24
+     }
+    },
+    {
+     "id": "Diamond|desecrated|rare",
+     "costRatio": 6.739,
+     "dp": 0,
+     "differs": [
+      "sideOmens: true → default",
+      "bone: default → Ancient",
+      "echoes: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 47585.31
+     },
+     "best": {
+      "p": 1,
+      "cps": 7061.19
+     }
+    },
+    {
+     "id": "Emerald|desecrated|rare",
+     "costRatio": 6.739,
+     "dp": 0,
+     "differs": [
+      "sideOmens: true → default",
+      "bone: default → Ancient",
+      "echoes: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 47585.31
+     },
+     "best": {
+      "p": 1,
+      "cps": 7061.19
+     }
+    },
+    {
+     "id": "Ruby|desecrated|rare",
+     "costRatio": 6.739,
+     "dp": 0,
+     "differs": [
+      "sideOmens: true → default",
+      "bone: default → Ancient",
+      "echoes: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 47585.31
+     },
+     "best": {
+      "p": 1,
+      "cps": 7061.19
+     }
+    },
+    {
+     "id": "Sapphire|desecrated|rare",
+     "costRatio": 6.739,
+     "dp": 0,
+     "differs": [
+      "sideOmens: true → default",
+      "bone: default → Ancient",
+      "echoes: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 47585.31
+     },
+     "best": {
+      "p": 1,
+      "cps": 7061.19
+     }
+    },
+    {
+     "id": "Runemastered Veridical Chain|single-suffix-rare-T1|rare",
+     "costRatio": 6.563,
+     "dp": -0.073,
+     "differs": [
+      "catalyse: default → true",
+      "exaltTier: default → greater",
+      "removal: default → annul",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 0.927,
+      "cps": 13758.73
+     },
+     "best": {
+      "p": 1,
+      "cps": 2096.36
+     }
+    },
+    {
+     "id": "Time-Lost Diamond|desecrated|rare",
+     "costRatio": 6.056,
+     "dp": 0,
+     "differs": [
+      "bone: default → Ancient",
+      "echoes: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 92262.43
+     },
+     "best": {
+      "p": 1,
+      "cps": 15234.42
+     }
+    },
+    {
+     "id": "Time-Lost Emerald|desecrated|rare",
+     "costRatio": 6.056,
+     "dp": 0,
+     "differs": [
+      "bone: default → Ancient",
+      "echoes: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 92262.43
+     },
+     "best": {
+      "p": 1,
+      "cps": 15234.42
+     }
+    },
+    {
+     "id": "Time-Lost Ruby|desecrated|rare",
+     "costRatio": 6.056,
+     "dp": 0,
+     "differs": [
+      "bone: default → Ancient",
+      "echoes: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 92262.43
+     },
+     "best": {
+      "p": 1,
+      "cps": 15234.42
+     }
+    },
+    {
+     "id": "Time-Lost Sapphire|desecrated|rare",
+     "costRatio": 6.056,
+     "dp": 0,
+     "differs": [
+      "bone: default → Ancient",
+      "echoes: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 92262.43
+     },
+     "best": {
+      "p": 1,
+      "cps": 15234.42
+     }
+    },
+    {
+     "id": "Biostatic Ring|single-prefix-common-T2|rare",
+     "costRatio": 4.956,
+     "dp": 0,
+     "differs": [
+      "catalyse: default → true",
+      "sideOmens: default → true",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 2213.42
+     },
+     "best": {
+      "p": 1,
+      "cps": 446.61
+     }
+    },
+    {
+     "id": "Diamond|pair-prefix-suffix-T2|white",
+     "costRatio": 4.729,
+     "dp": 0.658,
+     "differs": [
+      "removal: erasure → default",
+      "restart: default → false",
+      "pair: default → true",
+      "slamOnly: default → true",
+      "fracture: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 452511.09
+     },
+     "best": {
+      "p": 0.342,
+      "cps": 95691.4
+     }
+    }
+   ]
+  },
+  "balanced": {
+   "verified": 784,
+   "replaced": 76,
+   "cheaperLeft": 0,
+   "saferLeft": 19,
+   "unstable": 42,
+   "planner": {
+    "same": 257,
+    "equal": 197,
+    "better": 1,
+    "worse": 329,
+    "none": 0
+   },
+   "byStart": {
+    "rare": {
+     "same": 54,
+     "equal": 116,
+     "better": 1,
+     "worse": 193,
+     "none": 0
+    },
+    "white": {
+     "same": 132,
+     "equal": 46,
+     "better": 0,
+     "worse": 82,
+     "none": 0
+    },
+    "rare-low": {
+     "same": 23,
+     "equal": 35,
+     "better": 0,
+     "worse": 54,
+     "none": 0
+    },
+    "magic": {
+     "same": 48,
+     "equal": 0,
+     "better": 0,
+     "worse": 0,
+     "none": 0
+    }
+   },
+   "patterns": [
+    {
+     "change": "homog: default → true",
+     "n": 265
+    },
+    {
+     "change": "sideOmens: true → default",
+     "n": 190
+    },
+    {
+     "change": "chaosTier: greater → default",
+     "n": 128
+    },
+    {
+     "change": "removal: default → annul",
+     "n": 108
+    },
+    {
+     "change": "slamOnly: default → true",
+     "n": 44
+    },
+    {
+     "change": "bone: default → Ancient",
+     "n": 36
+    },
+    {
+     "change": "desSlam: default → true",
+     "n": 31
+    },
+    {
+     "change": "echoes: default → true",
+     "n": 30
+    },
+    {
+     "change": "exaltTier: default → greater",
+     "n": 26
+    },
+    {
+     "change": "exaltTier: greater → default",
+     "n": 20
+    },
+    {
+     "change": "pair: true → default",
+     "n": 18
+    },
+    {
+     "change": "start: default → alchemy",
+     "n": 18
+    },
+    {
+     "change": "magicTier: greater → default",
+     "n": 16
+    },
+    {
+     "change": "catalyse: default → true",
+     "n": 14
+    }
+   ],
+   "uses": {
+    "essence": {
+     "true": 97
+    },
+    "exaltTier": {
+     "greater": 413,
+     "perfect": 14
+    },
+    "removal": {
+     "annul": 131,
+     "whittle": 11,
+     "erasure": 5
+    },
+    "homog": {
+     "true": 339
+    },
+    "sideOmens": {
+     "true": 214
+    },
+    "magicTier": {
+     "greater": 206,
+     "perfect": 11
+    },
+    "slamOnly": {
+     "true": 79
+    },
+    "catalyse": {
+     "true": 20
+    },
+    "greaterExalt": {
+     "true": 8
+    },
+    "pair": {
+     "true": 11
+    },
+    "fracture": {
+     "true": 12
+    },
+    "desSlam": {
+     "true": 32
+    },
+    "bone": {
+     "Ancient": 37
+    },
+    "echoes": {
+     "true": 38
+    },
+    "chaosTier": {
+     "greater": 31,
+     "perfect": 10
+    },
+    "start": {
+     "alchemy": 90
+    },
+    "restart": {
+     "false": 46
+    },
+    "flux": {
+     "false": 16
+    }
+   },
+   "ratio": {
+    "p50": 1.426,
+    "p90": 3.906,
+    "max": 152.787
+   },
+   "dp": {
+    "p50": 0,
+    "p10": -0.033
+   },
+   "worseExamples": [
+    {
+     "id": "Grasping Mail|resistance-T2|rare",
+     "costRatio": 152.787,
+     "dp": -0.564,
+     "differs": [
+      "removal: erasure → annul",
+      "chaosTier: perfect → default",
+      "catalyse: default → true",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 0.391,
+      "cps": 9776057.04
+     },
+     "best": {
+      "p": 0.955,
+      "cps": 63984.97
+     }
+    },
+    {
+     "id": "Grasping Mail|single-prefix-rare-T1|rare",
+     "costRatio": 68.24,
+     "dp": -0.02,
+     "differs": [
+      "sideOmens: true → default",
+      "removal: erasure → annul",
+      "chaosTier: perfect → default",
+      "catalyse: default → true",
+      "desSlam: default → true",
+      "bone: default → Ancient",
+      "echoes: default → true",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 0.081,
+      "cps": 74557161.14
+     },
+     "best": {
+      "p": 0.101,
+      "cps": 1092566.61
+     }
+    },
+    {
+     "id": "Grand Regalia|pair-prefix-suffix-T2|white",
+     "costRatio": 25.917,
+     "dp": 0,
+     "differs": [
+      "magicTier: perfect → greater",
+      "exaltTier: perfect → greater",
+      "chaosTier: perfect → default",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 24006.73
+     },
+     "best": {
+      "p": 1,
+      "cps": 926.28
+     }
+    },
+    {
+     "id": "Siege Crossbow|pair-prefix-suffix-T2|white",
+     "costRatio": 21.518,
+     "dp": -0.059,
+     "differs": [
+      "exaltTier: perfect → default",
+      "removal: annul → whittle",
+      "homog: default → true",
+      "desSlam: default → true",
+      "bone: default → Ancient",
+      "echoes: default → true",
+      "slamOnly: default → true",
+      "chaosTier: default → greater"
+     ],
+     "planner": {
+      "p": 0.941,
+      "cps": 963227.09
+     },
+     "best": {
+      "p": 1,
+      "cps": 44764.36
+     }
+    },
+    {
+     "id": "Maji Talisman|single-prefix-rare-T1|white",
+     "costRatio": 19.114,
+     "dp": 0.011,
+     "differs": [
+      "exaltTier: perfect → greater",
+      "chaosTier: perfect → default",
+      "desSlam: default → true",
+      "echoes: default → true"
+     ],
+     "planner": {
+      "p": 0.986,
+      "cps": 290984.35
+     },
+     "best": {
+      "p": 0.975,
+      "cps": 15223.71
+     }
+    },
+    {
+     "id": "Time-Lost Sapphire|pair-prefix-suffix-T2|rare",
+     "costRatio": 11.041,
+     "dp": 0.277,
+     "differs": [
+      "removal: whittle → default",
+      "chaosTier: greater → default"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 322140.83
+     },
+     "best": {
+      "p": 0.723,
+      "cps": 29176.27
+     }
+    },
+    {
+     "id": "Sapphire|pair-prefix-suffix-T2|rare",
+     "costRatio": 10.74,
+     "dp": 0.26,
+     "differs": [
+      "removal: whittle → default"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 297167.9
+     },
+     "best": {
+      "p": 0.74,
+      "cps": 27668.54
+     }
+    },
+    {
+     "id": "Aegis Quarterstaff|single-prefix-rare-T1|rare-low",
+     "costRatio": 10.45,
+     "dp": 0.108,
+     "differs": [
+      "chaosTier: perfect → greater",
+      "exaltTier: perfect → greater"
+     ],
+     "planner": {
+      "p": 0.933,
+      "cps": 696181.51
+     },
+     "best": {
+      "p": 0.825,
+      "cps": 66619.56
+     }
+    },
+    {
+     "id": "Time-Lost Ruby|pair-prefix-suffix-T2|rare",
+     "costRatio": 10.293,
+     "dp": 0.022,
+     "differs": [
+      "removal: whittle → annul",
+      "chaosTier: greater → default",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 285959.85
+     },
+     "best": {
+      "p": 0.978,
+      "cps": 27783.12
+     }
+    },
+    {
+     "id": "Runemastered Veridical Chain|single-suffix-rare-T1|rare-low",
+     "costRatio": 9.639,
+     "dp": -0.029,
+     "differs": [
+      "chaosTier: greater → default",
+      "sideOmens: true → default",
+      "catalyse: default → true",
+      "removal: default → annul",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 0.963,
+      "cps": 34209.41
+     },
+     "best": {
+      "p": 0.992,
+      "cps": 3549.07
+     }
+    },
+    {
+     "id": "Emerald|pair-prefix-suffix-T2|rare",
+     "costRatio": 8.9,
+     "dp": 0.413,
+     "differs": [
+      "removal: whittle → default",
+      "chaosTier: greater → default",
+      "fracture: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 392305.17
+     },
+     "best": {
+      "p": 0.587,
+      "cps": 44078.83
+     }
+    },
+    {
+     "id": "Grand Cuisses|pair-prefix-suffix-T2|white",
+     "costRatio": 8.89,
+     "dp": -0.127,
+     "differs": [
+      "magicTier: greater → perfect",
+      "sideOmens: true → default",
+      "chaosTier: greater → default",
+      "homog: default → true",
+      "slamOnly: default → true"
+     ],
+     "planner": {
+      "p": 0.873,
+      "cps": 47854.73
+     },
+     "best": {
+      "p": 1,
+      "cps": 5383.22
+     }
+    },
+    {
+     "id": "Time-Lost Emerald|pair-prefix-suffix-T2|rare",
+     "costRatio": 7.913,
+     "dp": 0.485,
+     "differs": [
+      "removal: whittle → default",
+      "chaosTier: greater → default"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 408159.1
+     },
+     "best": {
+      "p": 0.515,
+      "cps": 51579.92
+     }
+    },
+    {
+     "id": "Grand Spear|pair-prefix-suffix-T2|white",
+     "costRatio": 7.039,
+     "dp": 0.449,
+     "differs": [
+      "exaltTier: perfect → greater",
+      "removal: whittle → default",
+      "chaosTier: perfect → greater",
+      "homog: default → true",
+      "fracture: default → true"
+     ],
+     "planner": {
+      "p": 0.994,
+      "cps": 971408.46
+     },
+     "best": {
+      "p": 0.545,
+      "cps": 137994.89
+     }
+    },
+    {
+     "id": "recipe|c3",
+     "costRatio": 6.881,
+     "dp": 0,
+     "differs": [
+      "essence: true → default",
+      "slamOnly: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 834.27
+     },
+     "best": {
+      "p": 1,
+      "cps": 121.24
+     }
+    },
+    {
+     "id": "Aegis Quarterstaff|pair-prefix-suffix-T2|white",
+     "costRatio": 6.855,
+     "dp": 0.423,
+     "differs": [
+      "removal: whittle → default",
+      "chaosTier: perfect → greater",
+      "fracture: default → true"
+     ],
+     "planner": {
+      "p": 0.994,
+      "cps": 937908.04
+     },
+     "best": {
+      "p": 0.571,
+      "cps": 136824.06
+     }
+    },
+    {
+     "id": "Siege Crossbow|single-prefix-rare-T1|white",
+     "costRatio": 6.442,
+     "dp": -0.136,
+     "differs": [
+      "chaosTier: greater → default",
+      "slamOnly: default → true",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 0.811,
+      "cps": 66045.43
+     },
+     "best": {
+      "p": 0.947,
+      "cps": 10251.79
+     }
+    },
+    {
+     "id": "Runemastered Veridical Chain|single-suffix-rare-T1|rare",
+     "costRatio": 6.331,
+     "dp": -0.164,
+     "differs": [
+      "sideOmens: true → default",
+      "catalyse: default → true",
+      "removal: default → annul",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 0.831,
+      "cps": 20787.88
+     },
+     "best": {
+      "p": 0.995,
+      "cps": 3283.38
+     }
+    },
+    {
+     "id": "Emerald|pair-prefix-suffix-T2|white",
+     "costRatio": 6.24,
+     "dp": 0.342,
+     "differs": [
+      "sideOmens: true → default",
+      "removal: erasure → default",
+      "chaosTier: greater → default",
+      "exaltTier: greater → default",
+      "fracture: default → true",
+      "catalyse: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 207008.46
+     },
+     "best": {
+      "p": 0.658,
+      "cps": 33176.08
+     }
+    },
+    {
+     "id": "Time-Lost Diamond|pair-prefix-suffix-T2|white",
+     "costRatio": 5.886,
+     "dp": -0.001,
+     "differs": [
+      "magicTier: greater → default",
+      "sideOmens: true → default",
+      "chaosTier: greater → default",
+      "exaltTier: greater → default",
+      "homog: default → true",
+      "desSlam: default → true",
+      "bone: default → Ancient",
+      "echoes: default → true"
+     ],
+     "planner": {
+      "p": 0.999,
+      "cps": 474934.36
+     },
+     "best": {
+      "p": 1,
+      "cps": 80689.45
+     }
+    }
+   ]
+  },
+  "premium": {
+   "verified": 784,
+   "replaced": 77,
+   "cheaperLeft": 79,
+   "saferLeft": 17,
+   "unstable": 5,
+   "planner": {
+    "same": 168,
+    "equal": 59,
+    "better": 3,
+    "worse": 554,
+    "none": 0
+   },
+   "byStart": {
+    "rare": {
+     "same": 16,
+     "equal": 3,
+     "better": 3,
+     "worse": 342,
+     "none": 0
+    },
+    "white": {
+     "same": 104,
+     "equal": 56,
+     "better": 0,
+     "worse": 100,
+     "none": 0
+    },
+    "rare-low": {
+     "same": 0,
+     "equal": 0,
+     "better": 0,
+     "worse": 112,
+     "none": 0
+    },
+    "magic": {
+     "same": 48,
+     "equal": 0,
+     "better": 0,
+     "worse": 0,
+     "none": 0
+    }
+   },
+   "patterns": [
+    {
+     "change": "homog: default → true",
+     "n": 348
+    },
+    {
+     "change": "exaltTier: perfect → greater",
+     "n": 247
+    },
+    {
+     "change": "sideOmens: true → default",
+     "n": 197
+    },
+    {
+     "change": "removal: annul → default",
+     "n": 129
+    },
+    {
+     "change": "chaosTier: perfect → default",
+     "n": 102
+    },
+    {
+     "change": "exaltTier: default → greater",
+     "n": 98
+    },
+    {
+     "change": "chaosTier: greater → default",
+     "n": 93
+    },
+    {
+     "change": "desSlam: true → default",
+     "n": 83
+    },
+    {
+     "change": "echoes: true → default",
+     "n": 83
+    },
+    {
+     "change": "removal: erasure → annul",
+     "n": 76
+    },
+    {
+     "change": "desSlam: default → true",
+     "n": 75
+    },
+    {
+     "change": "echoes: default → true",
+     "n": 72
+    },
+    {
+     "change": "bone: default → Ancient",
+     "n": 64
+    },
+    {
+     "change": "slamOnly: default → true",
+     "n": 63
+    }
+   ],
+   "uses": {
+    "essence": {
+     "true": 89
+    },
+    "exaltTier": {
+     "greater": 396,
+     "perfect": 47
+    },
+    "removal": {
+     "annul": 191,
+     "whittle": 14,
+     "erasure": 6
+    },
+    "homog": {
+     "true": 362
+    },
+    "sideOmens": {
+     "true": 211
+    },
+    "magicTier": {
+     "greater": 185,
+     "perfect": 34
+    },
+    "slamOnly": {
+     "true": 84
+    },
+    "chaosTier": {
+     "greater": 48,
+     "perfect": 10
+    },
+    "catalyse": {
+     "true": 20
+    },
+    "greaterExalt": {
+     "true": 10
+    },
+    "fracture": {
+     "true": 12
+    },
+    "pair": {
+     "true": 18
+    },
+    "desSlam": {
+     "true": 76
+    },
+    "bone": {
+     "Ancient": 73
+    },
+    "echoes": {
+     "true": 81
+    },
+    "runes": {
+     "false": 1
+    },
+    "restart": {
+     "false": 54
+    },
+    "start": {
+     "alchemy": 91
+    },
+    "flux": {
+     "false": 16
+    }
+   },
+   "ratio": {
+    "p50": 6.419,
+    "p90": 25.267,
+    "max": 12725.859
+   },
+   "dp": {
+    "p50": 0,
+    "p10": -0.001
+   },
+   "worseExamples": [
+    {
+     "id": "Runemastered Veridical Chain|single-suffix-rare-T1|white",
+     "costRatio": 12725.859,
+     "dp": -0.883,
+     "differs": [
+      "magicTier: perfect → default",
+      "restart: false → default",
+      "exaltTier: perfect → greater",
+      "removal: whittle → default",
+      "chaosTier: perfect → default",
+      "start: default → alchemy",
+      "slamOnly: default → true",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 0.117,
+      "cps": 38051178.02
+     },
+     "best": {
+      "p": 1,
+      "cps": 2990.07
+     }
+    },
+    {
+     "id": "Time-Lost Diamond|single-prefix-rare-T1|white",
+     "costRatio": 3460.729,
+     "dp": 0,
+     "differs": [
+      "removal: erasure → default",
+      "chaosTier: greater → default",
+      "slamOnly: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 486953.97
+     },
+     "best": {
+      "p": 1,
+      "cps": 140.71
+     }
+    },
+    {
+     "id": "Diamond|single-prefix-rare-T1|white",
+     "costRatio": 3311.462,
+     "dp": 0,
+     "differs": [
+      "removal: erasure → default",
+      "chaosTier: greater → default",
+      "slamOnly: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 487404.52
+     },
+     "best": {
+      "p": 1,
+      "cps": 147.19
+     }
+    },
+    {
+     "id": "Diamond|single-suffix-rare-T1|white",
+     "costRatio": 2350.139,
+     "dp": 0,
+     "differs": [
+      "magicTier: greater → default",
+      "restart: false → default",
+      "exaltTier: greater → default",
+      "removal: erasure → default",
+      "chaosTier: greater → default",
+      "start: default → alchemy",
+      "slamOnly: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 440781.64
+     },
+     "best": {
+      "p": 1,
+      "cps": 187.56
+     }
+    },
+    {
+     "id": "Time-Lost Diamond|single-suffix-rare-T1|white",
+     "costRatio": 2330.641,
+     "dp": -0.002,
+     "differs": [
+      "removal: erasure → default",
+      "chaosTier: greater → default",
+      "slamOnly: default → true"
+     ],
+     "planner": {
+      "p": 0.998,
+      "cps": 439126.16
+     },
+     "best": {
+      "p": 1,
+      "cps": 188.41
+     }
+    },
+    {
+     "id": "Grasping Mail|single-prefix-rare-T1|rare-low",
+     "costRatio": 219.56,
+     "dp": 0.018,
+     "differs": [
+      "removal: erasure → annul",
+      "chaosTier: perfect → default",
+      "sideOmens: true → default",
+      "catalyse: default → true",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 0.053,
+      "cps": 115128092.51
+     },
+     "best": {
+      "p": 0.035,
+      "cps": 524358.47
+     }
+    },
+    {
+     "id": "Grasping Mail|resistance-T2|rare",
+     "costRatio": 152.787,
+     "dp": -0.564,
+     "differs": [
+      "removal: erasure → annul",
+      "chaosTier: perfect → default",
+      "catalyse: default → true",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 0.391,
+      "cps": 9776057.04
+     },
+     "best": {
+      "p": 0.955,
+      "cps": 63984.97
+     }
+    },
+    {
+     "id": "Grasping Mail|single-suffix-rare-T1|rare",
+     "costRatio": 105.568,
+     "dp": 0.031,
+     "differs": [
+      "sideOmens: true → default",
+      "removal: erasure → annul",
+      "chaosTier: greater → default",
+      "catalyse: default → true",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 0.061,
+      "cps": 48017324.5
+     },
+     "best": {
+      "p": 0.03,
+      "cps": 454845.69
+     }
+    },
+    {
+     "id": "Grasping Mail|single-prefix-rare-T1|rare",
+     "costRatio": 86.639,
+     "dp": -0.006,
+     "differs": [
+      "exaltTier: greater → perfect",
+      "sideOmens: true → default",
+      "removal: erasure → annul",
+      "chaosTier: perfect → default",
+      "catalyse: default → true",
+      "desSlam: default → true",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 0.054,
+      "cps": 112879585.3
+     },
+     "best": {
+      "p": 0.06,
+      "cps": 1302879.49
+     }
+    },
+    {
+     "id": "Sirenscale Gloves|single-prefix-rare-T1|white",
+     "costRatio": 66.562,
+     "dp": 0.007,
+     "differs": [
+      "sideOmens: true → default",
+      "exaltTier: perfect → greater",
+      "removal: whittle → default",
+      "chaosTier: perfect → default",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 257522.38
+     },
+     "best": {
+      "p": 0.993,
+      "cps": 3868.89
+     }
+    },
+    {
+     "id": "Adherent Cuffs|single-prefix-rare-T1|white",
+     "costRatio": 65.68,
+     "dp": 0.005,
+     "differs": [
+      "sideOmens: true → default",
+      "exaltTier: perfect → greater",
+      "removal: whittle → default",
+      "chaosTier: perfect → default",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 256596.83
+     },
+     "best": {
+      "p": 0.995,
+      "cps": 3906.79
+     }
+    },
+    {
+     "id": "Massive Mitts|single-prefix-rare-T1|white",
+     "costRatio": 63.663,
+     "dp": 0.008,
+     "differs": [
+      "sideOmens: true → default",
+      "exaltTier: perfect → greater",
+      "removal: whittle → default",
+      "chaosTier: perfect → default",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 258423.33
+     },
+     "best": {
+      "p": 0.992,
+      "cps": 4059.21
+     }
+    },
+    {
+     "id": "Diamond|single-prefix-common-T2|rare",
+     "costRatio": 61.871,
+     "dp": 0.014,
+     "differs": [
+      "removal: erasure → default",
+      "chaosTier: greater → default"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 516251.46
+     },
+     "best": {
+      "p": 0.986,
+      "cps": 8344.01
+     }
+    },
+    {
+     "id": "Time-Lost Diamond|single-prefix-common-T2|rare",
+     "costRatio": 59.967,
+     "dp": 0.013,
+     "differs": [
+      "removal: erasure → default",
+      "chaosTier: greater → default"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 528475.46
+     },
+     "best": {
+      "p": 0.987,
+      "cps": 8812.79
+     }
+    },
+    {
+     "id": "Diamond|single-prefix-rare-T1|rare",
+     "costRatio": 58.77,
+     "dp": 0.011,
+     "differs": [
+      "removal: erasure → default"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 499115.85
+     },
+     "best": {
+      "p": 0.989,
+      "cps": 8492.64
+     }
+    },
+    {
+     "id": "Diamond|single-prefix-rare-T1|rare-low",
+     "costRatio": 58.635,
+     "dp": 0.011,
+     "differs": [
+      "removal: erasure → default"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 499115.85
+     },
+     "best": {
+      "p": 0.989,
+      "cps": 8512.28
+     }
+    },
+    {
+     "id": "Runemastered Veridical Chain|pair-two-suffixes|rare",
+     "costRatio": 55.97,
+     "dp": -0.003,
+     "differs": [
+      "sideOmens: true → default",
+      "removal: erasure → annul",
+      "chaosTier: perfect → default",
+      "exaltTier: default → greater",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 0.997,
+      "cps": 787123.1
+     },
+     "best": {
+      "p": 1,
+      "cps": 14063.26
+     }
+    },
+    {
+     "id": "Time-Lost Diamond|single-prefix-rare-T1|rare-low",
+     "costRatio": 55.189,
+     "dp": 0.015,
+     "differs": [
+      "removal: erasure → default"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 500691.54
+     },
+     "best": {
+      "p": 0.985,
+      "cps": 9072.38
+     }
+    },
+    {
+     "id": "Time-Lost Diamond|single-prefix-rare-T1|rare",
+     "costRatio": 54.104,
+     "dp": 0.015,
+     "differs": [
+      "removal: erasure → default"
+     ],
+     "planner": {
+      "p": 1,
+      "cps": 499115.85
+     },
+     "best": {
+      "p": 0.985,
+      "cps": 9225.17
+     }
+    },
+    {
+     "id": "Gladiatorial Helm|single-suffix-rare-T1|rare-low",
+     "costRatio": 50.829,
+     "dp": -0.001,
+     "differs": [
+      "chaosTier: perfect → default",
+      "exaltTier: perfect → greater",
+      "sideOmens: true → default",
+      "removal: default → annul",
+      "homog: default → true"
+     ],
+     "planner": {
+      "p": 0.999,
+      "cps": 249541.52
+     },
+     "best": {
+      "p": 1,
+      "cps": 4909.43
+     }
+    }
+   ]
+  }
+ }
+}
