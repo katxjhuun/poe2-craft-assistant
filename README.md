@@ -135,8 +135,11 @@ own window (Edge's app mode), kept above the game.
   steps no longer ask for a paste.
 - The hotkey is taken only while the game window is in front. Settings are in `config.json` next to the exe
   (`hotkey`, `port`, `topmost`, `advancedCopy`, `gameTitle`); the tray menu opens it.
-- Price check on the hotkey: a small window at the top right of the game shows the item, the search lines (untick or
-  change them, then Search) and the ten cheapest listings. The program asks the trade site for them the way Exiled
+- Price check on the hotkey: a window at the right of the game shows the item as the game draws it, every line a
+  search filter (click a line to use it or leave it out; its tier at the left, minimum and maximum at the right;
+  Exact match or Broad), an estimate from the listings (their middle price, with range and how far they agree), and
+  the ten cheapest listings as a table (price, item level, quality, account, age), with the currency, the kind of
+  listing and its age as options. The program asks the trade site for them the way Exiled
   Exchange 2 and PoE Overlay II do. Those endpoints are not in Grinding Gear Games' documented API (its developer
   documentation calls their use a breach of the terms, 7i); the player chose to use them knowingly, no further than
   those tools go. The limits kept here: only on a key press or a Search click, never in the background; one search and

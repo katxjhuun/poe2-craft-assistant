@@ -198,13 +198,14 @@ namespace PoE2CraftAssistant
         }
 
         /// <summary>The search and its first ten listings as JSON for the page: {ok, total, id, listings} or {ok:false, message, wait, login}.</summary>
-        public string Check(string league, string body)
+        public string Check(string league, string body, bool fresh)
         {
             lock (gate)
             {
                 string key = league + "\n" + body;
                 KeyValuePair<DateTime, string> hit;
-                if (cache.TryGetValue(key, out hit) && (DateTime.UtcNow - hit.Key).TotalSeconds < 60) return hit.Value; // the same search again
+                // the same search again within a minute: the answer already here (Refresh asks the site again)
+                if (!fresh && cache.TryGetValue(key, out hit) && (DateTime.UtcNow - hit.Key).TotalSeconds < 60) return hit.Value;
                 double wait = (nextSearch - DateTime.UtcNow).TotalSeconds;
                 if (wait > 0) return Fail("Too soon after the last search: wait " + Math.Ceiling(wait) + " s (the trade site's rate limit).", wait, false);
                 Reply sr = Send("POST", "https://www.pathofexile.com/api/trade2/search/poe2/" + Uri.EscapeDataString(league), body);
@@ -238,6 +239,22 @@ namespace PoE2CraftAssistant
                         o["indexed"] = Get(listing, "indexed");
                         o["seller"] = Get(account, "name");
                         o["online"] = Get(account, "online") != null;
+                        object item = Get(row, "item");
+                        o["ilvl"] = Get(item, "ilvl");
+                        // quality from the item's property line ("Quality": "+20%")
+                        System.Collections.IEnumerable props = Get(item, "properties") as System.Collections.IEnumerable;
+                        if (props != null) foreach (object pr in props)
+                        {
+                            if (Convert.ToString(Get(pr, "name")).IndexOf("Quality", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                            System.Collections.IEnumerable vals = Get(pr, "values") as System.Collections.IEnumerable;
+                            if (vals != null) foreach (object v in vals)
+                            {
+                                System.Collections.IEnumerable pair = v as System.Collections.IEnumerable;
+                                if (pair != null) foreach (object x in pair) { o["quality"] = Convert.ToString(x).Trim('+', '%'); break; }
+                                break;
+                            }
+                            break;
+                        }
                         listings.Add(o);
                     }
                 }
@@ -343,7 +360,7 @@ namespace PoE2CraftAssistant
                 string league = q.QueryString["league"];
                 if (!cfg.PriceCheck) { Text(r, 200, "application/json", "{\"ok\":false,\"message\":\"The price check is turned off (tray menu).\",\"wait\":0,\"login\":false}"); return; }
                 if (string.IsNullOrEmpty(league) || string.IsNullOrEmpty(body)) { Text(r, 400, "text/plain", "league and search needed"); return; }
-                Text(r, 200, "application/json", trade.Check(league, body));
+                Text(r, 200, "application/json", trade.Check(league, body, q.QueryString["fresh"] == "1"));
                 return;
             }
             if (path == "/overlay" && q.HttpMethod == "POST")
@@ -750,7 +767,7 @@ namespace PoE2CraftAssistant
             if (cfg.PriceCheck)
             {
                 // the price check window over the game (it opens on the first press and reads the item it missed)
-                if (Native.FindWindowByTitle(PRICE_TITLE) == IntPtr.Zero) Launch(server.Url + "?view=price", "460,760");
+                if (Native.FindWindowByTitle(PRICE_TITLE) == IntPtr.Zero) Launch(server.Url + "?view=price", "600,1000");
                 Interlocked.Exchange(ref panelWanted, DateTime.UtcNow.AddSeconds(10).Ticks);
             }
         }
@@ -772,9 +789,9 @@ namespace PoE2CraftAssistant
                 g.Left = s.Left; g.Top = s.Top; g.Right = s.Right; g.Bottom = s.Bottom;
             }
             int gw = g.Right - g.Left, gh = g.Bottom - g.Top;
-            int w = Math.Min(gw, 460), h = Math.Max(420, Math.Min(gh - 140, 780));
+            int w = Math.Min(gw, 600), h = Math.Max(480, Math.Min(gh - 90, 1120));
             if (Native.IsIconic(t)) Native.ShowWindow(t, 4); // SW_SHOWNOACTIVATE
-            Native.SetWindowPos(t, Native.HWND_TOPMOST, g.Right - w - 14, g.Top + 70, w, h, Native.SWP_NOACTIVATE | Native.SWP_SHOWWINDOW);
+            Native.SetWindowPos(t, Native.HWND_TOPMOST, g.Right - w - 14, g.Top + 44, w, h, Native.SWP_NOACTIVATE | Native.SWP_SHOWWINDOW);
             // a window that was just created takes the keyboard: hand it back to the game
             if (gameWnd != IntPtr.Zero && Native.GetForegroundWindow() == t) Native.SetForegroundWindow(gameWnd);
         }
