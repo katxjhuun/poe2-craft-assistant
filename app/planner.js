@@ -1318,10 +1318,96 @@
       }
       return null;
     }
+    /**
+     * Five-modifier jewel (recipe c15, rules R_JEWEL_SLOTS and R_NO_SPACE): three goals on one side of a jewel, which
+     * holds two a side. The route, as a rule for the item as it is now:
+     *   1. two of the three on the item (the usual way for two goals of a side);
+     *   2. both slots of the other side filled, then Potent Liquid Contempt for "+1 Suffix (Prefix) Modifier allowed",
+     *      which sits on the other side (the wrong one of its two outcomes takes a goal: back to 1);
+     *   3. the third by desecration, kept at the Well of Souls (a wrong one comes off with Omen of Light);
+     *   4. the allowance modifier removed with the side omen of its side: the three stay, over the limit;
+     *   5. the other side filled at once with Exalted Orbs (with a free slot there a Chaos Orb can still take one of the three);
+     *   6. the other side's goals with Chaos Orbs, which can only swap that side now, and the liquid emotion of a
+     *      crafted goal ("increased Effect of Suffixes") last: it replaces one of the two, half the time the wanted one.
+     * Returns a function (st, left) -> action, or null when the goals are not of this kind.
+     */
+    function jewelFive() {
+      if (ctx.cls !== 'Jewel' || !ctx.bone) return null;
+      const natural = (g) => !g.des && !g.essenceOnly && sidePool(ctx, g.side, 0).some((e) => e.fam === g.fam);
+      const L = SIDES.find((s) => goals.filter((g) => g.side === s).length === 3 && goals.filter((g) => g.side === s).every(natural));
+      if (!L) return null;
+      const O = other(L);
+      const Lg = goals.filter((g) => g.side === L), Og = goals.filter((g) => g.side === O);
+      const liquidOf = (g) => (g.ess || []).find((r) => r.liquid);
+      const crafted = Og.filter((g) => !natural(g) && liquidOf(g)), plainO = Og.filter(natural);
+      if (Og.length > 2 || crafted.length > 1 || crafted.length + plainO.length !== Og.length) return null;
+      // the liquid emotion whose modifier raises the limit of side L (it sits on side O), and its other outcome
+      const allow = ctx.essences.find((r) => r.liquid && ((ctx.capMods.get(r.mod) || {})[L] || 0) > 0);
+      if (!allow) return null;
+      const wrong = ctx.essences.find((r) => r.liquid && r.item === allow.item && r.mod !== allow.mod);
+      const quiet = Object.create(params, { desSlam: { value: false }, essence: { value: false } }); // the first two the plain way
+      const pairs = new Map();
+      const pairPolicy = (two) => {
+        const k = two.map((g) => g.key).join('|');
+        if (!pairs.has(k)) pairs.set(k, makePolicy(ctx, two, quiet, priced));
+        return pairs.get(k);
+      };
+      const met = (st, g) => goalMet(st, g);
+      const isJunk = (m) => removable(m) && !useful(m, goals);
+      return function (st, left) {
+        if (st.rarity !== 'Rare') return null; // a white or Magic jewel first becomes Rare the usual way
+        const onL = st.mods.filter((m) => m.side === L), onO = st.mods.filter((m) => m.side === O);
+        const metL = Lg.filter((g) => met(st, g));
+        const hasAllow = st.mods.some((m) => m.id === allow.mod);
+        const craftedMod = st.mods.find((m) => m.crafted);
+        // A fractured modifier that is no goal takes a slot the five need: from a white base start over, else no way on.
+        if (st.mods.some((m) => m.frac && !useful(m, goals))) {
+          return ctx.item.rarity === 'Normal' && params.restart ? { op: 'newbase' } : { fail: 'a fractured modifier that is not a goal takes a slot the five modifiers need' };
+        }
+        if (metL.length === 3) {
+          // 4. the allowance modifier goes; 5. the other side is filled; 6. its goals
+          if (hasAllow) return { op: 'annul', side: O };
+          if (open(ctx, st, O) > 0) return { op: 'exalt', tier: 'base' };
+          const plainLeft = plainO.filter((g) => !met(st, g));
+          if (plainLeft.length) return { op: 'chaos', tier: params.chaosTier || params.tier };
+          const c = crafted.find((g) => !met(st, g));
+          if (!c) return null;
+          if (craftedMod) return { op: 'chaos', tier: params.chaosTier || params.tier }; // another crafted modifier is in the way
+          const r = liquidOf(c);
+          return { op: 'liquid', item: r.item, mod: r.mod };
+        }
+        if (metL.length === 2 && onL.length === 3) {
+          // the third slot holds something else: a desecrated one comes off with Omen of Light, another one only by chance
+          const des = onL.find((m) => m.des && isJunk(m));
+          if (des) return { op: 'annul', light: true };
+          return { op: 'annul', side: L };
+        }
+        if (metL.length === 2 && onL.length === 2) {
+          if (hasAllow) {
+            // 3. the third by desecration (the only free slot is on side L once the other side is full)
+            const des = st.mods.find((m) => m.des);
+            if (des && isJunk(des)) return { op: 'annul', light: true };
+            // a goal that is itself desecrated uses the one desecrated slot: the third comes from an aimed Exalted Orb then
+            if (des) return { op: 'exalt', tier: params.exaltTier || params.tier, side: L };
+            return { op: 'bone', quality: 'Preserved', side: open(ctx, st, O) > 0 ? L : null, echoes: !!params.echoes };
+          }
+          // 2. fill the other side, then the liquid emotion
+          if (craftedMod) return { op: 'annul', side: craftedMod.side };
+          if (open(ctx, st, O) > 0) return { op: 'exalt', tier: 'base' };
+          return { op: 'liquid', item: allow.item };
+        }
+        // 1. two of the three: the ones already there first
+        const two = Lg.slice().sort((a, b) => met(st, b) - met(st, a)).slice(0, 2);
+        const a = pairPolicy(two)(st);
+        return a.done ? null : a;
+      };
+    }
+    const five = jewelFive();
     return function next(st) {
       const left = unmet(st);
       if (!left.length) return { done: true };
       if (st.corrupted || st.sanctified) return { fail: 'item is locked' };
+      if (five) { const a = five(st, left); if (a) return a; }
       const rs = runeStep(st, left);
       if (rs) return rs;
       const fx = fluxStep(st, left);
@@ -1468,6 +1554,24 @@
    * Can this goal never share the item with another one? Every natural tier of the other goal's family gives the item tags
    * that stop this family (a Fire spell damage prefix keeps the Cold one off, game data adds_tags).
    */
+  /**
+   * More goals than the item can hold? A jewel takes five modifiers at most, three on one side (recipe c15); other
+   * items hold their Rare limits (a rune that adds a suffix slot counts where the class takes it).
+   */
+  function slotClash(ctx, goals) {
+    const n = { prefix: goals.filter((g) => g.side === 'prefix').length, suffix: goals.filter((g) => g.side === 'suffix').length };
+    if (ctx.cls === 'Jewel') {
+      const lim = E.slotLimits({ rarity: 'Rare', slotDelta: { prefix: 0, suffix: 0 } }, 'Jewel');
+      if (n.prefix > lim.prefix + 1 || n.suffix > lim.suffix + 1 || (n.prefix > lim.prefix && n.suffix > lim.suffix))
+        return 'a jewel takes five modifiers at most: three on one side and two on the other';
+      return null;
+    }
+    const lim = E.slotLimits({ rarity: 'Rare', slotDelta: ctx.slotDelta }, ctx.cls);
+    const extra = runeFor(ctx, /Suffix Modifiers? allowed/i) ? 1 : 0;
+    if (n.prefix > lim.prefix) return `more prefix targets (${n.prefix}) than a Rare item of this class holds (${lim.prefix})`;
+    if (n.suffix > lim.suffix + extra) return `more suffix targets (${n.suffix}) than a Rare item of this class holds (${lim.suffix + extra})`;
+    return null;
+  }
   function goalClash(ctx, goals, g) {
     for (const o of goals) {
       if (o === g || o.des || o.essenceOnly || g.des || g.essenceOnly) continue;
@@ -2073,9 +2177,19 @@
     { magicTier: 'greater', slamOnly: true }, { magicTier: 'perfect', slamOnly: true }, { start: 'alchemy' }, { start: 'alchemy', slamOnly: true },
   ];
   const ROUTES_FINISH = [{}, { exaltTier: 'greater' }, { sideOmens: true }, { exaltTier: 'greater', sideOmens: true }];
+  /**
+   * Five-modifier jewel (three goals on one side, recipe c15): the first of the three is fractured before the Chaos
+   * Orbs for the second (from a white base a wrong fracture means a new base), and Abyssal Echoes shows a second set
+   * of three at the Well of Souls for the third.
+   */
+  const ROUTES_JEWEL_FIVE = [
+    { fracture: true, echoes: true }, { fracture: true, echoes: true, tier: 'greater' }, { fracture: true, echoes: true, magicTier: 'greater' },
+    { fracture: true, echoes: true, pair: true, magicTier: 'greater' }, { echoes: true }, { echoes: true, removal: 'annul' }, { fracture: true },
+  ];
   /** The sweep's routes for this start item, with and without the settings that only matter on some items. */
-  function verifiedRoutes(st, goals) {
+  function verifiedRoutes(st, goals, ctx) {
     const out = [];
+    if (ctx && ctx.cls === 'Jewel' && SIDES.some((s) => goals.filter((g) => g.side === s).length === 3)) out.push(...ROUTES_JEWEL_FIVE);
     const extras = [{}];
     if (goals.some((g) => (g.ess || []).length)) extras.push({ essence: true });
     if (goals.some((g) => !g.des && /^(Fire|Cold|Lightning)Resistance$/.test(g.fam || ''))) for (const e of extras.slice()) extras.push(Object.assign({ flux: false }, e));
@@ -2113,12 +2227,14 @@
       const pg = prof.goals(goals);
       const infeasible = pg.map((g) => ({ g, why: goalFeasible(ctx, st, g) || goalClash(ctx, pg, g) })).filter((x) => x.why);
       if (!pg.length) { out.profiles[names[i]] = { label: prof.label, none: 'No required goals. Mark at least one target as Required.' }; done += grids[i].length + 1; continue; }
+      const tooMany = slotClash(ctx, pg);
+      if (tooMany) { out.profiles[names[i]] = { label: prof.label, impossible: [tooMany.charAt(0).toUpperCase() + tooMany.slice(1) + '.'] }; done += grids[i].length + 1; continue; }
       if (infeasible.length) { out.profiles[names[i]] = { label: prof.label, impossible: infeasible.map((x) => `${x.g.label}: ${x.why}`) }; done += grids[i].length + 1; continue; }
       const sc = makeScreen(ctx, st, pg, input);
       // (a) the grid and (b) recipes whose goals overlap: the recipe's settings on top of the profile's first strategy
       const cands = grids[i].map((p) => ({ p, from: { grid: true } }))
         .concat((input.recipes || []).map((rc) => ({ p: Object.assign({}, grids[i][0], rc.params), from: { recipe: rc.id, title: rc.title } })))
-        .concat(verifiedRoutes(st, pg).map((p) => ({ p, from: { sweep: true } })));
+        .concat(verifiedRoutes(st, pg, ctx).map((p) => ({ p, from: { sweep: true } })));
       let seeded = 0;
       await sc.seed(cands, prof, () => { if (++seeded <= grids[i].length) { done++; if (input.onProgress) input.onProgress(done / total); } });
       // (c) beam search from the best candidates (the page runs it later with improvePlan, after showing the plans)

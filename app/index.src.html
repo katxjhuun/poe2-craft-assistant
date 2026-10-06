@@ -1541,7 +1541,11 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   function craftLimits(it) {
     const f = it.flags || {};
     if (it.rarity === 'Unique' || f.corrupted || f.sanctified || f.mirrored) return E.itemLimits(S.ix, it);
-    return E.itemLimits(S.ix, Object.assign({}, it, { rarity: 'Rare', slotDelta: it.slotDelta || { prefix: 0, suffix: 0 } }));
+    const lim = E.itemLimits(S.ix, Object.assign({}, it, { rarity: 'Rare', slotDelta: it.slotDelta || { prefix: 0, suffix: 0 } }));
+    // A jewel holds 2 + 2, and three on one side through Potent Liquid Contempt (five modifiers in all, recipe c15):
+    // a third target row on each side; the plans take three on one side only.
+    if (it.itemClass === 'Jewel') return { prefix: Math.max(lim.prefix, 3), suffix: Math.max(lim.suffix, 3) };
+    return lim;
   }
   /**
    * A new state of the same item: rows follow the order of the pasted text, which changes as mods come and go, so move
@@ -2462,7 +2466,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (S.tplMode === 'save') html += `<div class="tctl" style="margin:-4px 0 12px"><input id="tplName" placeholder="Template name" maxlength="60" value="${esc(S.tplName || '')}" aria-label="Template name"><button class="btn small" type="button" id="tplSaveBtn">Save</button><button class="linkish" type="button" id="tplCancel">Cancel</button></div>`;
     if (S.tplMode === 'delete') html += `<div class="tctl" style="margin:-4px 0 12px">${mine.map((t) => `<button class="btn small" type="button" data-tpldel="${esc(t.id)}">Delete ${esc(t.label)}</button>`).join('')}<button class="linkish" type="button" id="tplCancel">Done</button></div>`;
     if (it.rarity === 'Unique') html += '<p class="sub">Unique modifiers are fixed; targets apply to Magic and Rare items.</p>';
-    else if (it.rarity === 'Normal' && cap.prefix + cap.suffix > 0) html += `<p class="sub">White base: choose up to ${cap.prefix} prefix and ${cap.suffix} suffix targets, and the plans craft them from this base.</p>`;
+    else if (it.rarity === 'Normal' && cap.prefix + cap.suffix > 0 && it.itemClass !== 'Jewel') html += `<p class="sub">White base: choose up to ${cap.prefix} prefix and ${cap.suffix} suffix targets, and the plans craft them from this base.</p>`;
+    if (it.itemClass === 'Jewel' && it.rarity !== 'Unique') html += '<p class="sub">A jewel holds two prefixes and two suffixes. Five targets are possible with three on one side: the plans then go through Potent Liquid Contempt and a desecrated third modifier, and the liquid emotion target (for example "increased Effect of Suffixes") comes last.</p>';
     for (const side of ['prefix', 'suffix']) {
       const have = sideMods(it, side).length;
       const n = Math.max(cap[side], have);
@@ -2470,7 +2475,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       html += `<div class="side"><div class="side-head"><b>${side === 'prefix' ? 'Prefixes' : 'Suffixes'}</b><span class="sub num"${holds}>${have} / ${cap[side]}</span></div>`;
       if (!n) html += '<div class="sub">No slots on this side.</div>';
       // rows past what the item holds now open when it becomes Magic (the first) or Rare (the rest)
-      for (let i = 0; i < n; i++) html += rowHtml(side, i, i >= lim[side] ? (i < 1 ? 'Magic' : 'Rare') : null);
+      for (let i = 0; i < n; i++) html += rowHtml(side, i, i >= lim[side] ? (i < 1 ? 'Magic' : it.itemClass === 'Jewel' && i >= 2 ? '· a third one comes through Potent Liquid Contempt' : 'Rare') : null);
       html += '</div>';
     }
     el.innerHTML = html;
@@ -2506,7 +2511,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const cur = m
       ? `<span class="tchip ${m.tier ? 't' + Math.min(m.tier, 3) : ''}">${m.tier ? 'T' + m.tier : '–'}</span><span class="modtxt ${modState(m)}">${esc(m.text).replace(/\n/g, ' / ')}</span>
          <button type="button" class="icon-btn lock" data-lock="${key}" aria-pressed="${!!locked}" ${m.fractured ? 'disabled title="Fractured: cannot be removed"' : 'title="Keep: the planner will not remove this mod"'} aria-label="Keep this mod">${locked ? LOCK : UNLOCK}</button>`
-      : `<span class="tchip">–</span><span class="modtxt empty">Empty ${side}${opensAt ? ` <span class="opens">· opens when ${opensAt}</span>` : ''}</span>`;
+      : `<span class="tchip">–</span><span class="modtxt empty">Empty ${side}${opensAt ? ` <span class="opens">${opensAt.charAt(0) === '·' ? opensAt : '· opens when ' + opensAt}</span>` : ''}</span>`;
     let opts = '';
     let done = false;
     if (t && t.fam) {

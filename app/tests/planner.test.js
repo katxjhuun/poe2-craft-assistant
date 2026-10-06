@@ -593,6 +593,49 @@ test('five-modifier jewel (t24): three suffixes stay when "+1 Suffix Modifier al
   assert.ok(suffixHit > 70 && suffixHit < 130, String(suffixHit));
 });
 
+test('five targets on a jewel: the plan goes through Potent Liquid Contempt, a desecrated third suffix and Potent Liquid Ferocity (recipe c15)', async () => {
+  const W = require('../data/weights_0.5.5.json');
+  const jewel = (rarity, lines) => E.parseItem(ix, ['Item Class: Jewels', 'Rarity: ' + rarity].concat(rarity === 'Normal' ? [] : ['Test Gem'], ['Emerald', '--------', 'Item Level: 82'],
+    lines.length ? ['--------'] : [], lines).join('\n')).item;
+  const want = ['20% increased Critical Damage Bonus for Attack Damage', '15% increased Critical Hit Chance for Attacks', '3% increased Attack Speed with Bows',
+    '10% increased Projectile Damage', '60% increased Effect of Suffixes'];
+  const targets = {}, n = { prefix: 0, suffix: 0 };
+  for (const t of want) {
+    const m = jewel('Rare', [t]).mods[0];
+    targets[m.slot + '-' + n[m.slot]++] = { fam: kb.mods[m.modId].fam, group: m.slot, minTier: null, required: true, label: E.template(t) };
+  }
+  assert.deepEqual(n, { prefix: 2, suffix: 3 });
+  const weights = W.pages[W.base_page.Emerald].weights;
+  const sim = (item, params, trials) => {
+    const ctx = P.makeContext(ix, item, { weights });
+    const { goals } = P.goalsFromTargets(ctx, targets);
+    goals.forEach((g) => { g.eff = g.tier; });
+    return P.simulate(ctx, P.toState(ctx, item), goals, P.expandStrategy(params), { trials, seed: 11, priceOf: () => 10, baseCost: 1 });
+  };
+  // the start of the guides: the first suffix fractured
+  const frac = jewel('Rare', ['20% increased Critical Damage Bonus for Attack Damage (fractured)', '8% increased Fire Damage']);
+  assert.ok(frac.mods[0].fractured);
+  const r = sim(frac, { echoes: true }, 300);
+  assert.ok(r.p > 0.9, 'finishes: ' + r.p);
+  const used = (re) => r.steps.some((x) => x.names.some((nm) => re.test(nm)));
+  for (const re of [/^Potent Liquid Contempt$/, /^Preserved Cranium$/, /^Potent Liquid Ferocity$/, /^Omen of Sinistral Annulment$/, /^Omen of Light$/]) assert.ok(used(re), String(re));
+  assert.ok(!used(/Dextral (Erasure|Annulment)/), 'no suffix-side removal omen: the fractured suffix and the over-limit rule keep the suffixes');
+  // from a white base: fracture the first suffix, a wrong fracture means a new base
+  const white = sim(jewel('Normal', []), { fracture: true, restart: true, echoes: true, tier: 'greater' }, 200);
+  assert.ok(white.p > 0.8, 'white base: ' + white.p);
+  assert.ok(white.steps.some((x) => x.names.includes('Fracturing Orb')) && white.steps.some((x) => x.names.includes('New base')));
+  // on a Rare jewel a wrong fracture ends the run
+  const rare = sim(jewel('Rare', ['8% increased Fire Damage', '+10% to Fire Resistance']), { fracture: true, echoes: true }, 200);
+  assert.ok(rare.fails.some((f) => /fractured modifier that is not a goal/.test(f.reason)));
+  // the planner offers the route, and refuses six targets or three on both sides
+  const out = await P.buildPlans({ ix, item: frac, targets, locks: {}, priceOf: () => 10, baseCost: 1, weights, trials: 300, screenTrials: 60, beamBudgetMs: 0 });
+  for (const k of ['cheap', 'balanced', 'premium']) assert.ok(out.profiles[k].p > 0.8, k + ': ' + JSON.stringify(out.profiles[k].impossible || out.profiles[k].p));
+  const extra = jewel('Rare', ['12% increased Attack Damage']).mods[0];
+  const six = Object.assign({}, targets, { 'prefix-2': { fam: kb.mods[extra.modId].fam, group: 'prefix', minTier: null, required: true, label: 'attack damage' } });
+  const no = await P.buildPlans({ ix, item: frac, targets: six, locks: {}, priceOf: () => 10, baseCost: 1, weights, trials: 100, screenTrials: 40, beamBudgetMs: 0 });
+  assert.match(no.profiles.premium.impossible[0], /five modifiers at most/);
+});
+
 test('jewels are desecrated with the Preserved Cranium only (no Gnawed or Ancient Cranium in the game)', () => {
   const jewel = E.parseItem(ix, 'Item Class: Jewels\nRarity: Normal\nDiamond\n--------\nItem Level: 82').item;
   const ctx = P.makeContext(ix, jewel);
