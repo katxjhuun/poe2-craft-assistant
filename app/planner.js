@@ -1797,13 +1797,17 @@
     };
     const required = goals.filter((g) => g.required);
     const acc = { n: 0, succ: 0, partial: 0, lost: 0, stepsSum: 0, costs: [], fails: new Map(), uses: new Map(), order: new Map(), hits: new Map(),
-      out: { dead: 0, budget: 0, unfinished: 0 }, doneAt: [], basesSum: 0 };
+      out: { dead: 0, budget: 0, unfinished: 0 }, doneAt: [], basesSum: 0, okCosts: [], okUses: new Map() };
     const metCount = (s) => { let n = 0; for (const g of goals) if (goalMet(s, g)) n++; return n; };
     // Steps are listed by where they first come in a run (averaged), so restart loops do not scramble the order.
     let seen = null;
+    // uses of the run in progress: the runs that finish the item are also counted on their own (okUses, okCosts), for
+    // what a finished craft takes
+    let cur = null;
     const book = (k, a, n, first, hits) => {
       if (!n) return;
       acc.uses.set(k, (acc.uses.get(k) || 0) + n);
+      cur.set(k, (cur.get(k) || 0) + n);
       let o = acc.order.get(k);
       if (!o) acc.order.set(k, (o = { sum: 0, n: 0, action: a }));
       if (!seen.has(k)) { seen.add(k); o.sum += first; o.n++; }
@@ -1879,6 +1883,7 @@
     function one() {
       let st = st0, cost = 0, steps = 0, early = 0, bases = 0, fail = null, kind = null, lostGoal = false;
       seen = new Set();
+      cur = new Map();
       for (;;) {
         const a = next(st);
         if (a.done) break;
@@ -1912,7 +1917,10 @@
       }
       if (kind) acc.out[kind]++;
       const ok = !fail && goals.every((g) => goalMet(st, g));
-      if (ok) { acc.succ++; acc.doneAt.push(steps); }
+      if (ok) {
+        acc.succ++; acc.doneAt.push(steps); acc.okCosts.push(cost);
+        for (const [k, n] of cur) acc.okUses.set(k, (acc.okUses.get(k) || 0) + n);
+      }
       else if (required.length && required.every((g) => goalMet(st, g))) acc.partial++;
       if (fail) acc.fails.set(fail, (acc.fails.get(fail) || 0) + 1);
       if (lostGoal) acc.lost++;
@@ -1933,15 +1941,19 @@
         const se = Math.sqrt(Math.max(p * (1 - p), 1e-9) / N);
         const steps = [...acc.uses.entries()].map(([k, n]) => {
           const o = acc.order.get(k);
-          return { key: k, names: k.split(' + '), avg: n / N, cost: costCache.get(k), order: o.sum / o.n, action: o.action, hit: (acc.hits.get(k) || 0) / n };
+          return { key: k, names: k.split(' + '), avg: n / N, ok: acc.succ ? (acc.okUses.get(k) || 0) / acc.succ : null, cost: costCache.get(k), order: o.sum / o.n, action: o.action, hit: (acc.hits.get(k) || 0) / n };
         }).sort((a, b) => a.order - b.order);
+        // the runs that finish the item: what one finished craft costs (the steps' ok uses times their prices add up to its mean)
+        const okSorted = acc.okCosts.slice().sort((a, b) => a - b);
+        const okQ = (x) => okSorted[Math.min(okSorted.length - 1, Math.floor(x * okSorted.length))];
+        const okCost = okSorted.length ? { mean: okSorted.reduce((a, b) => a + b, 0) / okSorted.length, p10: okQ(0.1), p50: okQ(0.5), p90: okQ(0.9), n: okSorted.length } : null;
         return {
           params, trials: N, p, pLow: Math.max(0, p - 1.96 * se), pHigh: Math.min(1, p + 1.96 * se), maxSteps,
           pFail: 1 - p, failDead: acc.out.dead / N, failBudget: acc.out.budget / N, unfinished: acc.out.unfinished / N,
           meanBases: acc.basesSum / N, basesPerSuccess: p > 0 ? acc.basesSum / N / p : Infinity, baseLimit,
           // P(all goals reached within n uses) from the same runs, so per-use and whole-plan chances line up
           finishWithin: [1, 3, 5, 10, 25, 50, 100, 250, 600].map((n) => ({ n, p: acc.doneAt.filter((x) => x <= n).length / N })),
-          partial: acc.partial / N, lost: acc.lost / N, meanCost: mean, p10: q(0.1), p50: q(0.5), p90: q(0.9),
+          partial: acc.partial / N, lost: acc.lost / N, meanCost: mean, okCost, p10: q(0.1), p50: q(0.5), p90: q(0.9),
           costPerSuccess: p > 0 ? mean / p : Infinity, meanSteps: acc.stepsSum / N, steps,
           fails: [...acc.fails.entries()].sort((a, b) => b[1] - a[1]).map(([r, n]) => ({ reason: r, share: n / N })),
           missingPrices: [...missing], skippedUnpriced: [...skipped], weighted: !!ctx.weights, imputed: ctx.imputed.size,

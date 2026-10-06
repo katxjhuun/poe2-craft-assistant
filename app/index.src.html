@@ -13,18 +13,22 @@
 }
 :root {
   color-scheme: dark;
-  --bg: #121417;
-  --panel: #181B20;
-  --panel-2: #1F232A;
-  --inset: #0F1114;
-  --line: #2A2F37;
-  --line-2: #363C46;
+  --bg: #2A2B32;
+  --bar: #0F0F12;
+  --panel: #1E1F25;
+  --panel-2: #282A31;
+  --inset: #17181C;
+  --line: #34363F;
+  --line-2: #474A55;
+  --run: #37C285;
+  --run-ink: #06200F;
+  --cyan: #5CC8E2;
   --text: #DCD8CF;
   --muted: #8E949E;
   --faint: #7F8590;
-  --accent: #C9A66B;
-  --accent-ink: #17130C;
-  --accent-soft: rgba(201, 166, 107, .13);
+  --accent: #EDB23C;
+  --accent-ink: #1B1403;
+  --accent-soft: rgba(237, 178, 60, .13);
   --up: #6FB58A;
   --down: #D2766A;
   --warn: #D6A64A;
@@ -51,8 +55,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .num { font-variant-numeric: tabular-nums; }
 .muted { color: var(--muted); }
-h2 { margin: 0; font: 600 13px/1.2 var(--f-ui); letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
-.wrap { max-width: 1480px; margin: 0 auto; }
+h2 { margin: 0; font: 700 14px/1.2 var(--f-ui); letter-spacing: .14em; text-transform: uppercase; color: var(--text); }
+.wrap { max-width: 1080px; margin: 0 auto; }
 
 /* buttons */
 .btn { display: inline-flex; align-items: center; gap: 7px; background: var(--panel-2); border: 1px solid var(--line-2); border-radius: var(--r); padding: 6px 12px; cursor: pointer; white-space: nowrap; }
@@ -79,9 +83,18 @@ h2 { margin: 0; font: 600 13px/1.2 var(--f-ui); letter-spacing: .09em; text-tran
 .up { color: var(--up); } .down { color: var(--down); }
 
 /* top bar */
-.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 40; background: var(--bg); display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.top-left { display: flex; align-items: center; gap: 14px; position: relative; margin-right: auto; }
-.brand { font: 18px/1 var(--f-game); color: var(--g-white); letter-spacing: .02em; }
+.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 40; background: var(--bar); box-shadow: 0 0 0 100vmax var(--bar); clip-path: inset(0 -100vmax); display: flex; align-items: center; gap: 12px; padding: 10px 0; flex-wrap: wrap; }
+.brand { font: 800 16px/1 var(--f-ui); color: var(--accent); letter-spacing: .16em; text-transform: uppercase; margin-right: auto; }
+.unit select { background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r); padding: 6px 8px; }
+/* tools: the page's sections as a row of tabs */
+.tools { display: flex; flex-wrap: wrap; align-items: stretch; gap: 2px; margin-top: 14px; border-bottom: 2px solid var(--accent); }
+.tool { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; padding: 9px 14px; font: 700 12.5px/1.2 var(--f-ui); letter-spacing: .13em; text-transform: uppercase; color: var(--accent); cursor: pointer; white-space: nowrap; }
+.tool:hover { background: var(--accent-soft); }
+.tool[aria-current="page"] { background: var(--accent); color: var(--accent-ink); cursor: default; }
+.tool svg { width: 16px; height: 16px; flex: none; }
+.tool .count { background: none; border-color: currentColor; color: inherit; letter-spacing: 0; }
+.tool-hist { position: relative; margin-left: auto; display: inline-flex; }
+.tool-hist .popover { left: auto; right: 0; }
 .count { background: var(--panel); border: 1px solid var(--line-2); border-radius: 999px; padding: 0 7px; font-size: 12.5px; color: var(--muted); }
 .ticker { display: flex; align-items: center; gap: 14px; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r); padding: 5px 12px; cursor: pointer; }
 .ticker:hover { border-color: var(--accent); }
@@ -91,7 +104,7 @@ h2 { margin: 0; font: 600 13px/1.2 var(--f-ui); letter-spacing: .09em; text-tran
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); }
 .dot.live { background: var(--up); }
 .dot.stale { background: var(--warn); }
-.league select { background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r); padding: 6px 10px; max-width: 240px; }
+.league select { background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r); padding: 6px 10px; max-width: 200px; }
 .popover { position: absolute; top: calc(100% + 8px); left: 0; z-index: 50; width: min(360px, calc(100vw - 32px)); max-height: 60vh; overflow: auto; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: 0 18px 40px rgba(0,0,0,.5); padding: 6px; }
 .hist-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; width: 100%; text-align: left; background: none; border: 1px solid transparent; border-radius: var(--r); padding: 7px 9px; cursor: pointer; }
 .hist-row:hover { background: var(--panel-2); }
@@ -102,8 +115,39 @@ h2 { margin: 0; font: 600 13px/1.2 var(--f-ui); letter-spacing: .09em; text-tran
 .band { margin-top: 12px; border: 1px solid var(--warn); color: var(--warn); border-radius: var(--r); padding: 8px 12px; }
 
 /* board */
-.board { display: grid; grid-template-columns: minmax(300px, 1.1fr) minmax(360px, 440px) minmax(330px, 1fr); gap: 16px; align-items: start; margin-top: 16px; }
-.center { display: grid; gap: 16px; min-width: 0; }
+.flow { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-top: 16px; }
+.setup { display: grid; grid-template-columns: minmax(340px, 430px) minmax(0, 1fr); gap: 14px; align-items: start; }
+.quick { display: block; width: 100%; resize: vertical; min-height: 44px; margin-bottom: 12px; background: var(--inset); border: 1px dashed var(--line-2); border-radius: var(--r); padding: 9px 11px; font-size: 14px; color: var(--text); }
+.quick::placeholder { color: var(--muted); }
+.quick:focus { outline: none; border-color: var(--accent); border-style: solid; }
+/* option rows: one line each, the current values in the line, opened on demand */
+details.optrow { border-top: 1px solid var(--line); }
+details.optrow > summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 12px 2px; min-width: 0; }
+details.optrow > summary::-webkit-details-marker { display: none; }
+details.optrow > summary svg { width: 18px; height: 18px; color: var(--cyan); flex: none; }
+details.optrow > summary b { font-weight: 700; font-size: 15.5px; white-space: nowrap; }
+details.optrow > summary .sum { color: var(--muted); font-size: 14px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+details.optrow > summary::after { content: ""; width: 8px; height: 8px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(45deg); margin: 0 6px 4px auto; flex: none; }
+details.optrow[open] > summary::after { transform: rotate(-135deg); margin-bottom: -4px; }
+details.optrow > .optbody { padding: 2px 2px 14px; }
+details.panel.optrow { border-top: 1px solid var(--line); padding: 2px 16px; }
+details.panel.optrow > #pricePanel { padding: 4px 0 14px; }
+/* the run row and the result */
+.run-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 14px 0 4px; border-top: 1px solid var(--line); }
+.btn.run { background: var(--run); border-color: var(--run); color: var(--run-ink); font-weight: 800; font-size: 13.5px; letter-spacing: .13em; text-transform: uppercase; padding: 11px 22px; }
+.btn.run:hover { filter: brightness(1.08); border-color: var(--run); }
+.btn.run:disabled { background: var(--panel-2); border-color: var(--line-2); color: var(--muted); cursor: not-allowed; filter: none; }
+.run-row .progress { flex: 1 1 220px; margin: 0; height: 6px; border-radius: 3px; }
+.result { margin-top: 14px; display: grid; gap: 12px; }
+.res-head { display: flex; flex-wrap: wrap; gap: 10px 36px; align-items: flex-end; }
+.big { display: grid; gap: 3px; }
+.big .mk { font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+.big b { font-size: 32px; line-height: 1.05; font-weight: 800; display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.big b .money { gap: 8px; }
+.big b .ci { width: 30px; height: 30px; vertical-align: 0; }
+details.more { border-top: 1px solid var(--line); margin-top: 4px; }
+details.more > summary { cursor: pointer; color: var(--muted); padding: 10px 0 2px; font-size: 14px; }
+details.more[open] > summary { margin-bottom: 8px; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
 .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
 .head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -191,6 +235,8 @@ details.notes[open] summary { margin-bottom: 6px; }
 .side-head b { font-weight: 600; }
 .srow { background: var(--inset); border: 1px solid var(--line); border-radius: var(--r); padding: 9px 10px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .srow + .srow { margin-top: 8px; }
+.srow.empty { padding: 6px 8px; }
+.srow.empty .srow-cur, .srow.empty .srow-target .arrow { display: none; }
 .srow.done { border-color: rgba(111,181,138,.55); }
 .srow-cur { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .modtxt { font: 16px/1.3 var(--f-game); color: var(--g-magic); min-width: 0; overflow-wrap: anywhere; flex: 1; }
@@ -302,13 +348,14 @@ details.notes[open] summary { margin-bottom: 6px; }
 .ptab b { font-weight: 600; }
 .ptab span { color: var(--muted); font-size: 13.5px; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; }
 .ptab[aria-selected="true"] { border-color: var(--accent); background: var(--accent-soft); }
-.plan-settings { display: flex; gap: 8px 16px; flex-wrap: wrap; align-items: center; margin: 12px 0; color: var(--muted); font-size: 14px; }
+.plan-settings { display: flex; gap: 8px 16px; flex-wrap: wrap; align-items: center; margin: 0; padding: 2px 2px 14px; color: var(--muted); font-size: 14px; }
 .plan-settings label { display: inline-flex; align-items: center; gap: 8px; }
 .plan-settings .price-in { width: 120px; }
 .plan-settings .price-in input { font-size: 15px; }
 .progress { height: 3px; background: var(--line); border-radius: 2px; overflow: hidden; margin: 0 0 12px; }
 .progress span { display: block; height: 100%; background: var(--accent); transition: width .2s; }
-.plan-card { border: 1px solid var(--line-2); border-radius: 8px; padding: 12px 14px; background: var(--inset); }
+.plan-card { border: 1px solid var(--line-2); border-radius: 8px; padding: 14px; background: var(--inset); display: grid; gap: 12px; }
+.plan-card > * { margin: 0; }
 .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 10px 14px; }
 .mk { display: block; color: var(--muted); font-size: 13px; }
 .metrics b { font-size: 19px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; flex-wrap: wrap; }
@@ -318,14 +365,17 @@ details.notes[open] summary { margin-bottom: 6px; }
 .pnotes { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 14.5px; }
 .pnotes li::before { content: "\2022"; color: var(--faint); margin-right: 7px; }
 .pnotes .risk { color: var(--warn); }
-.steps { list-style: none; margin: 14px 0 0; padding: 0; counter-reset: st; display: grid; gap: 10px; }
-.steps li { counter-increment: st; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; }
-.steps li::before { content: counter(st); grid-row: 1 / span 2; align-self: start; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-2); display: grid; place-items: center; font-size: 12.5px; color: var(--muted); }
+.steps { list-style: none; margin: 0; padding: 0; counter-reset: st; display: grid; }
+.steps li { counter-increment: st; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.steps li::before { content: counter(st); align-self: center; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line-2); display: grid; place-items: center; font-size: 12.5px; color: var(--muted); }
+.steps .x { min-width: 46px; text-align: right; color: var(--text); font-weight: 600; }
+.steps .money { min-width: 82px; justify-content: flex-end; }
+.steps-head { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding-bottom: 6px; }
 .st-names { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font: 15.5px/1.3 var(--f-game); color: #D5CBB2; min-width: 0; }
 .st-names span { margin-left: 3px; }
 .st-meta { justify-self: end; color: var(--muted); font-size: 14px; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .st-help { grid-column: 2 / -1; color: var(--muted); font-size: 14px; }
-.next { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.next { padding: 10px 12px; border: 1px solid var(--line-2); border-left: 3px solid var(--accent); border-radius: var(--r); background: var(--panel); display: grid; gap: 6px; }
 .next .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
 .eval { border-radius: var(--r); padding: 8px 12px; margin-bottom: 12px; border: 1px solid var(--line-2); font-size: 14.5px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .eval .sub { flex-basis: 100%; }
@@ -509,15 +559,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
 .v.trade { color: var(--warn); border-color: rgba(214,166,74,.55); }
 .v.mixed, .v.none { color: var(--muted); border-color: var(--line-2); }
 
-@media (max-width: 1240px) {
-  .board { grid-template-columns: minmax(340px, 440px) minmax(0, 1fr); }
-  .board > .plan { grid-column: 1 / -1; order: 3; }
+@media (max-width: 860px) {
+  .setup { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 800px) {
-  /* one column in the order of the desktop reading path: item, stats, value, plans */
-  .board { grid-template-columns: minmax(0, 1fr); }
-  .board > .center { display: contents; }
-  .item-panel { order: 1; } .board > .stats { order: 2; } #pricePanel { order: 3; } .board > .plan { order: 4; }
   .ex-body { grid-template-columns: minmax(0, 1fr); }
   .ex-detail { border-left: 0; border-top: 1px solid var(--line); max-height: 45%; }
   .ex-row { grid-template-columns: 30px minmax(0, 1fr) auto; }
@@ -527,8 +572,11 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
 @media (max-width: 600px) {
   dialog.dlg, dialog.dlg.wide { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; border: 0; }
   .top { gap: 8px; padding: 10px 0; position: static; }
-  .top-left { gap: 10px; }
-  .brand { font-size: 16px; }
+  .brand { font-size: 14px; flex: 1 1 100%; }
+  .tool { padding: 9px 10px; letter-spacing: .08em; }
+  .big b { font-size: 26px; }
+  details.optrow > summary .sum { display: none; }
+  details.panel.optrow { padding: 2px 12px; }
   .ticker { padding: 4px 9px; gap: 8px; }
   .league select { max-width: 100%; }
   .league { flex: 1 1 100%; } .league select { width: 100%; }
@@ -562,24 +610,31 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
 
 <div class="wrap">
   <header class="top">
-    <div class="top-left">
-      <button class="btn" id="histBtn" type="button" aria-haspopup="true" aria-expanded="false">
-        <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.6V8l2.4 1.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        History <span class="count num" id="histCount">0</span>
-      </button>
-      <div class="popover" id="histPop" hidden></div>
-      <span class="brand">PoE2 Craft Assistant</span>
-    </div>
+    <span class="brand">PoE2 Craft Assistant</span>
     <button class="ticker" id="tickerBtn" type="button" aria-haspopup="dialog" title="Open Currency Exchange prices">
       <span class="muted">Loading prices…</span>
     </button>
+    <label class="unit" for="unitSel" title="The currency prices are shown in. Auto: Exalted Orbs below one Chaos Orb, Chaos Orbs below one Divine Orb, Divine Orbs from there."><select id="unitSel" aria-label="Show prices in">
+      <option value="auto">Auto</option><option value="ex">Exalted</option><option value="chaos">Chaos</option><option value="div">Divine</option></select></label>
     <label class="league" for="league"><select id="league" aria-label="League"></select></label>
   </header>
+  <nav class="tools" aria-label="Tools">
+    <span class="tool" aria-current="page"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 13.5l4-4M9 3l4 4-5.5 5.5-4-4z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>Craft route</span>
+    <button class="tool" id="benchBtn" type="button" title="Try currency on a copy of this item, and work out the chance of one use"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 5.5h12M4 5.5v7M12 5.5v7M6 3h4v2.5H6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/></svg>Workbench</button>
+    <button class="tool" id="navPrices" type="button" aria-haspopup="dialog"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="5.7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 5v6M6.3 6.6h2.6a1 1 0 010 2H7a1 1 0 000 2h2.7" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>Prices</button>
+    <button class="tool" id="navLib" type="button" aria-haspopup="dialog"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2.5h7.5a2 2 0 012 2v9H5a2 2 0 01-2-2zM5.5 5.5h4.5M5.5 8h4.5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>Recipes &amp; guides</button>
+    <span class="tool-hist">
+      <button class="tool" id="histBtn" type="button" aria-haspopup="true" aria-expanded="false">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 4.6V8l2.4 1.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        History <span class="count num" id="histCount">0</span>
+      </button>
+      <div class="popover" id="histPop" hidden></div>
+    </span>
+  </nav>
   <div class="band" id="staleBand" role="status" hidden></div>
 
-  <main class="board" id="board">
-    <section class="panel plan" id="planPanel" aria-label="Craft plan"></section>
-    <div class="center">
+  <main class="flow" id="board">
+    <div class="setup">
       <section class="panel item-panel" aria-label="Item">
         <div class="panel-head">
           <h2>Item</h2>
@@ -587,19 +642,20 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
             <button class="chip" id="previewBtn" type="button" aria-pressed="false" title="Show what the next step of the selected plan can do to this item">Next step</button>
             <button class="chip" id="compareBtn" type="button" aria-pressed="false" hidden title="Switch between the item before and after the last paste">Before</button>
             <button class="chip" id="altBtn" type="button" aria-pressed="true" title="Show mod headers and roll ranges, like holding Alt in game">Alt view</button>
-            <button class="chip" id="benchBtn" type="button" title="Try currency on a copy of this item, and work out the chance of one use">Workbench</button>
-            <button class="btn primary" id="pasteBtn" type="button">
-              <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="3" y="2.5" width="10" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6 2.5h4v2H6z" fill="currentColor"/></svg>
-              Paste item
-            </button>
+            <button class="btn small" id="pasteBtn" type="button" title="Paste a screenshot, read a file, or add a trade listing">More ways…</button>
           </div>
         </div>
+        <textarea class="quick" id="quickPaste" rows="2" spellcheck="false" aria-label="Paste item text" placeholder="Paste the item here: hover it in game, press Ctrl+Alt+C, then Ctrl+V"></textarea>
         <div id="itemView"><div class="loading">Loading knowledge base…</div></div>
         <div id="issues"></div>
       </section>
-      <section class="panel" id="pricePanel" aria-label="Value"></section>
+      <section class="panel stats" id="statsPanel" aria-label="Targets"></section>
     </div>
-    <section class="panel stats" id="statsPanel" aria-label="Stats"></section>
+    <section class="panel plan" id="planPanel" aria-label="Craft route"></section>
+    <details class="panel optrow" id="valueRow">
+      <summary><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 13.5h11M4.5 11V7.5M8 11V4M11.5 11V6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><b>Value and price check</b><span class="sum">What the item may sell for, and a trade search</span></summary>
+      <section id="pricePanel" aria-label="Value"></section>
+    </details>
   </main>
 
   <footer>
@@ -793,7 +849,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     history: [], histIdx: -1, shot: null, open: null, observed: store.get('observed', ''), recent: store.get('recent', []),
     ex: { q: '', cat: 'All', sort: 'vol', sel: DIV, qty: 1 }, db: null, unsubLeague: null, pricesState: 'loading',
     overrides: store.get('overrides', {}), nameBySid: {},
-    plans: null, planTab: store.get('planTab', 'balanced'), planState: 'idle', planProgress: 0,
+    plans: null, planTab: store.get('planTab', 'balanced'), planState: 'idle', planProgress: 0, unit: store.get('unit', 'auto'), planArmed: false, optOpen: false, detailOpen: false,
     budget: store.get('budget', ''), baseCost: store.get('baseCost', '1'), baseLimit: store.get('baseLimit', '100'), spent: store.get('spent', []),
     lastEval: null, pendingStep: null, opsOpen: false, buyPrice: store.get('buyPrice', ''), preview: store.get('preview', false), ack: {}, catMult: store.get('catMult', null), weightSource: store.get('weightSource', 'poe2db'), priceSource: store.get('priceSource', 'ee2'), myLeagues: [].concat(store.get('myLeagues', []) || []).filter((l) => l && typeof l.name === 'string' && l.name), simRuns: store.get('simRuns', 20000),
     sample: null, explain: {},
@@ -825,12 +881,24 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const letter = (name || '?').replace(/^(Greater|Perfect|Lesser|Omen of( the)?|Essence of( the)?|Ancient|Preserved|Gnawed|Refined)\s+/i, '').charAt(0).toUpperCase();
     return `<span class="ci-ph${cls}" aria-hidden="true">${esc(letter)}</span>`;
   }
-  function money(ex, withDiv) {
-    if (ex == null) return '<span class="money">—</span>';
-    let h = `<span class="money">${icon(EX, 'Exalted Orb', 'sm')}${fmt(ex)}</span>`;
-    const d = S.prices && S.prices.divine;
-    if (withDiv && d && ex >= d * 0.25) h += ` <span class="alt money">≈ ${icon(DIV, 'Divine Orb', 'sm')}${fmt(ex / d)}</span>`;
-    return h;
+  /**
+   * The currency an amount (in Exalted Orbs) is shown in. Auto: Exalted Orbs below the price of one Chaos Orb, Chaos
+   * Orbs below one Divine Orb, Divine Orbs (with decimals) from there. Or the one the player fixed (S.unit).
+   */
+  function unitFor(ex) {
+    const d = S.prices && S.prices.divine, c = S.prices && S.prices.chaos;
+    if (S.unit === 'div') return d > 0 ? 'div' : 'ex';
+    if (S.unit === 'chaos') return c > 0 ? 'chaos' : 'ex';
+    if (S.unit === 'ex') return 'ex';
+    const a = Math.abs(ex);
+    return d > 0 && a >= d ? 'div' : c > 0 && a >= c ? 'chaos' : 'ex';
+  }
+  function money(ex) {
+    if (ex == null || isNaN(ex)) return '<span class="money">—</span>';
+    const u = unitFor(ex);
+    const v = u === 'div' ? ex / S.prices.divine : u === 'chaos' ? ex / S.prices.chaos : ex;
+    const [sid, name] = u === 'div' ? [DIV, 'Divine Orb'] : u === 'chaos' ? [CHAOS, 'Chaos Orb'] : [EX, 'Exalted Orb'];
+    return `<span class="money" title="${fmt(ex)} Exalted Orbs">${icon(sid, name, 'sm')}${fmt(v)}</span>`;
   }
   function chg(v) {
     if (v == null) return '<span class="muted">—</span>';
@@ -961,7 +1029,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (!pl) return null;
     const num = (v, d) => (v == null || isNaN(v) ? null : +(+v).toFixed(d));
     return {
-      p: num(pl.p, 4), cost: num(pl.meanCost, 0), trials: pl.trials || null,
+      p: num(pl.p, 4), cost: num(pl.meanCost, 0), okCost: num(pl.okCost && pl.okCost.mean, 0), trials: pl.trials || null,
       steps: (pl.steps || []).slice(0, 30).map((s) => ({ n: (s.names || P.actionNames(s.action)).join(' + '), x: num(s.avg, 2) })),
       impossible: (pl.impossible || []).slice(0, 4),
       fails: (pl.fails || []).slice(0, 4).map((f) => ({ r: f.reason, s: num(f.share, 4) })),
@@ -1182,6 +1250,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (S.snapshot) useSnapshotLeague(); else if (S.db && S.meta) subscribeLeague();
     renderTicker(); renderPrice(); renderStats(); renderPlan(); schedulePlans();
   }
+  $('#unitSel').value = S.unit;
+  $('#unitSel').addEventListener('change', (e) => { S.unit = e.target.value; store.set('unit', S.unit); renderAll(); });
   $('#league').addEventListener('change', (e) => {
     if (e.target.value === '__leagues') { e.target.value = S.league; openLeagues(); return; }
     setLeague(e.target.value);
@@ -1296,7 +1366,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     saveSession();
     return { ok: true };
   }
-  function saveTargets() { store.set('targets', S.targets); store.set('locks', S.locks); }
+  function saveTargets() { store.set('targets', S.targets); store.set('locks', S.locks); S.planArmed = false; }
 
   // ============================================================ paste dialog
   const pasteDlg = $('#pasteDlg'), pasteArea = $('#pasteArea');
@@ -1315,7 +1385,9 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   function tryImport(text, src) {
     const before = S.item;
     const step = S.pendingStep;
+    const armed = S.planArmed && !!step; // the result of a plan step: the route goes on by itself
     const r = ingest(text, step ? 'Step result' : src);
+    if (r.ok) S.planArmed = armed;
     if (!r.ok) { const e = $('#pasteErr'); e.textContent = r.msg; e.hidden = false; return false; }
     S.shot = S.pendingShot || null; S.pendingShot = null;
     if (step) {
@@ -1334,6 +1406,24 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     return true;
   }
   $('#pasteBtn').addEventListener('click', () => openPaste(false));
+  // The paste box above the item: text loads at once; an image, or text that cannot be read, goes to the dialog.
+  function quickImport(text) {
+    S.pendingStep = null;
+    if (S.ix && E.parseItem(S.ix, text).item) { tryImport(text, 'Pasted'); return; }
+    openPaste(false); pasteArea.value = text;
+    if (!tryImport(text, 'Pasted')) previewPaste();
+  }
+  $('#quickPaste').addEventListener('paste', (e) => {
+    const cd = e.clipboardData;
+    const img = [...((cd && cd.items) || [])].find((i) => i.type.startsWith('image/'));
+    const text = cd ? cd.getData('text/plain') : '';
+    if (!img && !text.trim()) return;
+    e.preventDefault();
+    e.target.value = '';
+    if (img) { openPaste(false); readShot(img.getAsFile()); return; }
+    quickImport(text);
+  });
+  $('#quickPaste').addEventListener('change', (e) => { const t = e.target.value; e.target.value = ''; if (t.trim()) quickImport(t); });
   $('#pasteImport').addEventListener('click', () => (pasteMode === 'comparable' ? saveComparable() : tryImport(pasteArea.value, 'Pasted')));
   /** A listing copied from the trade site (Ctrl+C on the listing) with the price the seller asks. */
   async function saveComparable() {
@@ -2516,13 +2606,13 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const el = $('#statsPanel');
     const it = S.item;
     projCache = it && !it.unsupported && obsState.ready ? projected() : null;
-    if (!it) { el.innerHTML = '<h2>Stats</h2>'; return; }
-    if (it.unsupported) { el.innerHTML = `<div class="panel-head"><h2>Stats</h2></div><p class="sub">${esc(it.unsupported)}</p>`; return; }
+    if (!it) { el.innerHTML = '<h2>Targets</h2>'; return; }
+    if (it.unsupported) { el.innerHTML = `<div class="panel-head"><h2>Targets</h2></div><p class="sub">${esc(it.unsupported)}</p>`; return; }
     const lim = E.itemLimits(S.ix, it), cap = craftLimits(it);
     const tpl = TEMPLATES.filter((t) => t.cls.includes(it.itemClass));
     const mine = (S.userTemplates || []).filter((t) => t.cls === it.itemClass);
     const hasTargets = Object.values(S.targets).some((t) => t && t.fam);
-    let html = `<div class="panel-head"><h2>Stats</h2><div class="head-actions">
+    let html = `<div class="panel-head"><h2>Targets</h2><div class="head-actions">
       <select class="tpl-select" id="tplSel" aria-label="Templates"><option value="">Template…</option>${tpl.map((t) => `<option value="${t.id}">${esc(t.label)}</option>`).join('')}
         ${mine.length ? `<optgroup label="Yours">${mine.map((t) => `<option value="u:${esc(t.id)}">${esc(t.label)}</option>`).join('')}</optgroup>` : ''}
         ${hasTargets ? '<option value="__save">Save these targets…</option>' : ''}${mine.length ? '<option value="__del">Delete one of yours…</option>' : ''}</select>
@@ -2532,13 +2622,13 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (S.tplMode === 'save') html += `<div class="tctl" style="margin:-4px 0 12px"><input id="tplName" placeholder="Template name" maxlength="60" value="${esc(S.tplName || '')}" aria-label="Template name"><button class="btn small" type="button" id="tplSaveBtn">Save</button><button class="linkish" type="button" id="tplCancel">Cancel</button></div>`;
     if (S.tplMode === 'delete') html += `<div class="tctl" style="margin:-4px 0 12px">${mine.map((t) => `<button class="btn small" type="button" data-tpldel="${esc(t.id)}">Delete ${esc(t.label)}</button>`).join('')}<button class="linkish" type="button" id="tplCancel">Done</button></div>`;
     if (it.rarity === 'Unique') html += '<p class="sub">Unique modifiers are fixed; targets apply to Magic and Rare items.</p>';
-    else if (it.rarity === 'Normal' && cap.prefix + cap.suffix > 0 && it.itemClass !== 'Jewel') html += `<p class="sub">White base: choose up to ${cap.prefix} prefix and ${cap.suffix} suffix targets, and the plans craft them from this base.</p>`;
-    if (it.itemClass === 'Jewel' && it.rarity !== 'Unique') html += '<p class="sub">A jewel holds two prefixes and two suffixes. Five targets are possible with three on one side: the plans then go through Potent Liquid Contempt and a desecrated third modifier, and the liquid emotion target (for example "increased Effect of Suffixes") comes last.</p>';
+    const sideNote = it.itemClass === 'Jewel' && it.rarity !== 'Unique'
+      ? 'A jewel holds two prefixes and two suffixes. Five targets are possible with three on one side: the route then goes through Potent Liquid Contempt and a desecrated third modifier, and the liquid emotion target comes last.' : '';
     for (const side of ['prefix', 'suffix']) {
       const have = sideMods(it, side).length;
       const n = Math.max(cap[side], have);
       const holds = cap[side] > lim[side] ? ` title="${esc(`${it.rarity} items hold ${lim[side]} now; the plans can make it ${cap[side] > 1 ? 'Rare' : 'Magic'} (${cap[side]}).`)}"` : '';
-      html += `<div class="side"><div class="side-head"><b>${side === 'prefix' ? 'Prefixes' : 'Suffixes'}</b><span class="sub num"${holds}>${have} / ${cap[side]}</span></div>`;
+      html += `<div class="side"><div class="side-head"${sideNote ? ` title="${esc(sideNote)}"` : ''}><b>${side === 'prefix' ? 'Prefixes' : 'Suffixes'}</b><span class="sub num"${holds}>${have} / ${cap[side]}</span></div>`;
       if (!n) html += '<div class="sub">No slots on this side.</div>';
       // rows past what the item holds now open when it becomes Magic (the first) or Rare (the rest)
       const rune = side === 'suffix' && it.itemClass !== 'Jewel' ? P.suffixRune(S.ix, it) : null;
@@ -2604,7 +2694,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       if (aug.length) opts += `<div class="sub" style="margin-top:4px">Also from an augment socket (no affix): ${aug.slice(0, 3).map((a) => esc(a.name) + ' (' + esc(a.txt) + ')').join('; ')}${aug.length > 3 ? ` and ${aug.length - 3} more` : ''}.</div>`;
     }
     const value = S.open && S.open.key === key ? S.open.query : (t && t.label) || '';
-    return `<div class="srow ${done ? 'done' : ''}">
+    const note = !m && opensAt ? (opensAt.charAt(0) === '·' ? opensAt.slice(1).trim() : 'Opens when the item is ' + opensAt) : '';
+    return `<div class="srow ${done ? 'done' : ''} ${m ? '' : 'empty'}"${note ? ` title="${esc(note)}"` : ''}>
       <div class="srow-cur">${cur}</div>
       <div class="srow-target"><span class="arrow" aria-hidden="true">→</span>
         <div class="combo"><input id="combo-${key}" class="${t && t.fam ? 'set ' + groupCls(t.group) : ''}" data-combo="${key}" data-side="${side}" autocomplete="off" role="combobox" aria-expanded="${!!(S.open && S.open.key === key)}" aria-controls="dd-${key}" aria-label="Target stat for ${side} ${i + 1}" placeholder="${m ? 'Replace with…' : 'Target stat'}" value="${esc(value)}"><div class="dd" id="dd-${key}" role="listbox" hidden></div></div>
@@ -2842,7 +2933,16 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     premium: 'Highest chance at your exact tiers. Perfect orbs and omens.',
   };
   let planGen = 0, planTimer = null;
-  function schedulePlans() { clearTimeout(planTimer); planTimer = setTimeout(runPlans, 450); }
+  /** Plan again when a route was asked for (Find craft route); otherwise drop the old result and wait for the button. */
+  function schedulePlans() {
+    clearTimeout(planTimer);
+    if (S.planArmed) { planTimer = setTimeout(runPlans, 450); return; }
+    planGen++;
+    const had = S.plans || S.planState !== 'idle';
+    S.plans = null; S.planState = 'idle';
+    renderPlan();
+    if (had) { renderPrice(); if (S.preview) renderItem(); }
+  }
   function planInput() {
     return {
       ix: S.ix, item: S.item, targets: S.targets, locks: S.locks,
@@ -2929,7 +3029,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       if (S.preview) renderItem();
       logTest('ready');
       const cur = out.profiles[S.planTab];
-      if (cur && cur.steps && cur.steps.length) announce(`Plans ready. ${cur.label}: ${successFail(cur.p).s} success, expected cost ${fmtShort(cur.meanCost)} Exalted Orbs.`);
+      if (cur && cur.steps && cur.steps.length) announce(`Plans ready. ${cur.label}: ${successFail(cur.p).s} success, a finished craft costs about ${fmtShort(planCost(cur))} Exalted Orbs.`);
     } catch (e) {
       if (e && e.message === 'cancelled') return;
       S.planState = 'error'; S.planError = e && e.message; renderPlan();
@@ -3070,64 +3170,75 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (!pick.length) return '';
     return `<p class="sub" style="margin:4px 0 0">Done within ${pick.map((x) => `${x.n} use${x.n > 1 ? 's' : ''}: <b class="num">${p1(x.p)}</b>`).join(' · ')} · all ${pl.maxSteps || 600}: <b class="num">${successFail(pl.p).s}</b></p>`;
   }
+  /** Uses of a step in one finished craft (the simulated crafts that reach the targets); over all crafts when none did. */
+  const stepUses = (st) => (st.ok != null ? st.ok : st.avg);
+  const usesText = (x) => (x >= 9.95 ? String(Math.round(x)) : x >= 0.95 ? String(+x.toFixed(1)) : String(+x.toFixed(2)));
+  /** What a finished craft costs: the average over the simulated crafts that reach every target. The step rows add up to it. */
+  function planCost(pl) { return pl.okCost ? pl.okCost.mean : pl.meanCost; }
   function planCard(pl) {
     if (!pl) return '';
-    if (pl.none) return `<div class="plan-card"><p class="sub" style="margin:0">${esc(pl.none)}</p></div>`;
+    if (pl.none) return `<div class="plan-card"><p class="sub">${esc(pl.none)}</p></div>`;
     if (pl.impossible) return `<div class="plan-card"><b>Not possible on this item</b><ul class="pnotes">${pl.impossible.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
-    if (pl.noSuccess) return `<div class="plan-card"><b>No strategy reached the goals</b><ul class="pnotes">${(pl.fails || []).slice(0, 3).map((f) => `<li>${esc(f.reason)} (${pct(f.share)})</li>`).join('')}</ul></div>`;
-    if (!pl.steps.length) return '<div class="plan-card"><b class="ok-note">Goals already met at this plan\'s tiers.</b></div>';
+    if (pl.noSuccess) return `<div class="plan-card"><b>No strategy reached the targets</b><ul class="pnotes">${(pl.fails || []).slice(0, 3).map((f) => `<li>${esc(f.reason)} (${pct(f.share)})</li>`).join('')}</ul></div>`;
+    if (!pl.steps.length) return '<div class="plan-card"><b class="ok-note">Targets already met.</b></div>';
     const notes = [];
     const relaxed = pl.goals.filter((g) => g.tier && g.eff && g.eff !== g.tier);
     if (relaxed.length) notes.push(`Accepts ${relaxed.map((g) => `T${g.eff} or better for ${esc(g.label)} (you asked T${g.tier})`).join('; ')}.`);
     if (pl.dropped && pl.dropped.length) notes.push(`Not pursued: ${pl.dropped.map((g) => esc(g.label)).join(', ')}.`);
-    if (pl.partial > 0.01) notes.push(`${p1(pl.partial)} of runs end with the required goals only (counted in Plan fail).`);
-    if (pl.lost > 0.05) notes.push(`<span class="risk">Removes an already finished goal mod at least once in ${p1(pl.lost)} of runs (it is then rolled again).</span>`);
-
+    if (pl.partial > 0.01) notes.push(`${p1(pl.partial)} of crafts end with the required targets only (counted as failed).`);
+    if (pl.lost > 0.05) notes.push(`<span class="risk">Removes an already finished target mod at least once in ${p1(pl.lost)} of crafts (it is then rolled again).</span>`);
     if (S.plans.unsupported.length) notes.push(`Not planned: ${S.plans.unsupported.map(esc).join(', ')} (no essence or alloy gives it on this item class).`);
     if (borrowed()) notes.push(`Costs use ${esc(priceLeague(S.league).name)} prices: ${esc(S.league)} has no Currency Exchange data.`);
     if (pl.missingPrices.length) notes.push(`No price for ${pl.missingPrices.map(esc).join(', ')}; counted as 0.`);
-    if (pl.skippedUnpriced && pl.skippedUnpriced.length) notes.push(`Not used: ${pl.skippedUnpriced.map(esc).join(', ')} (no market price, so its cost is unknown). Set your own price in the exchange window to plan with it.`);
+    if (pl.skippedUnpriced && pl.skippedUnpriced.length) notes.push(`Not used: ${pl.skippedUnpriced.map(esc).join(', ')} (no market price). Set your own price under Prices to plan with it.`);
     const thin = [...new Set(pl.steps.flatMap((st) => st.names))].map((n) => ({ n, r: priceByName(n) })).filter((x) => x.r && !x.r.manual && thinMarket(x.r));
-    if (thin.length) notes.push(`<span class="risk">Thin market: ${thin.map((x) => `${esc(x.n)} (${x.r.vol} traded in 24h, ${fmt(x.r.lo)}–${fmt(x.r.hi)} ex)`).join('; ')}. Its price is uncertain; check the exchange or set your own price.</span>`);
+    if (thin.length) notes.push(`<span class="risk">Thin market: ${thin.map((x) => `${esc(x.n)} (${x.r.vol} traded in 24h)`).join('; ')}. The price is uncertain.</span>`);
     const buy = parseFloat(S.buyPrice);
-    if (buy > 0) notes.push(buy < pl.meanCost
-      ? `<span class="risk">Buying a finished item (${fmtShort(buy)} ex) is cheaper than this plan's expected cost.</span>`
-      : `Crafting is expected to cost less than buying (${fmtShort(buy)} ex).`);
+    if (buy > 0) notes.push(buy < planCost(pl) ? `<span class="risk">Buying a finished item (${money(buy)}) is cheaper than crafting it.</span>` : `Crafting costs less than buying (${money(buy)}).`);
     if (pl.moreBases) {
       const n = pl.moreBases.bases;
-      notes.push(`With about ${fmtShort(n)} white bases per item, starting over instead of fixing mods would cost about ${fmtShort(pl.moreBases.cps)} ex per finished item (a first estimate). <button class="linkish" type="button" data-bases="${Math.ceil(n * 1.15)}">Plan with ${fmtShort(Math.ceil(n * 1.15))} bases</button>`);
+      notes.push(`With about ${fmtShort(n)} white bases per item, starting over instead of fixing mods would cost about ${money(pl.moreBases.cps)} per finished item. <button class="linkish" type="button" data-bases="${Math.ceil(n * 1.15)}">Plan with ${fmtShort(Math.ceil(n * 1.15))} bases</button>`);
     }
-    if (pl.goals.some((g) => !g.required)) notes.push('Checkpoint: when the required goals are met, price the item before chasing the nice-to-have ones.');
-    if (pl.from && pl.from.recipe) notes.push(`Route from the recipe <b>${esc(pl.from.title)}</b>${pl.search && pl.search.searched ? ', tuned by the search' : ''}.`);
-    else if (pl.from && pl.from.search) notes.push('Route found by the search: it changed one or two settings at a time from the best strategies until nothing improved.');
-    else if (pl.from && pl.from.sweep) notes.push('Route from the exhaustive sweep: one of the strategies that came out best most often when every combination of settings was simulated on 784 test items.');
+    if (pl.goals.some((g) => !g.required)) notes.push('When the required targets are met, price the item before chasing the nice-to-have ones.');
+    if (pl.from && pl.from.recipe) notes.push(`Route from the recipe <b>${esc(pl.from.title)}</b>.`);
     notes.push(...selftestTips(pl));
     const nx = P.nextAction(S.ix, S.item, S.locks, pl.goals, pl.params, priceEx);
-    const nextHtml = nx.done ? '<div class="ok-note">All goals of this plan are met.</div>'
+    let chance = '';
+    if (!nx.done && !nx.fail) {
+      const pd = previewFor(pl, nx), c = pd && pd.pv;
+      if (c && c.success > 0.0005) chance = `<span class="sub num" title="Chance that one use finishes a target on your item${c.damage > 0.0005 ? '; ' + p1(c.damage) + ' that it removes a finished one' : ''}">${successFail(c.success).s} per use</span>`;
+    }
+    const nextHtml = nx.done ? '<div class="ok-note">All targets of this route are met.</div>'
       : nx.fail ? `<div class="bad-note">${esc(nx.fail)}</div>`
-      : `<div class="row"><div class="st-names">${namesHtml(nx.names)}</div>${IRREVERSIBLE[nx.op] && !S.ack[ackKey(nx)]
+      : `<div class="row"><div class="st-names" title="${esc(stepHelp(nx, pl.params))}">${namesHtml(nx.names)}</div>${chance}${IRREVERSIBLE[nx.op] && !S.ack[ackKey(nx)]
           ? '<button class="btn primary" type="button" id="reviewBtn">Before you use it…</button>'
           : '<button class="btn primary" type="button" id="appliedBtn">I applied this</button>'}</div>
-         ${IRREVERSIBLE[nx.op] ? `<div class="irrev"><b>Cannot be undone.</b> ${esc(IRREVERSIBLE[nx.op])}${S.ack[ackKey(nx)] ? ' You reviewed this step.' : ' Review it before you use it in game.'}</div>` : ''}
-         ${nextChanceHtml(pl, nx)}
-         <div class="st-help">${esc(stepHelp(nx, pl.params))}</div>${nx.error ? `<div class="bad-note">${esc(nx.error)}</div>` : ''}`;
+         ${IRREVERSIBLE[nx.op] ? `<div class="irrev"><b>Cannot be undone.</b> ${esc(IRREVERSIBLE[nx.op])}</div>` : ''}${nx.error ? `<div class="bad-note">${esc(nx.error)}</div>` : ''}`;
+    const rows = pl.steps.filter((st) => stepUses(st) >= 0.005);
+    const ok = pl.okCost;
     return `<div class="plan-card">
-      <div class="metrics">
-        <div><span class="mk" title="Share of simulated runs that reach every goal of this plan, repeating the steps as needed">Plan success</span><b class="up">${successFail(pl.p).s}</b></div>
-        <div><span class="mk" title="Share of runs that end without the goals: dead end, over budget or not finished">Plan fail</span><b class="${pl.pFail >= 0.25 ? 'down' : ''}">${successFail(pl.p).f}</b></div>
-        <div><span class="mk">Expected cost</span><b>${money(pl.meanCost, true)}</b></div>
-        <div><span class="mk">Most runs cost</span><b>${icon(EX, 'Exalted Orb', 'sm')}${fmtShort(pl.p10)}–${fmtShort(pl.p90)}</b></div>
+      <div class="res-head">
+        <div class="big"><span class="mk" title="Average cost of the simulated crafts that reach every target. It is the sum of the step rows: uses times price.">Cost</span><b>${money(planCost(pl))}</b></div>
+        <div class="big"><span class="mk" title="Share of the simulated crafts that reach every target within ${pl.maxSteps || 600} uses">Success</span><b class="${pl.p >= 0.5 ? 'up' : pl.p < 0.25 ? 'down' : ''}">${successFail(pl.p).s}</b></div>
       </div>
-      <p class="sub" style="margin:10px 0 0">${failLine(pl)}</p>
-      ${withinLine(pl)}
-      ${notes.length ? `<ul class="pnotes">${notes.map((n) => `<li>${n}</li>`).join('')}</ul>` : ''}
-      <ol class="steps">${pl.steps.map((s) => `<li><div class="st-names">${namesHtml(s.names)}</div>
-        <div class="st-meta">${s.hit > 0 ? `<span class="hit" title="Average over all simulated uses of this step: share that completed a goal">${p1(s.hit)} per use</span>` : ''}<span class="num">×${s.avg < 10 ? s.avg.toFixed(1) : Math.round(s.avg)}</span>${s.names[0] === 'New base' ? '' : money(s.cost)}</div>
-        <div class="st-help">${esc(stepHelp(s.action, pl.params))}</div></li>`).join('')}</ol>
-      <div class="next"><span class="mk">Next step on your item</span>${nextHtml}</div>
-      <div class="rules">${ruleBadges(pl)}</div>
-      ${explainHtml()}
-      <div class="sub" style="margin-top:8px">${pl.trials.toLocaleString('en-US')} simulated runs${pl.search ? ` · best of ${pl.search.candidates} strategies${pl.search.recipes ? ` (incl. ${pl.search.recipes} recipe${pl.search.recipes > 1 ? 's' : ''})` : ''}${pl.search.searched ? '' : ', search pending'}` : ''} · ${esc(S.league || '')} prices</div>
+      <div class="next"><span class="mk">Next step</span>${nextHtml}</div>
+      <div>
+        <div class="steps-head"><span>Steps in order</span><span>Uses · Cost</span></div>
+        <ol class="steps">${rows.map((st) => `<li title="${esc(stepHelp(st.action, pl.params))}"><div class="st-names">${namesHtml(st.names)}</div>
+          <div class="st-meta"><span class="num x">×${usesText(stepUses(st))}</span>${money(stepUses(st) * (st.cost || 0))}</div></li>`).join('')}</ol>
+      </div>
+      <details class="more" id="planMore" ${S.detailOpen ? 'open' : ''}><summary>Details</summary>
+        <div class="metrics">
+          ${ok ? `<div><span class="mk" title="8 of 10 finished crafts cost between these two amounts">Most finished crafts</span><b>${money(ok.p10)}–${money(ok.p90)}</b></div>` : ''}
+          <div><span class="mk" title="Average over every simulated craft, the ones that do not reach the targets included">All crafts, failed ones too</span><b>${money(pl.meanCost)}</b></div>
+        </div>
+        <p class="sub" style="margin:10px 0 0">${failLine(pl)}</p>
+        ${withinLine(pl)}
+        ${notes.length ? `<ul class="pnotes">${notes.map((n) => `<li>${n}</li>`).join('')}</ul>` : ''}
+        <div class="rules">${ruleBadges(pl)}</div>
+        ${explainHtml()}
+        <div class="sub" style="margin-top:8px">${pl.trials.toLocaleString('en-US')} simulated crafts${pl.search ? ` · best of ${pl.search.candidates} strategies${pl.search.searched ? '' : ', search pending'}` : ''} · ${esc(S.league || '')} prices</div>
+      </details>
     </div>`;
   }
   /** Up to two self-test findings about techniques this plan uses (evidence from many scenarios, not this item). */
@@ -3204,73 +3315,80 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   }
   (async () => { try { S.sample = window.claude && window.claude.use ? await window.claude.use('sample') : null; } catch (e) { S.sample = null; } if (S.sample) renderPlan(); })();
 
+  const OPT_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h7M12.5 4.5h1M2.5 11.5h1M6.5 11.5h7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="11" cy="4.5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5" cy="11.5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
+  const USE_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3.5h10v9H3zM3 6.5h10M6.5 6.5v6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>';
   function renderPlan() {
     const el = $('#planPanel');
     const it = S.item;
-    const status = S.planState === 'running' ? 'Simulating…' : S.planState === 'searching' ? 'Searching…' : S.planState === 'refining' ? 'Refining…' : S.planState === 'error' ? 'Planner error' : '';
-    let html = `<div class="panel-head"><h2>Craft plan</h2><div class="head-actions"><span class="sub">${status}</span><button class="btn small" type="button" id="libBtn">Recipes &amp; guides</button></div></div>`;
+    let html = '<div class="panel-head"><h2>Craft route</h2></div>';
     if (!it) { el.innerHTML = html; return; }
     if (it.unsupported) { el.innerHTML = html + `<div class="plan-card sub">${esc(it.unsupported)}</div>`; return; }
-    const tabs = PROFILE_KEYS.map((k) => {
-      const pl = S.plans && S.plans.profiles[k];
-      const sum = !pl ? '…' : pl.steps ? (pl.steps.length ? `${successFail(pl.p).s} success · ${icon(EX, 'Exalted Orb', 'sm')}${fmtShort(pl.meanCost)}` : 'Done') : pl.impossible ? 'Not possible' : '—';
-      return `<button type="button" class="ptab" role="tab" id="ptab-${k}" aria-controls="planCard" tabindex="${S.planTab === k ? 0 : -1}" data-ptab="${k}" aria-selected="${S.planTab === k}" title="${esc(PROFILE_HINT[k])}"><b>${k === 'cheap' ? 'Cheap' : k === 'balanced' ? 'Balanced' : 'Premium'}</b><span>${sum}</span></button>`;
-    }).join('');
-    html += `<div class="ptabs" role="tablist" aria-label="Plan profiles">${tabs}</div>`;
-    html += `<div class="plan-settings">
-      <label for="planRuns" title="Simulated runs per plan. More runs give steadier chances but take longer (the plan stops at a time limit).">Runs <select id="planRuns" class="tpl-select">${[5000, 20000, 50000].map((n) => `<option value="${n}" ${+S.simRuns === n ? 'selected' : ''}>${n.toLocaleString('en-US')}</option>`).join('')}</select></label>
+    const busy = S.planState === 'running' || S.planState === 'searching' || S.planState === 'refining';
+    const status = S.planState === 'running' ? 'Simulating…' : S.planState === 'searching' ? 'Searching for a cheaper route…' : S.planState === 'refining' ? 'Refining…' : '';
+    const nTargets = Object.values(S.targets).filter((t) => t && t.fam).length;
+    // options, one row each
+    const optSum = [`${(+S.simRuns || 20000).toLocaleString('en-US')} runs`, S.budget ? `budget ${S.budget} ex` : 'no budget']
+      .concat(it.rarity !== 'Rare' ? [`white base ${S.baseCost || 0} ex`, `${baseLimit()} bases`] : []).join(', ');
+    html += `<details class="optrow" id="optPlan" ${S.optOpen ? 'open' : ''}><summary>${OPT_ICON}<b>Plan options</b><span class="sum">${esc(optSum)}</span></summary><div class="plan-settings">
+      <label for="planRuns" title="Simulated crafts per route. More give steadier numbers but take longer.">Runs <select id="planRuns" class="tpl-select">${[5000, 20000, 50000].map((n) => `<option value="${n}" ${+S.simRuns === n ? 'selected' : ''}>${n.toLocaleString('en-US')}</option>`).join('')}</select></label>
       <label for="planBudget">Budget <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBudget" inputmode="decimal" placeholder="none" value="${esc(S.budget)}"></span></label>
-      <label for="planBuy" title="Price of a finished item with your goals, seen on the official trade site">Buy instead <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBuy" inputmode="decimal" placeholder="price" value="${esc(S.buyPrice)}"></span></label>
+      <label for="planBuy" title="Price of a finished item with your targets, seen on the official trade site">Buy instead <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBuy" inputmode="decimal" placeholder="price" value="${esc(S.buyPrice)}"></span></label>
       ${weightsDisagree() ? `<label for="planWsrc" title="poe2db and Craft of Exile agree on ${esc(coeAgreeText())}; on ${weightsDisagree()} tiers of this item class they give different roll weights. Pick whose to use.">Weights <select id="planWsrc"><option value="poe2db" ${S.weightSource !== 'coe' ? 'selected' : ''}>poe2db</option><option value="coe" ${S.weightSource === 'coe' ? 'selected' : ''}>Craft of Exile</option></select></label>` : ''}
-      ${hasCatalyst(it) ? `<label for="planCat" title="How much Omen of Catalysing Exaltation raises the weight of ${esc(it.qualityType)} at 20% quality. The game gives no number. The default 25 comes from your test t8 (4 of 4 rings got the attribute modifier; anything from about x6 fits); set your own estimate.">Catalyst boost <span class="price-in">×<input id="planCat" inputmode="decimal" value="${esc(catMult())}"></span></label>` : ''}
+      ${hasCatalyst(it) ? `<label for="planCat" title="How much Omen of Catalysing Exaltation raises the weight of ${esc(it.qualityType)} at 20% quality. The game gives no number; set your own estimate.">Catalyst boost <span class="price-in">×<input id="planCat" inputmode="decimal" value="${esc(catMult())}"></span></label>` : ''}
       ${it.rarity !== 'Rare' ? `<label for="planBase" title="Price of one white base of this type">White base <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBase" inputmode="decimal" value="${esc(S.baseCost)}"></span></label>
       <label for="planBases" title="White bases you will use for one finished item. Starting over on a fresh base is often far cheaper than fixing a wrong mod, but each try takes a base.">Bases per item <span class="price-in"><input id="planBases" inputmode="numeric" value="${esc(S.baseLimit)}"></span></label>` : ''}
-    </div>`;
-    if (S.planState === 'running' || S.planState === 'searching' || S.planState === 'refining') html += `<div class="progress"><span id="planProgress" style="width:${Math.round(S.planProgress * 100)}%"></span></div>`;
-    if (S.lastEval) {
-      const v = S.lastEval;
-      const prevH = S.history[S.histIdx - 1];
-      const a = valueOf(S.item, S.item.itemClass), bv = prevH ? valueOf(prevH.item, S.item.itemClass) : null;
-      html += `<div class="eval ${v.verdict}"><b>${v.verdict === 'expected' ? 'On plan' : v.verdict === 'acceptable' ? 'No hit yet' : 'Off plan'}</b> · ${esc(v.names.join(' + '))} · ${money(v.cost)}${a && bv ? ` · value ${signed(a.value - bv.value)}` : ''}${v.notes.length ? `<div class="sub">${v.notes.map(esc).join(' ')}</div>` : ''}</div>`;
-    }
-    if (S.planState === 'error') html += `<div class="plan-card bad-note">The planner stopped: ${esc(S.planError || 'unknown error')}.</div>`;
-    else if (S.plans && S.plans.blocked) html += `<div class="plan-card">${esc(S.plans.blocked)} items cannot be crafted with normal currency.${ruleConfBadge(S.plans.blocked === 'Sanctified' ? 'R_SANCTIFIED_LOCK' : 'R_CORRUPTED_LOCK')}</div>`;
-    else if (S.plans && S.plans.empty) html += '<div class="plan-card sub">Pick target stats on the right (or a template) and the three plans appear here.</div>';
-    else if (S.plans) html += `<div id="planCard" role="tabpanel" aria-labelledby="ptab-${S.planTab}">${planCard(S.plans.profiles[S.planTab])}</div>`;
-    else html += '<div class="plan-card sub">Preparing plans…</div>';
-
-    const goals = Object.entries(S.targets).filter(([, t]) => t && t.fam);
-    html += '<div class="plan-block"><h3>Goals</h3>';
-    html += goals.length ? goals.map(([k, t]) => {
-      const [side, n] = k.split('-');
-      const m = modAt(side, +n);
-      const met = targetMet(m, t);
-      return `<div class="goal"><span class="tchip ${t.minTier === 1 && !(t.minValue > 0) ? 't1' : ''}">${goalTag(t)}</span><span class="modtxt ${groupCls(t.group) === 'g-desecrated' ? 'desecrated' : groupCls(t.group) ? 'crafted' : ''}">${esc(t.label)}</span><span class="state ${met ? 'met' : ''}">${met ? 'Done' : t.required ? 'Required' : 'Nice to have'}</span></div>`;
-    }).join('') : '<div class="sub">No goals yet.</div>';
-    html += '</div>';
+    </div></details>`;
     const lim = E.itemLimits(S.ix, it);
     const pc = sideMods(it, 'prefix').length, sc = sideMods(it, 'suffix').length;
     const crafted = it.mods.some((m) => m.crafted), des = it.mods.some((m) => m.desecrated);
     const locked = Object.values(S.locks).filter(Boolean).length + it.mods.filter((m) => m.fractured).length;
-    html += `<div class="plan-block"><h3>Item state</h3><div class="checks">
-      <span class="check ${pc < lim.prefix ? 'free' : 'used'}">Prefixes ${pc}/${lim.prefix}</span>
-      <span class="check ${sc < lim.suffix ? 'free' : 'used'}">Suffixes ${sc}/${lim.suffix}</span>
-      <span class="check ${crafted ? 'used' : 'free'}">Crafted slot ${crafted ? 'used' : 'free'}</span>
-      <span class="check ${des ? 'used' : 'free'}">Desecrated slot ${des ? 'used' : 'free'}</span>
-      ${locked ? `<span class="check">${locked} kept</span>` : ''}
-      ${it.flags.corrupted ? '<span class="check block">Corrupted</span>' : ''}
-      ${it.flags.sanctified ? '<span class="check block">Sanctified</span>' : ''}
-    </div></div>`;
     const ops = opsFor(it);
     const none = it.flags.mirrored ? 'Mirrored items cannot be modified.' : it.flags.sanctified ? 'Sanctified items cannot be crafted further.' : 'No currency applies to this item.';
-    html += `<details class="plan-block ops" ${S.opsOpen ? 'open' : ''}><summary><h3>What you can use now</h3> <span class="sub">${ops.length} options</span></summary>${ops.length ? ops.map((op) => `<div class="op"><div class="op-title"><b title="${op.planned ? 'The planner can use this.' : 'Listed from its game text; the planner does not use it.'}">${esc(op.title)}</b>${irrevBadge(op)}</div>
+    html += `<details class="optrow" id="optOps" ${S.opsOpen ? 'open' : ''}><summary>${USE_ICON}<b>What you can use now</b><span class="sum">${ops.length} options</span></summary><div class="optbody">
+      <div class="checks" style="margin-bottom:10px">
+        <span class="check ${pc < lim.prefix ? 'free' : 'used'}">Prefixes ${pc}/${lim.prefix}</span>
+        <span class="check ${sc < lim.suffix ? 'free' : 'used'}">Suffixes ${sc}/${lim.suffix}</span>
+        <span class="check ${crafted ? 'used' : 'free'}">Crafted slot ${crafted ? 'used' : 'free'}</span>
+        <span class="check ${des ? 'used' : 'free'}">Desecrated slot ${des ? 'used' : 'free'}</span>
+        ${locked ? `<span class="check">${locked} kept</span>` : ''}
+        ${it.flags.corrupted ? '<span class="check block">Corrupted</span>' : ''}
+        ${it.flags.sanctified ? '<span class="check block">Sanctified</span>' : ''}
+      </div>
+      ${ops.length ? ops.map((op) => `<div class="op"><div class="op-title"><b title="${op.planned ? 'The planner can use this.' : 'Listed from its game text; the planner does not use it.'}">${esc(op.title)}</b>${irrevBadge(op)}</div>
       ${op.cat ? catRow(op) : ''}${op.cur.map((n) => curRow(n)).join('')}${op.omens.map((n) => curRow(n, true)).join('')}
-      ${op.blocked.length ? `<div class="sub" style="margin-top:4px">${op.blocked.map((b) => `${esc(b.name)}: ${esc(b.reason)}`).join(' · ')}</div>` : ''}${op.note ? `<div class="sub" style="margin-top:4px">${esc(op.note)}</div>` : ''}</div>`).join('') : `<p class="sub">${esc(none)}</p>`}</details>`;
+      ${op.blocked.length ? `<div class="sub" style="margin-top:4px">${op.blocked.map((b) => `${esc(b.name)}: ${esc(b.reason)}`).join(' · ')}</div>` : ''}${op.note ? `<div class="sub" style="margin-top:4px">${esc(op.note)}</div>` : ''}</div>`).join('') : `<p class="sub">${esc(none)}</p>`}
+    </div></details>`;
+    // the run row
+    html += `<div class="run-row">${busy
+      ? `<div class="progress"><span id="planProgress" style="width:${Math.round(S.planProgress * 100)}%"></span></div><span class="sub">${status}</span><button class="linkish" type="button" id="stopBtn">Stop</button>`
+      : `<button class="btn run" type="button" id="runBtn" ${nTargets ? '' : 'disabled'}>${S.plans && !S.plans.empty ? 'Run again' : 'Find craft route'}</button><span class="sub">${nTargets ? `${nTargets} target${nTargets > 1 ? 's' : ''}` : 'Pick target stats first'}</span>`}</div>`;
+    // the result
+    html += '<div class="result">';
+    if (S.lastEval) {
+      const v = S.lastEval;
+      const prevH = S.history[S.histIdx - 1];
+      const a = valueOf(S.item, S.item.itemClass), bv = prevH ? valueOf(prevH.item, S.item.itemClass) : null;
+      html += `<div class="eval ${v.verdict}" style="margin:0"><b>${v.verdict === 'expected' ? 'On plan' : v.verdict === 'acceptable' ? 'No hit yet' : 'Off plan'}</b> · ${esc(v.names.join(' + '))} · ${money(v.cost)}${a && bv ? ` · value ${signed(a.value - bv.value)}` : ''}${v.notes.length ? `<div class="sub">${v.notes.map(esc).join(' ')}</div>` : ''}</div>`;
+    }
+    if (S.planState === 'error') html += `<div class="plan-card bad-note">The planner stopped: ${esc(S.planError || 'unknown error')}.</div>`;
+    else if (S.plans && S.plans.blocked) html += `<div class="plan-card">${esc(S.plans.blocked)} items cannot be crafted with normal currency.${ruleConfBadge(S.plans.blocked === 'Sanctified' ? 'R_SANCTIFIED_LOCK' : 'R_CORRUPTED_LOCK')}</div>`;
+    else if (S.plans && !S.plans.empty) {
+      const tabs = PROFILE_KEYS.map((k) => {
+        const pl = S.plans.profiles[k];
+        const sum = !pl ? '…' : pl.steps ? (pl.steps.length ? `${money(planCost(pl))} · ${successFail(pl.p).s}` : 'Done') : pl.impossible ? 'Not possible' : '—';
+        return `<button type="button" class="ptab" role="tab" id="ptab-${k}" aria-controls="planCard" tabindex="${S.planTab === k ? 0 : -1}" data-ptab="${k}" aria-selected="${S.planTab === k}" title="${esc(PROFILE_HINT[k])}"><b>${k === 'cheap' ? 'Cheap' : k === 'balanced' ? 'Balanced' : 'Premium'}</b><span>${sum}</span></button>`;
+      }).join('');
+      html += `<div class="ptabs" role="tablist" aria-label="Route profiles">${tabs}</div>`;
+      html += `<div id="planCard" role="tabpanel" aria-labelledby="ptab-${S.planTab}">${planCard(S.plans.profiles[S.planTab])}</div>`;
+    }
+    html += '</div>';
     el.innerHTML = html;
   }
   const planEl = $('#planPanel');
   planEl.addEventListener('click', (e) => {
     const b = e.target.closest('button, [data-browse]'); if (!b) return;
+    if (b.id === 'runBtn') { S.planArmed = true; clearTimeout(planTimer); runPlans(); return; }
+    if (b.id === 'stopBtn') { S.planArmed = false; schedulePlans(); return; }
     if (b.dataset.browse) { S.ex.cat = b.dataset.browse; S.ex.q = ''; openExchange(); return; }
     if (b.dataset.ptab) { S.planTab = b.dataset.ptab; store.set('planTab', S.planTab); renderPlan(); renderPrice(); if (S.preview) renderItem(); return; }
     if (b.dataset.bases) { S.baseLimit = b.dataset.bases; store.set('baseLimit', S.baseLimit); schedulePlans(); return; }
@@ -3331,7 +3449,12 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     renderPlan(); renderPrice(); if (S.preview) renderItem();
     const nt = $('#ptab-' + S.planTab); if (nt) nt.focus();
   });
-  planEl.addEventListener('toggle', (e) => { if (e.target.classList && e.target.classList.contains('ops')) S.opsOpen = e.target.open; }, true);
+  planEl.addEventListener('toggle', (e) => {
+    const id = e.target.id;
+    if (id === 'optOps') S.opsOpen = e.target.open;
+    else if (id === 'optPlan') S.optOpen = e.target.open;
+    else if (id === 'planMore') S.detailOpen = e.target.open;
+  }, true);
   planEl.addEventListener('change', (e) => {
     if (e.target.id === 'planBudget') { S.budget = e.target.value.trim(); store.set('budget', S.budget); schedulePlans(); }
     if (e.target.id === 'planBase') { S.baseCost = e.target.value.trim(); store.set('baseCost', S.baseCost); schedulePlans(); }
@@ -3397,6 +3520,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     };
   }
   function openLib() { renderLib(); libDlg.showModal(); }
+  $('#navLib').addEventListener('click', openLib);
   function vBadge(v) { return `<span class="v ${v}">${v.charAt(0).toUpperCase() + v.slice(1)}</span>`; }
   function renderLib() {
     document.querySelectorAll('#libTabs [data-libtab]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.libtab === lib.tab)));
@@ -3618,6 +3742,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   // ============================================================ exchange dialog
   const exDlg = $('#exDlg');
   $('#tickerBtn').addEventListener('click', () => { S.ex.cat = 'All'; openExchange(); });
+  $('#navPrices').addEventListener('click', () => { S.ex.cat = 'All'; openExchange(); });
   function openExchange() {
     $('#exQ').value = S.ex.q; $('#exSort').value = S.ex.sort;
     renderExchange();
