@@ -34,8 +34,9 @@ node app/build.js                          # app/dist/index.html ve data/ (sonra
 node --test app/tests/*.test.js            # JS testleri
 python -m unittest discover -s scripts/tests
 python scripts/fetch_prices.py             # fiyatları yerelde günceller (.kb_cache/out)
-node scripts/selftest/run.js               # self-test (~10 dk); --quick kısa sürüm
-scripts\selftest\capped.cmd node scripts/selftest/sweep.js --workers 25   # tam tarama (saatler sürer); CPU'nun 25/32'sinde
+node scripts/selftest/run.js               # self-test (~30 dk); --quick kısa sürüm
+scripts\selftest\capped.cmd node scripts/selftest/sweep.js --workers 25   # tam tarama (~5 saat); CPU'nun 25/32'sinde
+scripts\selftest\capped.cmd node scripts/selftest/sweep_planner.js --workers 25   # planner'ı taramaya karşı ölçer (~30 dk)
 python scripts/kb_update.py build          # yeni bilgi tabanı adayı, sonra check / approve
 python scripts/fetch_icons.py              # yeni fiyatlı eşyaların ikonları, sonra scripts/build_icons.py
 ```
@@ -46,12 +47,33 @@ python scripts/fetch_icons.py              # yeni fiyatlı eşyaların ikonları
 
 Self-test senaryolarının her birinde (başlangıç item'i + hedefler) planner'ın bütün strateji ayarlarının çarpımını (yaklaşık 10,6 milyon kombinasyon) kapsar ve sayfanın Cheap / Balanced / Premium seçimlerini denetler.
 
-1. **Sınıflar.** Planner ayarları yalnızca sonucu değiştirebilecekleri yerde okur. Tarama hangi ayarların okunduğunu kaydeder; aynı rastgele sayılarla okunan her ayarda aynı değeri taşıyan iki strateji birebir aynı hamleleri yapar. Uzay yalnızca okunan ayarlarda bölünür, her yaprak ("sınıf") kapsadığı bütün kombinasyonları temsil eder.
+1. **Sınıflar.** Planner ayarları yalnızca sonucu değiştirebilecekleri yerde okur. Tarama hangi ayarların okunduğunu kaydeder; aynı rastgele sayılarla, okunan her ayarda aynı değeri taşıyan iki strateji birebir aynı hamleleri yapar. Uzay yalnızca okunan ayarlarda bölünür, her yaprak ("sınıf") kapsadığı bütün kombinasyonları temsil eder.
 2. **Eleme.** Her sınıf kısa bir koşu alır (6 deneme, hepsi aynı rastgele sayılarla); iyimser tahmine göre en iyiler 30, sonra 300 denemeyle yeniden koşulur.
-3. **Eşleştirme.** Cheap = bitmiş item başına en düşük maliyet, Balanced = bitirme şansıyla tartılmış maliyet, Premium = en yüksek bitirme şansı (sayfanın profil skorları). Sınır ayrıca üç maliyet bandına bölünür.
-4. **Doğrulama.** Atanan stratejiler, sayfa planner'ının kendi seçimi ve rakipler yeni rastgele sayılarla 1.000 denemeyle koşulur: aynı sıklıkta bitiren daha ucuzu var mı, daha pahalı olmayan daha garantilisi var mı? Varsa atama değişir ve yeniden denetlenir; son seçimler 4.000 denemeyle bir kez daha koşulur.
+3. **Eşleştirme.** Cheap = bitmiş item başına en düşük maliyet, Balanced = bitirme şansıyla tartılmış maliyet, Premium = en yüksek bitirme şansı (sayfanın profil skorları).
+4. **Doğrulama.** Atanan stratejiler, sayfa planner'ının kendi seçimi ve rakipler yeni rastgele sayılarla 1.000 denemeyle koşulur: aynı sıklıkta bitiren daha ucuzu var mı, daha pahalı olmayan daha garantilisi var mı? Varsa atama değişir ve yeniden denetlenir; son seçim 4.000 denemeyle ikinciyle bir kez daha karşılaştırılır.
 
-Rare başlangıçta item'i atıp yeni base'e geçen stratejiler (slamOnly) dışarıda tutulur: yapıştırılan Rare item bitirilecek item'dir. Beyaz ve Magic başlangıçta yeni base yöntemin parçasıdır. Çıktılar: `reports/sweep-latest.md` (özet), `reports/sweep-latest.json` (tam sonuç, depoya girmez). Yarıda kesilen tarama `reports/sweep-partial.jsonl` dosyasından devam eder; `--fresh` baştan başlatır. `scripts/selftest/watch.sh` ilerlemeyi çubuk olarak gösterir.
+Rare başlangıçta item'i atıp yeni base'e geçen stratejiler (slamOnly) dışarıda tutulur: yapıştırılan Rare item bitirilecek item'dir. Beyaz ve Magic başlangıçta yeni base yöntemin parçasıdır.
+
+Son tam tarama (6 Ekim 2026, 283 dakika, 25 çekirdek): 784 senaryo, 12,9 milyar kombinasyon, 8,4 milyon sınıf, 9,6 milyon simülasyon. Yeniden simülasyon ilk atamayı Cheap'te 58, Balanced'ta 94, Premium'da 116 senaryoda değiştirdi; Cheap ve Balanced için atanandan daha ucuzu hiçbir senaryoda kalmadı.
+
+İlgili betikler:
+
+- `sweep_planner.js`: sayfanın plan akışını her senaryoda çalıştırır ve seçimini taramanın doğrulanmış en iyisiyle karşılaştırır (784 senaryo ~30 dakika, `--limit 150` ile ~6 dakika). Planner'daki her değişiklik bununla ölçülür.
+- `sweep_report.js`: `reports/sweep-latest.md` (özet) ve `reports/sweep-summary.json`; `--planner <dosya>` ile planner tarafını bir `sweep_planner.js` ölçümünden alır.
+- `capped.cmd`: komutu CPU'nun bir kısmında (varsayılan 32 mantıksal çekirdeğin 25'i) ve düşük öncelikte çalıştırır. `watch.sh`: ilerlemeyi çubuk olarak gösterir.
+
+Yarıda kesilen tarama `reports/sweep-partial.jsonl` dosyasından devam eder; `--fresh` baştan başlatır. Tam sonuç `reports/sweep-latest.json` depoya girmez.
+
+### Planner araması (taramadan çıkanlar)
+
+Sayfanın araması (`app/planner.js`, `makeScreen`) taramanın yöntemlerini kullanır:
+
+- Aynı davranan stratejiler tek koşuyu paylaşır (okunan ayarlar kaydedilir, aynı rastgele sayılar kullanılır).
+- Koşular üç uzunluktadır (40, 200, 800 deneme); kısa koşu yalnızca kimin uzun koşu alacağını iyimser bir tahminle belirler.
+- Başlangıç adayları profilin ızgarası, kütüphanedeki tarifler ve taramanın en sık kazanan rotalarıdır (`ROUTES_RARE`, `ROUTES_START`). Bazı rotalar yalnızca birlikte işe yarar (Orb of Alchemy + tutmazsa yeni base), tek ayar değiştiren arama onlara ulaşamaz.
+- Beam search bir ya da iki ayarı birlikte değiştirir; seçimde, yalnızca en uzun koşunun okuduğu ayarların (nadir yolların) diğer değerleri de denenir, çünkü nadir bir çıkmaz maliyetin büyük kısmını taşıyabilir.
+
+Ölçüm (784 senaryo, doğrulanmış en iyiye göre): Cheap %93, Balanced %90, Premium %89 aynı strateji, eşdeğer sonuç ya da daha iyisi; geri kalanların çoğunda fark %10'un altında. Aynı 150 senaryoda eski arama Cheap %25, Balanced %27, Premium %71 oranında daha kötüydü; yenisi %5, %8, %9. Item başına süre değişmedi (ortanca ~25 saniye).
 
 ## Fiyat hattı
 
@@ -83,6 +105,7 @@ Amaç: yapıştırılan item hangi durumda olursa olsun, hedef item'e giden craf
 - Kapsam dışı (kullanıcı kararı): flask ve charm craft'ı, tablet, waystone, amulet anointing, Verisium Anvil, craft dışı malzemeler ve canlı trade ilanı çekmek. Başka eşyalardaki flask ve charm statları (ör. belt'teki Flask Recovery) diğer statlar gibi planlanır.
 - Soul modları (Medved's Tending) desteklenmiyor (kullanıcı, 28 Eylül 2026: sayıları yalnızca omen + Divine Orb ile yeniden atılabiliyor; ikinci bir kaynakla doğrulanmadı). Planner onları atmaz ve hedef olarak sunmaz; yapıştırılan item'de okunurlar.
 - Desecration (R_DESECRATE_REVEAL): açılmamış modun tarafı bone kullanılırken belli olur. Well of Souls o tarafın normal modlarından ve yalnızca desecrate ile gelen modlardan 3 seçenek sunar: özel olanların sayısı %80/%15/%5 olasılıkla 1/2/3 (Craft of Exile), lich omen'i ilk seçeneği o lich'ten yapar. Gnawed bone ve sceptre yalnızca normal mod verir.
+- Fiyatı olmayan malzeme bedava sayılmaz. İsteğe bağlı omen'ler (yön omen'leri, Greater, Catalysing, Homogenising, Whittling, Crystallisation, Abyssal Echoes) fiyatsızsa plandan çıkarılır ve bildirilir; fiyatsız zorunlu bir malzeme (bone, essence) kullanan plan, fiyatı tam bilinen bütün planların arkasında sıralanır. 6 Ekim 2026'da fiyatsız olanlar: Homogenising, Coronation, Alchemy, Greater Annulment ve Corruption omen'leri, Gnawed ve Ancient Cranium, Essence of Battle, Lesser Essence of Ruin. İlk tam tarama Homogenising omen'ini bedava saydığı için geçersizdi ve düzeltilip yeniden koşuldu.
 - Kurallar mümkün olduğunca oyunun kendi metinlerine dayanıyor (`game_keywords`): tek crafted mod, dolu eşyada desecration, fractured kilidi, Sanctify aralığı, Minimum Modifier Level, Maximum Item Level, socket-bound augment'lar (açıklamasında "cannot be retrieved or replaced" yazan 17 rune/core; Orb of Extraction item'i yok eder ve bunları geri vermez).
 - Oyun tablolarından: liquid emotion sonuçları, catalyst kalite türleri, Greater/Perfect alt seviyeleri, modların eşyaya eklediği tag'ler (caster silahlarda bir elementin büyü modu diğerlerini engeller; Grasping Mail yüzük modlarını açar).
 - Olasılıklar tahmindir: mod ağırlıkları poe2db'nin topluluk verisi; Craft of Exile 8.987 tier'ın 8.929'unda aynı olasılığı veriyor, 58 tier'da ayrışıyor (sayfada seçilebilir). Desecrated modlar eşit ağırlıklı (Craft of Exile de öyle). Catalysing Exaltation çarpanı ×25: oyuncunun testi (t8, 4 yüzükte 4/4 attribute modu), ×6 ve üstü bu sonuçla uyumlu; ayarlanabilir.

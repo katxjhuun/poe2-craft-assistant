@@ -1740,8 +1740,8 @@
   /** Settings in the order the pick tries them on rare paths: the ones that leave an expensive dead end first. */
   const TAIL_ORDER = ['pair', 'slamOnly', 'chaosTier', 'removal', 'exaltTier', 'homog', 'sideOmens', 'desSlam', 'greaterExalt', 'catalyse', 'bone', 'echoes', 'fracture', 'flux'];
   /** The order the search tries settings in: the ones that most often separate the best strategy in the exhaustive sweep first. */
-  const SEARCH_ORDER = ['homog', 'exaltTier', 'removal', 'sideOmens', 'catalyse', 'chaosTier', 'essence', 'magicTier', 'start', 'slamOnly', 'pair', 'restart',
-    'greaterExalt', 'desSlam', 'bone', 'echoes', 'fracture', 'flux', 'lich'];
+  const SEARCH_ORDER = ['exaltTier', 'sideOmens', 'chaosTier', 'removal', 'essence', 'magicTier', 'slamOnly', 'start', 'pair', 'desSlam', 'bone', 'echoes',
+    'catalyse', 'fracture', 'flux', 'greaterExalt', 'homog', 'restart', 'lich'];
   /** A complete strategy: the per-operation orb tiers filled from `tier`, every setting present. */
   function expandStrategy(p) {
     const t = p.tier || 'base';
@@ -1796,8 +1796,8 @@
       seen.add(k);
       for (const v of [{ pair: true, slamOnly: true }, { slamOnly: true }]) extra.push(Object.assign({}, p, v));
       // From a white base an Orb of Alchemy too, alone and with a new base when the Rare item's sides fill up with
-      // unwanted mods: together a third of the best routes from a white base in the exhaustive sweep, and the search
-      // cannot reach the second by changing one setting at a time (Alchemy alone is usually worse).
+      // unwanted mods: the second is one in eight of the best routes from a white base in the exhaustive sweep, and the
+      // search cannot reach it by changing one setting at a time (Alchemy alone is usually worse).
       if (st.rarity === 'Normal') for (const v of [{ start: 'alchemy', slamOnly: true }, { start: 'alchemy' }]) extra.push(Object.assign({}, p, v));
     }
     return grid.concat(extra);
@@ -2001,25 +2001,26 @@
   }
   /**
    * Routes the exhaustive sweep found best most often (scripts/selftest/sweep.js, reports/sweep-latest.md), as settings on
-   * top of the defaults. Several pay off only together, such as Greater Exalted Orbs with Omen of Homogenising Exaltation
-   * and Orbs of Annulment, or an Orb of Alchemy with a new base on a miss; a search that changes one setting at a time
-   * does not reach those, so every profile starts from them as well as from its own grid.
+   * top of the defaults: the lists below cover about nine in ten of its verified best strategies. Several pay off only
+   * together, such as an Orb of Alchemy with a new base on a miss, or an Ancient bone with Abyssal Echoes and side omens
+   * for a base modifier; a search that changes one setting at a time does not reach those, so every profile starts from
+   * these routes as well as from its own grid.
    */
   const ROUTES_RARE = [
-    {}, { exaltTier: 'greater' }, { homog: true }, { sideOmens: true }, { homog: true, sideOmens: true },
-    { exaltTier: 'greater', homog: true }, { exaltTier: 'greater', sideOmens: true }, { exaltTier: 'greater', homog: true, sideOmens: true },
-    { exaltTier: 'greater', homog: true, removal: 'annul' }, { exaltTier: 'greater', homog: true, removal: 'annul', greaterExalt: true },
-    { exaltTier: 'perfect', homog: true, removal: 'annul' },
-    { exaltTier: 'greater', chaosTier: 'greater' }, { exaltTier: 'greater', chaosTier: 'greater', homog: true }, { exaltTier: 'greater', chaosTier: 'greater', homog: true, sideOmens: true },
+    {}, { exaltTier: 'greater' }, { sideOmens: true }, { exaltTier: 'greater', sideOmens: true },
+    { chaosTier: 'greater' }, { chaosTier: 'greater', sideOmens: true }, { exaltTier: 'greater', chaosTier: 'greater' }, { exaltTier: 'greater', chaosTier: 'greater', sideOmens: true },
+    { exaltTier: 'greater', removal: 'annul' }, { exaltTier: 'perfect', removal: 'annul' }, { removal: 'annul', sideOmens: true, echoes: true },
     { desSlam: true, bone: 'Ancient', echoes: true, sideOmens: true },
+    { desSlam: true, bone: 'Ancient', echoes: true, sideOmens: true, exaltTier: 'greater', removal: 'annul' },
+    { desSlam: true, bone: 'Ancient', echoes: true, sideOmens: true, exaltTier: 'perfect', removal: 'annul' },
+    { fracture: true }, { fracture: true, sideOmens: true },
   ];
   /** From a white or Magic item: how the item gets its first mods, each with the main ways to finish the Rare item. */
   const ROUTES_START = [
     { magicTier: 'greater' }, {}, { magicTier: 'perfect' }, { pair: true }, { magicTier: 'greater', pair: true },
-    { magicTier: 'greater', slamOnly: true }, { start: 'alchemy' }, { start: 'alchemy', slamOnly: true },
+    { magicTier: 'greater', slamOnly: true }, { magicTier: 'perfect', slamOnly: true }, { start: 'alchemy' }, { start: 'alchemy', slamOnly: true },
   ];
-  const ROUTES_FINISH = [{}, { sideOmens: true }, { homog: true }, { exaltTier: 'greater', homog: true }, { exaltTier: 'greater', homog: true, sideOmens: true },
-    { exaltTier: 'greater', homog: true, removal: 'annul' }];
+  const ROUTES_FINISH = [{}, { exaltTier: 'greater' }, { sideOmens: true }, { exaltTier: 'greater', sideOmens: true }];
   /** The sweep's routes for this start item, with and without the settings that only matter on some items. */
   function verifiedRoutes(st, goals) {
     const out = [];
@@ -2030,8 +2031,8 @@
     for (const r of core) for (const e of extras) {
       if (st.rarity !== 'Normal' && r.start) continue;
       out.push(Object.assign({}, r, e));
-      // catalyst quality for Omen of Catalysing Exaltation, where the route uses exalts on a base that takes catalysts
-      if (st.rarity === 'Rare' && r.homog) out.push(Object.assign({ catalyse: true }, r, e));
+      // catalyst quality for Omen of Catalysing Exaltation, where the route exalts on a base that takes catalysts
+      if (st.rarity === 'Rare' && r.exaltTier && !r.desSlam) out.push(Object.assign({ catalyse: true }, r, e));
     }
     return out;
   }

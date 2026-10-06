@@ -99,7 +99,7 @@ async function runPlanner(P, input) {
   const planned = await P.buildPlans(Object.assign({}, input, { beamBudgetMs: 0 }));
   for (const k of Object.keys(planned.profiles || {})) {
     const pl = planned.profiles[k];
-    if (pl && pl.steps && pl.seeds) planned.profiles[k] = await P.improvePlan(Object.assign({}, input, { beamBudgetMs: P.SEARCH.budgetMs }), pl);
+    if (pl && pl.steps && pl.seeds) planned.profiles[k] = await P.improvePlan(Object.assign({}, input, { beamBudgetMs: P.SEARCH ? P.SEARCH.budgetMs : 1500 }), pl);
   }
   return planned;
 }

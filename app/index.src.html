@@ -2995,7 +2995,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     }
     if (pl.goals.some((g) => !g.required)) notes.push('Checkpoint: when the required goals are met, price the item before chasing the nice-to-have ones.');
     if (pl.from && pl.from.recipe) notes.push(`Route from the recipe <b>${esc(pl.from.title)}</b>${pl.search && pl.search.searched ? ', tuned by the search' : ''}.`);
-    else if (pl.from && pl.from.search) notes.push('Route found by the search: it changed one setting at a time from the best strategies until nothing improved.');
+    else if (pl.from && pl.from.search) notes.push('Route found by the search: it changed one or two settings at a time from the best strategies until nothing improved.');
+    else if (pl.from && pl.from.sweep) notes.push('Route from the exhaustive sweep: one of the strategies that came out best most often when every combination of settings was simulated on 784 test items.');
     notes.push(...selftestTips(pl));
     const nx = P.nextAction(S.ix, S.item, S.locks, pl.goals, pl.params, priceEx);
     const nextHtml = nx.done ? '<div class="ok-note">All goals of this plan are met.</div>'
@@ -3044,9 +3045,9 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (ops.has('flux')) used.push('flux');
     if (ops.has('fracture')) used.push('fracture');
     if (pl.steps.some((s) => s.action.catalyse)) used.push('catalyse');
-    const word = { pro: 'usually cheaper', con: 'usually costs more', 'trade-off': 'more likely to finish but costs more' };
+    const word = { pro: 'is usually cheaper', con: 'usually costs more', 'trade-off': 'is more likely to finish but costs more' };
     return used.map((id) => T[id]).filter((t) => t && word[t.verdict] && t.comparisons >= 20).slice(0, 2).map((t) =>
-      `Self-test on ${t.scenarios} scenarios: ${esc(t.label)} is ${word[t.verdict]} (cheaper in ${Math.round(t.cheaper * 100)}% of comparisons, median ×${t.medianCostRatio >= 10 ? Math.round(t.medianCostRatio) : t.medianCostRatio}). The plan above was still the best of its profile for this item.`);
+      `Self-test on ${t.scenarios} scenarios: ${esc(t.label)} ${word[t.verdict]} (cheaper in ${Math.round(t.cheaper * 100)}% of comparisons, median ×${t.medianCostRatio >= 10 ? Math.round(t.medianCostRatio) : t.medianCostRatio}). The plan above was still the best of its profile for this item.`);
   }
   // ------------------------------------------------------------ plan explanation (Claude, text only)
   function explainKey() { const pl = S.plans && S.plans.profiles[S.planTab]; return pl && pl.steps ? S.planTab + '|' + pl.trials + '|' + pl.meanCost : null; }
