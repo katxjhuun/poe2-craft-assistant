@@ -1812,15 +1812,22 @@
   /** Same as simulate, yielding to the page every `slice` trials so the UI stays responsive. */
   async function simulateAsync(ctx, st0, goals, params, opts) {
     const run = createRun(ctx, st0, goals, params, opts);
-    const total = opts.trials || 2000, slice = opts.slice || 200;
+    const total = opts.trials || 2000;
     const t0 = Date.now();
+    // slices of about 50 ms: runs of plans with many goals take hundreds of uses each
+    let slice = opts.slice || 25;
     while (run.done < total) {
       if (opts.cancelled && opts.cancelled()) throw new Error('cancelled');
+      const s0 = Date.now();
       run.step(Math.min(slice, total - run.done));
+      const took = Date.now() - s0;
+      if (!opts.slice) slice = Math.max(5, Math.min(400, Math.round(slice * 50 / Math.max(took, 1))));
       const f = run.done / total;
       if (opts.onSlice) opts.onSlice(opts.timeBudgetMs ? Math.max(f, (Date.now() - t0) / opts.timeBudgetMs) : f);
-      // Long plans (hundreds of uses per run) stop at the time budget once enough runs are in.
-      if (opts.timeBudgetMs && Date.now() - t0 > opts.timeBudgetMs && run.done >= (opts.minTrials || 1000)) break;
+      // Long plans (hundreds of uses per run) stop at the time budget once enough runs are in, and at four times the
+      // budget in any case once 100 runs are in (a plan for six goals can take a second for a few runs).
+      const el = Date.now() - t0;
+      if (opts.timeBudgetMs && el > opts.timeBudgetMs && (run.done >= (opts.minTrials || 1000) || (el > 4 * opts.timeBudgetMs && run.done >= 100))) break;
       await tick();
     }
     return run.result();
@@ -1887,6 +1894,8 @@
     bone: ['Gnawed', 'Preserved', 'Ancient'], echoes: [false, true], lich: [false, true], desSlam: [false, true], homog: [false, true],
   };
   const BEAM_WIDTH = 3, BEAM_DEPTH = 8;
+  /** Uses a run when no strategy finishes within the usual 600 (plans for many goals on a large pool). */
+  const LONG_USES = 3000;
   /**
    * The search's run lengths (trials) with their time limits, how many short runs get a long one (keepSeeds after the
    * seeds, keep per round of the beam search), the shared random seed, the default time for the beam search of one
@@ -1987,7 +1996,7 @@
     const sigOf = (p) => ALL.map((k) => p[k]).join('|');
     const hi = input.screenTrials || SEARCH.hi, lo = Math.min(SEARCH.lo, hi);
     const LEVELS = [{ n: lo, ms: SEARCH.loMs, min: Math.min(12, lo) }, { n: hi, ms: SEARCH.hiMs, min: Math.min(60, hi) }, { n: Math.max(SEARCH.top, hi), ms: SEARCH.topMs, min: hi }];
-    const base = { seed: SEARCH.seed, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, baseLimit: input.baseLimit };
+    const base = { seed: SEARCH.seed, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, baseLimit: input.baseLimit, maxSteps: input.maxSteps };
     const classes = [], bySig = new Map();
     function find(full, sig) {
       const hit = bySig.get(sig);
@@ -2075,9 +2084,9 @@
       }
     }
     /** Seeds: every candidate with the short run, the best of them with the long one. */
-    async function seed(cands, prof, onEach) {
+    async function seed(cands, prof, onEach, keep) {
       for (const x of cands) { await ensure(x.p, 0, x.from); if (onEach) onEach(); }
-      await promote(prof, SEARCH.keepSeeds, null);
+      await promote(prof, keep || SEARCH.keepSeeds, null);
     }
     /**
      * Beam search: from the best classes, change one setting at a time (short runs); neighbours that may beat the
@@ -2186,10 +2195,26 @@
     { fracture: true, echoes: true }, { fracture: true, echoes: true, tier: 'greater' }, { fracture: true, echoes: true, magicTier: 'greater' },
     { fracture: true, echoes: true, pair: true, magicTier: 'greater' }, { echoes: true }, { echoes: true, removal: 'annul' }, { fracture: true },
   ];
+  /**
+   * Four or more goals: the removals that spare what is finished (Omen of Whittling takes the lowest-level modifier,
+   * the Erasure omens one side) with aimed Exalted Orbs, and bones for base modifiers. These are the routes the
+   * full-target runs end on (scripts/selftest/full_targets.js); the profile grids do not all hold them.
+   */
+  const ROUTES_MANY = [
+    { removal: 'whittle', sideOmens: true, exaltTier: 'greater', chaosTier: 'greater' }, { removal: 'whittle', sideOmens: true, exaltTier: 'perfect', chaosTier: 'perfect' },
+    { removal: 'erasure', sideOmens: true, exaltTier: 'greater', chaosTier: 'greater' }, { removal: 'erasure', sideOmens: true, exaltTier: 'perfect', chaosTier: 'perfect' },
+    { removal: 'annul', sideOmens: true, exaltTier: 'perfect', desSlam: true, bone: 'Ancient', echoes: true },
+  ];
   /** The sweep's routes for this start item, with and without the settings that only matter on some items. */
   function verifiedRoutes(st, goals, ctx) {
     const out = [];
     if (ctx && ctx.cls === 'Jewel' && SIDES.some((s) => goals.filter((g) => g.side === s).length === 3)) out.push(...ROUTES_JEWEL_FIVE);
+    else if (goals.length >= 4) {
+      for (const r of ROUTES_MANY) {
+        if (st.rarity === 'Rare') out.push(r);
+        else for (const a of [{ magicTier: 'greater' }, { magicTier: 'greater', slamOnly: true }]) out.push(Object.assign({}, a, r));
+      }
+    }
     const extras = [{}];
     if (goals.some((g) => (g.ess || []).length)) extras.push({ essence: true });
     if (goals.some((g) => !g.des && /^(Fire|Cold|Lightning)Resistance$/.test(g.fam || ''))) for (const e of extras.slice()) extras.push(Object.assign({ flux: false }, e));
@@ -2240,7 +2265,16 @@
       // (c) beam search from the best candidates (the page runs it later with improvePlan, after showing the plans)
       const budget = input.beamBudgetMs == null ? SEARCH.budgetMs : input.beamBudgetMs;
       const depth = budget > 0 ? await sc.beam(prof, budget) : 0;
-      const best = await sc.pick(prof, budget > 0);
+      let best = await sc.pick(prof, budget > 0);
+      let uses = input.maxSteps || null, screen = sc;
+      if (!best && !input.maxSteps && !input.budget) {
+        // No run finished within the usual 600 uses (many goals on a large pool): the routes once more with runs of
+        // 3,000 uses, a few short runs each, so that the player still gets a route and what it costs.
+        uses = LONG_USES;
+        screen = makeScreen(ctx, st, pg, Object.assign({}, input, { maxSteps: LONG_USES, screenTrials: 24 }));
+        await screen.seed(verifiedRoutes(st, pg, ctx).slice(0, 10).map((p) => ({ p, from: { sweep: true } })), prof, null, 3);
+        best = await screen.pick(prof, false);
+      }
       if (!best) {
         const r = simulate(ctx, st, pg, expandStrategy(grids[i][0]), { trials: 400, seed: 3, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, baseLimit: input.baseLimit });
         out.profiles[names[i]] = { label: prof.label, noSuccess: true, fails: r.fails };
@@ -2249,7 +2283,7 @@
       }
       const final = await simulateAsync(ctx, st, pg, best.params, {
         trials: input.trials || 4000, seed: 99, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, cancelled: input.cancelled,
-        baseLimit: input.baseLimit, timeBudgetMs: input.timeBudgetMs || 2500, minTrials: Math.min(input.trials || 4000, 800),
+        baseLimit: input.baseLimit, timeBudgetMs: input.timeBudgetMs || 2500, minTrials: Math.min(input.trials || 4000, 800), maxSteps: uses || undefined,
         onSlice: (f) => input.onProgress && input.onProgress((done + f) / total),
       });
       final.label = prof.label;
@@ -2257,10 +2291,10 @@
       final.goals = pg;
       final.dropped = goals.filter((g) => !pg.some((x) => x.key === g.key));
       final.from = best.from;
-      final.seeds = sc.top(prof, 1).slice(0, BEAM_WIDTH * 2).map((c) => ({ params: c.params, from: c.from }));
-      final.search = { candidates: sc.count(), beamDepth: depth, recipes: (input.recipes || []).length, searched: budget > 0 };
-      final.moreBases = moreBasesHint(prof, sc.results(), final);
-      SCREENS.set(final, sc);
+      final.seeds = screen.top(prof, 1).slice(0, BEAM_WIDTH * 2).map((c) => ({ params: c.params, from: c.from }));
+      final.search = { candidates: sc.count() + (screen === sc ? 0 : screen.count()), beamDepth: depth, recipes: (input.recipes || []).length, searched: budget > 0 };
+      final.moreBases = moreBasesHint(prof, screen.results(), final);
+      SCREENS.set(final, screen);
       out.profiles[names[i]] = final;
       done++;
       if (input.onProgress) input.onProgress(done / total);
@@ -2279,9 +2313,10 @@
     const prof = PROFILES[plan.profile];
     const ctx = makeContext(input.ix, input.item, { weights: input.weights, essences: input.essences, catalystMult: input.catalystMult });
     const st = toState(ctx, input.item, input.locks);
+    const long = plan.maxSteps > 600 ? plan.maxSteps : undefined; // a plan from the long runs (buildPlans) stays on them
     let sc = SCREENS.get(plan);
     if (!sc) {
-      sc = makeScreen(ctx, st, plan.goals, input);
+      sc = makeScreen(ctx, st, plan.goals, long ? Object.assign({}, input, { maxSteps: long, screenTrials: 24 }) : input);
       for (const s0 of plan.seeds) await sc.ensure(s0.params, 1, s0.from);
     }
     const depth = await sc.beam(prof, input.beamBudgetMs == null ? SEARCH.budgetMs : input.beamBudgetMs, onProgress);
@@ -2291,7 +2326,7 @@
     if (!best || sc.same(best.params, plan.params)) return keep();
     const final = await simulateAsync(ctx, st, plan.goals, best.params, {
       trials: input.trials || 4000, seed: 99, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, cancelled: input.cancelled,
-      baseLimit: input.baseLimit, timeBudgetMs: input.timeBudgetMs || 2500, minTrials: Math.min(input.trials || 4000, 800),
+      baseLimit: input.baseLimit, timeBudgetMs: input.timeBudgetMs || 2500, minTrials: Math.min(input.trials || 4000, 800), maxSteps: long,
     });
     // keep the search's pick only when the full run agrees it is better
     if (prof.score(final) >= prof.score(plan)) return keep();
@@ -2307,7 +2342,7 @@
     const st = toState(ctx, input.item, input.locks);
     const r = await simulateAsync(ctx, st, plan.goals, plan.params, {
       trials: trials || 20000, seed: 1234, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, onSlice: onProgress, cancelled: input.cancelled,
-      baseLimit: input.baseLimit,
+      baseLimit: input.baseLimit, maxSteps: plan.maxSteps > 600 ? plan.maxSteps : undefined,
       timeBudgetMs: input.refineBudgetMs || 6000, minTrials: Math.min(3000, trials || 20000),
     });
     Object.assign(r, { label: plan.label, profile: plan.profile, goals: plan.goals, dropped: plan.dropped, from: plan.from, seeds: plan.seeds, search: plan.search, moreBases: plan.moreBases });
