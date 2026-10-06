@@ -1320,7 +1320,11 @@
     const viaEssence = essenceOptions(ctx, g, 'magic').length + essenceOptions(ctx, g, 'rare').length > 0;
     if (g.rune && (st.tags || []).some((t) => t !== g.rune)) return `needs the rune ${g.runeItem}, but the rune on the item opens another pool (one per item)`;
     const ok = (g.rune ? runeSide(ctx, g.rune, g.side, 0) : sidePool(ctx, g.side, 0)).some((e) => e.fam === g.fam && (!g.eff || e.tier <= g.eff) && reaches(ctx, e.id, g)) || viaEssence;
-    if (!ok) return g.minValue != null ? `no tier reaches ${g.minValue} at this item level` : 'this tier cannot roll at this item level';
+    if (!ok) {
+      const onBase = viaEssence || (g.rune ? runeSide(ctx, g.rune, g.side, 0) : sidePool(ctx, g.side, 0)).some((e) => e.fam === g.fam);
+      if (!onBase) return 'this modifier cannot roll on this base';
+      return g.minValue != null ? `no tier reaches ${g.minValue} at this item level` : 'this tier cannot roll at this item level';
+    }
     const blocker = st.mods.find((m) => (m.frac || m.lock) && !meets(m, g, g.eff) && m.grp.some((x) => (g.grp || []).includes(x)));
     if (blocker) return 'blocked by a kept or fractured mod of the same group';
     const stopper = st.mods.find((m) => (m.frac || m.lock) && !meets(m, g, g.eff) && tagStops(ctx, m, g));

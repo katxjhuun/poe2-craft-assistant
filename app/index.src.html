@@ -1018,6 +1018,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     S.lastEval = null;
     S.sessionSavedAt = d.savedAt || 0;
     store.set('spent', S.spent); store.set('lastText', cur.text);
+    pruneTargets();
     return true;
   }
   // ------------------------------------------------------------ test log (per viewer)
@@ -1360,6 +1361,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     S.history = S.history.slice(0, S.histIdx + 1);
     let value = null;
     try { const est = r.item.unsupported ? null : valueOf(r.item, r.item.itemClass); value = est ? Math.round(est.value * 10) / 10 : null; } catch (e) { value = null; }
+    pruneTargets();
     S.history.push({ text, item: r.item, at: new Date(), src, value });
     S.histIdx = S.history.length - 1;
     store.set('lastText', text);
@@ -1367,6 +1369,25 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     return { ok: true };
   }
   function saveTargets() { store.set('targets', S.targets); store.set('locks', S.locks); S.planArmed = false; }
+  /**
+   * Drop targets the item on screen cannot have at all. Targets are kept per browser while the item can come from the
+   * player's saved session or a paste of the same base, so a target of another item class could stay behind.
+   * Essence, alloy and liquid emotion targets are left alone (their lists load later).
+   */
+  function pruneTargets() {
+    if (!S.item || !S.ix || S.item.unsupported || !S.item.base) return;
+    let gone = 0;
+    for (const side of ['prefix', 'suffix']) {
+      let keys = null;
+      for (const [k, t] of Object.entries(S.targets)) {
+        if (!t || !t.fam || !k.startsWith(side + '-') || !['prefix', 'suffix', 'desecrated', 'rune'].includes(t.group)) continue;
+        if (!keys) { try { keys = new Map(E.pickerOptions(S.ix, S.item, { side, showImpossible: true }).map((o) => [o.key, o])); } catch (e) { return; } }
+        const o = keys.get(t.key);
+        if (!o || o.baseReason === 'cannot roll on this base') { delete S.targets[k]; gone++; }
+      }
+    }
+    if (gone) store.set('targets', S.targets);
+  }
 
   // ============================================================ paste dialog
   const pasteDlg = $('#pasteDlg'), pasteArea = $('#pasteArea');
