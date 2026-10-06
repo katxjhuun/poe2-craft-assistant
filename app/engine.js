@@ -690,7 +690,12 @@
     if (item.rarity === 'Normal' && item.mods.length) warnings.push({ level: 'error', msg: 'A Normal item cannot have explicit mods; check the Rarity line.' });
     if (item.rarity !== 'Unique') {
       for (const side of ['prefix', 'suffix']) {
-        if (count[side] > lim[side]) warnings.push({ level: 'error', msg: `A ${item.rarity} item allows at most ${lim[side]} ${side}${lim[side] === 1 ? '' : 'es'}; found ${count[side]}. Check the matches.` });
+        if (count[side] <= lim[side]) continue;
+        // A Rare jewel one over its limit on a side: left from a removed "+1 Suffix (Prefix) Modifier allowed" (R_JEWEL_SLOTS,
+        // test t24). The side keeps its three modifiers; a Chaos Orb only changes the other side once that one is full.
+        const jewelOver = item.rarity === 'Rare' && (item.itemClass === 'Jewel' || (ix.kb.bases[item.base] || {}).cls === 'Jewel') && count[side] === lim[side] + 1;
+        if (jewelOver) warnings.push({ level: 'info', msg: `Three ${side}es on a jewel: one more than the limit, kept from a removed "+1 ${side === 'prefix' ? 'Prefix' : 'Suffix'} Modifier allowed" (a five-modifier jewel). They stay; a new ${side} cannot be added.` });
+        else warnings.push({ level: 'error', msg: `A ${item.rarity} item allows at most ${lim[side]} ${side}${lim[side] === 1 ? '' : 'es'}; found ${count[side]}. Check the matches.` });
       }
     }
     const crafted = item.mods.filter((m) => m.crafted).length;

@@ -1116,6 +1116,115 @@
           "tier": "A"
         }
       ]
+    },
+    {
+      "id": "c15",
+      "title": "Jewel: five modifiers (three suffixes) with Potent Liquid Contempt and Ferocity",
+      "classes": [
+        "Jewel"
+      ],
+      "league_scope": [
+        "Forbidden Rites",
+        "Runes of Aldur",
+        "Standard"
+      ],
+      "verdict": "verified",
+      "source_tier": "B + game data",
+      "min_ilvl": 1,
+      "crafted_slot_use": "yes (the liquid emotion modifier)",
+      "desecrated_slot_use": "yes (the third suffix)",
+      "target": [],
+      "steps": [
+        {
+          "text": "Start with a jewel whose first wanted suffix is fractured: buy one, or use a Fracturing Orb on a jewel with four modifiers (one in four).",
+          "names": [
+            "Fracturing Orb"
+          ]
+        },
+        {
+          "text": "Remove the other modifiers down to one, then Chaos Orb until the second wanted suffix comes.",
+          "names": [
+            "Orb of Annulment",
+            "Chaos Orb"
+          ]
+        },
+        {
+          "text": "Exalted Orb until both prefix slots are filled. These prefixes are thrown away later.",
+          "names": [
+            "Exalted Orb"
+          ]
+        },
+        {
+          "text": "Potent Liquid Contempt (Ancient Potent Liquid Contempt on a Time-Lost jewel): it gives the prefix \"+1 Suffix Modifier allowed\" in place of a prefix, or the suffix \"+1 Prefix Modifier allowed\" in place of the unfractured suffix. After the second, go back to the Chaos Orbs.",
+          "names": [
+            "Potent Liquid Contempt"
+          ]
+        },
+        {
+          "text": "Third suffix by desecration: Omen of Dextral Necromancy and a Preserved Cranium, with Omen of Abyssal Echoes for a second set of three at the Well of Souls. A wrong one comes off with Omen of Light and an Orb of Annulment.",
+          "names": [
+            "Omen of Dextral Necromancy",
+            "Omen of Abyssal Echoes",
+            "Preserved Cranium",
+            "Omen of Light"
+          ]
+        },
+        {
+          "text": "Remove \"+1 Suffix Modifier allowed\": Omen of Sinistral Annulment and an Orb of Annulment take one of the prefixes; when it is the only prefix, Omen of Sinistral Erasure and a Chaos Orb replace it with a new prefix. The three suffixes stay.",
+          "names": [
+            "Omen of Sinistral Annulment",
+            "Orb of Annulment",
+            "Omen of Sinistral Erasure"
+          ]
+        },
+        {
+          "text": "Exalted Orb at once until both prefixes are filled. With a free prefix slot a Chaos Orb can still take a suffix.",
+          "names": [
+            "Exalted Orb"
+          ]
+        },
+        {
+          "text": "Chaos Orb for one wanted prefix. The suffixes are safe now: the game refuses the orb (\"Item has no space for more modifiers\") when it would take one, and nothing is spent.",
+          "names": [
+            "Chaos Orb"
+          ]
+        },
+        {
+          "text": "Potent Liquid Ferocity: \"increased Effect of Suffixes\" replaces one of the two prefixes, the wanted one half the time (then Chaos Orb again). On a Time-Lost jewel use Ancient Potent Liquid Melancholy for \"Upgrades Radius to Very Large\".",
+          "names": [
+            "Potent Liquid Ferocity"
+          ]
+        },
+        {
+          "text": "Divine Orbs for the values, Refined catalysts for quality.",
+          "names": [
+            "Divine Orb"
+          ]
+        }
+      ],
+      "checkpoints": [
+        "After the third suffix the jewel can no longer lose a suffix as long as both prefix slots are filled.",
+        "A jewel with the three suffixes and a poor prefix can be bought and finished from the Chaos Orb step."
+      ],
+      "risks": [
+        "Not intended by the game (unchanged from 0.5.1 to 0.5.5): a patch may end it.",
+        "Two even gambles (Contempt, Ferocity) and the Well of Souls pick: the guides quote 50 to 200 Divine Orbs per jewel.",
+        "With three prefixes instead (via \"+1 Prefix Modifier allowed\") the game data is the same, but no guide shows it."
+      ],
+      "sources": [
+        {
+          "label": "Two video guides for 0.5 (transcripts from the player, 6 Oct 2026)",
+          "tier": "B"
+        },
+        {
+          "label": "Game data: LiquidEmotionOutcomes and the crafted jewel modifiers (sides and texts)",
+          "tier": "A"
+        },
+        {
+          "label": "Jewels shown in the guides: three suffixes, a prefix and \"60% increased Effect of Suffixes\"",
+          "tier": "B"
+        }
+      ]
     }
   ],
   "claims": [
@@ -1436,6 +1545,24 @@
       "claim": "Omen of Catalysing Exaltation at 20% quality makes the matching modifier type very likely (about x25 its weight)",
       "verdict": "plausible",
       "reason": "One in-game test of four rings (t8), all four hits; the exact size needs more tries."
+    },
+    {
+      "id": "k54",
+      "claim": "A jewel keeps three suffixes (or prefixes) after its \"+1 Suffix (Prefix) Modifier allowed\" modifier is removed, and the other side can still be filled: five modifiers",
+      "verdict": "verified",
+      "reason": "Two independent 0.5 video guides show every step in game, and the finished jewels read as three suffixes and two prefixes in the planner; the modifier sides are game data (test t24). Not intended by the game: it may be changed in a later patch."
+    },
+    {
+      "id": "k55",
+      "claim": "On a jewel with three suffixes over the limit and both prefixes filled, a Chaos Orb only changes prefixes and Potent Liquid Ferocity only gives \"increased Effect of Suffixes\"",
+      "verdict": "verified",
+      "reason": "Both guides show the game refusing the Chaos Orb with \"Item has no space for more modifiers\" when it would take a suffix (rule R_NO_SPACE); with a free prefix slot a suffix can be lost."
+    },
+    {
+      "id": "k56",
+      "claim": "Potent Liquid Contempt gives \"+1 Suffix Modifier allowed\" or \"+1 Prefix Modifier allowed\" with even chances whatever the item holds",
+      "verdict": "plausible",
+      "reason": "One guide calls it a pure 50/50, the other is not sure whether a fractured suffix shifts it; the planner removes one of the removable modifiers evenly and adds the modifier that fits (open test t32)."
     }
   ],
   "tests": [
@@ -1682,10 +1809,13 @@
       "id": "t24",
       "question": "After the \"+1 Prefix/Suffix Modifier allowed\" mod is removed, can a Rare jewel take a fifth regular modifier?",
       "how": "Settled so far (two trade jewels you pasted, 27 Sept 2026): with the allowance mod a jewel holds 4 regular modifiers and the crafted one, 5 in total (3 prefixes + 2 suffixes, or 2 + 3). Open: guides say a side stays at 3 after the allowance mod is removed, so the other side can be filled for 5 regular modifiers. Test: remove the allowance mod (Orb of Annulment with the side omen of its side) and try an Exalted Orb with the omen of the other side. The planner follows the game data and the guides until then.",
-      "claims": [],
-      "note": "No: a Rare jewel holds 2 prefixes and 2 suffixes; a \"+1 Prefix/Suffix Modifier allowed\" mod raises one side only while it is on the jewel. Once it is removed no fifth regular modifier can be added (the modifiers already there stay).",
-      "status": "refuted",
-      "source": "Craft of Exile (jewels: 4 modifiers, 2 + 2), Maxroll (\"Jewels have a limit of four modifiers — two prefixes and two suffixes\") and your report"
+      "claims": [
+        "k54",
+        "k55"
+      ],
+      "note": "Yes. Two 0.5 video guides show it step by step, and the jewels they show read as three suffixes, a prefix and a crafted prefix. With \"+1 Suffix Modifier allowed\" (a prefix from Potent Liquid Contempt) a third suffix is added; when that prefix is removed the three suffixes stay, and both prefix slots can be filled again: five modifiers. With both prefixes in place a Chaos Orb only changes prefixes (\"Item has no space for more modifiers\" when it would take a suffix). Your earlier answer and the four-modifier limit in Craft of Exile and Maxroll describe a jewel without this step. The game did not intend it and may change it.",
+      "status": "confirmed",
+      "source": "two video guides for 0.5 (transcripts you sent, 6 Oct 2026) and the jewels they show; game data of the crafted jewel modifiers"
     },
     {
       "id": "t25",
@@ -1753,6 +1883,14 @@
       "note": "One, two or three of the three options are desecrated-only with chances 80%, 15% and 5%; the rest are base modifiers of the side. With a lich omen the first option is that lich's. Without a desecrated-only modifier (sceptres, equipment below item level 65) all three are base modifiers. The planner uses these numbers.",
       "status": "confirmed",
       "source": "Craft of Exile (poe2.js: desecrationModSpawnRate = [0.8, 0.15, 0.05]); Game8 and Sift agree on at least one"
+    },
+    {
+      "id": "t32",
+      "question": "Potent Liquid Contempt on a jewel with two prefixes and two suffixes, one suffix fractured: how often does it give \"+1 Suffix Modifier allowed\"?",
+      "how": "Count the outcomes over several uses. If the emotion picks its modifier first, \"+1 Suffix\" comes half the time; if it picks the modifier to remove first (the fractured one cannot go), it comes two times in three. The planner assumes the second.",
+      "claims": [
+        "k56"
+      ]
     }
   ]
 }

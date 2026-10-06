@@ -121,9 +121,9 @@
    * buyable. Only omens that aim a step or add to it are dropped; the step stays legal without them. Omen of Light
    * and the lich omens change what a step does and stay. priced(name) -> bool; skipped collects the dropped names.
    */
-  function withoutUnpriced(a, priced, skipped) {
+  function withoutUnpriced(a, priced, skipped, gone) {
     if (!a || a.done || a.fail) return a;
-    const drop = (name) => { if (priced(name)) return false; if (skipped) skipped.add(name); return true; };
+    const drop = (name) => { if (gone && gone.has(name)) return true; if (priced(name)) return false; if (skipped) skipped.add(name); return true; };
     const b = Object.assign({}, a);
     switch (a.op) {
       case 'regal':
@@ -175,6 +175,15 @@
    * 'magic' essences turn a Magic item Rare and add their mod; 'rare' ones (Perfect, special, alloys) remove a
    * random mod from a Rare item and add theirs. Both use the item's single crafted slot.
    */
+  /** Items the game files list but the game does not have (kb.legacy_or_disabled, e.g. Omen of Homogenising Exaltation). */
+  const LEGACY = new WeakMap();
+  function legacyItems(kb) {
+    if (!LEGACY.has(kb)) LEGACY.set(kb, new Set((kb.legacy_or_disabled || []).flatMap((l) => l.items || [])));
+    return LEGACY.get(kb);
+  }
+  /** Is there such a bone? Jewels only have the Preserved Cranium (no Gnawed or Ancient one in the game data). */
+  const boneExists = (ctx, quality) => !!(ctx.kb.item_descriptions || {})[`${quality} ${quality === 'Altered' ? 'Collarbone' : ctx.bone}`];
+
   function makeContext(ix, item, opts) {
     opts = opts || {};
     const kb = ix.kb;
@@ -187,7 +196,7 @@
     const ctx = {
       ix, kb, item, base, cls: base.cls, ilvl, pool, desPool, weights: opts.weights || null,
       floors: floorsFrom(kb), bone: boneFor(base.cls), slotDelta: item.slotDelta || { prefix: 0, suffix: 0 },
-      _side: new Map(), _des: new Map(), imputed: new Set(),
+      _side: new Map(), _des: new Map(), imputed: new Set(), legacy: legacyItems(kb),
       essences: essencesForBase(ix, base, (opts.essences || []).filter((r) => !r.liquid)).concat(liquidFor(kb, item.base)),
       catalystMult: opts.catalystMult > 0 ? +opts.catalystMult : CATALYST_DEFAULT,
       capMods: ix._capMods || (ix._capMods = new Map(Object.entries(kb.mods).filter(([, m]) => m.cap).map(([id, m]) => [id, m.cap]))),
@@ -415,6 +424,8 @@
   function validate(ctx, st, a) {
     const cls = ctx.cls;
     const R = st.rarity;
+    // Omens that are in the game files but not in the game (kb.legacy_or_disabled): no step can use them.
+    if (ctx.legacy.size && (a.homog || a.greater || a.side || a.omen)) for (const n of actionNames(a, ctx)) if (ctx.legacy.has(n)) return `${n} is not in the game (the game files list it, but it cannot be found or traded).`;
     // Currency made for corrupted items (R_CORRUPTED_LOCK) is checked first; everything else needs an uncorrupted item.
     if (a.op === 'sacrifice') {
       if (!st.corrupted) return 'Orbs of Sacrifice work on corrupted items with a Corruption Enchantment.';
@@ -467,7 +478,11 @@
       case 'chaos': {
         if (R !== 'Rare') return 'Chaos Orb needs a Rare item.';
         const pool = st.mods.filter((m) => removable(m) && (!a.side || m.side === a.side));
-        return pool.length ? null : 'No removable modifier on that side (fractured mods cannot be removed).';
+        if (!pool.length) return 'No removable modifier on that side (fractured mods cannot be removed).';
+        // the new modifier needs a slot (R_NO_SPACE); Whittling takes the lowest-level modifier or nothing
+        const low = a.whittle ? Math.min(...st.mods.filter(removable).map((m) => m.lvl)) : null;
+        const ok = swapCandidates(ctx, st, (m) => removable(m) && (a.whittle ? m.lvl === low : !a.side || m.side === a.side), anyOpen(ctx));
+        return ok.length ? null : 'Item has no space for more modifiers: the item is over its limit on a side, and the modifier this would remove leaves no slot for a new one.';
       }
       case 'annul': {
         if (R !== 'Rare' && R !== 'Magic') return 'Orb of Annulment needs a Magic or Rare item.';
@@ -479,6 +494,7 @@
         if (R !== 'Rare') return 'Desecration needs a Rare item.';
         if (!ctx.bone) return 'No bone matches this item class.';
         if (a.quality === 'Altered' && ctx.bone !== 'Collarbone') return 'Altered Collarbones desecrate Rare amulets, rings and belts.';
+        if (!boneExists(ctx, a.quality)) return `There is no ${a.quality} ${ctx.bone} in the game${ctx.bone === 'Cranium' ? ' (jewels take the Preserved Cranium only)' : ''}.`;
         if (a.putrefy) return null; // Omen of Putrefaction replaces every modifier; the one-Desecrated rule does not apply (claim k11)
         if (hasDes) return 'Only one Desecrated modifier per item (0.5+). Remove it first with Omen of Light + Orb of Annulment.';
         if (a.quality === 'Gnawed' && ctx.ilvl > 64) return 'Gnawed bones only work on item level 64 or lower.';
@@ -584,12 +600,19 @@
         const outs = liquidOutcomes(ctx, a);
         if (e && !outs.length) return `The game data gives ${a.item} no modifier for a ${ctx.item.base} jewel.`;
         const from = outs.length ? swapSide(ctx, st, [...new Set(outs.map((id) => sideOf(ctx.kb.mods[id])))], null) : null;
-        return st.mods.some((m) => removable(m) && (!from || m.side === from)) ? null : 'No removable modifier.';
+        if (!st.mods.some((m) => removable(m) && (!from || m.side === from))) return 'No removable modifier.';
+        return !outs.length || swapCandidates(ctx, st, (m) => removable(m) && (!from || m.side === from), liquidFits(ctx, outs)).length ? null
+          : 'Item has no space for the crafted modifier: no removable modifier leaves a slot on its side.';
       }
       default:
         return 'Unknown action.';
     }
   }
+  /** Can one of a liquid emotion's crafted modifiers go on what is left of the item (its group free, a slot on its side)? */
+  const liquidFits = (ctx, outs) => (rest) => {
+    const taken = groupsOf(rest);
+    return outs.some((id) => { const m = ctx.kb.mods[id]; return !m.grp.some((g) => taken.has(g)) && open(ctx, rest, sideOf(m)) > 0; });
+  };
   /** Augment sockets the item has now, and the most a base of the class gets without corruption. */
   function socketsOf(ctx, st) { return (ctx.item.sockets || []).length + (st.sockets || 0); }
   function maxSockets(cls) { return cls === 'Body Armour' || /^Two Hand/.test(cls) || ['Bow', 'Staff', 'Warstaff', 'Crossbow', 'Talisman'].includes(cls) ? 2 : 1; }
@@ -725,6 +748,30 @@
   function liquidOutcomes(ctx, a) {
     const e = a.item && ctx.kb.liquid_emotions ? ctx.kb.liquid_emotions[a.item] : null;
     return ((e && e.by_base[ctx.item.base]) || []).filter((id) => ctx.kb.mods[id]);
+  }
+
+  /**
+   * The modifiers a "remove one, add one" currency can take (R_NO_SPACE): the new modifier needs a slot once the old one
+   * is gone, and the game refuses the use otherwise ("Item has no space for more modifiers", nothing is spent). That
+   * only bites on an item over its limit on a side, e.g. a jewel left with three suffixes after its "+1 Suffix
+   * Modifier allowed" was removed: with both prefixes in place a Chaos Orb can only swap a prefix, so the suffixes are safe.
+   * pred(m): the modifiers the currency may remove; fits(rest): is there room for what it adds on the item without m.
+   */
+  function swapCandidates(ctx, st, pred, fits) {
+    const lim = limits(ctx, st);
+    const over = count(st, 'prefix') > lim.prefix || count(st, 'suffix') > lim.suffix;
+    const caps = ctx.capMods && ctx.capMods.size ? ctx.capMods : null;
+    return st.mods.filter((m, i) => {
+      if (!pred(m)) return false;
+      if (!over && !(caps && caps.has(m.id))) return true; // within the limits, the freed slot is always there
+      return fits(Object.assign({}, st, { mods: st.mods.filter((x, j) => j !== i) }));
+    });
+  }
+  const anyOpen = (ctx) => (rest) => SIDES.some((s) => open(ctx, rest, s) > 0);
+  function removeOneOf(st, cands, rng) {
+    if (!cands.length) return null;
+    const m = cands[Math.floor(rng() * cands.length)];
+    return st.mods.splice(st.mods.indexOf(m), 1)[0];
   }
 
   function removeRandom(st, pred, rng) {
@@ -908,8 +955,8 @@
         if (a.whittle) {
           const cands = st.mods.filter(removable);
           const low = Math.min(...cands.map((m) => m.lvl));
-          r = removeRandom(st, (m) => removable(m) && m.lvl === low, rng);
-        } else r = removeRandom(st, (m) => removable(m) && (!a.side || m.side === a.side), rng);
+          r = removeOneOf(st, swapCandidates(ctx, st, (m) => removable(m) && m.lvl === low, anyOpen(ctx)), rng);
+        } else r = removeOneOf(st, swapCandidates(ctx, st, (m) => removable(m) && (!a.side || m.side === a.side), anyOpen(ctx)), rng);
         if (r) removed.push(r);
         addOne(openSides(ctx, st), floorFor(ctx, 'chaos', tier));
         break;
@@ -1076,7 +1123,9 @@
         // the modifier per jewel is in the game table LiquidEmotionOutcomes. Two outcomes (a prefix and a suffix): one that fits.
         const outs = liquidOutcomes(ctx, a);
         const from = outs.length ? swapSide(ctx, st, [...new Set(outs.map((id) => sideOf(ctx.kb.mods[id])))], null) : null;
-        const r = removeRandom(st, (m) => removable(m) && (!from || m.side === from), rng);
+        // the modifier that goes is one that leaves room for the crafted one (R_NO_SPACE)
+        const r = outs.length ? removeOneOf(st, swapCandidates(ctx, st, (m) => removable(m) && (!from || m.side === from), liquidFits(ctx, outs)), rng)
+          : removeRandom(st, (m) => removable(m) && (!from || m.side === from), rng);
         if (r) removed.push(r);
         if (!outs.length) { st.unpredictable = true; break; } // no emotion named: its mod is not known
         const taken = groupsOf(st);
@@ -1212,6 +1261,8 @@
     // Each setting is read only where its value can change the move (state checks come first). The exhaustive sweep
     // (scripts/selftest/sweep.js) records which settings a run reads to group strategies that behave the same.
     const unmet = (st) => goals.filter((g) => !goalMet(st, g));
+    /** The strategy's bone quality, or Preserved where the item class has no such bone (jewels). */
+    const boneQ = (q) => (q && boneExists(ctx, q) ? q : 'Preserved');
     const resGoal = (g) => !g.des && /^(Fire|Cold|Lightning)Resistance$/.test(g.fam || '');
     /** Flux when it finishes an unmet resistance goal from one mod of another element and keeps every finished goal. */
     function fluxStep(st, left) {
@@ -1287,7 +1338,7 @@
         : null;
       const magicEss = essHere && params.essence ? essHere : null;
       if (R === 'Normal') {
-        if (params.start === 'alchemy' && !magicEss) return { op: 'alchemy', side: lean && params.sideOmens ? lean : null };
+        if (params.start === 'alchemy' && !magicEss) return { op: 'alchemy', side: lean && !ctx.legacy.has(OMEN.alchemy[lean]) && params.sideOmens ? lean : null };
         return { op: 'transmute', tier: params.magicTier || params.tier };
       }
       if (R === 'Magic') {
@@ -1351,7 +1402,7 @@
         if (st.mods.some((m) => m.des)) return { fail: 'a kept Desecrated mod blocks the desecrated goal' };
         if (open(ctx, st, g.side) > 0) {
           return {
-            op: 'bone', quality: params.bone || 'Preserved', side: params.sideOmens ? g.side : null,
+            op: 'bone', quality: boneQ(params.bone), side: params.sideOmens ? g.side : null,
             lich: g.lich && (WEAPON.includes(ctx.cls) || JEWELLERY.includes(ctx.cls)) && params.lich ? g.lich : null,
             echoes: !!params.echoes,
           };
@@ -1363,7 +1414,7 @@
       if (blocking) return removal(st, blocking.side, desJunk, blocking);
       if (open(ctx, st, g.side) > 0) {
         if (ctx.bone && !st.mods.some((m) => m.des) && !left.some((x) => x.des) && params.desSlam) {
-          const b = { op: 'bone', quality: params.bone || 'Preserved', side: params.sideOmens ? g.side : null, echoes: !!params.echoes };
+          const b = { op: 'bone', quality: boneQ(params.bone), side: params.sideOmens ? g.side : null, echoes: !!params.echoes };
           if (!validate(ctx, st, b)) return b;
         }
         const two = open(ctx, st, g.side) >= 2 && left.filter((x) => x.side === g.side && !x.des).length >= 2 && !!params.greaterExalt;
@@ -1376,7 +1427,7 @@
 
     /** Omen of Homogenising: when every goal the slam is for shares a modifier type with the item, the pool narrows to those types. */
     function homogHelps(st, gs, omen) {
-      if (!gs.length || (priced && !priced(omen))) return false;
+      if (!gs.length || ctx.legacy.has(omen) || (priced && !priced(omen))) return false;
       const have = homogTypes(ctx, st);
       return !!have && gs.every((g) => (ctx.ix.famMods.get(g.fam) || []).some((id) => typesOf(ctx, id).some((t) => have.has(t)))) && !!params.homog;
     }
@@ -1472,9 +1523,10 @@
   function createRun(ctx, st0, goals, params, opts) {
     if (goals.some((g) => g.minValue != null)) ctx.needValues = true;
     const rng = rngFrom(opts.seed || 1);
-    const policy = makePolicy(ctx, goals, params, opts.priceOf ? (n) => opts.priceOf(n) != null : null);
+    const hasPrice = opts.priceOf ? (n) => opts.priceOf(n) != null : () => true;
+    const policy = makePolicy(ctx, goals, params, hasPrice);
     const skipped = new Set();
-    const next = opts.priceOf ? (st) => withoutUnpriced(policy(st), (n) => opts.priceOf(n) != null, skipped) : policy;
+    const next = (st) => withoutUnpriced(policy(st), hasPrice, skipped, ctx.legacy);
     const pick = pickFor(goals, ctx);
     const maxSteps = opts.maxSteps || 600;
     const maxMagicSteps = opts.maxMagicSteps || 30000;
@@ -2577,7 +2629,7 @@
     const ctx = makeContext(ix, item);
     const st = toState(ctx, item, locks);
     const a0 = makePolicy(ctx, goals, params)(st);
-    const a = priceOf ? withoutUnpriced(a0, (n) => priceOf(n) != null) : a0;
+    const a = withoutUnpriced(a0, priceOf ? (n) => priceOf(n) != null : () => true, null, ctx.legacy);
     if (a.done || a.fail) return a;
     return Object.assign({}, a, { names: actionNames(a, ctx), error: validate(ctx, st, a) });
   }
@@ -2662,14 +2714,15 @@
       out.push(Object.assign({ id, title, cur: [], omens: [], blocked: [], planned: false, conf: kbOp(id).conf || null, ok: !why, reason: why || null }, e));
     };
     const des = st.mods.some((m) => m.des);
+    const inGame = (n) => !ctx.legacy.has(n);
     const openP = open(ctx, st, 'prefix'), openS = open(ctx, st, 'suffix');
     // Normal
     add('transmute', 'Make Magic', { op: 'transmute' }, { cur: ORB.transmute.slice(), planned: true });
-    add('alchemy', 'Make Rare with 4 mods', { op: 'alchemy' }, { cur: ['Orb of Alchemy'], omens: [OMEN.alchemy.prefix, OMEN.alchemy.suffix], planned: true });
+    add('alchemy', 'Make Rare with 4 mods', { op: 'alchemy' }, { cur: ['Orb of Alchemy'], omens: [OMEN.alchemy.prefix, OMEN.alchemy.suffix].filter(inGame), planned: true });
     add('chance', 'Gamble for a Unique', { op: 'chance' }, { cur: ['Orb of Chance'], omens: ['Omen of Chance', 'Omen of the Ancients'] });
     // Magic
     add('augment', 'Add a mod', { op: 'augment' }, { cur: ORB.augment.slice(), planned: true });
-    add('regal', 'Make Rare, add a mod', { op: 'regal' }, { cur: ORB.regal.slice(), omens: [OMEN.coronation.prefix, OMEN.coronation.suffix], planned: true });
+    add('regal', 'Make Rare, add a mod', { op: 'regal' }, { cur: ORB.regal.slice(), omens: [OMEN.coronation.prefix, OMEN.coronation.suffix].filter(inGame), planned: true });
     add('essence_upgrade', 'Make Rare with a guaranteed mod', { op: 'essence' },
       { cat: 'Essences', match: { include: '^(Lesser |Greater )?Essence of', exclude: SPECIAL_ESS }, label: 'Essences', planned: true });
     // Rare
@@ -2683,15 +2736,16 @@
     add('exalt', 'Add a mod', { op: 'exalt' }, { cur: ORB.exalt.slice(), omens: exOmens, blocked: exBlocked, planned: true });
     add('chaos', 'Swap one mod', { op: 'chaos' }, { cur: ORB.chaos.slice(), omens: [OMEN.erasure.prefix, OMEN.erasure.suffix, OMEN.whittling], planned: true });
     add('annul', 'Remove a mod', { op: 'annul' }, { cur: ['Orb of Annulment'],
-      omens: R === 'Rare' ? [OMEN.annul.prefix, OMEN.annul.suffix, OMEN.greaterAnnul].concat(des ? [OMEN.light] : []) : [], planned: true });
+      omens: R === 'Rare' ? [OMEN.annul.prefix, OMEN.annul.suffix, OMEN.greaterAnnul].filter(inGame).concat(des ? [OMEN.light] : []) : [], planned: true });
     add('essence_replace', 'Swap a mod for an essence mod', R === 'Rare' ? { op: 'pessence' } : 'Perfect and special essences need a Rare item.',
       { omens: [OMEN.crystal.prefix, OMEN.crystal.suffix], cat: 'Essences', match: { include: '^Perfect Essence|' + SPECIAL_ESS }, label: 'Perfect and special essences', planned: true });
     if (ctx.bone) {
       const bone = ctx.bone, bones = [], blocked = [];
-      if (ctx.ilvl <= 64) bones.push('Gnawed ' + bone); else blocked.push({ name: 'Gnawed ' + bone, reason: 'item level 64 or lower only' });
+      // jewels: only the Preserved Cranium is in the game
+      if (boneExists(ctx, 'Gnawed')) { if (ctx.ilvl <= 64) bones.push('Gnawed ' + bone); else blocked.push({ name: 'Gnawed ' + bone, reason: 'item level 64 or lower only' }); }
       bones.push('Preserved ' + bone);
       // game text: Minimum Modifier Level 40, and such currency cannot be used below that item level
-      if (ctx.ilvl >= 40) bones.push('Ancient ' + bone); else blocked.push({ name: 'Ancient ' + bone, reason: 'item level 40 or higher only' });
+      if (boneExists(ctx, 'Ancient')) { if (ctx.ilvl >= 40) bones.push('Ancient ' + bone); else blocked.push({ name: 'Ancient ' + bone, reason: 'item level 40 or higher only' }); }
       if (bone === 'Collarbone') bones.push('Altered Collarbone');
       const omens = [OMEN.necro.prefix, OMEN.necro.suffix, OMEN.echoes, 'Omen of Putrefaction'];
       const lich = [OMEN.lich.Kurgal, OMEN.lich.Amanamu, OMEN.lich.Ulaman];
@@ -2764,6 +2818,6 @@
     goalsFromTargets, goalMet, meets, nearMiss, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
     availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, goalClash, essencesForBase, liquidFor, CATALYST_DEFAULT,
     emulate, chanceOf, familyChances, runStrategy, runStrategyAsync, groupsMet, revealOptions, desSides, DES_OPTIONS,
-    expandStrategy, recipeParams, relevantKeys, SPACE, SEARCH, improvePlan, searchOf: (plan) => SCREENS.get(plan),
+    expandStrategy, recipeParams, relevantKeys, SPACE, SEARCH, improvePlan, searchOf: (plan) => SCREENS.get(plan), legacyItems,
   };
 });

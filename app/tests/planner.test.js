@@ -502,31 +502,110 @@ test('an omen without a price is left out of the plan instead of counting as fre
   assert.ok(priced.steps.some((x) => x.names.some((n) => /Coronation/.test(n))), 'the priced omen is used');
 });
 
-test('Omen of Homogenising without a price is left out, and a plan that needs an unpriced item ranks last', () => {
+test('omens that are not in the game are never used, unpriced optional omens are left out, and unpriced plans rank last', () => {
   const item = parse('rare-sceptre-adv');
   const lvl = item.mods.find((x) => /Level of all Minion/.test(x.text));
   const ctx = P.makeContext(ix, item);
   const st = P.toState(ctx, item);
   const { goals } = P.goalsFromTargets(ctx, { 'suffix-0': { fam: lvl.fam, group: 'suffix', minTier: 1, required: true, label: 'lvl' } });
   goals.forEach((g) => { g.eff = g.tier; });
-  const params = P.expandStrategy({ tier: 'greater', homog: true });
-  // priced: the omen is part of the exalt steps
-  const withOmen = P.simulate(ctx, st, goals, params, { trials: 300, seed: 5, priceOf: () => 10 });
-  assert.ok(withOmen.steps.some((x) => x.names.includes('Omen of Homogenising Exaltation')), 'the strategy uses the omen when it has a price');
-  // no price: left out and reported, never counted as free
-  const noPrice = (n) => (/Homogenising/.test(n) ? null : 10);
-  const without = P.simulate(ctx, st, goals, params, { trials: 300, seed: 5, priceOf: noPrice });
-  assert.ok(!without.steps.some((x) => x.names.some((n) => /Homogenising/.test(n))), 'no step uses the unpriced omen');
-  assert.deepEqual(without.missingPrices, []);
-  // the same moves as the strategy without the setting
-  const plain = P.simulate(ctx, st, goals, P.expandStrategy({ tier: 'greater' }), { trials: 300, seed: 5, priceOf: noPrice });
-  assert.equal(without.meanCost, plain.meanCost);
+  // Omen of Homogenising Exaltation is in the game files but not in the game (kb.legacy_or_disabled): even with a
+  // price no step uses it, and the strategy makes the same moves as the one without the setting
+  const withSetting = P.simulate(ctx, st, goals, P.expandStrategy({ tier: 'greater', homog: true }), { trials: 300, seed: 5, priceOf: () => 10 });
+  assert.ok(!withSetting.steps.some((x) => x.names.some((n) => /Homogenising/.test(n))), 'no step uses the omen');
+  assert.deepEqual(withSetting.skippedUnpriced, [], 'and it is not reported as an omen without a price');
+  const plain = P.simulate(ctx, st, goals, P.expandStrategy({ tier: 'greater' }), { trials: 300, seed: 5, priceOf: () => 10 });
+  assert.equal(withSetting.meanCost, plain.meanCost);
+  // the workbench refuses them too
+  for (const a of [{ op: 'exalt', homog: true }, { op: 'annul', greater: true }, { op: 'vaal', omen: true }]) assert.match(P.validate(ctx, st, a) || '', /not in the game/, JSON.stringify(a));
+  const white = E.parseItem(ix, 'Item Class: Sceptres\nRarity: Normal\nRattling Sceptre\n--------\nItem Level: 82').item;
+  const wctx = P.makeContext(ix, white);
+  assert.match(P.validate(wctx, P.toState(wctx, white), { op: 'alchemy', side: 'prefix' }) || '', /Omen of Sinistral Alchemy is not in the game/);
+  assert.equal(P.validate(wctx, P.toState(wctx, white), { op: 'alchemy' }), null);
+  assert.ok(!P.availableOps(ix, white, { all: true }).some((o) => o.omens.some((n) => /Alchemy|Homogenising|Greater Annulment/.test(n))), 'not listed as usable');
+  // an optional omen that is in the game but has no price is left out and reported, never counted as free
+  const noPrice = (n) => (/Dextral Exaltation/.test(n) ? null : 10);
+  const aimed = P.simulate(ctx, st, goals, P.expandStrategy({ tier: 'greater', sideOmens: true }), { trials: 300, seed: 5, priceOf: noPrice });
+  assert.ok(!aimed.steps.some((x) => x.names.includes('Omen of Dextral Exaltation')), 'no step uses the unpriced omen');
+  assert.ok(aimed.skippedUnpriced.includes('Omen of Dextral Exaltation'));
+  assert.deepEqual(aimed.missingPrices, []);
   // a result that counted something at 0 ranks behind a fully priced one in every profile, whatever its cost
   for (const prof of Object.values(P.PROFILES)) {
     const priced = { p: 0.3, costPerSuccess: 9e6, basesPerSuccess: 1, baseLimit: 100, missingPrices: [] };
-    const free = { p: 1, costPerSuccess: 1, basesPerSuccess: 1, baseLimit: 100, missingPrices: ['Ancient Cranium'] };
+    const free = { p: 1, costPerSuccess: 1, basesPerSuccess: 1, baseLimit: 100, missingPrices: ['Essence of Battle'] };
     assert.ok(prof.score(priced) < prof.score(free), prof.label);
   }
+});
+
+test('five-modifier jewel (t24): three suffixes stay when "+1 Suffix Modifier allowed" goes, and only prefixes change after that (R_NO_SPACE)', () => {
+  const jewel = (lines) => E.parseItem(ix, ['Item Class: Jewels', 'Rarity: Rare', 'Test Gem', 'Emerald', '--------', 'Item Level: 82', '--------'].concat(lines).join('\n')).item;
+  const S3 = ['20% increased Critical Damage Bonus for Attack Damage', '15% increased Critical Hit Chance for Attacks', '3% increased Attack Speed with Bows'];
+  const sides = (it) => [it.mods.filter((m) => m.slot === 'prefix').length, it.mods.filter((m) => m.slot === 'suffix').length];
+  const kept = (it) => S3.every((t) => it.mods.some((m) => m.text === t));
+  const after = (it, a, seed) => { const r = P.emulate(ix, it, a, { seed }); return r.reason ? r : E.parseItem(ix, r.text).item; };
+  // the jewel of the guides reads as three suffixes and two prefixes (one crafted), with no issue
+  const done = jewel(S3.concat(['10% increased Projectile Damage', '60% increased Effect of Suffixes']));
+  assert.deepEqual(sides(done), [2, 3]);
+  assert.ok(done.mods.find((m) => /Effect of Suffixes/.test(m.text)).crafted);
+  const notes = (lines) => E.parseItem(ix, ['Item Class: Jewels', 'Rarity: Rare', 'Test Gem', 'Emerald', '--------', 'Item Level: 82', '--------'].concat(lines).join('\n')).warnings;
+  assert.ok(!notes(S3.concat(['10% increased Projectile Damage', '60% increased Effect of Suffixes'])).some((w) => w.level === 'error'), 'three suffixes on a jewel are a note, not an error');
+  assert.ok(notes(S3.concat(['10% increased Projectile Damage'])).some((w) => w.level === 'info' && /Three suffixes on a jewel/.test(w.msg)));
+  assert.ok(notes(S3.concat(['4% increased Attack Speed'])).some((w) => w.level === 'error' && /found 4/.test(w.msg)), 'four suffixes are still an error');
+  // with "+1 Suffix Modifier allowed" (a prefix) a third suffix can be desecrated
+  const two = jewel(S3.slice(0, 2).concat(['+1 Suffix Modifier allowed', '12% increased Attack Damage']));
+  assert.deepEqual(sides(after(two, { op: 'bone', quality: 'Preserved', side: 'suffix' }, 1)), [2, 3]);
+  // removing a prefix with Omen of Sinistral Annulment: the allowance mod or the other prefix; the three suffixes stay either way
+  const three = jewel(S3.concat(['+1 Suffix Modifier allowed', '10% increased Projectile Damage']));
+  let gone = 0;
+  for (let s = 1; s <= 200; s++) {
+    const it = after(three, { op: 'annul', side: 'prefix' }, s);
+    assert.deepEqual(sides(it), [1, 3]);
+    assert.ok(kept(it));
+    if (!it.mods.some((m) => /Suffix Modifier allowed/.test(m.text))) gone++;
+  }
+  assert.ok(gone > 70 && gone < 130, String(gone));
+  // one prefix, three suffixes (over the limit of two): an Exalted Orb adds a prefix, never a suffix
+  const open = jewel(S3.concat(['10% increased Projectile Damage']));
+  for (let s = 1; s <= 30; s++) assert.deepEqual(sides(after(open, { op: 'exalt' }, s)), [2, 3]);
+  // ...but with that free prefix slot a Chaos Orb can still take a suffix (it comes back as a prefix)
+  let lost = 0;
+  for (let s = 1; s <= 200; s++) if (!kept(after(open, { op: 'chaos' }, s))) lost++;
+  assert.ok(lost > 100, 'a suffix can be lost while a prefix slot is free: ' + lost);
+  // both prefixes filled: the Chaos Orb only swaps a prefix, and no Exalted Orb fits
+  const full = jewel(S3.concat(['10% increased Projectile Damage', '12% increased Attack Damage']));
+  for (let s = 1; s <= 200; s++) { const it = after(full, { op: 'chaos' }, s); assert.deepEqual(sides(it), [2, 3]); assert.ok(kept(it)); }
+  assert.match(after(full, { op: 'exalt' }, 1).reason, /No open affix/);
+  // Omen of Dextral Erasure aims at the suffixes, where nothing can be replaced: the game refuses the orb
+  assert.match(after(full, { op: 'chaos', side: 'suffix' }, 1).reason, /no space for more modifiers/);
+  // Potent Liquid Ferocity can only give "Effect of Suffixes" (a prefix) there, in place of one of the two prefixes
+  let first = 0;
+  for (let s = 1; s <= 200; s++) {
+    const it = after(full, { op: 'liquid', item: 'Potent Liquid Ferocity' }, s);
+    assert.deepEqual(sides(it), [2, 3]);
+    assert.ok(kept(it) && it.mods.some((m) => /Effect of Suffixes/.test(m.text)));
+    if (!it.mods.some((m) => m.text === '10% increased Projectile Damage')) first++;
+  }
+  assert.ok(first > 70 && first < 130, String(first));
+  // on a jewel within its limits nothing changes: a Chaos Orb takes any modifier
+  const plain = jewel(S3.slice(0, 2).concat(['10% increased Projectile Damage', '12% increased Attack Damage']));
+  let suffixHit = 0;
+  for (let s = 1; s <= 200; s++) if (!S3.slice(0, 2).every((t) => after(plain, { op: 'chaos' }, s).mods.some((m) => m.text === t))) suffixHit++;
+  assert.ok(suffixHit > 70 && suffixHit < 130, String(suffixHit));
+});
+
+test('jewels are desecrated with the Preserved Cranium only (no Gnawed or Ancient Cranium in the game)', () => {
+  const jewel = E.parseItem(ix, 'Item Class: Jewels\nRarity: Normal\nDiamond\n--------\nItem Level: 82').item;
+  const ctx = P.makeContext(ix, jewel);
+  const rare = Object.assign({}, P.toState(ctx, jewel), { rarity: 'Rare' });
+  assert.equal(P.validate(ctx, rare, { op: 'bone', quality: 'Preserved' }), null);
+  assert.match(P.validate(ctx, rare, { op: 'bone', quality: 'Ancient' }), /no Ancient Cranium/);
+  assert.match(P.validate(ctx, rare, { op: 'bone', quality: 'Gnawed' }), /no Gnawed Cranium/);
+  const des = P.availableOps(ix, jewel, { all: true }).find((o) => o.id === 'desecrate');
+  assert.deepEqual(des.cur, ['Preserved Cranium']);
+  assert.ok(!des.blocked.some((x) => /Cranium/.test(x.name)), 'the missing bones are not listed as blocked either');
+  // other classes keep all three
+  const wand = E.parseItem(ix, 'Item Class: Wands\nRarity: Normal\nDueling Wand\n--------\nItem Level: 82').item;
+  assert.equal(P.availableOps(ix, wand, { all: true }).find((o) => o.id === 'desecrate').cur.filter((n) => /Jawbone/.test(n)).length, 2);
 });
 
 test('white base: starting over (pair, slamOnly) beats paying for removals, and counts the bases a finished item takes', () => {
@@ -1011,7 +1090,7 @@ test('Flux: every other-element resistance converts at its tier, values rolled a
   assert.ok(!/Cold Resistance/.test(out.text));
 });
 
-test('corruption: Vaal Orb outcomes (Omen of Corruption never leaves it unchanged), Architect 50/50, Orb of Sacrifice', () => {
+test('corruption: Vaal Orb outcomes (Omen of Corruption is not in the game), Architect 50/50, Orb of Sacrifice', () => {
   const armour = E.parseItem(ix, ['Item Class: Body Armours', 'Rarity: Rare', 'Test Robe', 'Heavy Plate', '--------', 'Item Level: 82', '--------',
     '+120 to maximum Life', '35% increased Armour', '+30% to Fire Resistance', '+25% to Cold Resistance'].join('\n')).item;
   const seen = {};
@@ -1023,10 +1102,11 @@ test('corruption: Vaal Orb outcomes (Omen of Corruption never leaves it unchange
   }
   assert.equal(Object.keys(seen).length, 4, JSON.stringify(seen));
   for (const n of Object.values(seen)) assert.ok(n > 60 && n < 140, JSON.stringify(seen));
-  for (let s = 1; s <= 100; s++) assert.ok(!/nothing changed/.test(P.emulate(ix, armour, { op: 'vaal', omen: true }, { seed: s }).outcome));
+  // Omen of Corruption cannot be obtained since 0.5.0 (kb.legacy_or_disabled): the emulator refuses it
+  assert.match(P.emulate(ix, armour, { op: 'vaal', omen: true }, { seed: 1 }).reason, /Omen of Corruption is not in the game/);
   // an added Corruption Enchantment reads back as a corruption implicit
   let ench;
-  for (let s = 1; !ench; s++) { const r = P.emulate(ix, armour, { op: 'vaal', omen: true }, { seed: s }); if (/Enchantment was added/.test(r.outcome)) ench = r; }
+  for (let s = 1; !ench && s <= 400; s++) { const r = P.emulate(ix, armour, { op: 'vaal' }, { seed: s }); if (/Enchantment was added/.test(r.outcome)) ench = r; }
   const ci = E.parseItem(ix, ench.text).item;
   assert.equal(ci.implicits.filter((m) => m.corruption).length, 1);
   assert.match(P.emulate(ix, ci, { op: 'exalt' }).reason, /Corrupted/);
@@ -1052,15 +1132,9 @@ test('Void Flux, Omen of Putrefaction, Homogenising omens, Altered Collarbone, c
   const pu = E.parseItem(ix, P.emulate(ix, armour, { op: 'bone', quality: 'Preserved', putrefy: true }, { seed: 3 }).text).item;
   assert.equal(pu.mods.filter((m) => m.desecrated).length, 6);
   assert.ok(pu.flags.corrupted);
-  // Homogenising: the added modifier shares a type with the one already there
+  // Homogenising omens are not in the game (0.5.5): the emulator refuses them
   const one = it(['Item Class: Body Armours', 'Rarity: Rare', 'Test Robe', 'Heavy Plate', '--------', 'Item Level: 82', '--------', '+30% to Fire Resistance']);
-  const fireId = one.mods[0].modId;
-  const types = new Set(kb.mods[fireId].mt);
-  for (let s = 1; s <= 30; s++) {
-    const r = P.emulate(ix, one, { op: 'exalt', homog: true }, { seed: s });
-    const add = E.parseItem(ix, r.text).item.mods.find((m) => m.modId !== fireId);
-    assert.ok((kb.mods[add.modId].mt || []).some((t) => types.has(t)), add.text);
-  }
+  assert.match(P.emulate(ix, one, { op: 'exalt', homog: true }, { seed: 1 }).reason, /Omen of Homogenising Exaltation is not in the game/);
   assert.ok(P.actionNames({ op: 'exalt', homog: true }).includes('Omen of Homogenising Exaltation'));
   // Altered Collarbone only on jewellery
   const ring = it(['Item Class: Rings', 'Rarity: Rare', 'Test Loop', 'Ruby Ring', '--------', 'Item Level: 82', '--------', '+60 to maximum Life']);

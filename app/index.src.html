@@ -1808,10 +1808,21 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       { k: 'fracture', g: 'Orbs', label: 'Fracturing Orb' },
     ];
     const cls = it && it.base && S.ix.kb.bases[it.base] ? S.ix.kb.bases[it.base].cls : '';
-    for (const q of ['Gnawed', 'Preserved', 'Ancient'].concat(['Ring', 'Amulet', 'Belt'].includes(cls) ? ['Altered'] : [])) L.push({ k: 'bone:' + q, g: 'Desecrate', label: q === 'Altered' ? 'Altered Collarbone' : `${q} bone`, omens: side('Necromancy') });
+    // omens the game files list but the game does not have (Homogenising, Alchemy, Greater Annulment, Corruption) are not offered
+    const gone = P.legacyItems(S.ix.kb);
+    for (const m of L) if (m.omens) {
+      m.omens = m.omens.filter(([o]) => !o || !P.actionNames(benchAction(m, { omen: o })).some((n) => gone.has(n)));
+      if (m.omens.length < 2) m.omens = null; // only "No omen" is left
+    }
+    // bones that exist for this class (jewels: the Preserved Cranium only)
+    const boneName = P.boneFor(cls);
+    for (const q of ['Gnawed', 'Preserved', 'Ancient'].concat(['Ring', 'Amulet', 'Belt'].includes(cls) ? ['Altered'] : [])) {
+      if (q !== 'Altered' && boneName && !S.ix.kb.item_descriptions[`${q} ${boneName}`]) continue;
+      L.push({ k: 'bone:' + q, g: 'Desecrate', label: q === 'Altered' ? 'Altered Collarbone' : `${q} bone`, omens: side('Necromancy') });
+    }
     for (const [to, n] of [['fire', 'Blazing Flux'], ['cold', 'Chilling Flux'], ['lightning', 'Crackling Flux'], ['chaos', 'Void Flux']]) L.push({ k: 'flux:' + to, g: 'Flux', label: n });
     // corruption and uniques
-    L.push({ k: 'vaal', g: 'Corruption', label: 'Vaal Orb', omens: [['', 'No omen'], ['corruption', 'Omen of Corruption (always a change)']] },
+    L.push({ k: 'vaal', g: 'Corruption', label: 'Vaal Orb', omens: [['', 'No omen'], ['corruption', 'Omen of Corruption (always a change)']].filter(([o]) => !o || !gone.has('Omen of Corruption')) },
       { k: 'architect', g: 'Corruption', label: "Architect's Orb" }, { k: 'sacrifice', g: 'Corruption', label: 'Orb of Sacrifice' },
       { k: 'cultivation', g: 'Corruption', label: 'Vaal Cultivation Orb' },
       { k: 'chance', g: 'Corruption', label: 'Orb of Chance', omens: [['', 'No omen'], ['chance', 'Omen of Chance (not destroyed)'], ['ancients', 'Omen of the Ancients (any unique of the class)']] });
@@ -2935,7 +2946,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (ops.has('essence') || ops.has('pessence')) b.push('<span class="badge" title="Which essence gives which mod on this item class comes from poe2db.">Essence mods: poe2db</span>');
     if (ops.has('liquid')) b.push('<span class="badge" title="Which crafted mod each liquid emotion adds on each jewel comes from the game table LiquidEmotionOutcomes.">Liquid emotion mods: game data</span>');
     if (ops.has('liquid') || ops.has('pessence')) b.push('<span class="badge verify" title="When the side of the new mod is full, the removed mod is one of that side (players report it; in-game test t25).">Removal side: verify in game</span>');
-    if (S.item && S.item.itemClass === 'Jewel') b.push('<span class="badge verify" title="Rare jewels allow 2 prefixes and 2 suffixes (community source; in-game test t24).">Jewel limit 2 + 2: verify in game</span>');
+    if (S.item && S.item.itemClass === 'Jewel') b.push('<span class="badge ok" title="Rare jewels allow 2 prefixes and 2 suffixes. A liquid emotion\'s &quot;+1 Suffix (or Prefix) Modifier allowed&quot; raises one side to 3, and the side keeps its three modifiers when that modifier is removed: five modifiers in all (two 0.5 guides and the jewels they show; test t24).">Jewel limit 2 + 2, five with a liquid emotion</span>');
     if (ops.has('bone')) b.push('<span class="badge verify" title="Gnawed, Preserved and Ancient bone rules come from a single source.">Bone rules: verify in game</span>', '<span class="badge" title="No weights are published for Desecrated mods.">Desecrated options: equal weights</span>');
     if (pl.steps.some((s) => s.action.whittle)) b.push('<span class="badge verify">Whittling: hover-check the mod</span>');
     if (ops.has('flux')) b.push('<span class="badge verify" title="Game text: transforms the resistance mods to equivalent ones. The planner keeps the tier number (the value ranges match).">Flux: same tier assumed</span>');
