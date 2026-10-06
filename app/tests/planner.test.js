@@ -165,12 +165,41 @@ test('buildPlans returns three profiles with costs from the price function', asy
   const ranked = P.rankProfiles(out.profiles);
   const all = ['cheap', 'balanced', 'premium'].map((k) => out.profiles[k]);
   assert.ok(ranked.premium.p >= Math.max(...all.map((x) => x.p)) - 0.005, 'premium success ' + ranked.premium.p);
-  assert.ok(all.every((x) => P.PROFILES.cheap.score(ranked.cheap) <= P.PROFILES.cheap.score(x)));
+  assert.equal(ranked.cheap, out.profiles.cheap, 'Cheap keeps its own plan: only early-game materials');
   assert.deepEqual([ranked.premium.label, ranked.premium.profile, ranked.cheap.profile], ['Premium', 'premium', 'cheap']);
   // one profile on its own (the page plans each in a worker): the same goals, a finished plan
   const solo = await P.planProfile({ ix, item, targets, locks: {}, priceOf: () => 10, trials: 800, screenTrials: 100 }, 'premium', { runs: 1500 });
   assert.ok(!solo.out.profiles && solo.out.goals.length === 3);
   assert.ok(solo.plan.profile === 'premium' && solo.plan.p > 0 && solo.plan.trials >= 800, JSON.stringify([solo.plan.profile, solo.plan.p, solo.plan.trials]));
+});
+
+test('profiles keep to their materials (early, mid, end game by price); the tier range widens every goal', async () => {
+  const item = parse('rare-sceptre-adv');
+  const targets = {
+    'suffix-0': { fam: 'GlobalIncreaseMinionSpellSkillGemLevelWeapon', group: 'suffix', minTier: 1, required: true, label: 'minion level' },
+    'prefix-2': { fam: 'AlliesInPresenceAllDamage', group: 'prefix', minTier: 2, required: true, label: 'allies damage' },
+  };
+  // omens, Perfect orbs and the Fracturing Orb are end-game priced; Greater orbs and the Orb of Annulment mid-game
+  const price = (n) => (n === 'Chaos Orb' ? 60 : n === 'Divine Orb' ? 600 : /^Omen|^Perfect|Fracturing|^Ancient/.test(n) ? 3000 : /^Greater|Annulment/.test(n) ? 200 : 5);
+  const out = await P.buildPlans({ ix, item, targets, locks: {}, priceOf: price, trials: 600, screenTrials: 60, beamBudgetMs: 0 });
+  const mats = (k) => [...new Set(out.profiles[k].steps.flatMap((s) => s.names))].filter((n) => n !== 'New base');
+  assert.deepEqual([out.profiles.cheap.params.mat, out.profiles.balanced.params.mat, out.profiles.premium.params.mat], ['early', 'mid', 'end']);
+  assert.ok(mats('cheap').length && mats('cheap').every((n) => price(n) <= 60), 'early game: ' + mats('cheap').join(', '));
+  assert.ok(mats('balanced').every((n) => price(n) <= 600), 'mid game: ' + mats('balanced').join(', '));
+  // the next step on the item keeps to the route's materials too
+  const nx = P.nextAction(ix, item, {}, out.profiles.cheap.goals, out.profiles.cheap.params, price);
+  assert.ok(nx.done || nx.fail || nx.names.every((n) => price(n) <= 60), JSON.stringify(nx.names));
+  // a strategy brought down to a level's materials
+  const ctx = ctxOf(item);
+  const wild = P.expandStrategy({ tier: 'perfect', removal: 'erasure', fracture: true, echoes: true, greaterExalt: true });
+  const early = P.clampStrategy(wild, 'early', ctx, price), end = P.clampStrategy(wild, 'end', ctx, price);
+  assert.deepEqual([early.exaltTier, early.chaosTier, early.removal, early.fracture, early.echoes, early.greaterExalt, early.mat], ['base', 'base', 'chaos', false, false, false, 'early']);
+  assert.deepEqual([end.exaltTier, end.removal, end.fracture, end.mat], ['perfect', 'erasure', true, 'end']);
+  // the tier range: T2-T1 accepts T2 for the T1 target, T3-T1 accepts T3 for both
+  const g2 = P.PROFILES.cheap.goals(out.goals, 2).map((g) => g.eff).sort(), g3 = P.PROFILES.premium.goals(out.goals, 3).map((g) => g.eff);
+  assert.deepEqual([g2, g3, P.PROFILES.balanced.goals(out.goals).map((g) => g.eff).sort()], [[2, 2], [3, 3], [1, 2]]);
+  const wide = await P.buildPlans({ ix, item, targets, tiers: 3, locks: {}, priceOf: price, trials: 300, screenTrials: 40, beamBudgetMs: 0, only: 'premium' });
+  assert.deepEqual([Object.keys(wide.profiles), wide.profiles.premium.goals.map((g) => g.eff)], [['premium'], [3, 3]]);
 });
 
 test('impossible goals are reported instead of planned', async () => {

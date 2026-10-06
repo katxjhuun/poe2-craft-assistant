@@ -155,6 +155,53 @@
     return b;
   }
 
+  /**
+   * The materials a route may use, by what one of them costs (the player's wish, 6 Oct 2026: Cheap with what the early
+   * game gives, Balanced the mid game, Premium the end game): early up to the price of one Chaos Orb each, mid up to
+   * one Divine Orb each, end anything. A material a step cannot do without (its base orb, the only essence or bone for
+   * a goal, a rune a goal needs) is used at any price.
+   */
+  const MATERIAL_CAP = { early: 'Chaos Orb', mid: 'Divine Orb', end: null };
+  function capOf(level, priceOf) { const n = MATERIAL_CAP[level]; const v = n && priceOf ? priceOf(n) : null; return v > 0 ? v : Infinity; }
+  /** null when the level has no cap; else name -> may the route use it (it has a price at or below the cap). */
+  function materialOk(level, priceOf) {
+    const cap = capOf(level, priceOf);
+    return cap < Infinity ? (n) => { const v = priceOf(n); return v != null && v <= cap; } : null;
+  }
+  /**
+   * A strategy within a level's materials: orb tiers, bone quality and the settings that stand for one omen or orb come
+   * down to what the level allows (omens that only aim a step are dropped per step, withoutUnpriced). Sets p.mat.
+   */
+  function clampStrategy(p, level, ctx, priceOf) {
+    const out = Object.assign({}, p, { mat: level });
+    const ok = materialOk(level, priceOf);
+    if (!ok) return out;
+    const memo = ctx._clamp || (ctx._clamp = new Map());
+    let T = memo.get(level);
+    if (!T) {
+      // the highest tier at or below the asked one whose orbs the level allows (the base orb in any case)
+      const down = (lists) => { const m = {}; TIERS.forEach((t, i) => { let j = i; while (j > 0 && !lists.every((l) => ok(l[j]))) j--; m[t] = TIERS[j]; }); return m; };
+      const order = ['Ancient', 'Preserved', 'Gnawed'].filter((q) => boneExists(ctx, q));
+      const bone = {};
+      for (const q of ['Gnawed', 'Preserved', 'Ancient']) {
+        const from = order.indexOf(q);
+        bone[q] = (from < 0 ? null : order.slice(from).find((x) => ok(`${x} ${ctx.bone}`) && (x !== 'Gnawed' || ctx.ilvl <= 64))) || (boneExists(ctx, 'Preserved') ? 'Preserved' : q);
+      }
+      T = { exalt: down([ORB.exalt]), chaos: down([ORB.chaos]), magic: down([ORB.transmute, ORB.augment, ORB.regal]), bone,
+        greaterExalt: ok(OMEN.greaterExalt), erasure: ok(OMEN.erasure.prefix) && ok(OMEN.erasure.suffix), whittle: ok(OMEN.whittling), annul: ok('Orb of Annulment'),
+        echoes: ok(OMEN.echoes), lich: Object.values(OMEN.lich).some(ok), catalyse: ok(OMEN.catalyse), fracture: ok('Fracturing Orb'), flux: Object.values(FLUX).every(ok) };
+      memo.set(level, T);
+    }
+    if (out.exaltTier) out.exaltTier = T.exalt[out.exaltTier] || out.exaltTier;
+    if (out.chaosTier) out.chaosTier = T.chaos[out.chaosTier] || out.chaosTier;
+    if (out.magicTier) out.magicTier = T.magic[out.magicTier] || out.magicTier;
+    if (out.bone) out.bone = T.bone[out.bone] || out.bone;
+    if ((out.removal === 'erasure' && !T.erasure) || (out.removal === 'whittle' && !T.whittle) || (out.removal === 'annul' && !T.annul)) out.removal = 'chaos';
+    for (const k of ['greaterExalt', 'echoes', 'lich', 'catalyse', 'fracture']) if (out[k] && !T[k]) out[k] = false;
+    if (out.flux !== false && !T.flux) out.flux = false;
+    return out;
+  }
+
   // ---------------------------------------------------------------- context
 
   function floorsFrom(kb) {
@@ -1366,7 +1413,14 @@
    *                    the side too, and the one the goal asks for is kept (echoes: reroll the three once)
    *  essence: bool     use an essence when one guarantees an unmet goal (and the crafted slot is free)
    */
-  function makePolicy(ctx, goals, params, priced) {
+  function makePolicy(ctx, goals, params, priced, matOk) {
+    /** Essences for a goal within the route's materials (matOk); all of them when none is, so the goal stays possible. */
+    const essFor = (g, kind) => {
+      const all = essenceOptions(ctx, g, kind);
+      if (!matOk || !all.length) return all;
+      const ok = all.filter((r) => matOk(r.item));
+      return ok.length ? ok : all;
+    };
     // Each setting is read only where its value can change the move (state checks come first). The exhaustive sweep
     // (scripts/selftest/sweep.js) records which settings a run reads to group strategies that behave the same.
     const unmet = (st) => goals.filter((g) => !goalMet(st, g));
@@ -1597,7 +1651,7 @@
       const craftedFree = st.mods.filter((m) => m.crafted).length < (ctx.craftedCap || 1);
       const taken = groupsOf(st);
       const essHere = R !== 'Rare' && craftedFree
-        ? left.map((g) => ({ g, r: essenceOptions(ctx, g, 'magic').find((r) => !ctx.kb.mods[r.mod].grp.some((x) => taken.has(x))) })).find((x) => x.r)
+        ? left.map((g) => ({ g, r: essFor(g, 'magic').find((r) => !ctx.kb.mods[r.mod].grp.some((x) => taken.has(x))) })).find((x) => x.r)
         : null;
       const magicEss = essHere && params.essence ? essHere : null;
       if (R === 'Normal') {
@@ -1636,7 +1690,7 @@
       // Perfect/special essence: removes a random mod (side chosen with Crystallisation) and adds the goal mod.
       if (craftedFree) {
         for (const eg of left) {
-          const r = essenceOptions(ctx, eg, 'rare').find((x) => !ctx.kb.mods[x.mod].grp.some((y) => taken.has(y)));
+          const r = essFor(eg, 'rare').find((x) => !ctx.kb.mods[x.mod].grp.some((y) => taken.has(y)));
           if (!r) continue;
           if (!params.essence) break;
           const mside = ctx.kb.mods[r.mod].gen === 'p' ? 'prefix' : 'suffix';
@@ -1823,9 +1877,13 @@
     if (goals.some((g) => g.minValue != null)) ctx.needValues = true;
     const rng = rngFrom(opts.seed || 1);
     const hasPrice = opts.priceOf ? (n) => opts.priceOf(n) != null : () => true;
-    const policy = makePolicy(ctx, goals, params, hasPrice);
+    const matOk = materialOk(params.mat, opts.priceOf);
+    const policy = makePolicy(ctx, goals, params, hasPrice, matOk);
     const skipped = new Set();
-    const next = (st) => withoutUnpriced(policy(st), hasPrice, skipped, ctx.legacy);
+    // optional omens go when they have no price (noted in skipped) or cost more than the route's materials allow
+    const usable = matOk ? (n) => hasPrice(n) && matOk(n) : hasPrice;
+    const noted = matOk ? { add: (n) => { if (!hasPrice(n)) skipped.add(n); } } : skipped;
+    const next = (st) => withoutUnpriced(policy(st), usable, noted, ctx.legacy);
     const pick = pickFor(goals, ctx);
     const maxSteps = opts.maxSteps || 600;
     const maxMagicSteps = opts.maxMagicSteps || 30000;
@@ -2049,12 +2107,17 @@
    * known: such plans rank behind every fully priced plan in each profile, and the page marks them.
    */
   const unpriced = (r) => (r.missingPrices && r.missingPrices.length ? 1e17 : 0);
+  function profileGoals(gs, slack) {
+    const n = slack > 1 ? Math.min(3, Math.floor(slack)) : 1;
+    return gs.map((g) => Object.assign({}, g, { eff: g.tier ? Math.max(g.tier, n) : null }));
+  }
   const PROFILES = {
     cheap: {
       label: 'Cheap',
-      // every profile works on the same goals, at the tiers the player asked for: the three routes differ in cost and
-      // in how often they finish, not in the item they make
-      goals: (gs) => gs.map((g) => Object.assign({}, g, { eff: g.tier || null })),
+      // Every profile works on the same goals: the tiers the player asked for, or with the range the player picked
+      // (slack 2: T2 or better is accepted, 3: T3 or better). The profiles differ in the materials they use (mat).
+      mat: 'early',
+      goals: profileGoals,
       grid: () => cross({ tier: ['base', 'greater'], sideOmens: [false, true], greaterExalt: [false], removal: ['chaos', 'erasure', 'annul'],
         start: ['alchemy', 'transmute'], restart: [true], bone: ['Preserved'], echoes: [false], lich: [false], essence: [false, true] }),
       // cheapest per success among strategies that succeed at least one run in five (else the most likely one)
@@ -2062,7 +2125,8 @@
     },
     balanced: {
       label: 'Balanced',
-      goals: (gs) => gs.map((g) => Object.assign({}, g, { eff: g.tier || null })),
+      mat: 'mid',
+      goals: profileGoals,
       grid: () => cross({ tier: ['greater', 'perfect'], sideOmens: [true], greaterExalt: [false, true], removal: ['chaos', 'erasure', 'whittle', 'annul'],
         start: ['transmute', 'alchemy'], restart: [true], bone: ['Preserved'], echoes: [true], lich: [true], essence: [false, true] }),
       // cost per success, weighed by the chance to finish; strategies that fail more often than not only as a last resort
@@ -2070,7 +2134,8 @@
     },
     premium: {
       label: 'Premium',
-      goals: (gs) => gs.map((g) => Object.assign({}, g, { eff: g.tier || null })),
+      mat: 'end',
+      goals: profileGoals,
       grid: () => cross({ tier: ['perfect', 'greater'], sideOmens: [true], greaterExalt: [false, true], removal: ['whittle', 'erasure', 'annul'],
         start: ['transmute'], restart: [true], bone: ['Ancient', 'Preserved'], echoes: [true], lich: [true], essence: [false, true] }),
       // Highest success first: cost only separates strategies within a point of success of each other (a 10x cost
@@ -2267,7 +2332,7 @@
     }
     /** The class of a strategy with at least the run of `level`. */
     async function ensure(p, level, from) {
-      const full = expandStrategy(p);
+      const full = input.mat ? clampStrategy(expandStrategy(p), input.mat, ctx, input.priceOf) : expandStrategy(p);
       const sig = sigOf(full);
       for (;;) {
         const c = find(full, sig) || create(full, sig, from);
@@ -2460,13 +2525,14 @@
     for (let i = 0; i < names.length; i++) {
       if (!wanted(i)) continue;
       const prof = PROFILES[names[i]];
-      const pg = prof.goals(goals);
+      const pg = prof.goals(goals, input.tiers);
+      const pin = Object.assign({}, input, { mat: prof.mat }); // the screen keeps every candidate to the profile's materials
       const infeasible = pg.map((g) => ({ g, why: goalFeasible(ctx, st, g) || goalClash(ctx, pg, g) })).filter((x) => x.why);
       if (!pg.length) { out.profiles[names[i]] = { label: prof.label, none: 'No required goals. Mark at least one target as Required.' }; done += grids[i].length + 1; continue; }
       const tooMany = slotClash(ctx, pg);
       if (tooMany) { out.profiles[names[i]] = { label: prof.label, impossible: [tooMany.charAt(0).toUpperCase() + tooMany.slice(1) + '.'] }; done += grids[i].length + 1; continue; }
       if (infeasible.length) { out.profiles[names[i]] = { label: prof.label, impossible: infeasible.map((x) => `${x.g.label}: ${x.why}`) }; done += grids[i].length + 1; continue; }
-      const sc = makeScreen(ctx, st, pg, input);
+      const sc = makeScreen(ctx, st, pg, pin);
       // (a) the grid and (b) recipes whose goals overlap: the recipe's settings on top of the profile's first strategy
       const cands = grids[i].map((p) => ({ p, from: { grid: true } }))
         .concat((input.recipes || []).map((rc) => ({ p: Object.assign({}, grids[i][0], rc.params), from: { recipe: rc.id, title: rc.title } })))
@@ -2482,12 +2548,12 @@
         // No run finished within the usual 600 uses (many goals on a large pool): the routes once more with runs of
         // 3,000 uses, a few short runs each, so that the player still gets a route and what it costs.
         uses = LONG_USES;
-        screen = makeScreen(ctx, st, pg, Object.assign({}, input, { maxSteps: LONG_USES, screenTrials: 24 }));
+        screen = makeScreen(ctx, st, pg, Object.assign({}, pin, { maxSteps: LONG_USES, screenTrials: 24 }));
         await screen.seed(verifiedRoutes(st, pg, ctx).slice(0, 10).map((p) => ({ p, from: { sweep: true } })), prof, null, 3);
         best = await screen.pick(prof, false);
       }
       if (!best) {
-        const r = simulate(ctx, st, pg, expandStrategy(grids[i][0]), { trials: 400, seed: 3, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, baseLimit: input.baseLimit });
+        const r = simulate(ctx, st, pg, clampStrategy(expandStrategy(grids[i][0]), prof.mat, ctx, input.priceOf), { trials: 400, seed: 3, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, baseLimit: input.baseLimit });
         out.profiles[names[i]] = { label: prof.label, noSuccess: true, fails: r.fails };
         done++;
         continue;
@@ -2527,7 +2593,8 @@
     const long = plan.maxSteps > 600 ? plan.maxSteps : undefined; // a plan from the long runs (buildPlans) stays on them
     let sc = SCREENS.get(plan);
     if (!sc) {
-      sc = makeScreen(ctx, st, plan.goals, long ? Object.assign({}, input, { maxSteps: long, screenTrials: 24 }) : input);
+      const pin = Object.assign({}, input, { mat: prof.mat });
+      sc = makeScreen(ctx, st, plan.goals, long ? Object.assign({}, pin, { maxSteps: long, screenTrials: 24 }) : pin);
       for (const s0 of plan.seeds) await sc.ensure(s0.params, 1, s0.from);
     }
     const depth = await sc.beam(prof, input.beamBudgetMs == null ? SEARCH.budgetMs : input.beamBudgetMs, onProgress);
@@ -2569,20 +2636,24 @@
     return { out, plan };
   }
   /**
-   * The three finished plans work on the same goals, so each profile takes the one it scores best among them (a plan
-   * another profile found may beat its own): Cheap the lowest cost per finished craft, Balanced cost weighed by the
-   * chance to finish, Premium the highest success, the cheaper one among those within half a point of it.
+   * The three finished plans work on the same goals, and a profile's materials include those of the profiles before
+   * it (early, mid, end game). So a profile takes the plan it scores best among its own and the earlier ones: Balanced
+   * cost weighed by the chance to finish, Premium the highest success (the cheaper one among those within half a point
+   * of it). Cheap keeps its own: only early-game materials.
    */
   function rankProfiles(profiles) {
     const names = Object.keys(PROFILES);
-    const done = names.map((n) => profiles[n]).filter((p) => p && p.steps && p.steps.length && p.p > 0);
-    if (done.length < 2) return profiles;
+    const usable = (p) => p && p.steps && p.steps.length && p.p > 0;
+    if (names.filter((n) => usable(profiles[n])).length < 2) return profiles;
     const sig = (p) => JSON.stringify(p.goals.map((g) => [g.key, g.eff, g.minValue, g.required]));
-    if (!done.every((p) => sig(p) === sig(done[0]))) return profiles;
+    const first = names.map((n) => profiles[n]).find(usable);
+    if (!names.every((n) => !usable(profiles[n]) || sig(profiles[n]) === sig(first))) return profiles;
     const out = Object.assign({}, profiles);
-    for (const n of names) {
+    for (let i = 0; i < names.length; i++) {
+      const n = names[i];
       const own = profiles[n];
-      if (!own || !own.steps || !own.steps.length) continue;
+      if (!usable(own)) continue;
+      const done = names.slice(0, i + 1).map((x) => profiles[x]).filter(usable);
       let best;
       if (n === 'premium') {
         const top = Math.max(...done.map((p) => p.p));
@@ -3036,8 +3107,10 @@
   function nextAction(ix, item, locks, goals, params, priceOf) {
     const ctx = makeContext(ix, item);
     const st = toState(ctx, item, locks);
-    const a0 = makePolicy(ctx, goals, params)(st);
-    const a = withoutUnpriced(a0, priceOf ? (n) => priceOf(n) != null : () => true, null, ctx.legacy);
+    const matOk = materialOk(params && params.mat, priceOf);
+    const a0 = makePolicy(ctx, goals, params, undefined, matOk)(st);
+    const has = priceOf ? (n) => priceOf(n) != null : () => true;
+    const a = withoutUnpriced(a0, matOk ? (n) => has(n) && matOk(n) : has, null, ctx.legacy);
     if (a.done || a.fail) return a;
     return Object.assign({}, a, { names: actionNames(a, ctx), error: validate(ctx, st, a) });
   }
@@ -3231,7 +3304,7 @@
     goalsFromTargets, goalMet, meets, nearMiss, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
     availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, goalClash, essencesForBase, liquidFor, CATALYST_DEFAULT,
     emulate, chanceOf, familyChances, runStrategy, runStrategyAsync, groupsMet, revealOptions, desSides, DES_OPTIONS,
-    planProfile, rankProfiles, setTick,
+    planProfile, rankProfiles, setTick, clampStrategy, materialOk,
     expandStrategy, recipeParams, relevantKeys, SPACE, SEARCH, improvePlan, searchOf: (plan) => SCREENS.get(plan), legacyItems, suffixRune, runeBlocks,
   };
 });
