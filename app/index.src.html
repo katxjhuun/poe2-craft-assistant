@@ -1,4 +1,5 @@
 <meta charset="utf-8">
+<meta name="google" content="notranslate">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>PoE2 Craft Assistant</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -90,6 +91,8 @@ h2 { margin: 0; font: 700 14px/1.2 var(--f-ui); letter-spacing: .14em; text-tran
 html.pv .wrap { display: none; }
 html.pv #priceView { display: block; }
 html.pv body { padding: 0; background: #0B0B0D; }
+/* the window has no frame of its own (the program cuts the browser's away): a line around the page stands for it */
+html.pv body::after { content: ''; position: fixed; inset: 0; border: 1px solid #3A3B43; pointer-events: none; z-index: 60; }
 .pv-card { padding: 8px 10px 14px; display: grid; gap: 9px; font-size: 14px; }
 .pv-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 13px; }
 .pv-top b { color: var(--text); font-weight: 600; }
@@ -117,8 +120,8 @@ html.pv body { padding: 0; background: #0B0B0D; }
 .pv-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .pv-bar .right { margin-left: auto; display: inline-flex; gap: 10px; align-items: center; }
 .pv-est { border: 1px solid var(--line-2); border-radius: 6px; padding: 8px 10px; text-align: center; display: grid; gap: 2px; background: var(--panel); }
-.pv-est .v { font-size: 21px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; justify-content: center; }
-.pv-est .v .ci { width: 24px; height: 24px; vertical-align: 0; }
+.pv-est .pv-val { font-size: 21px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; justify-content: center; }
+.pv-est .pv-val .ci { width: 24px; height: 24px; vertical-align: 0; }
 .pv-est .rel { color: var(--text); font-weight: 600; }
 .pv-q { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .pv-q select { padding: 5px 6px; }
@@ -1037,8 +1040,19 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   document.documentElement.lang = 'en';
   // The desktop program opens this page a second time as its price check window (?view=price): only the compact card
   // is shown, and nothing of the craft session is read or written there.
-  const PRICE_VIEW = /[?&]view=price\b/.test(location.search);
+  const PRICE_VIEW = location.pathname === '/price' || /[?&]view=price\b/.test(location.search);
   if (PRICE_VIEW) { document.title = 'PoE2 Price Check'; document.documentElement.classList.add('pv'); }
+  // The program shows the price check without the browser's frame: it cuts the window down to the page, and for that
+  // the page tells how large it is inside its window (in pixels).
+  function pvSize() {
+    if (!PRICE_VIEW) return;
+    const d = window.devicePixelRatio || 1;
+    fetch('/overlay', { method: 'POST', body: 'size ' + Math.round(window.innerWidth * d) + ' ' + Math.round(window.innerHeight * d) }).catch(() => { /* the program is gone */ });
+  }
+  if (PRICE_VIEW) { pvSize(); window.addEventListener('resize', pvSize); }
+  // English by design (the game's own names): no "translate this page?" from the browser
+  document.documentElement.setAttribute('translate', 'no');
+  document.documentElement.classList.add('notranslate');
   $('#exampleBtns').innerHTML = SAMPLES.map((s) => `<button class="chip" type="button" data-sample="${esc(s.id)}">${esc(s.label)}</button>`).join('');
 
   // Published files keep their paths across versions, so ask the server each time (a copy that did not change comes
@@ -1603,11 +1617,11 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     try { const r = await fetch('/bridge', { cache: 'no-store' }); PV.info = r.ok ? await r.json() : null; } catch (e) { PV.info = null; }
     pvRender();
     if (typeof EventSource !== 'undefined') {
-      const es = new EventSource('/events');
+      const es = new EventSource('/events?view=price');
       es.onmessage = (e) => {
         let m = null;
         try { m = JSON.parse(e.data); } catch (x) { return; }
-        if (m && typeof m.text === 'string' && m.source !== 'clipboard') pvItem(m.text); // another tool's copy: that tool shows its own
+        if (m && typeof m.text === 'string' && m.source !== 'clipboard') { pvSize(); pvItem(m.text); } // another tool's copy: that tool shows its own
       };
     }
     // the item whose key press opened this window
@@ -1724,8 +1738,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       const L = PV.res.listings || [];
       const est = pvEstimate(PV.res);
       answer = (est ? `<div class="pv-est" title="The middle price of the ${est.n} cheapest listings below, in the currencies the estimate can add up (Exalted, Chaos and Divine Orbs)">
-          <span class="pv-note">Estimated value</span><span class="v">≈ ${money(est.ex)}</span>
-          <span class="pv-note">Range: ${money(est.lo)}–${money(est.hi)} · Reliability: <span class="rel">${est.rel}</span></span></div>` : '')
+          <span class="pv-note">Estimated value</span><span class="pv-val">≈ ${money(est.ex)}</span>
+          <span class="pv-note">Range: ${money(est.lo)} to ${money(est.hi)} · Reliability: <span class="rel">${est.rel}</span></span></div>` : '')
         + `<div class="pv-bar"><span class="pv-note">${L.length}/${PV.res.total} · results from pathofexile.com/trade</span><span class="right"><button class="linkish" type="button" id="pvRefresh" title="Search again">↻ Refresh</button></span></div>`
         + (L.length ? `<table class="pv-table"><thead><tr><th>Price</th><th class="r">iLvl</th><th class="r">Q%</th><th>Account</th><th class="r">Listed</th></tr></thead><tbody>${L.map((l) => {
             const name = TRADE_CUR[l.currency];

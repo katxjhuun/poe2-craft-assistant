@@ -134,8 +134,8 @@ own window (Edge's app mode), kept above the game.
 - While a route is running, the same item coming back changed counts as the result of the route's next step, so the
   steps no longer ask for a paste.
 - The hotkey is taken only while the game window is in front. Settings are in `config.json` next to the exe
-  (`hotkey`, `port`, `topmost`, `advancedCopy`, `gameTitle`); the tray menu opens it.
-- Price check on the hotkey: a window at the right of the game shows the item as the game draws it, every line a
+  (`hotkey`, `port`, `topmost`, `advancedCopy`, `gameTitle`, `priceWidth`, `priceHeight`); the tray menu opens it.
+- Price check on the hotkey: a panel over the game shows the item as the game draws it, every line a
   search filter (click a line to use it or leave it out; its tier at the left, minimum and maximum at the right;
   Exact match or Broad), an estimate from the listings (their middle price, with range and how far they agree), and
   the ten cheapest listings as a table (price, item level, quality, account, age), with the currency, the kind of
@@ -146,9 +146,24 @@ own window (Edge's app mode), kept above the game.
   one fetch of ten listings; the site's rate limit headers obeyed with a margin; no account cookies (a search the site
   wants a login for is refused and left to the trade site); a refusal by the site is never worked around. The tray
   menu turns it off (`priceCheck` in `config.json`).
+- Where the price check is: at the top, in the free space beside the game's side panel the cursor is over (left of the
+  inventory; right of the stash for an item there). The side panels are 370/600 of the game's height wide at every
+  resolution, which is where the place comes from. The size is fixed (`priceWidth` x `priceHeight`, 455 x 1110 at
+  100% scaling, never taller than the game) and the same on every press. The window has no frame: the browser's
+  title bar and resize borders are cut away (the page tells the program how large it is inside its window), so it
+  cannot be moved or resized by hand. It is no taskbar button and not among the Alt+Tab windows, it never takes the
+  keyboard from the game, and it is put away when another program comes in front (Alt+Tab), when its own close
+  button is clicked, and when the hotkey is pressed over nothing. It is opened once, hidden, when the program starts.
+- The browser does not offer to translate the program's pages (they are in English on purpose): the pages are marked
+  "do not translate", and translation is turned off in the program's own browser profile.
 - Other tools: an item copied in game by any means (Ctrl+C, another tool's price check) is loaded as well
   (`watchClipboard`). With a route running, only the route's own item comes in that way.
 - "Search on trade" in the page still opens the official trade site with the search prefilled.
 - Tested by the author: the page is served, an item text pushed to `POST /push` is loaded, counted as a step result and
-  the route goes on; the window opens and stays on top; one real price check returned listings. The player confirmed the
-  hotkey in game. Not tested: the price window's place over the game, and the clipboard watcher with another tool.
+  the route goes on; the window opens and stays on top; one real price check returned listings. The price check
+  window, shown without an item on a 2560x1440 game: the page lies at 1215..1670 x 29..1139 (the inventory starts at
+  1672), title bar and borders cut, above every other window, the keyboard left where it was, hidden again a quarter
+  of a second later because another program was in front. The player confirmed the hotkey in game. Not tested: a
+  price check from a real key press with the game in front since the window lost its frame (how it looks beside the
+  inventory, and that it stays while the game is in front), the translation prompt being gone (it was never seen by
+  the author), and the clipboard watcher with another tool.

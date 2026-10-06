@@ -1,7 +1,7 @@
 // PoE2 Craft Assistant, desktop helper.
 //
 // A tray program that serves the Craft Assistant page from this folder on localhost, opens it in its own window, and
-// while Path of Exile 2 is the window in front listens for one hotkey (default Ctrl+D). On the hotkey it presses the
+// while Path of Exile 2 is the window in front listens for one hotkey (default Alt+E). On the hotkey it presses the
 // game's own "copy item" keys (Alt+Ctrl+C: the item text with modifier tiers) for the item under the cursor, reads the
 // clipboard and hands the text to the page, which loads the item and checks its price. One key press, one copy: the
 // same thing the player would do by hand. It reads nothing from the game but the clipboard text the game writes.
@@ -30,6 +30,7 @@ namespace PoE2CraftAssistant
             using (Mutex one = new Mutex(true, "PoE2CraftAssistant.single", out first))
             {
                 if (!first) { MessageBox.Show("PoE2 Craft Assistant is already running (see the tray icon).", "PoE2 Craft Assistant"); return; }
+                try { Native.SetProcessDPIAware(); } catch (Exception) { }
                 Application.EnableVisualStyles();
                 Application.Run(new Host(args));
             }
@@ -46,6 +47,8 @@ namespace PoE2CraftAssistant
         public bool Overlay = false;       // the trade search of a copied item as a panel over the game
         public bool WatchClipboard = true; // take every item copied in game (Ctrl+C, another tool's price check)
         public bool PriceCheck = true;     // on the hotkey, ask the trade site for the item's listings (see Trade)
+        public int PriceWidth = 455;       // the price check window's size (at 100% display scaling); it is placed
+        public int PriceHeight = 1110;     // beside the game's inventory and is never taller than the game
         public double OverlayWidth = 0.42; // the panel's share of the game window's width
         public string GameTitle = "Path of Exile 2";
         public string File;
@@ -67,6 +70,9 @@ namespace PoE2CraftAssistant
                     if (d.ContainsKey("overlay")) c.Overlay = Convert.ToBoolean(d["overlay"]);
                     if (d.ContainsKey("watchClipboard")) c.WatchClipboard = Convert.ToBoolean(d["watchClipboard"]);
                     if (d.ContainsKey("priceCheck")) c.PriceCheck = Convert.ToBoolean(d["priceCheck"]);
+                    if (d.ContainsKey("priceWidth")) c.PriceWidth = Convert.ToInt32(d["priceWidth"]);
+                    if (d.ContainsKey("priceHeight")) c.PriceHeight = Convert.ToInt32(d["priceHeight"]);
+                    else c.Save(); // a file from before this setting: written again with every setting in it
                     if (d.ContainsKey("overlayWidth")) c.OverlayWidth = Convert.ToDouble(d["overlayWidth"], System.Globalization.CultureInfo.InvariantCulture);
                 }
                 else c.Save();
@@ -81,7 +87,7 @@ namespace PoE2CraftAssistant
             {
                 string json = "{\r\n  \"hotkey\": " + Json(Hotkey) + ",\r\n  \"port\": " + Port + ",\r\n  \"topmost\": " + (Topmost ? "true" : "false")
                     + ",\r\n  \"advancedCopy\": " + (AdvancedCopy ? "true" : "false") + ",\r\n  \"gameTitle\": " + Json(GameTitle)
-                    + ",\r\n  \"watchClipboard\": " + (WatchClipboard ? "true" : "false") + ",\r\n  \"priceCheck\": " + (PriceCheck ? "true" : "false")
+                    + ",\r\n  \"watchClipboard\": " + (WatchClipboard ? "true" : "false") + ",\r\n  \"priceCheck\": " + (PriceCheck ? "true" : "false") + ",\r\n  \"priceWidth\": " + PriceWidth + ",\r\n  \"priceHeight\": " + PriceHeight
                     + ",\r\n  \"overlay\": " + (Overlay ? "true" : "false") + ",\r\n  \"overlayWidth\": " + OverlayWidth.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "\r\n}\r\n";
                 System.IO.File.WriteAllText(File, json);
             }
@@ -273,12 +279,16 @@ namespace PoE2CraftAssistant
     {
         readonly HttpListener listener = new HttpListener();
         readonly List<HttpListenerResponse> clients = new List<HttpListenerResponse>();
+        readonly HashSet<HttpListenerResponse> viewers = new HashSet<HttpListenerResponse>(); // price check windows among them
         readonly string root;
         readonly Config cfg;
         Thread thread;
         System.Threading.Timer ping;
         public string Url;
-        /// <summary>The page asks for the price panel over the game ("show") or to put it away ("hide").</summary>
+        /// <summary>
+        /// The page asks for the price panel over the game ("show") or to put it away ("hide"); the price check's page
+        /// tells how large it is inside its window ("size W H", in pixels).
+        /// </summary>
         public Action<string> OnOverlay;
         readonly Trade trade = new Trade();
         string lastJson = "{}";
@@ -336,7 +346,7 @@ namespace PoE2CraftAssistant
                 byte[] hello = Encoding.UTF8.GetBytes(": connected\n\n");
                 r.OutputStream.Write(hello, 0, hello.Length);
                 r.OutputStream.Flush();
-                lock (clients) clients.Add(r);
+                lock (clients) { clients.Add(r); if (q.QueryString["view"] == "price") viewers.Add(r); }
                 return; // kept open: items are written to it as they are copied
             }
             if (path == "/push" && q.HttpMethod == "POST")
@@ -374,7 +384,7 @@ namespace PoE2CraftAssistant
                 return;
             }
             if (q.HttpMethod != "GET") { Text(r, 405, "text/plain", "method not allowed"); return; }
-            if (path == "/") path = "/index.html";
+            if (path == "/" || path == "/price") path = "/index.html"; // "/price": the price check window (the same page)
             string file = Path.GetFullPath(Path.Combine(root, path.TrimStart('/').Replace('/', Path.DirectorySeparatorChar)));
             if (!file.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || !File.Exists(file)) { Text(r, 404, "text/plain", "not found"); return; }
             byte[] data = File.ReadAllBytes(file);
@@ -413,7 +423,7 @@ namespace PoE2CraftAssistant
             r.OutputStream.Close();
         }
 
-        /// <summary>An item text for the page. Returns the number of open pages it reached.</summary>
+        /// <summary>An item text for the pages. Returns the number of assistant pages it reached (price check windows aside).</summary>
         public int Push(string text, string source)
         {
             Dictionary<string, object> m = new Dictionary<string, object>();
@@ -432,8 +442,8 @@ namespace PoE2CraftAssistant
             {
                 for (int i = clients.Count - 1; i >= 0; i--)
                 {
-                    try { clients[i].OutputStream.Write(b, 0, b.Length); clients[i].OutputStream.Flush(); ok++; }
-                    catch (Exception) { try { clients[i].Abort(); } catch (Exception) { } clients.RemoveAt(i); }
+                    try { clients[i].OutputStream.Write(b, 0, b.Length); clients[i].OutputStream.Flush(); if (!viewers.Contains(clients[i])) ok++; }
+                    catch (Exception) { try { clients[i].Abort(); } catch (Exception) { } viewers.Remove(clients[i]); clients.RemoveAt(i); }
                 }
             }
             return ok;
@@ -446,7 +456,8 @@ namespace PoE2CraftAssistant
         public const uint MOD_ALT = 1, MOD_CONTROL = 2, MOD_SHIFT = 4, MOD_WIN = 8, MOD_NOREPEAT = 0x4000;
         public const ushort VK_SHIFT = 0x10, VK_CONTROL = 0x11, VK_MENU = 0x12, VK_C = 0x43;
         public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1), HWND_NOTOPMOST = new IntPtr(-2);
-        public const uint SWP_NOSIZE = 1, SWP_NOMOVE = 2, SWP_NOACTIVATE = 0x10, SWP_SHOWWINDOW = 0x40;
+        public const uint SWP_NOSIZE = 1, SWP_NOMOVE = 2, SWP_NOZORDER = 4, SWP_NOACTIVATE = 0x10, SWP_FRAMECHANGED = 0x20, SWP_SHOWWINDOW = 0x40;
+        public const int GWL_EXSTYLE = -20, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_APPWINDOW = 0x40000;
 
         [DllImport("user32.dll")] public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
         [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
@@ -490,6 +501,37 @@ namespace PoE2CraftAssistant
 
         [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
         [DllImport("user32.dll")] public static extern uint GetClipboardSequenceNumber();
+        [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+        [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hWnd);
+        [DllImport("user32.dll")] public static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool redraw);
+        [DllImport("user32.dll")] public static extern int GetWindowRgnBox(IntPtr hWnd, out RECT box);
+        [DllImport("gdi32.dll")] public static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
+        [DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr obj);
+        [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+        [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
+        [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr hWnd, out RECT r);
+        [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr hWnd, ref POINT p);
+        [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
+        [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint thread, uint to, bool attach);
+        [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+
+        /// <summary>
+        /// Give the keyboard to a window. Windows lets only the program in front do that, so for the moment of the
+        /// request this thread joins the input of the window that has the keyboard now.
+        /// </summary>
+        public static void Focus(IntPtr h)
+        {
+            IntPtr fg = GetForegroundWindow();
+            if (fg == h || h == IntPtr.Zero) return;
+            uint pid, mine = GetCurrentThreadId(), other = fg != IntPtr.Zero ? GetWindowThreadProcessId(fg, out pid) : 0;
+            bool joined = other != 0 && other != mine && AttachThreadInput(mine, other, true);
+            SetForegroundWindow(h);
+            if (joined) AttachThreadInput(mine, other, false);
+        }
+        [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hWnd);
+        [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr hWnd, uint cmd);
+        [DllImport("user32.dll")] public static extern int SetWindowLong(IntPtr hWnd, int index, int value);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr hWnd, StringBuilder text, int max);
         public const int WM_CLIPBOARDUPDATE = 0x031D;
         [DllImport("user32.dll")] public static extern bool AddClipboardFormatListener(IntPtr hWnd);
         [DllImport("user32.dll")] public static extern bool RemoveClipboardFormatListener(IntPtr hWnd);
@@ -515,13 +557,21 @@ namespace PoE2CraftAssistant
         /// <summary>
         /// The assistant's own window: a visible Edge window whose title is exactly the page's (an app-mode window has
         /// no browser suffix). Other windows that merely mention the name (a chat, a folder, a browser tab) do not count.
+        /// With "hidden" a window that is not shown counts as well (the price check between two key presses).
         /// </summary>
-        public static IntPtr FindWindowByTitle(string title)
+        public static IntPtr FindWindowByTitle(string title, bool hidden = false)
         {
             IntPtr found = IntPtr.Zero;
             EnumWindows(delegate(IntPtr h, IntPtr l)
             {
-                if (!IsWindowVisible(h) || TitleOf(h) != title) return true;
+                if (TitleOf(h) != title) return true;
+                if (!IsWindowVisible(h))
+                {
+                    if (!hidden) return true;
+                    StringBuilder cls = new StringBuilder(64);
+                    GetClassName(h, cls, cls.Capacity);
+                    if (cls.ToString() != "Chrome_WidgetWin_1") return true; // the browser's own window, not one of its helpers
+                }
                 uint pid;
                 GetWindowThreadProcessId(h, out pid);
                 try { if (!Process.GetProcessById((int)pid).ProcessName.Equals("msedge", StringComparison.OrdinalIgnoreCase)) return true; }
@@ -564,6 +614,13 @@ namespace PoE2CraftAssistant
         string copySource = "hotkey", lastText;
         DateTime lastAt = DateTime.MinValue;
         long panelWanted; // ticks until which the price panel is to be placed over the game (0: nothing asked, -1: hide)
+        IntPtr priceWnd = IntPtr.Zero, priceReady = IntPtr.Zero; // the price check window (shown or hidden); the one made ready
+        long priceAsked, openAhead; // ticks: when the browser was last asked for that window; when to open it ahead of its use
+        long pageSize;              // the price check page's size in pixels as the page tells it (width << 32 | height; 0: not told)
+        int titleBar = -1;          // height of the browser's title bar above that page in pixels (-1: not measured yet)
+        int away;                   // ticks in a row with another program in front
+        bool panelOn;               // the price check is shown because a key press asked for it
+        Native.RECT panelRect;      // where on the screen the price check's page is to be
         readonly bool anyWindow, noWindow;
         readonly string dir;
         bool registered;
@@ -602,7 +659,17 @@ namespace PoE2CraftAssistant
             copy.Interval = 15;
             copy.Tick += delegate { CopyTick(); };
             // the page asks for the panel from the server's thread; the window work is done here, on the program's own
-            server.OnOverlay = delegate(string cmd) { Interlocked.Exchange(ref panelWanted, cmd == "hide" ? -1 : DateTime.UtcNow.AddSeconds(4).Ticks); };
+            server.OnOverlay = delegate(string cmd)
+            {
+                if (cmd.StartsWith("size ", StringComparison.Ordinal))
+                {
+                    string[] p = cmd.Split(' ');
+                    int w, h;
+                    if (p.Length == 3 && int.TryParse(p[1], out w) && int.TryParse(p[2], out h) && w > 0 && h > 0) Interlocked.Exchange(ref pageSize, ((long)w << 32) | (uint)h);
+                    return;
+                }
+                Interlocked.Exchange(ref panelWanted, cmd == "hide" ? -1 : DateTime.UtcNow.AddSeconds(4).Ticks);
+            };
             panel.Interval = 120;
             panel.Tick += delegate { PanelTick(); };
             panel.Start();
@@ -610,7 +677,12 @@ namespace PoE2CraftAssistant
             focus.Tick += delegate { WatchFocus(); };
             focus.Start();
 
-            if (!noWindow) OpenWindow(true);
+            if (!noWindow)
+            {
+                OpenWindow(true);
+                // the price check window is opened ahead and kept hidden, so a key press in game only has to show it
+                openAhead = DateTime.UtcNow.AddSeconds(3).Ticks;
+            }
         }
 
         void BuildMenu()
@@ -766,40 +838,218 @@ namespace PoE2CraftAssistant
             else ShowAbove();
             if (cfg.PriceCheck)
             {
-                // the price check window over the game (it opens on the first press and reads the item it missed)
-                if (Native.FindWindowByTitle(PRICE_TITLE) == IntPtr.Zero) Launch(server.Url + "?view=price", "600,1000");
+                // the price check window over the game (a window that was closed opens again and reads the item it missed)
+                EnsurePrice();
                 Interlocked.Exchange(ref panelWanted, DateTime.UtcNow.AddSeconds(10).Ticks);
+                PanelTick(); // now, not on the next tick
             }
         }
 
-        /// <summary>The price check window at the top right of the game, above it, the keyboard left with the game.</summary>
+        bool IsGame(IntPtr h) { return h != IntPtr.Zero && Native.TitleOf(h).StartsWith(cfg.GameTitle, StringComparison.OrdinalIgnoreCase); }
+
+        /// <summary>The price check window, shown or hidden; none when it is not open (or still opening).</summary>
+        IntPtr PriceWindow()
+        {
+            if (priceWnd != IntPtr.Zero && Native.IsWindow(priceWnd) && Native.TitleOf(priceWnd) == PRICE_TITLE) return priceWnd;
+            priceWnd = Native.FindWindowByTitle(PRICE_TITLE, true);
+            return priceWnd;
+        }
+
+        /// <summary>Ask the browser for the price check window unless it is there (or was asked for a moment ago).</summary>
+        void EnsurePrice()
+        {
+            if (!cfg.PriceCheck || PriceWindow() != IntPtr.Zero) return;
+            long now = DateTime.UtcNow.Ticks;
+            if (now - priceAsked < 8 * TimeSpan.TicksPerSecond) return; // the browser is still opening it
+            priceAsked = now;
+            // its own address: the browser remembers a window's place by the address, and this one's is not the assistant's
+            Launch(server.Url + "price", (cfg.PriceWidth + 16) + "," + (cfg.PriceHeight + 39));
+        }
+
+        /// <summary>
+        /// A price check window the browser has just opened: put away until a key press asks for it, marked as a tool
+        /// window (no button on the taskbar, not among the windows of Alt+Tab) and set above the other windows.
+        /// </summary>
+        void Prepare(IntPtr t)
+        {
+            priceReady = t;
+            panelOn = false;
+            Native.ShowWindow(t, 0); // SW_HIDE: Windows hands the keyboard back to the window that had it
+            int ex = Native.GetWindowLong(t, Native.GWL_EXSTYLE);
+            Native.SetWindowLong(t, Native.GWL_EXSTYLE, (ex | Native.WS_EX_TOOLWINDOW) & ~Native.WS_EX_APPWINDOW);
+            Above(t);
+        }
+
+        /// <summary>
+        /// The window above the game ("always on top"). Asked for in two steps: a window the browser has just opened
+        /// answers "done" to the plain request and stays below the other windows, until its place in the order has been
+        /// set once (tried on the price check window: "not on top" first, then "on top", works every time).
+        /// </summary>
+        static void Above(IntPtr t)
+        {
+            if ((Native.GetWindowLong(t, Native.GWL_EXSTYLE) & Native.WS_EX_TOPMOST) != 0) return;
+            Native.SetWindowPos(t, Native.HWND_NOTOPMOST, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+            Native.SetWindowPos(t, Native.HWND_TOPMOST, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
+        }
+
+        /// <summary>The game's picture on the screen; with no game window known, the screen the cursor is on.</summary>
+        Native.RECT GameArea()
+        {
+            Native.RECT g, c;
+            Native.POINT o = new Native.POINT();
+            if (IsGame(gameWnd) && !Native.IsIconic(gameWnd) && Native.GetClientRect(gameWnd, out c) && c.Right > 0 && c.Bottom > 0 && Native.ClientToScreen(gameWnd, ref o))
+            {
+                g.Left = o.X; g.Top = o.Y; g.Right = o.X + c.Right; g.Bottom = o.Y + c.Bottom;
+                return g;
+            }
+            Rectangle s = Screen.FromPoint(Cursor.Position).Bounds;
+            g.Left = s.Left; g.Top = s.Top; g.Right = s.Right; g.Bottom = s.Bottom;
+            return g;
+        }
+
+        /// <summary>
+        /// Where the price check goes: at the top, beside the game's side panel the cursor is over. The side panels (the
+        /// inventory at the right, the stash or a vendor at the left) are 370/600 of the game's height wide at every
+        /// resolution, so the window lies in the free space left of the inventory, or right of the stash. Its size is
+        /// the same on every key press.
+        /// </summary>
+        void Place(IntPtr t)
+        {
+            Native.RECT g = GameArea();
+            int gw = g.Right - g.Left, gh = g.Bottom - g.Top;
+            double scale = 1.0;
+            try { uint dpi = Native.GetDpiForWindow(t); if (dpi >= 96) scale = dpi / 96.0; } catch (Exception) { }
+            int w = Math.Min(gw, (int)Math.Round(Math.Max(320, cfg.PriceWidth) * scale));
+            int top = (int)Math.Round(gh * 0.02);
+            int h = Math.Min(gh - 2 * top, (int)Math.Round(Math.Max(320, cfg.PriceHeight) * scale));
+            int side = (int)Math.Round(gh * 370.0 / 600.0);
+            Native.POINT cur;
+            bool inventory = !Native.GetCursorPos(out cur) || cur.X >= g.Left + gw / 2;
+            int x = inventory ? g.Right - side - w - 2 : g.Left + side + 2;
+            x = Math.Max(g.Left, Math.Min(g.Right - w, x));
+            panelRect.Left = x; panelRect.Top = g.Top + top; panelRect.Right = x + w; panelRect.Bottom = g.Top + top + h;
+        }
+
+        /// <summary>
+        /// How high the browser's title bar is above the page: the inside of the window less the page's own height,
+        /// which the page tells (the browser draws its title bar inside the window, there is nothing to ask Windows).
+        /// True when the height is another than it was thought to be.
+        /// </summary>
+        bool Measure(IntPtr t)
+        {
+            long ps = Interlocked.Read(ref pageSize);
+            Native.RECT c;
+            if (ps == 0 || !Native.GetClientRect(t, out c)) return false;
+            int pw = (int)(ps >> 32), ph = (int)(ps & 0xFFFFFFFF);
+            int bar = (c.Bottom - c.Top) - ph;
+            if (Math.Abs((c.Right - c.Left) - pw) > 2 || bar < 0 || bar > 200 || bar == titleBar) return false; // told at another size
+            titleBar = bar;
+            return true;
+        }
+
+        /// <summary>
+        /// Put the page of the price check window on its rectangle of the screen and cut the rest of the window away:
+        /// the browser's title bar above the page and the borders around it. With the frame go moving and resizing.
+        /// </summary>
+        void Fit(IntPtr t, bool show)
+        {
+            if (Native.IsIconic(t) || Native.IsZoomed(t)) Native.ShowWindow(t, 4); // SW_SHOWNOACTIVATE: a plain window again
+            Native.RECT wr, c, box;
+            Native.POINT o = new Native.POINT();
+            if (!Native.GetWindowRect(t, out wr) || !Native.GetClientRect(t, out c) || !Native.ClientToScreen(t, ref o)) return;
+            double scale = 1.0;
+            try { uint dpi = Native.GetDpiForWindow(t); if (dpi >= 96) scale = dpi / 96.0; } catch (Exception) { }
+            int bar = titleBar >= 0 ? titleBar : (int)Math.Round(31 * scale); // the usual one until the page has told its size
+            // the page inside the window: below the title bar, within the borders for resizing
+            int L = o.X - wr.Left, T = o.Y - wr.Top + bar, R = wr.Right - (o.X + c.Right), B = wr.Bottom - (o.Y + c.Bottom);
+            int w = panelRect.Right - panelRect.Left, h = panelRect.Bottom - panelRect.Top;
+            int nx = panelRect.Left - L, ny = panelRect.Top - T, nw = w + L + R, nh = h + T + B;
+            bool sized = wr.Right - wr.Left != nw || wr.Bottom - wr.Top != nh;
+            if (sized) Interlocked.Exchange(ref pageSize, 0); // told at the old size: the page tells its new one
+            if (sized || wr.Left != nx || wr.Top != ny) Native.SetWindowPos(t, IntPtr.Zero, nx, ny, nw, nh, Native.SWP_NOACTIVATE | Native.SWP_NOZORDER);
+            if (Native.GetWindowRgnBox(t, out box) == 0 || box.Left != L || box.Top != T || box.Right != L + w || box.Bottom != T + h)
+            {
+                IntPtr rgn = Native.CreateRectRgn(L, T, L + w, T + h);
+                if (Native.SetWindowRgn(t, rgn, true) == 0) Native.DeleteObject(rgn); // taken over by Windows when it is set
+            }
+            if (!show) return;
+            panelOn = true;
+            if (!Native.IsWindowVisible(t)) Native.ShowWindow(t, 4); // SW_SHOWNOACTIVATE: the keyboard stays with the game
+            Above(t);
+        }
+
+        /// <summary>
+        /// The price check window over the game: shown where it belongs when a key press asks for it, without its frame
+        /// and without the keyboard; put away when the page's close button asks, and when another program comes in front
+        /// (Alt+Tab): it belongs to the game and is not to lie over other programs.
+        /// </summary>
         void PanelTick()
         {
+            long now = DateTime.UtcNow.Ticks;
+            if (openAhead != 0 && now > openAhead) { openAhead = 0; EnsurePrice(); }
             long want = Interlocked.Read(ref panelWanted);
-            if (want == 0) return;
-            if (want < 0) { Interlocked.Exchange(ref panelWanted, 0); HidePanel(); return; }
-            if (DateTime.UtcNow.Ticks > want) { Interlocked.Exchange(ref panelWanted, 0); return; }
-            IntPtr t = Native.FindWindowByTitle(PRICE_TITLE);
-            if (t == IntPtr.Zero) return; // still opening
-            Interlocked.Exchange(ref panelWanted, 0);
-            Native.RECT g;
-            if (gameWnd == IntPtr.Zero || !Native.GetWindowRect(gameWnd, out g))
+            IntPtr t = PriceWindow();
+            if (t == IntPtr.Zero)
             {
-                Rectangle s = Screen.PrimaryScreen.WorkingArea;
-                g.Left = s.Left; g.Top = s.Top; g.Right = s.Right; g.Bottom = s.Bottom;
+                if (want < 0 || (want > 0 && now > want)) Interlocked.Exchange(ref panelWanted, 0);
+                return; // not open, or still opening
             }
-            int gw = g.Right - g.Left, gh = g.Bottom - g.Top;
-            int w = Math.Min(gw, 600), h = Math.Max(480, Math.Min(gh - 90, 1120));
-            if (Native.IsIconic(t)) Native.ShowWindow(t, 4); // SW_SHOWNOACTIVATE
-            Native.SetWindowPos(t, Native.HWND_TOPMOST, g.Right - w - 14, g.Top + 44, w, h, Native.SWP_NOACTIVATE | Native.SWP_SHOWWINDOW);
-            // a window that was just created takes the keyboard: hand it back to the game
-            if (gameWnd != IntPtr.Zero && Native.GetForegroundWindow() == t) Native.SetForegroundWindow(gameWnd);
+            if (t != priceReady) Prepare(t);
+            if (want != 0) Interlocked.Exchange(ref panelWanted, 0);
+            if (want < 0) { HidePanel(); return; }
+            if (want > 0 && now <= want)
+            {
+                Measure(t);
+                Place(t);
+                Fit(t, true);
+                away = 0;
+                // a window that took the keyboard all the same (the browser opened it this moment): back to the game
+                if (IsGame(gameWnd) && Native.GetForegroundWindow() == t) Native.Focus(gameWnd);
+                return;
+            }
+            if (!Native.IsWindowVisible(t)) return;
+            if (!panelOn) { Native.ShowWindow(t, 0); return; } // shown by the browser itself (as it opened): not asked for
+            if (Measure(t)) Fit(t, false); // the page told its size: the cut follows the real title bar
+            if (anyWindow) return;
+            IntPtr fg = Native.GetForegroundWindow();
+            bool with = fg == IntPtr.Zero || fg == t || IsGame(fg) || Native.GetWindow(fg, 4) == t; // 4: its owner (a list the page opened)
+            away = with ? 0 : away + 1;
+            if (away >= 2) { away = 0; HidePanel(); }
         }
 
         void HidePanel()
         {
-            IntPtr t = Native.FindWindowByTitle(PRICE_TITLE);
-            if (t != IntPtr.Zero && !Native.IsIconic(t)) Native.ShowWindow(t, 7); // SW_SHOWMINNOACTIVE
+            IntPtr t = PriceWindow();
+            panelOn = false;
+            if (t == IntPtr.Zero || !Native.IsWindowVisible(t)) return;
+            // put away with its own button it has the keyboard: that goes back to the game, not to the next window in line
+            if (Native.GetForegroundWindow() == t && IsGame(gameWnd) && !Native.IsIconic(gameWnd)) Native.Focus(gameWnd);
+            Native.ShowWindow(t, 0); // SW_HIDE
+        }
+
+        /// <summary>
+        /// The assistant's own browser profile does not offer to translate its pages (they are in English on purpose).
+        /// The setting is written while no window of the profile is open; the browser reads it when it starts.
+        /// </summary>
+        static void NoTranslate(string profile)
+        {
+            try
+            {
+                if (File.Exists(Path.Combine(profile, "lockfile"))) return; // the browser is running with this profile
+                string dir = Path.Combine(profile, "Default"), file = Path.Combine(dir, "Preferences");
+                JavaScriptSerializer js = new JavaScriptSerializer();
+                js.MaxJsonLength = int.MaxValue;
+                js.RecursionLimit = 400;
+                Dictionary<string, object> prefs = File.Exists(file) ? js.Deserialize<Dictionary<string, object>>(File.ReadAllText(file, Encoding.UTF8)) : null;
+                if (prefs == null) prefs = new Dictionary<string, object>();
+                Dictionary<string, object> tr = prefs.ContainsKey("translate") ? prefs["translate"] as Dictionary<string, object> : null;
+                if (tr == null) { tr = new Dictionary<string, object>(); prefs["translate"] = tr; }
+                if (tr.ContainsKey("enabled") && tr["enabled"] is bool && !(bool)tr["enabled"]) return; // off already
+                tr["enabled"] = false;
+                Directory.CreateDirectory(dir);
+                File.WriteAllText(file, js.Serialize(prefs), new UTF8Encoding(false));
+            }
+            catch (Exception) { /* unreadable, or in use after all: the page's own "do not translate" mark remains */ }
         }
 
         /// <summary>A page of this program in its own window (Edge's app mode, the assistant's own profile).</summary>
@@ -817,14 +1067,15 @@ namespace PoE2CraftAssistant
                 if (edge != null)
                 {
                     string profile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"PoE2CraftAssistant\window");
-                    Process.Start(edge, "--app=" + url + " --user-data-dir=\"" + profile + "\" --window-size=" + size + " --no-first-run --no-default-browser-check");
+                    NoTranslate(profile);
+                    Process.Start(edge, "--app=" + url + " --user-data-dir=\"" + profile + "\" --window-size=" + size + " --no-first-run --no-default-browser-check --disable-features=Translate");
                 }
                 else Process.Start(url); // the default browser
             }
             catch (Exception e) { tray.ShowBalloonTip(6000, PAGE_TITLE, "The window could not be opened (" + e.Message + "). Open " + url + " in a browser.", ToolTipIcon.Warning); }
         }
 
-        /// <summary>The assistant's window above the game without taking the keyboard from it.</summary>        /// <summary>The assistant's window above the game without taking the keyboard from it.</summary>
+        /// <summary>The assistant's window above the game without taking the keyboard from it.</summary>
         void ShowAbove()
         {
             if (!cfg.Topmost) return;
@@ -846,23 +1097,7 @@ namespace PoE2CraftAssistant
                 return;
             }
             // its own window (Edge's app mode, on every Windows 10 and 11), with its own profile so the page keeps its data
-            string edge = null;
-            foreach (string p in new string[] { Environment.GetEnvironmentVariable("ProgramFiles(x86)"), Environment.GetEnvironmentVariable("ProgramFiles") })
-            {
-                if (p == null) continue;
-                string f = Path.Combine(p, @"Microsoft\Edge\Application\msedge.exe");
-                if (File.Exists(f)) { edge = f; break; }
-            }
-            try
-            {
-                if (edge != null)
-                {
-                    string profile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), @"PoE2CraftAssistant\window");
-                    Process.Start(edge, "--app=" + server.Url + " --user-data-dir=\"" + profile + "\" --window-size=560,960 --no-first-run --no-default-browser-check");
-                }
-                else Process.Start(server.Url); // the default browser
-            }
-            catch (Exception e) { tray.ShowBalloonTip(6000, PAGE_TITLE, "The window could not be opened (" + e.Message + "). Open " + server.Url + " in a browser.", ToolTipIcon.Warning); }
+            Launch(server.Url, "560,960");
             if (cfg.Topmost)
             {
                 // once the window is there, keep it above the game
@@ -887,7 +1122,7 @@ namespace PoE2CraftAssistant
             {
                 foreach (string title in new string[] { PRICE_TITLE, PAGE_TITLE })
                 {
-                    IntPtr h = Native.FindWindowByTitle(title);
+                    IntPtr h = Native.FindWindowByTitle(title, title == PRICE_TITLE);
                     if (h != IntPtr.Zero) Native.PostMessage(h, 0x0010, IntPtr.Zero, IntPtr.Zero);
                 }
             }
