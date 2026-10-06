@@ -145,6 +145,41 @@ details.panel.optrow > #pricePanel { padding: 4px 0 14px; }
 .big b { font-size: 32px; line-height: 1.05; font-weight: 800; display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
 .big b .money { gap: 8px; }
 .big b .ci { width: 30px; height: 30px; vertical-align: 0; }
+.job { display: grid; justify-items: center; gap: 14px; padding: 8px 0 4px; }
+.job-status { justify-self: start; font-weight: 700; }
+.job-status b { color: var(--cyan); font-weight: 700; margin-left: 6px; }
+.job-status b.done { color: var(--up); }
+.ring { position: relative; width: 168px; height: 168px; }
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring circle { fill: none; stroke-width: 10; }
+.ring .trk { stroke: var(--line); }
+.ring .arc { stroke: var(--cyan); stroke-linecap: butt; transition: stroke-dashoffset .35s linear; }
+.ring span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 38px; font-weight: 800; color: var(--cyan); font-variant-numeric: tabular-nums; }
+.job-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; justify-self: stretch; max-width: 420px; margin-inline: auto; width: 100%; }
+.job-log li { display: flex; align-items: center; gap: 10px; color: var(--muted); }
+.job-log li::before { content: ""; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--line-2); flex: none; }
+.job-log li.now { color: var(--text); font-weight: 600; }
+.job-log li.now::before { border-color: var(--cyan); background: var(--cyan); }
+.job-log li.ok::before { border-color: var(--up); background: var(--up); }
+.job-foot { justify-self: stretch; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 12px; }
+.report-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 10px 24px; flex-wrap: wrap; }
+.headline { display: grid; justify-items: end; gap: 2px; margin-left: auto; }
+.headline b { font-size: 36px; line-height: 1.05; font-weight: 800; letter-spacing: .02em; display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.headline b .ci { width: 32px; height: 32px; vertical-align: 0; }
+.headline b .money { gap: 8px; }
+.rtable { display: grid; background: var(--bar); border: 1px solid var(--line-2); border-radius: 8px; padding: 4px 12px; }
+.rrow { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 2px 14px; align-items: baseline; background: none; border: 0; border-bottom: 1px solid var(--line); border-left: 3px solid transparent; padding: 12px 8px 6px; cursor: pointer; color: var(--text); text-align: left; }
+.rrow:last-child { border-bottom: 0; }
+.rrow:hover { background: var(--panel); }
+.rrow[aria-selected="true"] { border-left-color: var(--accent); background: var(--accent-soft); }
+.rrow .rname { text-align: right; font-weight: 600; }
+.rrow .rcost { color: var(--accent); font-weight: 800; font-size: 17px; }
+.rrow .rcost .money { gap: 5px; }
+.rrow .rok { font-size: 14px; font-variant-numeric: tabular-nums; }
+.rrow .rbar { grid-column: 1 / -1; position: relative; height: 12px; }
+.rrow .rbar i { position: absolute; top: 5px; height: 2px; background: var(--accent); opacity: .75; min-width: 2px; }
+.rrow .rbar u { position: absolute; top: 2px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; border: 2px solid var(--accent); background: var(--bar); }
+#planPanel { scroll-margin-top: 64px; }
 details.more { border-top: 1px solid var(--line); margin-top: 4px; }
 details.more > summary { cursor: pointer; color: var(--muted); padding: 10px 0 2px; font-size: 14px; }
 details.more[open] > summary { margin-bottom: 8px; }
@@ -575,6 +610,9 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   .brand { font-size: 14px; flex: 1 1 100%; }
   .tool { padding: 9px 10px; letter-spacing: .08em; }
   .big b { font-size: 26px; }
+  .headline b { font-size: 28px; }
+  .rrow { grid-template-columns: minmax(0, 1fr) auto auto; gap: 2px 10px; }
+  .ring { width: 140px; height: 140px; } .ring span { font-size: 32px; }
   details.optrow > summary .sum { display: none; }
   details.panel.optrow { padding: 2px 12px; }
   .ticker { padding: 4px 9px; gap: 8px; }
@@ -605,6 +643,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
 @media (prefers-reduced-motion: reduce) {
   .tx.added { animation: none; background: rgba(201,166,107,.14); }
   .progress span { transition: none; }
+  .ring .arc { transition: none; }
 }
 </style>
 
@@ -3019,16 +3058,16 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (!S.item || !S.ix || S.item.unsupported || !S.item.base) return;
     const gen = ++planGen;
     const input = Object.assign(planInput(), { cancelled: () => gen !== planGen });
-    S.planState = 'running'; S.planProgress = 0; renderPlan();
+    S.planState = 'running'; S.planProgress = 0; S.planOverall = 0; S.planT0 = Date.now(); renderPlan();
     try {
       // grid and recipe candidates first, so plans show quickly; the beam search follows per profile (7.4)
       const out = await P.buildPlans(Object.assign({}, input, { beamBudgetMs: 0, onProgress: (f) => { if (gen === planGen) { S.planProgress = f; drawProgress(); } } }));
       if (gen !== planGen) return;
-      S.plans = out; S.planState = 'refining'; S.planProgress = 0;
+      S.plans = out; S.planState = 'searching'; S.planProgress = 0;
       renderPlan(); renderPrice();
       if (S.preview) renderItem();
       const todo = PROFILE_KEYS.filter((k) => out.profiles[k] && out.profiles[k].steps && out.profiles[k].steps.length);
-      S.planState = 'searching'; renderPlan();
+      S.planState = 'searching'; S.planProgress = 0; renderPlan();
       for (let i = 0; i < todo.length; i++) {
         const k = todo[i];
         const imp = await P.improvePlan(Object.assign({}, input, { beamBudgetMs: P.SEARCH.budgetMs }), out.profiles[k], (f) => { if (gen === planGen) { S.planProgress = (i + f) / todo.length; drawProgress(); } });
@@ -3036,7 +3075,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
         out.profiles[k] = imp;
         renderPlan(); renderPrice();
       }
-      S.planState = 'refining'; renderPlan();
+      S.planState = 'refining'; S.planProgress = 0; renderPlan();
       for (let i = 0; i < todo.length; i++) {
         const k = todo[i];
         // simulated runs per plan (master prompt 7.3: 20,000 by default, adjustable); the time budget scales with it
@@ -3046,8 +3085,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
         out.profiles[k] = r;
         renderPlan(); renderPrice();
       }
+      S.planTook = Date.now() - (S.planT0 || Date.now());
       S.planState = 'ready'; renderPlan();
       if (S.preview) renderItem();
+      if (S.planShow) { S.planShow = false; planEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
       logTest('ready');
       const cur = out.profiles[S.planTab];
       if (cur && cur.steps && cur.steps.length) announce(`Plans ready. ${cur.label}: ${successFail(cur.p).s} success, a finished craft costs about ${fmtShort(planCost(cur))} Exalted Orbs.`);
@@ -3057,7 +3098,22 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       logTest('error', S.planError || 'error');
     }
   }
-  function drawProgress() { const b = $('#planProgress'); if (b) b.style.width = Math.round(S.planProgress * 100) + '%'; }
+  /**
+   * Progress of the whole job, 0 to 1. The three stages (first routes, search, final simulation) share one number that
+   * only goes up, so the display never runs to the end and starts over.
+   */
+  const RING = 2 * Math.PI * 52;
+  function jobProgress() {
+    const f = Math.max(0, Math.min(1, S.planProgress || 0));
+    const v = S.planState === 'running' ? 0.45 * f : S.planState === 'searching' ? 0.45 + 0.3 * f : S.planState === 'refining' ? 0.75 + 0.25 * f : 1;
+    S.planOverall = Math.max(S.planOverall || 0, Math.min(v, 0.99));
+    return S.planOverall;
+  }
+  function drawProgress() {
+    const p = jobProgress();
+    const c = $('#planRing'); if (c) c.style.strokeDashoffset = String(RING * (1 - p));
+    const t = $('#planPct'); if (t) t.textContent = Math.round(p * 100) + '%';
+  }
   function pctHit(p) { return p < 0.001 ? '<0.1%' : p < 0.1 ? (p * 100).toFixed(1) + '%' : Math.round(p * 100) + '%'; }
   function nextChanceHtml(pl, nx) {
     // Same simulated uses as the tooltip preview, so both show the same numbers.
@@ -3196,7 +3252,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   const usesText = (x) => (x >= 9.95 ? String(Math.round(x)) : x >= 0.95 ? String(+x.toFixed(1)) : String(+x.toFixed(2)));
   /** What a finished craft costs: the average over the simulated crafts that reach every target. The step rows add up to it. */
   function planCost(pl) { return pl.okCost ? pl.okCost.mean : pl.meanCost; }
-  function planCard(pl) {
+  function planCard(pl, bare) {
     if (!pl) return '';
     if (pl.none) return `<div class="plan-card"><p class="sub">${esc(pl.none)}</p></div>`;
     if (pl.impossible) return `<div class="plan-card"><b>Not possible on this item</b><ul class="pnotes">${pl.impossible.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
@@ -3238,10 +3294,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const rows = pl.steps.filter((st) => stepUses(st) >= 0.005);
     const ok = pl.okCost;
     return `<div class="plan-card">
-      <div class="res-head">
+      ${bare ? '' : `<div class="res-head">
         <div class="big"><span class="mk" title="Average cost of the simulated crafts that reach every target. It is the sum of the step rows: uses times price.">Cost</span><b>${money(planCost(pl))}</b></div>
         <div class="big"><span class="mk" title="Share of the simulated crafts that reach every target within ${pl.maxSteps || 600} uses">Success</span><b class="${pl.p >= 0.5 ? 'up' : pl.p < 0.25 ? 'down' : ''}">${successFail(pl.p).s}</b></div>
-      </div>
+      </div>`}
       <div class="next"><span class="mk">Next step</span>${nextHtml}</div>
       <div>
         <div class="steps-head"><span>Steps in order</span><span>Uses · Cost</span></div>
@@ -3350,7 +3406,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     // options, one row each
     const optSum = [`${(+S.simRuns || 20000).toLocaleString('en-US')} runs`, S.budget ? `budget ${S.budget} ex` : 'no budget']
       .concat(it.rarity !== 'Rare' ? [`white base ${S.baseCost || 0} ex`, `${baseLimit()} bases`] : []).join(', ');
-    html += `<details class="optrow" id="optPlan" ${S.optOpen ? 'open' : ''}><summary>${OPT_ICON}<b>Plan options</b><span class="sum">${esc(optSum)}</span></summary><div class="plan-settings">
+    let optHtml = `<details class="optrow" id="optPlan" ${S.optOpen ? 'open' : ''}><summary>${OPT_ICON}<b>Plan options</b><span class="sum">${esc(optSum)}</span></summary><div class="plan-settings">
       <label for="planRuns" title="Simulated crafts per route. More give steadier numbers but take longer.">Runs <select id="planRuns" class="tpl-select">${[5000, 20000, 50000].map((n) => `<option value="${n}" ${+S.simRuns === n ? 'selected' : ''}>${n.toLocaleString('en-US')}</option>`).join('')}</select></label>
       <label for="planBudget">Budget <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBudget" inputmode="decimal" placeholder="none" value="${esc(S.budget)}"></span></label>
       <label for="planBuy" title="Price of a finished item with your targets, seen on the official trade site">Buy instead <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBuy" inputmode="decimal" placeholder="price" value="${esc(S.buyPrice)}"></span></label>
@@ -3365,7 +3421,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const locked = Object.values(S.locks).filter(Boolean).length + it.mods.filter((m) => m.fractured).length;
     const ops = opsFor(it);
     const none = it.flags.mirrored ? 'Mirrored items cannot be modified.' : it.flags.sanctified ? 'Sanctified items cannot be crafted further.' : 'No currency applies to this item.';
-    html += `<details class="optrow" id="optOps" ${S.opsOpen ? 'open' : ''}><summary>${USE_ICON}<b>What you can use now</b><span class="sum">${ops.length} options</span></summary><div class="optbody">
+    optHtml += `<details class="optrow" id="optOps" ${S.opsOpen ? 'open' : ''}><summary>${USE_ICON}<b>What you can use now</b><span class="sum">${ops.length} options</span></summary><div class="optbody">
       <div class="checks" style="margin-bottom:10px">
         <span class="check ${pc < lim.prefix ? 'free' : 'used'}">Prefixes ${pc}/${lim.prefix}</span>
         <span class="check ${sc < lim.suffix ? 'free' : 'used'}">Suffixes ${sc}/${lim.suffix}</span>
@@ -3379,11 +3435,23 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       ${op.cat ? catRow(op) : ''}${op.cur.map((n) => curRow(n)).join('')}${op.omens.map((n) => curRow(n, true)).join('')}
       ${op.blocked.length ? `<div class="sub" style="margin-top:4px">${op.blocked.map((b) => `${esc(b.name)}: ${esc(b.reason)}`).join(' · ')}</div>` : ''}${op.note ? `<div class="sub" style="margin-top:4px">${esc(op.note)}</div>` : ''}</div>`).join('') : `<p class="sub">${esc(none)}</p>`}
     </div></details>`;
-    // the run row
-    html += `<div class="run-row">${busy
-      ? `<div class="progress"><span id="planProgress" style="width:${Math.round(S.planProgress * 100)}%"></span></div><span class="sub">${status}</span><button class="linkish" type="button" id="stopBtn">Stop</button>`
-      : `<button class="btn run" type="button" id="runBtn" ${nTargets ? '' : 'disabled'}>${S.plans && !S.plans.empty ? 'Run again' : 'Find craft route'}</button><span class="sub">${nTargets ? `${nTargets} target${nTargets > 1 ? 's' : ''}` : 'Pick target stats first'}</span>`}</div>`;
-    // the result
+    // a job in progress: one ring with one percentage, the stages below it, nothing else
+    if (busy) {
+      const p = jobProgress();
+      const stage = S.planState === 'running' ? 0 : S.planState === 'searching' ? 1 : 2;
+      const stages = ['First routes', 'Search for a cheaper route', 'Final simulation'];
+      html += `<div class="job">
+        <div class="job-status">Job status:<b>${esc(status)}</b></div>
+        <div class="ring" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(p * 100)}" aria-label="Simulation progress">
+          <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="trk" cx="60" cy="60" r="52"/><circle class="arc" id="planRing" cx="60" cy="60" r="52" stroke-dasharray="${RING.toFixed(2)}" style="stroke-dashoffset:${(RING * (1 - p)).toFixed(2)}"/></svg>
+          <span id="planPct">${Math.round(p * 100)}%</span>
+        </div>
+        <ol class="job-log">${stages.map((t, i) => `<li class="${i < stage ? 'ok' : i === stage ? 'now' : ''}">${t}</li>`).join('')}</ol>
+        <div class="job-foot"><span class="sub">${nTargets} target${nTargets === 1 ? '' : 's'} · ${(+S.simRuns || 20000).toLocaleString('en-US')} crafts per route</span><button class="btn" type="button" id="stopBtn">Cancel</button></div>
+      </div>`;
+      el.innerHTML = html;
+      return;
+    }
     html += '<div class="result">';
     if (S.lastEval) {
       const v = S.lastEval;
@@ -3394,21 +3462,38 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (S.planState === 'error') html += `<div class="plan-card bad-note">The planner stopped: ${esc(S.planError || 'unknown error')}.</div>`;
     else if (S.plans && S.plans.blocked) html += `<div class="plan-card">${esc(S.plans.blocked)} items cannot be crafted with normal currency.${ruleConfBadge(S.plans.blocked === 'Sanctified' ? 'R_SANCTIFIED_LOCK' : 'R_CORRUPTED_LOCK')}</div>`;
     else if (S.plans && !S.plans.empty) {
-      const tabs = PROFILE_KEYS.map((k) => {
+      // the report: the selected route's cost on top, one row per route, then its steps
+      const sel = S.plans.profiles[S.planTab];
+      const nameOf = (k) => (k === 'cheap' ? 'Cheap' : k === 'balanced' ? 'Balanced' : 'Premium');
+      const top = Math.max(1, ...PROFILE_KEYS.map((k) => { const pl = S.plans.profiles[k]; return pl && pl.steps && pl.steps.length ? (pl.okCost ? pl.okCost.p90 : planCost(pl)) : 0; }));
+      const took = S.planTook > 0 ? ` · ${S.planTook >= 60000 ? Math.round(S.planTook / 6000) / 10 + ' min' : Math.max(1, Math.round(S.planTook / 1000)) + ' s'}` : '';
+      html += `<div class="report-head">
+        <div><div class="job-status">Job status:<b class="done">Complete</b></div><div class="sub">${(+S.simRuns || 20000).toLocaleString('en-US')} crafts per route${took}</div></div>
+        ${sel && sel.steps && sel.steps.length ? `<div class="headline"><b title="Average cost of the simulated crafts that reach every target: the sum of the step rows below">${money(planCost(sel))}</b><span class="sub">${nameOf(S.planTab)} route · ${successFail(sel.p).s} success</span></div>` : ''}
+      </div>`;
+      html += `<div class="rtable" role="tablist" aria-label="Routes">${PROFILE_KEYS.map((k) => {
         const pl = S.plans.profiles[k];
-        const sum = !pl ? '…' : pl.steps ? (pl.steps.length ? `${money(planCost(pl))} · ${successFail(pl.p).s}` : 'Done') : pl.impossible ? 'Not possible' : '—';
-        return `<button type="button" class="ptab" role="tab" id="ptab-${k}" aria-controls="planCard" tabindex="${S.planTab === k ? 0 : -1}" data-ptab="${k}" aria-selected="${S.planTab === k}" title="${esc(PROFILE_HINT[k])}"><b>${k === 'cheap' ? 'Cheap' : k === 'balanced' ? 'Balanced' : 'Premium'}</b><span>${sum}</span></button>`;
-      }).join('');
-      html += `<div class="ptabs" role="tablist" aria-label="Route profiles">${tabs}</div>`;
-      html += `<div id="planCard" role="tabpanel" aria-labelledby="ptab-${S.planTab}">${planCard(S.plans.profiles[S.planTab])}</div>`;
+        const has = pl && pl.steps && pl.steps.length;
+        const ok = has && pl.okCost;
+        const bar = ok ? `<i style="left:${(ok.p10 / top * 100).toFixed(1)}%;width:${(Math.max(0, ok.p90 - ok.p10) / top * 100).toFixed(1)}%"></i><u style="left:${(ok.mean / top * 100).toFixed(1)}%"></u>` : '';
+        return `<button type="button" class="rrow" role="tab" id="ptab-${k}" aria-controls="planCard" tabindex="${S.planTab === k ? 0 : -1}" data-ptab="${k}" aria-selected="${S.planTab === k}" title="${esc(PROFILE_HINT[k])}">
+          <span class="rname">${nameOf(k)}</span>
+          <span class="rcost">${has ? money(planCost(pl)) : pl && pl.steps ? 'Done' : pl && pl.impossible ? 'Not possible' : '—'}</span>
+          <span class="rok ${has ? (pl.p >= 0.5 ? 'up' : pl.p < 0.25 ? 'down' : '') : ''}">${has ? successFail(pl.p).s + ' success' : ''}</span>
+          <span class="rbar" ${ok ? `title="8 of 10 finished crafts cost between ${fmt(ok.p10)} and ${fmt(ok.p90)} Exalted Orbs"` : ''}>${bar}</span></button>`;
+      }).join('')}</div>`;
+      html += `<div id="planCard" role="tabpanel" aria-labelledby="ptab-${S.planTab}">${planCard(sel, true)}</div>`;
     }
     html += '</div>';
+    // setup: the options, one row each, and the run button
+    html += optHtml;
+    html += `<div class="run-row"><button class="btn run" type="button" id="runBtn" ${nTargets ? '' : 'disabled'}>${S.plans && !S.plans.empty ? 'Run again' : 'Find craft route'}</button><span class="sub">${nTargets ? `${nTargets} target${nTargets > 1 ? 's' : ''}` : 'Pick target stats first'}</span></div>`;
     el.innerHTML = html;
   }
   const planEl = $('#planPanel');
   planEl.addEventListener('click', (e) => {
     const b = e.target.closest('button, [data-browse]'); if (!b) return;
-    if (b.id === 'runBtn') { S.planArmed = true; clearTimeout(planTimer); runPlans(); return; }
+    if (b.id === 'runBtn') { S.planArmed = true; S.planShow = true; clearTimeout(planTimer); runPlans(); planEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     if (b.id === 'stopBtn') { S.planArmed = false; schedulePlans(); return; }
     if (b.dataset.browse) { S.ex.cat = b.dataset.browse; S.ex.q = ''; openExchange(); return; }
     if (b.dataset.ptab) { S.planTab = b.dataset.ptab; store.set('planTab', S.planTab); renderPlan(); renderPrice(); if (S.preview) renderItem(); return; }
