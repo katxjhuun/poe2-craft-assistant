@@ -2628,13 +2628,15 @@
   }
 
   /**
-   * What a profile may spend on one craft (the player's ranges, 6 Oct 2026): Cheap stays under one Divine Orb,
-   * Balanced runs from two Chaos Orbs to one Divine Orb, Premium from 10 to 100 Divine Orbs; Premium with a "big
-   * pocket" has no limit. The upper end is a hard limit: a simulated craft stops when its next step would pass it and
-   * counts as failed, so no finished craft costs more. The lower end only names the range: a craft that finishes for
-   * less is not made dearer. Used when input.spendLimits is set (the page sets it).
+   * What a profile may spend on one craft: Cheap up to one Divine Orb, Balanced from 1 to 10, Premium from 10 to 100;
+   * Premium with a "big pocket" has no limit. The player asked for such ranges and left the numbers to the planner
+   * (6 Oct 2026). They follow what verified routes cost in the exhaustive sweep (780 routes from white bases): costs
+   * spread over factors of ten. One target at T1: 54% of routes under 1 Divine Orb, 35% from 1 to 10, 2% from 10 to
+   * 100, 10% above; two targets at T2: 39%, 30%, 6%, 24%. The upper end is a hard limit: a simulated craft stops when
+   * its next step would pass it and counts as failed, so no finished craft costs more. The lower end only names the
+   * range: a craft that finishes for less is not made dearer. Used when input.spendLimits is set (the page sets it).
    */
-  const SPEND = { cheap: { hi: ['Divine Orb', 1] }, balanced: { lo: ['Chaos Orb', 2], hi: ['Divine Orb', 1] }, premium: { lo: ['Divine Orb', 10], hi: ['Divine Orb', 100] } };
+  const SPEND = { cheap: { hi: ['Divine Orb', 1] }, balanced: { lo: ['Divine Orb', 1], hi: ['Divine Orb', 10] }, premium: { lo: ['Divine Orb', 10], hi: ['Divine Orb', 100] } };
   function spendOf(name, input) {
     if (!input.spendLimits) return null;
     if (name === 'premium' && input.bigPocket) return { lo: null, hi: null, big: true };
