@@ -25,6 +25,7 @@ function candidates(ctx, st, r) {
   // Homogenising omens, catalysts, runes that change crafting, Runes of Aldur
   A.push({ op: 'exalt', tier: 'base', homog: true }, { op: 'regal', tier: 'base', homog: true });
   for (const tag of ['life', 'fire', 'attack']) A.push({ op: 'catalyst', tag, refined: ctx.cls === 'Jewel' });
+  A.push({ op: 'artificer' }); // runes need a free augment socket
   for (const [name, aug] of Object.entries(ctx.kb.augments || {})) {
     const c = (aug.by_class || {})[ctx.cls];
     if (!c) continue;

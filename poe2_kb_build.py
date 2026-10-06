@@ -232,6 +232,8 @@ legacy=[{'name':'Omen of Homogenising Exaltation / Coronation','items':['Omen of
         {'name':'Omen of Corruption','items':['Omen of Corruption'],'status':'unobtainable since 0.5.0 (legacy)','conf':M2},
         {'name':'Omen of Sinistral Alchemy / Dextral Alchemy','items':['Omen of Sinistral Alchemy','Omen of Dextral Alchemy'],
          'status':'in the game files but not in the game: only the Orb of Alchemy exists','conf':S1,'source':'player (6 Oct 2026); no listing on the Currency Exchange'},
+        {'name':'Omen of Sinistral Coronation / Dextral Coronation','items':['Omen of Sinistral Coronation','Omen of Dextral Coronation'],
+         'status':'in the game files but not in the game: a Regal Orb cannot be aimed at a side','conf':S1,'source':'player (6 Oct 2026); no listing on the Currency Exchange'},
         {'name':'Omen of Greater Annulment','items':['Omen of Greater Annulment'],
          'status':'in the game files but not in the game: only the Orb of Annulment and the Sinistral and Dextral Annulment omens exist','conf':S1,'source':'player (6 Oct 2026); no listing on the Currency Exchange'},
         {'name':'Omen of Recombination','items':['Omen of Recombination'],'status':'removed in 0.5.0','conf':M2},

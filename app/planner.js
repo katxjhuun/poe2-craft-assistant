@@ -549,12 +549,14 @@
         if (!rune || !rune.by_class[cls]) return `${a.item || 'This rune'} does not go on ${cls} items.`;
         if ((rune.by_class[cls].txt || []).some((t) => /Soul modifiers/i.test(t))) return 'Soul modifiers are not supported.';
         const has = (st.runes || []).includes(a.item) || (ctx.item.runes || []).some((r) => (rune.by_class[cls].txt || []).includes(r.text));
-        return has && rune.limit === '1' ? `${a.item} is already socketed (one per item).` : null;
+        if (has && rune.limit === '1') return `${a.item} is already socketed (one per item).`;
+        return freeSockets(ctx, st) < 1 ? NO_SOCKET : null;
       }
       case 'aldur': {
         const rune = ctx.kb.augments && ctx.kb.augments[a.item];
         if (!rune || !rune.by_class[cls]) return `${a.item || 'This rune'} does not go on ${cls} items.`;
-        return st.aldur ? 'A Rune of Aldur is already socketed.' : null;
+        if (st.aldur) return 'A Rune of Aldur is already socketed.';
+        return freeSockets(ctx, st) < 1 ? NO_SOCKET : null;
       }
       case 'verisium': {
         const vu = R === 'Unique' ? ((ctx.kb.verisium_unique_upgrades || {})[ctx.item.name] || []).filter((u) => u.from === ctx.item.base)
@@ -613,8 +615,29 @@
     const taken = groupsOf(rest);
     return outs.some((id) => { const m = ctx.kb.mods[id]; return !m.grp.some((g) => taken.has(g)) && open(ctx, rest, sideOf(m)) > 0; });
   };
+  /**
+   * The rune that adds a suffix slot on this item (Serle's Triumph), when a plan could socket it: the class takes it, the
+   * item does not have it yet, and a socket is free or an Artificer's Orb can add one. null otherwise.
+   */
+  function suffixRune(ix, item) {
+    if (!item || !ix.kb.bases[item.base] || item.rarity === 'Unique') return null;
+    const ctx = makeContext(ix, item);
+    const name = runeFor(ctx, /Suffix Modifiers? allowed/i);
+    if (!name || (item.runes || []).some((r) => /Suffix Modifiers? allowed/i.test(r.text))) return null;
+    const st = toState(ctx, item);
+    return freeSockets(ctx, st) > 0 || !validate(ctx, st, { op: 'artificer' }) ? name : null;
+  }
   /** Augment sockets the item has now, and the most a base of the class gets without corruption. */
   function socketsOf(ctx, st) { return (ctx.item.sockets || []).length + (st.sockets || 0); }
+  /**
+   * Free augment sockets: the item's sockets (at least one per rune it came with, when the text has no Sockets line) and
+   * the ones an Artificer's Orb added, less the runes it came with and the ones socketed since.
+   */
+  function freeSockets(ctx, st) {
+    const came = (ctx.item.runes || []).length;
+    return Math.max((ctx.item.sockets || []).length, came) + (st.sockets || 0) - came - (st.socketed || 0);
+  }
+  const NO_SOCKET = "No free augment socket: an Artificer's Orb adds one where the item class takes it.";
   function maxSockets(cls) { return cls === 'Body Armour' || /^Two Hand/.test(cls) || ['Bow', 'Staff', 'Warstaff', 'Crossbow', 'Talisman'].includes(cls) ? 2 : 1; }
   function sacrificeFor(cls) {
     return JEWELLERY.includes(cls) ? "Kamasa's Orb of Sacrifice" : ARMOUR.includes(cls) ? "Kopec's Orb of Sacrifice"
@@ -910,7 +933,7 @@
     switch (a.op) {
       case 'newbase':
         // a fresh white base: nothing socketed, no catalyst quality, not runeforged
-        st.rarity = 'Normal'; st.mods = []; st.runes = []; st.soul = false; st.xCrafted = 0; st.xSuffix = 0; st.aldur = null;
+        st.rarity = 'Normal'; st.mods = []; st.runes = []; st.socketed = 0; st.sockets = 0; st.soul = false; st.xCrafted = 0; st.xSuffix = 0; st.aldur = null;
         st.catQ = 0; st.catTag = null; st.quality = 0; st.verisium = false;
         break;
       case 'transmute':
@@ -1054,6 +1077,7 @@
         const txt = ((ctx.kb.augments[a.item] || {}).by_class || {})[ctx.cls];
         const t = txt ? (txt.txt || []).join('\n') : '';
         st.runes = (st.runes || []).concat([a.item]);
+        st.socketed = (st.socketed || 0) + 1;
         if (/additional Crafted Modifier/i.test(t)) st.xCrafted = (st.xCrafted || 0) + 1;
         const sx = /\+(\d+) Suffix Modifiers? allowed/i.exec(t);
         if (sx) st.xSuffix = (st.xSuffix || 0) + +sx[1];
@@ -1064,6 +1088,7 @@
         // ones stay (t30). Equivalent: the same modifier with the element named the other way, same tier.
         const to = ALDUR_ELEMENT[a.item];
         st.aldur = to;
+        st.socketed = (st.socketed || 0) + 1;
         for (const m of st.mods) {
           if (m.frac || !m.id) continue;
           const id = aldurTwin(ctx, m.id, to);
@@ -1283,21 +1308,48 @@
       return r && params.runes !== false ? r : null;
     }
     function runeCandidate(st, left) {
+      // a rune goes into a free augment socket; where none is free an Artificer's Orb adds one first (if the class takes it)
+      const socket = (a) => {
+        const err = validate(ctx, st, a);
+        if (!err) return a;
+        return err === NO_SOCKET && !validate(ctx, st, { op: 'artificer' }) ? { op: 'artificer' } : null;
+      };
       // Astrid's Creativity: more crafted-modifier goals than crafted slots
       const cap = (ctx.craftedCap || 1) + (st.xCrafted || 0);
       if (goals.filter((g) => g.essenceOnly).length > cap) {
         const r = runeFor(ctx, /additional Crafted Modifier/i);
-        if (r && !validate(ctx, st, { op: 'rune_rule', item: r })) return { op: 'rune_rule', item: r };
+        const a = r && socket({ op: 'rune_rule', item: r });
+        if (a) return a;
       }
-      // Serle's Triumph: more suffix goals than suffix slots on the Rare item
-      if (goals.filter((g) => g.side === 'suffix').length > limitsBase(ctx, Object.assign({}, st, { rarity: 'Rare' })).suffix + (st.xSuffix || 0)) {
-        const r = runeFor(ctx, /Suffix Modifiers? allowed/i);
-        if (r && !validate(ctx, st, { op: 'rune_rule', item: r })) return { op: 'rune_rule', item: r };
+      // Serle's Triumph (+1 Suffix Modifier allowed): a fourth suffix goal. It is socketed once the Rare item's suffix
+      // slots all hold goals, so a base that is thrown away before that costs no rune.
+      const sLim = limitsBase(ctx, Object.assign({}, st, { rarity: 'Rare' })).suffix + (st.xSuffix || 0);
+      if (st.rarity === 'Rare' && goals.filter((g) => g.side === 'suffix').length > sLim && left.some((g) => g.side === 'suffix')) {
+        const onS = st.mods.filter((m) => m.side === 'suffix');
+        if (onS.length >= sLim && onS.every((m) => useful(m, goals))) {
+          const r = runeFor(ctx, /Suffix Modifiers? allowed/i);
+          const a = r && socket({ op: 'rune_rule', item: r });
+          if (a) return a;
+        }
       }
-      // a Rune of Aldur that finishes element goals from the other elements' modifiers, keeping every finished goal
-      if (!st.aldur && (st.rarity === 'Magic' || st.rarity === 'Rare')) {
+      // a Rune of Aldur that finishes element goals from the other elements' modifiers, keeping every finished goal.
+      // Sockets go to the runes that open a slot first: with one socket (a spear, a one-hand mace) and a fourth suffix
+      // goal, an Aldur rune would leave no socket for Serle's Triumph.
+      const reserve = (goals.filter((g) => g.side === 'suffix').length > sLim && runeFor(ctx, /Suffix Modifiers? allowed/i) ? 1 : 0)
+        + (goals.filter((g) => g.essenceOnly).length > cap && runeFor(ctx, /additional Crafted Modifier/i) ? 1 : 0);
+      const canAdd = validate(ctx, Object.assign({}, st, { sockets: 0 }), { op: 'artificer' }) === null || socketsOf(ctx, st) < maxSockets(ctx.cls)
+        ? Math.max(0, maxSockets(ctx.cls) - socketsOf(ctx, st)) : 0;
+      const spare = freeSockets(ctx, st) + (MARTIAL.includes(ctx.cls) || ctx.cls === 'Wand' || ctx.cls === 'Staff' || ARMOUR.includes(ctx.cls) ? canAdd : 0) - reserve;
+      if (spare > 0 && !st.aldur && (st.rarity === 'Magic' || st.rarity === 'Rare')) {
         for (const item of Object.keys(ALDUR_ELEMENT)) {
           const a = { op: 'aldur', item };
+          if (validate(ctx, st, a) === NO_SOCKET) { // the rune would finish a goal: an Artificer's Orb for its socket first
+            const art = { op: 'artificer' };
+            if (validate(ctx, st, art) || validate(ctx, Object.assign({}, st, { sockets: (st.sockets || 0) + 1 }), a)) continue;
+            const after1 = apply(ctx, Object.assign({}, st, { sockets: (st.sockets || 0) + 1 }), a, () => 0.5).state;
+            if (left.some((g) => goalMet(after1, g)) && goals.every((x) => !goalMet(st, x) || goalMet(after1, x))) return art;
+            continue;
+          }
           if (validate(ctx, st, a)) continue;
           const after = apply(ctx, st, a, () => 0.5).state;
           if (left.some((g) => goalMet(after, g)) && goals.every((x) => !goalMet(st, x) || goalMet(after, x))) return a;
@@ -1440,7 +1492,7 @@
           if (junk && left.some((x) => x.side === junk.side && !x.des && !x.essenceOnly) && params.pair && params.restart) return { op: 'newbase' };
         }
         if (open(ctx, st, 'prefix') + open(ctx, st, 'suffix') > 0 && st.mods.length < 2) return { op: 'augment', tier: params.magicTier || params.tier };
-        return { op: 'regal', tier: params.magicTier || params.tier, side: lean && params.sideOmens ? lean : null, homog: homogHelps(st, left.filter((x) => !x.des && !x.essenceOnly), OMEN.homogRegal) };
+        return { op: 'regal', tier: params.magicTier || params.tier, side: lean && !ctx.legacy.has(OMEN.coronation[lean]) && params.sideOmens ? lean : null, homog: homogHelps(st, left.filter((x) => !x.des && !x.essenceOnly), OMEN.homogRegal) };
       }
       if (R !== 'Rare') return { fail: 'unsupported rarity' };
       const desJunk = st.mods.find((m) => m.des && !useful(m, goals) && !m.frac);
@@ -1567,7 +1619,10 @@
       return null;
     }
     const lim = E.slotLimits({ rarity: 'Rare', slotDelta: ctx.slotDelta }, ctx.cls);
-    const extra = runeFor(ctx, /Suffix Modifiers? allowed/i) ? 1 : 0;
+    // Serle's Triumph adds a suffix slot where the class takes the rune and the item has, or can get, a socket for it
+    const st0 = { sockets: 0, socketed: 0 };
+    const hasRune = (ctx.item.runes || []).some((r) => /Suffix Modifiers? allowed/i.test(r.text));
+    const extra = !hasRune && runeFor(ctx, /Suffix Modifiers? allowed/i) && (freeSockets(ctx, st0) > 0 || !validate(ctx, Object.assign({ rarity: 'Rare', mods: [] }, st0), { op: 'artificer' })) ? 1 : 0;
     if (n.prefix > lim.prefix) return `more prefix targets (${n.prefix}) than a Rare item of this class holds (${lim.prefix})`;
     if (n.suffix > lim.suffix + extra) return `more suffix targets (${n.suffix}) than a Rare item of this class holds (${lim.suffix + extra})`;
     return null;
@@ -2969,6 +3024,6 @@
     goalsFromTargets, goalMet, meets, nearMiss, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
     availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, goalClash, essencesForBase, liquidFor, CATALYST_DEFAULT,
     emulate, chanceOf, familyChances, runStrategy, runStrategyAsync, groupsMet, revealOptions, desSides, DES_OPTIONS,
-    expandStrategy, recipeParams, relevantKeys, SPACE, SEARCH, improvePlan, searchOf: (plan) => SCREENS.get(plan), legacyItems,
+    expandStrategy, recipeParams, relevantKeys, SPACE, SEARCH, improvePlan, searchOf: (plan) => SCREENS.get(plan), legacyItems, suffixRune,
   };
 });

@@ -481,7 +481,7 @@ test('7.4 beam search never returns a worse plan than the screened grid', async 
 
 test('an omen without a price is left out of the plan instead of counting as free', () => {
   const item = E.parseItem(ix, 'Item Class: Sceptres\nRarity: Normal\nRattling Sceptre\n--------\nItem Level: 82').item;
-  const targets = { // two suffixes need a Rare, so the strategy goes through a Regal Orb (where Coronation omens aim)
+  const targets = { // two suffixes on a Rare item: the strategy removes misses with a Chaos Orb and the suffix Erasure omen
     'suffix-0': { fam: 'GlobalIncreaseMinionSpellSkillGemLevelWeapon', group: 'suffix', minTier: 2, required: true, label: 'minion level' },
     'suffix-1': { fam: 'MinionLife', group: 'suffix', minTier: 3, required: true, label: 'minion life' },
   };
@@ -489,17 +489,20 @@ test('an omen without a price is left out of the plan instead of counting as fre
   const st = P.toState(ctx, item);
   const { goals } = P.goalsFromTargets(ctx, targets);
   goals.forEach((g) => { g.eff = g.tier; });
-  const params = P.expandStrategy({ tier: 'greater', sideOmens: true, start: 'transmute' }); // a strategy that aims with side omens
-  const priceOf = (n) => (/Coronation/.test(n) ? null : 5);
+  const params = P.expandStrategy({ tier: 'greater', sideOmens: true, start: 'transmute', removal: 'erasure' }); // aims with side omens
+  const priceOf = (n) => (/Erasure/.test(n) ? null : 5);
   const r = P.simulate(ctx, st, goals, params, { trials: 400, seed: 5, priceOf, baseCost: 1 });
-  assert.ok(!r.missingPrices.some((n) => /Coronation/.test(n)), 'not counted at 0');
-  assert.ok(r.skippedUnpriced.some((n) => /Coronation/.test(n)), 'reported as left out');
-  assert.ok(!r.steps.some((x) => x.names.some((n) => /Coronation/.test(n))), 'no step uses it');
+  assert.ok(!r.missingPrices.some((n) => /Erasure/.test(n)), 'not counted at 0');
+  assert.ok(r.skippedUnpriced.some((n) => /Erasure/.test(n)), 'reported as left out');
+  assert.ok(!r.steps.some((x) => x.names.some((n) => /Erasure/.test(n))), 'no step uses it');
   assert.ok(r.steps.some((x) => x.names.includes('Omen of Dextral Exaltation')), 'priced side omens are still used');
   // with a price the omen comes back
   const priced = P.simulate(ctx, st, goals, params, { trials: 400, seed: 5, priceOf: () => 5, baseCost: 1 });
   assert.deepEqual(priced.skippedUnpriced, []);
-  assert.ok(priced.steps.some((x) => x.names.some((n) => /Coronation/.test(n))), 'the priced omen is used');
+  assert.ok(priced.steps.some((x) => x.names.some((n) => /Erasure/.test(n))), 'the priced omen is used');
+  // the Coronation omens are in the game files but not in the game: a Regal Orb is never aimed, and nothing is reported
+  assert.ok(!priced.steps.some((x) => x.names.some((n) => /Coronation/.test(n))));
+  assert.match(P.validate(ctx, Object.assign({}, st, { rarity: 'Magic' }), { op: 'regal', side: 'suffix' }) || '', /Omen of Dextral Coronation is not in the game/);
 });
 
 test('omens that are not in the game are never used, unpriced optional omens are left out, and unpriced plans rank last', () => {
@@ -634,6 +637,44 @@ test('five targets on a jewel: the plan goes through Potent Liquid Contempt, a d
   const six = Object.assign({}, targets, { 'prefix-2': { fam: kb.mods[extra.modId].fam, group: 'prefix', minTier: null, required: true, label: 'attack damage' } });
   const no = await P.buildPlans({ ix, item: frac, targets: six, locks: {}, priceOf: () => 10, baseCost: 1, weights, trials: 100, screenTrials: 40, beamBudgetMs: 0 });
   assert.match(no.profiles.premium.impossible[0], /five modifiers at most/);
+});
+
+test("Serle's Triumph: a fourth suffix (seven modifiers), socketed when three suffix goals are on the item", async () => {
+  // the player's gloves: two runes, three prefixes and four suffixes
+  const worn = E.parseItem(ix, ['Item Class: Gloves', 'Rarity: Rare', 'Demon Mitts', 'Polished Bracers', '--------', 'Sockets: S S', '--------', 'Item Level: 80', '--------',
+    '+1 Suffix Modifier allowed (rune)', 'Can roll Marksman modifiers (rune)', '--------', '33% increased Projectile Speed', '31% increased Projectile Damage',
+    'Adds 2 to 58 Lightning damage to Attacks', '+2 to Level of all Projectile Skills', '32% increased Critical Hit Chance',
+    'Gain Deflection Rating equal to 19% of Evasion Rating', '28% increased Critical Damage Bonus'].join('\n'));
+  assert.deepEqual(E.itemLimits(ix, worn.item), { prefix: 3, suffix: 4 });
+  assert.deepEqual([worn.item.mods.filter((m) => m.slot === 'prefix').length, worn.item.mods.filter((m) => m.slot === 'suffix').length], [3, 4]);
+  assert.ok(!worn.warnings.some((w) => w.level === 'error'), JSON.stringify(worn.warnings.filter((w) => w.level === 'error')));
+  assert.equal(P.suffixRune(ix, worn.item), null, 'the rune is already there');
+  // gloves without it: the plans can socket it (an Artificer's Orb first when there is no socket)
+  const gloves = E.parseItem(ix, ['Item Class: Gloves', 'Rarity: Rare', 'Test', 'Polished Bracers', '--------', 'Item Level: 82', '--------',
+    '+25% to Fire Resistance', '+25% to Cold Resistance', '+25% to Lightning Resistance'].join('\n')).item;
+  assert.equal(P.suffixRune(ix, gloves), "Serle's Triumph");
+  const targets = {};
+  gloves.mods.forEach((m, i) => { targets['suffix-' + i] = { fam: kb.mods[m.modId].fam, group: 'suffix', minTier: null, required: true, label: m.text }; });
+  const fourth = E.parseItem(ix, ['Item Class: Gloves', 'Rarity: Rare', 'Test', 'Polished Bracers', '--------', 'Item Level: 82', '--------', '+20 to Dexterity'].join('\n')).item.mods[0];
+  targets['suffix-3'] = { fam: kb.mods[fourth.modId].fam, group: 'suffix', minTier: 5, required: true, label: 'dexterity' };
+  const ctx = P.makeContext(ix, gloves);
+  const { goals } = P.goalsFromTargets(ctx, targets);
+  goals.forEach((g) => { g.eff = g.tier; });
+  assert.equal(goals.filter((g) => g.side === 'suffix').length, 4);
+  const r = P.simulate(ctx, P.toState(ctx, gloves), goals, P.expandStrategy({ sideOmens: true, removal: 'annul' }), { trials: 200, seed: 3, priceOf: () => 10 });
+  // a missed fourth suffix is hard to clear without losing one of the three (the omen takes any suffix), so many runs do not finish
+  assert.ok(r.p > 0.2, 'finishes: ' + r.p);
+  const first = (name) => r.steps.findIndex((x) => x.names.includes(name));
+  assert.ok(first("Artificer's Orb") >= 0 && first("Serle's Triumph") > first("Artificer's Orb"), 'a socket first, then the rune: ' + r.steps.map((x) => x.key).join('; '));
+  assert.ok(Math.abs(r.steps[first("Serle's Triumph")].avg - 1) < 0.01, 'socketed once');
+  // the planner takes four suffix targets on gloves, not five; a ring has no socket for the rune
+  const out = await P.buildPlans({ ix, item: gloves, targets, locks: {}, priceOf: () => 10, baseCost: 1, trials: 200, screenTrials: 40, beamBudgetMs: 0 });
+  assert.ok(out.profiles.balanced.p > 0, JSON.stringify(out.profiles.balanced.impossible || out.profiles.balanced.fails || 'route'));
+  const five = Object.assign({}, targets, { 'suffix-4': { fam: 'ManaRegeneration', group: 'suffix', minTier: null, required: true, label: 'mana regeneration' } });
+  const no = await P.buildPlans({ ix, item: gloves, targets: five, locks: {}, priceOf: () => 10, baseCost: 1, trials: 100, screenTrials: 40, beamBudgetMs: 0 });
+  assert.match(no.profiles.premium.impossible[0], /More suffix targets \(5\) than a Rare item of this class holds \(4\)/);
+  const ring = E.parseItem(ix, 'Item Class: Rings\nRarity: Normal\nRuby Ring\n--------\nItem Level: 82').item;
+  assert.equal(P.suffixRune(ix, ring), null);
 });
 
 test('jewels are desecrated with the Preserved Cranium only (no Gnawed or Ancient Cranium in the game)', () => {
@@ -930,8 +971,13 @@ test("runes that change crafting: Astrid's Creativity a second crafted modifier;
   const sword = E.parseItem(ix, 'Item Class: One Hand Maces\nRarity: Rare\nTest\nMarauding Mace\n--------\nItem Level: 82\n--------\n+20% to Fire Resistance').item;
   const sc = ctxOf(sword);
   const st = P.toState(sc, sword);
-  assert.equal(P.validate(sc, st, { op: 'rune_rule', item: "Astrid's Creativity" }), null);
-  assert.equal(P.apply(sc, st, { op: 'rune_rule', item: "Astrid's Creativity" }, P.rngFrom(1)).state.xCrafted, 1);
+  // a rune needs a free augment socket; an Artificer's Orb adds one
+  assert.match(P.validate(sc, st, { op: 'rune_rule', item: "Astrid's Creativity" }), /No free augment socket/);
+  const holed = P.apply(sc, st, { op: 'artificer' }, P.rngFrom(1)).state;
+  assert.equal(P.validate(sc, holed, { op: 'rune_rule', item: "Astrid's Creativity" }), null);
+  const runed = P.apply(sc, holed, { op: 'rune_rule', item: "Astrid's Creativity" }, P.rngFrom(1)).state;
+  assert.equal(runed.xCrafted, 1);
+  assert.match(P.validate(sc, runed, { op: 'rune_rule', item: "Serle's Triumph" }), /No free augment socket/, 'the one socket is taken');
 });
 
 test('workbench: the emulator keeps the modifiers that stay, the calculator and the stat shares agree', () => {
@@ -1205,7 +1251,9 @@ test('Void Flux, Omen of Putrefaction, Homogenising omens, Altered Collarbone, c
   assert.ok(ex.destroyed && /Back to you: \+15% to Fire Resistance/.test(ex.outcome) && /Lost \(socket-bound\): Can roll Soul modifiers/.test(ex.outcome), ex.outcome);
   assert.ok(kb.augments["Medved's Tending"].bound);
   // Rune of Aldur: Cold modifiers turn into the same tier of Fire ones
-  const staff = it(['Item Class: Staves', 'Rarity: Rare', 'Test', 'Chiming Staff', '--------', 'Item Level: 82', '--------', '120% increased Cold Damage', '+4 to Level of all Cold Spell Skills']);
+  const noSocket = it(['Item Class: Staves', 'Rarity: Rare', 'Test', 'Chiming Staff', '--------', 'Item Level: 82', '--------', '120% increased Cold Damage', '+4 to Level of all Cold Spell Skills']);
+  assert.match(P.emulate(ix, noSocket, { op: 'aldur', item: 'Passion of Aldur' }, { seed: 1 }).reason, /No free augment socket/);
+  const staff = it(['Item Class: Staves', 'Rarity: Rare', 'Test', 'Chiming Staff', '--------', 'Sockets: S', '--------', 'Item Level: 82', '--------', '120% increased Cold Damage', '+4 to Level of all Cold Spell Skills']);
   const al = E.parseItem(ix, P.emulate(ix, staff, { op: 'aldur', item: 'Passion of Aldur' }, { seed: 1 }).text).item;
   assert.equal(al.mods.length, 2);
   assert.ok(al.mods.every((m) => /Fire/.test(m.fam) && !/Cold/.test(m.fam)), JSON.stringify(al.mods.map((m) => m.fam)));

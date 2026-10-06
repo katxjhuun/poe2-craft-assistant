@@ -1,6 +1,9 @@
 /* Full-target coverage: can the planner build a route when every modifier slot of the item is a target?
  *
- *   node scripts/selftest/full_targets.js [--workers N] [--only <regex on scenario id>] [--limit N]
+ *   node scripts/selftest/full_targets.js [--workers N] [--only <regex on scenario id>] [--limit N] [--seven]
+ *
+ * --seven: the classes that take the rune Serle's Triumph (+1 Suffix Modifier allowed) with a socket for it: three
+ * prefixes and four suffixes. Writes reports/full-targets-seven.*.
  *
  * For every test base, from a white and from a Rare start, the targets fill the item: three prefixes and three
  * suffixes on gear, five on a jewel (three suffixes, a prefix and the liquid emotion modifier: recipe c15). The plans
@@ -26,7 +29,7 @@ if (!isMainThread && workerData === 'full-targets') {
 }
 
 /** Targets that fill the item: families spread over the weights of each side (a common, a middle and a rarer one). */
-function fullTargets(base) {
+function fullTargets(base, seven) {
   const { load } = require('./lib.js');
   const { goalFamilies, labelOf } = require('./scenarios.js');
   const { kb } = load();
@@ -60,7 +63,7 @@ function fullTargets(base) {
     if (liquid) targets['prefix-1'] = { fam: kb.mods[liquid.mod].fam, group: 'liquid', minTier: null, required: true, label: labelOf(liquid.mod) };
   } else {
     put('prefix', spread('prefix', 3));
-    put('suffix', spread('suffix', 3));
+    put('suffix', spread('suffix', seven ? 4 : 3));
   }
   return targets;
 }
@@ -91,9 +94,15 @@ if (isMainThread && require.main === module) {
   const progressFile = path.join(reports, 'sweep-progress.txt');
   let all = [];
   let seed = 700;
+  const SEVEN = args.includes('--seven');
   for (const base of testBases()) {
-    const targets = fullTargets(base);
-    for (const start of ['white', 'rare']) all.push({ id: `${base}|full|${start}`, base, cls: kb.bases[base].cls, ilvl: 82, start, group: 'full', targets, seed: seed++ });
+    if (SEVEN) {
+      // only where a plan can socket the rune: the class takes it and an Artificer's Orb can add a socket
+      const { P, input } = S.setup({ base, ilvl: 82, start: 'white', targets: {}, seed: 1 });
+      if (!P.suffixRune(input.ix, input.item)) continue;
+    }
+    const targets = fullTargets(base, SEVEN);
+    for (const start of ['white', 'rare']) all.push({ id: `${base}|full${SEVEN ? '7' : ''}|${start}`, base, cls: kb.bases[base].cls, ilvl: 82, start, group: 'full', targets, seed: seed++ });
   }
   const only = argv('--only', null);
   if (only) all = all.filter((s) => new RegExp(only).test(s.id));
@@ -143,8 +152,9 @@ if (isMainThread && require.main === module) {
       for (const r of low) for (const n of NAMES) { const x = r.profiles[n]; if (x && x.status === 'route' && x.p < 0.5) L.push(`| ${r.id} | ${n} | ${Math.round(x.p * 100)}% | ${Math.round(x.cps / div).toLocaleString('en-US')} div | ${Math.round(x.unfinished * 100)}% | ${Math.round(x.dead * 100)}% |`); }
       L.push('');
     }
-    fs.writeFileSync(path.join(reports, 'full-targets.md'), L.join('\n'));
-    fs.writeFileSync(path.join(reports, 'full-targets.json'), JSON.stringify({ date: new Date().toISOString(), seconds: Math.round((Date.now() - t0) / 1000), results, errors }, null, 1));
+    const tag = SEVEN ? '-seven' : '';
+    fs.writeFileSync(path.join(reports, `full-targets${tag}.md`), L.join('\n').replace('gear: 3 prefixes + 3 suffixes', SEVEN ? "gear with the rune Serle's Triumph: 3 prefixes + 4 suffixes" : 'gear: 3 prefixes + 3 suffixes'));
+    fs.writeFileSync(path.join(reports, `full-targets${tag}.json`), JSON.stringify({ date: new Date().toISOString(), seconds: Math.round((Date.now() - t0) / 1000), results, errors }, null, 1));
     fs.writeFileSync(progressFile, `100.0 ${done}/${all.length} scenarios, finished in ${Math.round((Date.now() - t0) / 60000)} min, ${errors.length} errors\n`);
     console.log(`full targets: ${results.length} scenarios in ${Math.round((Date.now() - t0) / 60000)} min, ${errors.length} errors; planner time ${(q(ms, 0.5) / 1000).toFixed(0)} s median, ${(q(ms, 0.9) / 1000).toFixed(0)} s at 90%`);
     console.log(lines.join('\n'));

@@ -1545,6 +1545,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     // A jewel holds 2 + 2, and three on one side through Potent Liquid Contempt (five modifiers in all, recipe c15):
     // a third target row on each side; the plans take three on one side only.
     if (it.itemClass === 'Jewel') return { prefix: Math.max(lim.prefix, 3), suffix: Math.max(lim.suffix, 3) };
+    // Serle's Triumph (a rune) allows one more suffix where the class takes it and the item has or can get a socket
+    if (P.suffixRune(S.ix, it)) return { prefix: lim.prefix, suffix: lim.suffix + 1 };
     return lim;
   }
   /**
@@ -2475,7 +2477,12 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       html += `<div class="side"><div class="side-head"><b>${side === 'prefix' ? 'Prefixes' : 'Suffixes'}</b><span class="sub num"${holds}>${have} / ${cap[side]}</span></div>`;
       if (!n) html += '<div class="sub">No slots on this side.</div>';
       // rows past what the item holds now open when it becomes Magic (the first) or Rare (the rest)
-      for (let i = 0; i < n; i++) html += rowHtml(side, i, i >= lim[side] ? (i < 1 ? 'Magic' : it.itemClass === 'Jewel' && i >= 2 ? '· a third one comes through Potent Liquid Contempt' : 'Rare') : null);
+      const rune = side === 'suffix' && it.itemClass !== 'Jewel' ? P.suffixRune(S.ix, it) : null;
+      for (let i = 0; i < n; i++) {
+        const later = i < lim[side] ? null : i < 1 ? 'Magic' : it.itemClass === 'Jewel' && i >= 2 ? '· a third one comes through Potent Liquid Contempt'
+          : rune && i === cap[side] - 1 ? `· one more with the rune ${rune} (needs an augment socket)` : 'Rare';
+        html += rowHtml(side, i, later);
+      }
       html += '</div>';
     }
     el.innerHTML = html;
