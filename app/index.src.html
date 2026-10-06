@@ -85,6 +85,29 @@ h2 { margin: 0; font: 700 14px/1.2 var(--f-ui); letter-spacing: .14em; text-tran
 /* top bar */
 .top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 40; background: var(--bar); box-shadow: 0 0 0 100vmax var(--bar); clip-path: inset(0 -100vmax); display: flex; align-items: center; gap: 12px; padding: 10px 0; flex-wrap: wrap; }
 .brand { font: 800 16px/1 var(--f-ui); color: var(--accent); letter-spacing: .16em; text-transform: uppercase; margin-right: auto; }
+/* the desktop program's price check window (?view=price): one compact card, nothing else of the page */
+#priceView { display: none; }
+html.pv .wrap { display: none; }
+html.pv #priceView { display: block; }
+html.pv body { padding: 0; background: var(--panel); }
+.pv-card { padding: 10px 12px 12px; display: grid; gap: 8px; font-size: 14px; }
+.pv-head { display: flex; align-items: flex-start; gap: 8px; }
+.pv-name { font: 19px/1.15 var(--f-game); flex: 1; min-width: 0; color: var(--g-normal); }
+.pv-name.magic { color: var(--g-magic); } .pv-name.rare { color: var(--g-rare); } .pv-name.unique { color: var(--g-unique); }
+.pv-name small { display: block; font: 13px/1.3 var(--f-ui); color: var(--muted); margin-top: 2px; }
+.pv-stats { display: grid; gap: 1px; max-height: 36vh; overflow: auto; }
+.pv-stat { display: grid; grid-template-columns: 18px minmax(0, 1fr) 60px; gap: 6px; align-items: center; padding: 2px 0; }
+.pv-stat.off span { color: var(--faint); text-decoration: line-through; }
+.pv-stat input[type="number"] { width: 60px; background: var(--inset); border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 4px; text-align: right; font-size: 13px; }
+.pv-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pv-bar .sub { margin-left: auto; }
+.pv-list { display: grid; border-top: 1px solid var(--line); }
+.pv-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 52px; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--line); align-items: center; font-variant-numeric: tabular-nums; }
+.pv-row .money { font-weight: 700; color: var(--accent); font-size: 15.5px; }
+.pv-row .n { color: var(--muted); }
+.pv-row .age { color: var(--muted); font-size: 12.5px; text-align: right; }
+.pv-note { color: var(--muted); font-size: 12.5px; }
+.pv-err { color: var(--warn); }
 .bridge { font-size: 13px; color: var(--up); border: 1px solid rgba(111,181,138,.5); border-radius: 999px; padding: 3px 11px; white-space: nowrap; }
 .unit select { background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r); padding: 6px 8px; }
 /* tools: the page's sections as a row of tabs */
@@ -662,6 +685,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
 }
 </style>
 
+<div id="priceView"></div>
 <div class="wrap">
   <header class="top">
     <span class="brand">PoE2 Craft Assistant</span>
@@ -989,6 +1013,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
 
   // ============================================================ boot
   document.documentElement.lang = 'en';
+  // The desktop program opens this page a second time as its price check window (?view=price): only the compact card
+  // is shown, and nothing of the craft session is read or written there.
+  const PRICE_VIEW = /[?&]view=price\b/.test(location.search);
+  if (PRICE_VIEW) { document.title = 'PoE2 Price Check'; document.documentElement.classList.add('pv'); }
   $('#exampleBtns').innerHTML = SAMPLES.map((s) => `<button class="chip" type="button" data-sample="${esc(s.id)}">${esc(s.label)}</button>`).join('');
 
   // Published files keep their paths across versions, so ask the server each time (a copy that did not change comes
@@ -1011,6 +1039,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       S.ix.essenceModsByClass = new Map(Object.entries(weights.essences || {}).map(([c, l]) => [c, new Set(l.map((r) => r.mod))])); // ... of the item's class
     }
     for (const [name, meta] of Object.entries(kb.currency_metadata_ids)) { S.sidByName[name] = meta.split('/').pop(); S.nameBySid[meta.split('/').pop()] = name; }
+    if (PRICE_VIEW) { priceViewStart(); return; }
     const last = store.get('lastText', null);
     S.targets = store.get('targets', {});
     S.locks = store.get('locks', {});
@@ -1027,7 +1056,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   }).catch((err) => {
     $('#itemView').innerHTML = `<div class="tt"><div class="tt-empty">Could not load the knowledge base (${esc(err.message)}). Reload the page.</div></div>`;
   });
-  connectPrices();
+  if (!PRICE_VIEW) connectPrices();
 
   // ============================================================ personal session and templates (per viewer)
   // The craft session (every pasted item, the steps, what they cost and the value estimate at the time) and the
@@ -1294,6 +1323,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     }, () => { S.pricesState = 'off'; renderTicker(); });
   }
   function renderLeagueSelect() {
+    if (S.league && store.get('league', null) !== S.league) store.set('league', S.league); // the price check window reads it
     const sel = $('#league');
     const list = S.meta ? S.meta.leagues.map((l) => l.name) : FALLBACK_LEAGUES.slice();
     for (const l of S.myLeagues) if (!list.includes(l.name)) list.push(l.name);
@@ -1514,19 +1544,136 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const chip = $('#bridgeChip');
     chip.hidden = false;
     chip.textContent = `${info.hotkey}: hover an item in game`;
-    chip.title = `The desktop program is connected. With ${info.game} in front, hover an item and press ${info.hotkey}: the item is loaded here and its price check opens.`;
+    chip.title = `The desktop program is connected. With ${info.game} in front, hover an item and press ${info.hotkey}: the item is loaded here. An item copied in game another way (Ctrl+C, or the price check of Exiled Exchange 2 or PoE Overlay II) is loaded as well.`;
     $('#quickPaste').placeholder = `Hover an item in game and press ${info.hotkey}, or paste it here`;
     const es = new EventSource('/events');
     es.onmessage = (e) => {
       let m = null;
       try { m = JSON.parse(e.data); } catch (x) { return; }
-      if (m && typeof m.text === 'string') bridgeItem(m.text);
+      if (m && typeof m.text === 'string') bridgeItem(m.text, m.source);
     };
   }
-  function bridgeItem(text) {
+  // ------------------------------------------------------------ price check window (desktop program, ?view=price)
+  // On the program's hotkey the item's search is sent to the trade site through the program (one search per key press
+  // or Search click; the program keeps to the site's rate limits and uses no account), and the first listings are
+  // shown here: the compact view price check tools give. The player chose this knowingly (6 Oct 2026): the endpoints
+  // are not in the game company's documented API.
+  const PV = { info: null, item: null, presets: [], active: null, res: null, err: null, busy: false, showAll: false, url: null };
+  const TRADE_CUR = { exalted: 'Exalted Orb', divine: 'Divine Orb', chaos: 'Chaos Orb', regal: 'Regal Orb', vaal: 'Vaal Orb', alch: 'Orb of Alchemy', annul: 'Orb of Annulment',
+    transmute: 'Orb of Transmutation', aug: 'Orb of Augmentation', mirror: 'Mirror of Kalandra', chance: 'Orb of Chance', gcp: "Gemcutter's Prism", artificers: "Artificer's Orb" };
+  const pvPreset = () => PV.presets.find((x) => x.id === PV.active) || PV.presets[0] || null;
+  const pvLeague = () => store.get('league', null) || 'Standard';
+  function pvAgo(iso) {
+    const t = Date.parse(iso);
+    if (!(t > 0)) return '';
+    const m = Math.max(0, (Date.now() - t) / 60000);
+    return m < 60 ? Math.round(m) + ' min' : m < 1440 ? Math.round(m / 60) + ' h' : Math.round(m / 1440) + ' d';
+  }
+  async function priceViewStart() {
+    pvRender();
+    try { const r = await fetch('/bridge', { cache: 'no-store' }); PV.info = r.ok ? await r.json() : null; } catch (e) { PV.info = null; }
+    pvRender();
+    if (typeof EventSource !== 'undefined') {
+      const es = new EventSource('/events');
+      es.onmessage = (e) => {
+        let m = null;
+        try { m = JSON.parse(e.data); } catch (x) { return; }
+        if (m && typeof m.text === 'string' && m.source !== 'clipboard') pvItem(m.text); // another tool's copy: that tool shows its own
+      };
+    }
+    // the item whose key press opened this window
+    try { const r = await fetch('/last', { cache: 'no-store' }); const m = r.ok ? await r.json() : null; if (m && m.text && m.source !== 'clipboard' && Date.now() - m.at < 20000) pvItem(m.text); } catch (e) { /* none */ }
+  }
+  function pvItem(text) {
+    const r = E.parseItem(S.ix, text);
+    if (!r.item || !r.item.base) return;
+    let pr = null;
+    try { pr = PC.createPresets(S.ix, E, r.item); } catch (e) { pr = null; }
+    Object.assign(PV, { item: r.item, presets: pr ? pr.presets : [], active: pr ? pr.active : null, res: null, err: null, showAll: false });
+    pvSearch();
+  }
+  async function pvSearch() {
+    const it = PV.item, p = pvPreset();
+    if (!it || PV.busy) return;
+    if (!p) { PV.err = { message: 'No search could be built for this item.' }; pvRender(); return; }
+    PV.busy = true; PV.err = null;
+    pvRender();
+    let out;
+    try {
+      const body = PC.tradeRequest(S.ix, E, p, it);
+      PV.url = PC.tradeUrl(pvLeague(), body);
+      const r = await fetch('/trade?league=' + encodeURIComponent(pvLeague()), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      out = await r.json();
+    } catch (e) { out = { ok: false, message: 'The price check could not be run.' }; }
+    PV.busy = false;
+    if (PV.item !== it) return; // another item came in meanwhile
+    PV.res = out && out.ok ? out : null;
+    PV.err = out && out.ok ? null : out || { message: 'No answer.' };
+    pvRender();
+  }
+  function pvPrice(l) {
+    const name = TRADE_CUR[l.currency];
+    return `<span class="money">${name ? icon(S.sidByName[name], name, 'sm') : ''}${esc(fmt(+l.amount))}${name ? '' : ' ' + esc(l.currency || '')}</span>`;
+  }
+  function pvRender() {
+    const el = $('#priceView');
+    if (!el) return;
+    const it = PV.item, key = (PV.info && PV.info.hotkey) || 'the hotkey';
+    if (!it) { el.innerHTML = `<div class="pv-card"><div class="pv-note">Hover an item in game and press ${esc(key)}.</div></div>`; return; }
+    const p = pvPreset();
+    const stats = p ? p.stats.map((st, i) => ({ st, i })).filter(({ st }) => PV.showAll || !st.hidden) : [];
+    const hidden = p ? p.stats.filter((st) => st.hidden).length : 0;
+    let body = '';
+    if (PV.busy) body = '<div class="pv-note">Searching…</div>';
+    else if (PV.err) body = `<div class="pv-err">${esc(PV.err.message || 'The search failed.')}</div>${PV.err.login ? '<div class="pv-note">The trade site wants a login for a search with this many filters. Untick some lines, or open the search on the trade site.</div>' : ''}`;
+    else if (PV.res) {
+      // equal prices next to each other are one row with a count
+      const rows = [];
+      for (const l of PV.res.listings || []) {
+        const last = rows[rows.length - 1];
+        if (last && last.l.amount === l.amount && last.l.currency === l.currency) last.n++; else rows.push({ l, n: 1 });
+      }
+      body = `<div class="pv-note">${PV.res.total} listed${PV.res.total > (PV.res.listings || []).length ? `, the ${(PV.res.listings || []).length} cheapest shown` : ''}</div>
+        <div class="pv-list">${rows.map(({ l, n }) => `<div class="pv-row">${pvPrice(l)}<span class="n">${n > 1 ? '×' + n : ''}</span><span class="age" title="${esc(l.seller || '')}${l.online ? ' (online)' : ''}">${esc(pvAgo(l.indexed))}</span></div>`).join('') || '<div class="pv-note" style="padding:6px 0">Nothing is listed for this search.</div>'}</div>`;
+    }
+    el.innerHTML = `<div class="pv-card">
+      <div class="pv-head"><div class="pv-name ${esc((it.rarity || 'Normal').toLowerCase())}">${esc(it.name || it.base)}<small>${it.name ? esc(it.base) + ' · ' : ''}item level ${esc(it.ilvl == null ? '?' : it.ilvl)} · ${esc(pvLeague())}</small></div>
+        <button class="icon-btn" type="button" id="pvClose" title="Put the price check away" aria-label="Put the price check away"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>
+      ${PV.presets.length > 1 ? `<div class="pv-bar">${PV.presets.map((x) => `<button type="button" class="chip" data-pvpreset="${esc(x.id)}" aria-pressed="${p && x.id === p.id}">${x.id === 'exact' ? 'Base item' : 'Pseudo'}</button>`).join('')}</div>` : ''}
+      <div class="pv-stats">${stats.map(({ st, i }) => `<label class="pv-stat ${st.disabled ? 'off' : ''}"><input type="checkbox" data-pvs="${i}" ${st.disabled ? '' : 'checked'}><span>${esc(st.text)}</span>${st.roll ? `<input type="number" data-pvmin="${i}" value="${st.roll.min != null ? esc(st.roll.min) : ''}" aria-label="Minimum">` : '<i></i>'}</label>`).join('')}</div>
+      <div class="pv-bar"><button class="btn small primary" type="button" id="pvSearch" ${PV.busy ? 'disabled' : ''}>Search</button>
+        ${hidden ? `<button class="linkish" type="button" id="pvAll">${PV.showAll ? 'Fewer' : hidden + ' more'} lines</button>` : ''}
+        ${PV.url ? `<a class="sub" href="${esc(PV.url)}" target="_blank" rel="noopener">Trade site ↗</a>` : ''}</div>
+      ${body}</div>`;
+  }
+  document.addEventListener('click', (e) => {
+    if (!PRICE_VIEW) return;
+    const b = e.target.closest && e.target.closest('button');
+    if (!b) return;
+    if (b.id === 'pvSearch') pvSearch();
+    else if (b.id === 'pvClose') fetch('/overlay', { method: 'POST', body: 'hide' }).catch(() => { /* gone */ });
+    else if (b.id === 'pvAll') { PV.showAll = !PV.showAll; pvRender(); }
+    else if (b.dataset.pvpreset) { PV.active = b.dataset.pvpreset; PV.res = null; PV.err = null; pvRender(); }
+  });
+  document.addEventListener('change', (e) => {
+    if (!PRICE_VIEW) return;
+    const p = pvPreset();
+    const t = e.target;
+    if (!p || !t.dataset) return;
+    if (t.dataset.pvs != null) { p.stats[+t.dataset.pvs].disabled = !t.checked; pvRender(); }
+    else if (t.dataset.pvmin != null) { const st = p.stats[+t.dataset.pvmin]; if (st && st.roll) st.roll.min = t.value === '' ? null : +t.value; }
+  });
+  /** source: 'hotkey' (the program's own key), 'clipboard' (any copy in game, e.g. another tool's price check), 'push'. */
+  function bridgeItem(text, source) {
     if (!S.ix || !text.trim()) return;
     const r = E.parseItem(S.ix, text);
     if (!r.item) { announce('The copied text is not an item.'); return; }
+    // A copy made for something else (a price check of another item) must not replace the item of a running route and
+    // clear its targets: with a route running, only the same item comes in that way. The program's own key always loads.
+    if (source === 'clipboard' && S.planArmed && S.item && (r.item.base !== S.item.base || r.item.ilvl !== S.item.ilvl)) {
+      announce('Another item was copied in game. It was not loaded: a route is running.');
+      return;
+    }
     if (pasteDlg.open) pasteDlg.close();
     const same = !!S.item && S.text === text;
     S.pendingStep = null;
@@ -1543,7 +1690,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (!same) tryImport(text, 'Hotkey');
     // the official trade site's search for this item, in the trade window (when it is open and the player wants it)
     // (not for the steps of a running route: that item is being crafted, not priced)
-    if (tradeFollows() && !step && S.item && !S.item.unsupported) {
+    if (source !== 'clipboard' && tradeFollows() && !step && S.item && !S.item.unsupported) {
       if (same) { if (S.tradeWin && !S.tradeWin.closed) overlayAsk('show'); } // the same item again: its search is still there
       else { try { tradeOpen(pcUrl(S.item), false); } catch (e) { /* no search for this item */ } }
     }
@@ -2689,7 +2836,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   }
   /** Desktop program: the trade window as a panel over the game ('show'), or put away ('hide'). */
   function overlayAsk(cmd) { if (S.bridge) fetch('/overlay', { method: 'POST', body: cmd }).catch(() => { /* the program is gone */ }); }
-  const tradeFollows = () => store.get('tradeFollow', true) !== false;
+  const tradeFollows = () => store.get('tradeFollow', false) === true; // off unless the player turns it on
   document.addEventListener('click', (e) => {
     const a = e.target.closest && e.target.closest('#pcGo');
     if (!a || !S.bridge) return;

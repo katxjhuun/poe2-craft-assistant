@@ -135,15 +135,17 @@ own window (Edge's app mode), kept above the game.
   steps no longer ask for a paste.
 - The hotkey is taken only while the game window is in front. Settings are in `config.json` next to the exe
   (`hotkey`, `port`, `topmost`, `advancedCopy`, `gameTitle`); the tray menu opens it.
-- Price check: the page builds Exiled Exchange 2's search for the item, and the listings are shown by the official
-  trade site in its own window. Click "Search on trade" once to open that window; with "Every copied item" on, each
-  item copied with the hotkey then loads its search there. The program does not query or read the listings itself:
-  Grinding Gear Games' developer documentation says "It is against our Terms of Use (section 7i) to reverse-engineer
-  endpoints outside of this documentation", and the trade search is not in it; the terms also rule out automated access
-  (7c) and data extraction (7f). Log in to pathofexile.com in that window once if the site asks.
-- Price check over the game: the trade window is placed along the right edge of the game window, above it, and the
-  keyboard stays with the game. Pressing the hotkey with nothing under the cursor puts it away (so does the tray menu).
-  `overlay` and `overlayWidth` in `config.json` turn it off or change its width. Items copied as steps of a running
-  route do not open a search.
-- Not tested by the author in game: the hotkey and the copy keys. Tested: the page is served, an item text pushed to
-  `POST /push` is loaded, counted as a step result and the route goes on; the window opens and stays on top.
+- Price check on the hotkey: a small window at the top right of the game shows the item, the search lines (untick or
+  change them, then Search) and the ten cheapest listings. The program asks the trade site for them the way Exiled
+  Exchange 2 and PoE Overlay II do. Those endpoints are not in Grinding Gear Games' documented API (its developer
+  documentation calls their use a breach of the terms, 7i); the player chose to use them knowingly, no further than
+  those tools go. The limits kept here: only on a key press or a Search click, never in the background; one search and
+  one fetch of ten listings; the site's rate limit headers obeyed with a margin; no account cookies (a search the site
+  wants a login for is refused and left to the trade site); a refusal by the site is never worked around. The tray
+  menu turns it off (`priceCheck` in `config.json`).
+- Other tools: an item copied in game by any means (Ctrl+C, another tool's price check) is loaded as well
+  (`watchClipboard`). With a route running, only the route's own item comes in that way.
+- "Search on trade" in the page still opens the official trade site with the search prefilled.
+- Tested by the author: the page is served, an item text pushed to `POST /push` is loaded, counted as a step result and
+  the route goes on; the window opens and stays on top; one real price check returned listings. The player confirmed the
+  hotkey in game. Not tested: the price window's place over the game, and the clipboard watcher with another tool.
