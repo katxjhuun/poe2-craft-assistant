@@ -202,6 +202,24 @@ test('profiles keep to their materials (early, mid, end game by price); the tier
   assert.deepEqual([Object.keys(wide.profiles), wide.profiles.premium.goals.map((g) => g.eff)], [['premium'], [3, 3]]);
 });
 
+test('spending ranges: Cheap under one Divine Orb, Balanced two Chaos Orbs to one Divine Orb, Premium 10 to 100, a big pocket without a limit', async () => {
+  const item = parse('rare-sceptre-adv');
+  const targets = { 'prefix-2': { fam: 'AlliesInPresenceAllDamage', group: 'prefix', minTier: 3, required: true, label: 'allies damage' } };
+  const price = (n) => (n === 'Chaos Orb' ? 60 : n === 'Divine Orb' ? 600 : /^Omen|^Perfect|Fracturing|^Ancient/.test(n) ? 3000 : /^Greater|Annulment/.test(n) ? 200 : 5);
+  const run = async (only, more) => (await P.buildPlans(Object.assign({ ix, item, targets, locks: {}, priceOf: price, trials: 500, screenTrials: 50, beamBudgetMs: 0, only, spendLimits: true }, more))).profiles[only];
+  const cheap = await run('cheap'), bal = await run('balanced'), prem = await run('premium'), big = await run('premium', { bigPocket: true });
+  assert.deepEqual([cheap.spend, bal.spend, prem.spend, big.spend], [{ lo: null, hi: 600 }, { lo: 120, hi: 600 }, { lo: 6000, hi: 60000 }, { lo: null, hi: null, big: true }]);
+  // the upper end is a hard limit: no simulated craft costs more, the ones that would are counted as failed
+  for (const pl of [cheap, bal, prem]) assert.ok(pl.noSuccess || pl.p90 <= pl.spend.hi + 1e-9, `${pl.label}: ${pl.p90} over ${pl.spend.hi}`);
+  assert.ok(cheap.noSuccess || cheap.okCost.p90 <= 600);
+  // without the option nothing is limited (the planner's own callers keep their runs)
+  const free = (await P.buildPlans({ ix, item, targets, locks: {}, priceOf: price, trials: 300, screenTrials: 40, beamBudgetMs: 0, only: 'cheap' })).profiles.cheap;
+  assert.equal(free.spend, null);
+  // the player's own budget still counts when it is lower
+  const tight = await run('premium', { budget: 300 });
+  assert.ok(tight.noSuccess || tight.p90 <= 300 + 1e-9);
+});
+
 test('impossible goals are reported instead of planned', async () => {
   const item = parse('rare-sceptre-adv', (t) => t.replace('Item Level: 82', 'Item Level: 60'));
   const targets = { 'suffix-0': { fam: 'GlobalIncreaseMinionSpellSkillGemLevelWeapon', group: 'suffix', minTier: 1, required: true, label: 'minion level' } };

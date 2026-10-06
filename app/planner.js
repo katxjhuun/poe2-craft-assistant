@@ -1952,13 +1952,23 @@
       // every new base needs the runes the plan socketed on the white base again
       const runeCost = (white.runes || []).reduce((t, n) => t + ((opts.priceOf && opts.priceOf(n)) || 0), 0);
       const kT = actionKey(a, ctx), kB = actionKey(NEWBASE, ctx), cT = costOf(a), cB = costOf(NEWBASE) + runeCost;
-      const tab = !opts.budget && !ctx.needValues ? keepTable(white, a) : null;
+      const tab = !ctx.needValues ? keepTable(white, a) : null;
       if (tab) {
         // Draw the number of Transmutations until one is kept (geometric), then the kept mod by weight.
         const room = Math.ceil((maxMagicSteps - run.early + 1) / 2); // Transmutations before the Magic-stage limit
         let n = tab.q >= 1 ? 1 : tab.q <= 0 ? Infinity : 1 + Math.floor(Math.log(1 - rng()) / Math.log(1 - tab.q));
-        const stop = n > room ? 'limit' : null;
+        let stop = n > room ? 'limit' : null;
         if (stop) n = room;
+        // with a budget: only the Transmutations (and the bases between them) the money left pays for
+        let lastBase = 0;
+        if (opts.budget && cT + cB > 0) {
+          const afford = Math.floor((opts.budget - run.cost + cB) / (cT + cB));
+          if (afford < 1) return { kept: null, stop: 'budget' };
+          if (n > afford) {
+            n = afford; stop = 'budget';
+            if (run.cost + n * cT + n * cB <= opts.budget) lastBase = 1; // one more base, and nothing left to use on it
+          }
+        }
         const pool = stop ? tab.junk : tab.kept;
         let r = rng() * pool.total, e = pool.list[pool.list.length - 1];
         for (let i = 0; i < pool.list.length; i++) { r -= pool.ws[i]; if (r <= 0) { e = pool.list[i]; break; } }
@@ -1966,9 +1976,10 @@
         kept.rarity = 'Magic';
         if (e) addRolled(ctx, kept, e, null, rng);
         const s0 = run.steps;
-        run.cost += n * cT + (n - 1) * cB; run.steps += 2 * n - 1; run.early += 2 * n - 1; run.bases += n - 1;
+        const nb = n - 1 + lastBase;
+        run.cost += n * cT + nb * cB; run.steps += n + nb; run.early += n + nb; run.bases += nb;
         book(kT, a, n, s0 + 1, !stop && metCount(kept) > 0 ? 1 : 0);
-        book(kB, NEWBASE, n - 1, s0 + 2, 0);
+        book(kB, NEWBASE, nb, s0 + 2, 0);
         return { kept, stop };
       }
       let tries = 0, bases = 0, firstT = 0, firstB = 0, kept = null, stop = null;
@@ -2526,7 +2537,7 @@
       if (!wanted(i)) continue;
       const prof = PROFILES[names[i]];
       const pg = prof.goals(goals, input.tiers);
-      const pin = Object.assign({}, input, { mat: prof.mat }); // the screen keeps every candidate to the profile's materials
+      const pin = profileInput(input, names[i]); // the profile's materials and what it may spend on one craft
       const infeasible = pg.map((g) => ({ g, why: goalFeasible(ctx, st, g) || goalClash(ctx, pg, g) })).filter((x) => x.why);
       if (!pg.length) { out.profiles[names[i]] = { label: prof.label, none: 'No required goals. Mark at least one target as Required.' }; done += grids[i].length + 1; continue; }
       const tooMany = slotClash(ctx, pg);
@@ -2544,7 +2555,7 @@
       const depth = budget > 0 ? await sc.beam(prof, budget) : 0;
       let best = await sc.pick(prof, budget > 0);
       let uses = input.maxSteps || null, screen = sc;
-      if (!best && !input.maxSteps && !input.budget) {
+      if (!best && !input.maxSteps && !pin.budget) {
         // No run finished within the usual 600 uses (many goals on a large pool): the routes once more with runs of
         // 3,000 uses, a few short runs each, so that the player still gets a route and what it costs.
         uses = LONG_USES;
@@ -2553,17 +2564,18 @@
         best = await screen.pick(prof, false);
       }
       if (!best) {
-        const r = simulate(ctx, st, pg, clampStrategy(expandStrategy(grids[i][0]), prof.mat, ctx, input.priceOf), { trials: 400, seed: 3, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, baseLimit: input.baseLimit });
-        out.profiles[names[i]] = { label: prof.label, noSuccess: true, fails: r.fails };
+        const r = simulate(ctx, st, pg, clampStrategy(expandStrategy(grids[i][0]), prof.mat, ctx, input.priceOf), { trials: 400, seed: 3, priceOf: input.priceOf, baseCost: input.baseCost, budget: pin.budget, baseLimit: input.baseLimit });
+        out.profiles[names[i]] = { label: prof.label, noSuccess: true, fails: r.fails, spend: pin.spend };
         done++;
         continue;
       }
       const final = await simulateAsync(ctx, st, pg, best.params, {
-        trials: input.trials || 4000, seed: 99, priceOf: input.priceOf, baseCost: input.baseCost, budget: input.budget, cancelled: input.cancelled,
+        trials: input.trials || 4000, seed: 99, priceOf: input.priceOf, baseCost: input.baseCost, budget: pin.budget, cancelled: input.cancelled,
         baseLimit: input.baseLimit, timeBudgetMs: input.timeBudgetMs || 2500, minTrials: Math.min(input.trials || 4000, 800), maxSteps: uses || undefined,
         onSlice: (f) => input.onProgress && input.onProgress((done + f) / total),
       });
       final.label = prof.label;
+      final.spend = pin.spend;
       final.profile = names[i];
       final.goals = pg;
       final.dropped = goals.filter((g) => !pg.some((x) => x.key === g.key));
@@ -2587,6 +2599,7 @@
    */
   async function improvePlan(input, plan, onProgress) {
     if (!plan || !plan.steps || !plan.seeds || !plan.profile) return plan;
+    input = profileInput(input, plan.profile);
     const prof = PROFILES[plan.profile];
     const ctx = makeContext(input.ix, input.item, { weights: input.weights, essences: input.essences, catalystMult: input.catalystMult });
     const st = toState(ctx, input.item, input.locks);
@@ -2608,10 +2621,33 @@
     });
     // keep the search's pick only when the full run agrees it is better
     if (prof.score(final) >= prof.score(plan)) return keep();
-    Object.assign(final, { label: plan.label, profile: plan.profile, goals: plan.goals, dropped: plan.dropped, from: best.from, seeds: plan.seeds, search, moreBases: plan.moreBases });
+    Object.assign(final, { label: plan.label, profile: plan.profile, spend: plan.spend, goals: plan.goals, dropped: plan.dropped, from: best.from, seeds: plan.seeds, search, moreBases: plan.moreBases });
     final.moreBases = moreBasesHint(prof, sc.results(), final);
     SCREENS.set(final, sc);
     return final;
+  }
+
+  /**
+   * What a profile may spend on one craft (the player's ranges, 6 Oct 2026): Cheap stays under one Divine Orb,
+   * Balanced runs from two Chaos Orbs to one Divine Orb, Premium from 10 to 100 Divine Orbs; Premium with a "big
+   * pocket" has no limit. The upper end is a hard limit: a simulated craft stops when its next step would pass it and
+   * counts as failed, so no finished craft costs more. The lower end only names the range: a craft that finishes for
+   * less is not made dearer. Used when input.spendLimits is set (the page sets it).
+   */
+  const SPEND = { cheap: { hi: ['Divine Orb', 1] }, balanced: { lo: ['Chaos Orb', 2], hi: ['Divine Orb', 1] }, premium: { lo: ['Divine Orb', 10], hi: ['Divine Orb', 100] } };
+  function spendOf(name, input) {
+    if (!input.spendLimits) return null;
+    if (name === 'premium' && input.bigPocket) return { lo: null, hi: null, big: true };
+    const s = SPEND[name] || {};
+    const ex = (x) => { const v = x && input.priceOf ? input.priceOf(x[0]) : null; return v > 0 ? v * x[1] : null; };
+    return { lo: ex(s.lo), hi: ex(s.hi) };
+  }
+  /** The input of one profile's runs: its materials, and its spending limit (or the player's own budget when lower). */
+  function profileInput(input, name) {
+    const sp = spendOf(name, input);
+    const own = input.budget > 0 ? +input.budget : null;
+    const hi = sp && sp.hi != null ? sp.hi : null;
+    return Object.assign({}, input, { mat: PROFILES[name].mat, budget: hi != null && own != null ? Math.min(hi, own) : hi != null ? hi : own || 0, spend: sp });
   }
 
   /**
@@ -2659,13 +2695,14 @@
         const top = Math.max(...done.map((p) => p.p));
         best = done.filter((p) => p.p >= top - 0.005).sort((a, b) => a.costPerSuccess - b.costPerSuccess)[0];
       } else best = done.slice().sort((a, b) => PROFILES[n].score(a) - PROFILES[n].score(b))[0];
-      out[n] = best === own ? own : Object.assign({}, best, { label: PROFILES[n].label, profile: n });
+      out[n] = best === own ? own : Object.assign({}, best, { label: PROFILES[n].label, profile: n, spend: own.spend });
     }
     return out;
   }
 
   /** Re-run a finished plan with more trials (same strategy, goals and seed family). */
   async function refinePlan(input, plan, trials, onProgress) {
+    if (plan.profile && PROFILES[plan.profile]) input = profileInput(input, plan.profile);
     const ctx = makeContext(input.ix, input.item, { weights: input.weights, essences: input.essences, catalystMult: input.catalystMult });
     const st = toState(ctx, input.item, input.locks);
     const r = await simulateAsync(ctx, st, plan.goals, plan.params, {
@@ -2673,7 +2710,7 @@
       baseLimit: input.baseLimit, maxSteps: plan.maxSteps > 600 ? plan.maxSteps : undefined,
       timeBudgetMs: input.refineBudgetMs || 6000, minTrials: Math.min(3000, trials || 20000),
     });
-    Object.assign(r, { label: plan.label, profile: plan.profile, goals: plan.goals, dropped: plan.dropped, from: plan.from, seeds: plan.seeds, search: plan.search, moreBases: plan.moreBases });
+    Object.assign(r, { label: plan.label, profile: plan.profile, spend: plan.spend, goals: plan.goals, dropped: plan.dropped, from: plan.from, seeds: plan.seeds, search: plan.search, moreBases: plan.moreBases });
     r.moreBases = moreBasesHint(PROFILES[plan.profile] || PROFILES.balanced, [], r);
     return r;
   }
