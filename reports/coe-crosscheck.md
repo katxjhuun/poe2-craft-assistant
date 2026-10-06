@@ -4,7 +4,7 @@ Source: Craft of Exile PoE2 data (craftofexile.com json/poe2/main/poec_data.json
 user's OK). Ours: knowledge base tiers (game data) and poe2db roll weights. Wearable gear only.
 
 Tiers in Craft of Exile: 8987; matched to our tier (side, level, text, ranges): 8987; not found in ours: 0; our natural tiers Craft of Exile lacks: 204.
-Weights of matched tiers: same 8929 (of them 182 on pages where Craft of Exile's are all the same multiple of poe2db's: Emerald, Ruby, Sapphire), different 58, no poe2db weight 0.
+Weights of matched tiers: same 8929 (of them 385 on pages where Craft of Exile's are all the same multiple of poe2db's: Body_Armours_str_dex_int + Rings, Emerald, Ruby, Sapphire), different 58, no poe2db weight 0.
 Desecrated tiers: weights {'1': 925} (all equal).
 
 | Base group | Our page | CoE tiers | Matched | Same weight | Different | Not in ours | Ours only |
@@ -39,7 +39,7 @@ Desecrated tiers: weights {'1': 925} (all equal).
 | Gloves (STR) | Gloves_str | 182 | 182 | 182 | 0 | 0 | 0 |
 | Gloves (STR/DEX) | Gloves_str_dex | 184 | 184 | 184 | 0 | 0 | 0 |
 | Gloves (STR/INT) | Gloves_str_int | 188 | 188 | 188 | 0 | 0 | 0 |
-| Grasping Mail | Body_Armours_str_dex_int + Rings | 203 | 203 | 203 | 0 | 0 | 204 |
+| Grasping Mail | Body_Armours_str_dex_int + Rings | 203 | 203 | 0 | 203 | 0 | 204 |
 | Helmet (DEX) | Helmets_dex | 137 | 137 | 137 | 0 | 0 | 0 |
 | Helmet (DEX/INT) | Helmets_dex_int | 135 | 135 | 135 | 0 | 0 | 0 |
 | Helmet (INT) | Helmets_int | 125 | 125 | 125 | 0 | 0 | 0 |

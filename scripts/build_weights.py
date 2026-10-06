@@ -207,9 +207,20 @@ def main():
         key = pg + ' + Rings'
         if key not in merged:
             w = dict(per_page[pg]['weights']) if pg in per_page else dict(merged[pg]['weights'])
-            for mid, v in per_page['Rings']['weights'].items():
+            ring = per_page['Rings']['weights']
+            # poe2db gives every mod of some pages the same number (Body_Armours_str_dex_int: all 1) and real weights on
+            # the Rings page (200-1000). Mixed as they are, the armour mods would be hundreds of times rarer than the ring
+            # mods. No source gives their relative weight on this base, so the flat page is put on the Rings scale: each
+            # of its mods weighs the median ring weight (an estimate, noted in meta).
+            flat = len(set(w.values())) == 1 and len(set(ring.values())) > 1
+            if flat:
+                mid_w = sorted(ring.values())[len(ring) // 2]
+                w = {mid: mid_w for mid in w}
+            for mid, v in ring.items():
                 w.setdefault(mid, v)
             merged[key] = {'cls': b['cls'], 'weights': w, 'merged_from': [pg, 'Rings']}
+            if flat:
+                merged[key]['rescaled'] = f'{pg} has one weight for every mod; set to the median Rings weight ({mid_w})'
         base_page[name] = key
     per_page.update(merged)
     matched = len({m for p in per_page.values() for m in p['weights']})
