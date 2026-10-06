@@ -1541,6 +1541,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     }
     const step = !!S.pendingStep;
     if (!same) tryImport(text, 'Hotkey');
+    // the official trade site's search for this item, in the trade window (when it is open and the player wants it)
+    if (!same && tradeFollows() && S.item && !S.item.unsupported) { try { tradeOpen(pcUrl(S.item), false); } catch (e) { /* no search for this item */ } }
     // the price check with every copied item; a route in progress stays in view
     const v = $('#valueRow');
     if (v && !v.open) v.open = true;
@@ -2656,9 +2658,41 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       ${hidden ? `<button class="linkish" type="button" id="pcAll">${st.showAll ? 'Hide' : 'Show'} ${hidden} more line${hidden === 1 ? '' : 's'}</button>` : ''}
       <div class="price-foot" style="border-top:0;margin-top:0;padding-top:0">
         ${url ? `<a class="btn small primary" id="pcGo" href="${esc(url)}" target="_blank" rel="noopener" title="Opens the official trade site with this search; the page cannot read the results itself">Search on trade ↗</a>` : ''}
-        <button class="btn small" id="copyRecipe" type="button">Copy search</button></div></div>`;
+        <button class="btn small" id="copyRecipe" type="button">Copy search</button>
+        ${S.bridge && url ? `<label class="toggle" for="pcFollow" title="Each item copied with ${esc(S.bridge.hotkey)} loads its search in the trade window. The window is opened once with Search on trade."><input type="checkbox" id="pcFollow" ${tradeFollows() ? 'checked' : ''}>Every copied item${S.tradeWin && !S.tradeWin.closed ? '' : ' (open the window once)'}</label>` : ''}</div></div>`;
   }
   function pcRefreshLink() { const a = $('#pcGo'); if (a && S.item) a.href = pcUrl(S.item); }
+  // ------------------------------------------------------------ the official trade site in its own window
+  // The price check builds the search; the listings are shown by the official trade site itself. The page does not
+  // query or read them: Grinding Gear Games' developer documentation calls the use of endpoints outside it a breach of
+  // the terms (7i), and the terms rule out automated access (7c) and data extraction (7f). In the desktop program the
+  // search opens in one window, and with "every copied item" on, each item copied with the hotkey loads its search
+  // there: one key press, one page of the official site.
+  function tradeOpen(url, fromUser) {
+    if (!url) return false;
+    const now = Date.now();
+    if (S.tradeWin && !S.tradeWin.closed) {
+      if (!fromUser && now - (S.tradeAt || 0) < 2000) return false; // no faster than the site's own searches allow by hand
+      S.tradeAt = now;
+      try { S.tradeWin.location.href = url; return true; } catch (e) { S.tradeWin = null; }
+    }
+    if (!fromUser) return false; // a new window needs a click: browsers block windows a page opens by itself
+    S.tradeWin = window.open(url, 'poe2trade', 'width=1180,height=920');
+    S.tradeAt = now;
+    return !!S.tradeWin;
+  }
+  const tradeFollows = () => store.get('tradeFollow', true) !== false;
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('#pcGo');
+    if (!a || !S.bridge) return;
+    e.preventDefault();
+    tradeOpen(a.href, true);
+    renderPrice();
+  });
+  document.addEventListener('change', (e) => {
+    if (e.target.id !== 'pcFollow') return;
+    store.set('tradeFollow', !!e.target.checked);
+  });
   function toGoalHtml() {
     const pl = S.plans && S.plans.profiles[S.planTab];
     if (!pl || !pl.steps) return '<span class="muted" style="font-weight:400;font-size:15px">—</span>';

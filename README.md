@@ -135,7 +135,11 @@ own window (Edge's app mode), kept above the game.
   steps no longer ask for a paste.
 - The hotkey is taken only while the game window is in front. Settings are in `config.json` next to the exe
   (`hotkey`, `port`, `topmost`, `advancedCopy`, `gameTitle`); the tray menu opens it.
-- The price check is the page's own (estimates, the Currency Exchange prices and a prefilled search on the official
-  trade site). It does not query trade listings by itself.
+- Price check: the page builds Exiled Exchange 2's search for the item, and the listings are shown by the official
+  trade site in its own window. Click "Search on trade" once to open that window; with "Every copied item" on, each
+  item copied with the hotkey then loads its search there. The program does not query or read the listings itself:
+  Grinding Gear Games' developer documentation says "It is against our Terms of Use (section 7i) to reverse-engineer
+  endpoints outside of this documentation", and the trade search is not in it; the terms also rule out automated access
+  (7c) and data extraction (7f). Log in to pathofexile.com in that window once if the site asks.
 - Not tested by the author in game: the hotkey and the copy keys. Tested: the page is served, an item text pushed to
   `POST /push` is loaded, counted as a step result and the route goes on; the window opens and stays on top.
