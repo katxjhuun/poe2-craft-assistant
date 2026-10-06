@@ -20,3 +20,6 @@ __pycache__/
 *.pyc
 Thumbs.db
 .DS_Store
+
+# The desktop program (desktopuild.cmd writes it)
+desktop/out/

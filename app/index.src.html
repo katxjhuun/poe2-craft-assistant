@@ -85,6 +85,7 @@ h2 { margin: 0; font: 700 14px/1.2 var(--f-ui); letter-spacing: .14em; text-tran
 /* top bar */
 .top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 40; background: var(--bar); box-shadow: 0 0 0 100vmax var(--bar); clip-path: inset(0 -100vmax); display: flex; align-items: center; gap: 12px; padding: 10px 0; flex-wrap: wrap; }
 .brand { font: 800 16px/1 var(--f-ui); color: var(--accent); letter-spacing: .16em; text-transform: uppercase; margin-right: auto; }
+.bridge { font-size: 13px; color: var(--up); border: 1px solid rgba(111,181,138,.5); border-radius: 999px; padding: 3px 11px; white-space: nowrap; }
 .unit select { background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r); padding: 6px 8px; }
 /* tools: the page's sections as a row of tabs */
 .tools { display: flex; flex-wrap: wrap; align-items: stretch; gap: 2px; margin-top: 14px; border-bottom: 2px solid var(--accent); }
@@ -664,6 +665,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
 <div class="wrap">
   <header class="top">
     <span class="brand">PoE2 Craft Assistant</span>
+    <span class="bridge" id="bridgeChip" hidden></span>
     <button class="ticker" id="tickerBtn" type="button" aria-haspopup="dialog" title="Open Currency Exchange prices">
       <span class="muted">Loading prices…</span>
     </button>
@@ -1018,6 +1020,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (!restoreSession(sess)) ingest(last || SAMPLES[0].text, last ? 'Last item' : 'Example', { keep: true });
     if (!sess && !last && !Object.keys(S.targets).length) applyTemplate('minion-sceptre');
     kbReadyResolve();
+    connectBridge();
     renderStaleBand();
     renderAll();
     schedulePlans();
@@ -1498,6 +1501,52 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     quickImport(text);
   });
   $('#quickPaste').addEventListener('change', (e) => { const t = e.target.value; e.target.value = ''; if (t.trim()) quickImport(t); });
+  // ------------------------------------------------------------ desktop program (desktop/PoE2CraftAssistant.cs)
+  // Served by the desktop helper, the page receives the item the player copied in game with the helper's hotkey (hover
+  // an item, press the key). It is loaded like a paste and its price check opens; when a route is running and the same
+  // item comes back changed, it counts as the result of the route's next step, so no step asks for a paste.
+  async function connectBridge() {
+    if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname) || typeof EventSource === 'undefined') return;
+    let info = null;
+    try { const r = await fetch('/bridge', { cache: 'no-store' }); info = r.ok ? await r.json() : null; } catch (e) { info = null; }
+    if (!info || !info.bridge) return;
+    S.bridge = info;
+    const chip = $('#bridgeChip');
+    chip.hidden = false;
+    chip.textContent = `${info.hotkey}: hover an item in game`;
+    chip.title = `The desktop program is connected. With ${info.game} in front, hover an item and press ${info.hotkey}: the item is loaded here and its price check opens.`;
+    $('#quickPaste').placeholder = `Hover an item in game and press ${info.hotkey}, or paste it here`;
+    const es = new EventSource('/events');
+    es.onmessage = (e) => {
+      let m = null;
+      try { m = JSON.parse(e.data); } catch (x) { return; }
+      if (m && typeof m.text === 'string') bridgeItem(m.text);
+    };
+  }
+  function bridgeItem(text) {
+    if (!S.ix || !text.trim()) return;
+    const r = E.parseItem(S.ix, text);
+    if (!r.item) { announce('The copied text is not an item.'); return; }
+    if (pasteDlg.open) pasteDlg.close();
+    const same = !!S.item && S.text === text;
+    S.pendingStep = null;
+    // the item of the running route, changed: the result of the route's next step
+    const pl = S.plans && S.plans.profiles[S.planTab];
+    if (!same && S.planArmed && pl && pl.goals && pl.steps && pl.steps.length && S.item && r.item.base === S.item.base && r.item.ilvl === S.item.ilvl) {
+      const nx = P.nextAction(S.ix, S.item, S.locks, pl.goals, pl.params, priceEx);
+      if (nx && nx.names && !nx.error) {
+        const cost = nx.names.reduce((t, n) => t + (n === 'New base' ? (parseFloat(S.baseCost) || 0) : ((priceByName(n) || {}).ex || 0)), 0);
+        S.pendingStep = { action: nx, names: nx.names, cost, goals: pl.goals };
+      }
+    }
+    const step = !!S.pendingStep;
+    if (!same) tryImport(text, 'Hotkey');
+    // the price check with every copied item; a route in progress stays in view
+    const v = $('#valueRow');
+    if (v && !v.open) v.open = true;
+    if (v && !step && !S.planArmed) v.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    announce(same ? 'The same item: nothing changed.' : step ? 'Step result loaded.' : 'Item loaded from the game.');
+  }
   $('#pasteImport').addEventListener('click', () => (pasteMode === 'comparable' ? saveComparable() : tryImport(pasteArea.value, 'Pasted')));
   /** A listing copied from the trade site (Ctrl+C on the listing) with the price the seller asks. */
   async function saveComparable() {

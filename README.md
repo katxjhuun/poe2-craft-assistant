@@ -121,3 +121,21 @@ Amaç: yapıştırılan item hangi durumda olursa olsun, hedef item'e giden craf
 - Fiyat paketi npm'de herkese açık; Standard ligde EE2 ile resmi özet arasındaki fark koruma sınırına yakın.
 - Veri 0.5.5'e kilitli. Yeni oyun verisi çıkınca sayfada uyarı bandı çıkar; bilgi tabanını yeniden üretmek elle yapılır: `kb_update.py build`, `check`, `approve`, sonra yayın.
 - Self-test simülatörün veriye ve kurallara uyduğunu doğrular, oyunun davranışını değil. Oyun içi testlerin (t1–t31) hepsi kapandı.
+
+## Desktop program (Windows)
+
+`desktop\build.cmd` builds `desktop\out\PoE2CraftAssistant.exe` with the C# compiler that ships with Windows (nothing is
+downloaded) and puts a copy of the page next to it. Run the exe: a tray icon appears and the Craft Assistant opens in its
+own window (Edge's app mode), kept above the game.
+
+- With Path of Exile 2 in front, hover an item and press the hotkey (default `Ctrl+D`). The program presses the game's
+  own copy keys (Alt+Ctrl+C) for that item, reads the clipboard and hands the text to the page: the item is loaded and
+  its price check opens. One key press, one copy; nothing else is read from the game.
+- While a route is running, the same item coming back changed counts as the result of the route's next step, so the
+  steps no longer ask for a paste.
+- The hotkey is taken only while the game window is in front. Settings are in `config.json` next to the exe
+  (`hotkey`, `port`, `topmost`, `advancedCopy`, `gameTitle`); the tray menu opens it.
+- The price check is the page's own (estimates, the Currency Exchange prices and a prefilled search on the official
+  trade site). It does not query trade listings by itself.
+- Not tested by the author in game: the hotkey and the copy keys. Tested: the page is served, an item text pushed to
+  `POST /push` is loaded, counted as a step result and the route goes on; the window opens and stays on top.
