@@ -190,7 +190,7 @@
     const base = kb.bases[item.base];
     if (!base) throw new Error('unknown base');
     const ilvl = item.ilvl == null ? 100 : item.ilvl;
-    // the base's natural pool; Soul modifiers (Medved's Tending) are not supported (R_SOUL_MODS)
+    // the base's natural pool; the pools of socketed runes come in with the state (st.tags, rollPool, R_RUNE_POOLS)
     const pool = E.poolFor(ix, base.sig);
     const desPool = E.desecratedPoolFor(ix, item.base);
     const ctx = {
@@ -206,7 +206,7 @@
     };
     return ctx;
   }
-  /** The context modifiers roll from (one pool per item: Soul modifiers are not supported, R_SOUL_MODS). */
+  /** The context modifiers roll from. */
   function poolCtx(ctx) { return ctx; }
 
   /**
@@ -276,6 +276,44 @@
     return out;
   }
 
+  /** The modifier pools a rune can open on this base (E.runePoolsOn): Marksman and Decay on gloves, Soul on body armour... */
+  function runePoolsFor(ctx) { return ctx._rp || (ctx._rp = E.runePoolsOn(ctx.ix, ctx.item.base)); }
+  /**
+   * One side of a rune's pool at a floor, like sidePool. The weights table has no entry for these modifiers, so weightOf
+   * gives them their family's lowest weight or the table median (an estimate, counted in ctx.imputed).
+   */
+  function runeSide(ctx, tag, side, floor) {
+    const key = 'rune|' + tag + '|' + side + '|' + floor;
+    if (ctx._side.has(key)) return ctx._side.get(key);
+    const p = runePoolsFor(ctx).find((x) => x.tag === tag);
+    const byFam = new Map();
+    if (p) for (const [id, pe] of p.mods) {
+      const m = ctx.kb.mods[id];
+      if (pe.side !== side || ctx.pool.has(id) || m.lvl > ctx.ilvl) continue;
+      if (!byFam.has(m.fam)) byFam.set(m.fam, []);
+      byFam.get(m.fam).push({ id, fam: m.fam, grp: m.grp, lvl: m.lvl, tier: pe.tier, side, w: weightOf(ctx, id), rune: tag });
+    }
+    const out = [];
+    for (const list of byFam.values()) {
+      const keep = list.filter((e) => e.lvl >= floor);
+      if (keep.length) out.push(...keep);
+      else { list.sort((a, b) => b.lvl - a.lvl); out.push(Object.assign({}, list[0], { fallback: true })); }
+    }
+    ctx._side.set(key, out);
+    return out;
+  }
+  /** What can roll on a side of the item as it is: the natural pool, and the pools of the runes socketed (st.tags). */
+  function rollPool(ctx, st, side, floor) {
+    const base = sidePool(ctx, side, floor);
+    return st && st.tags && st.tags.length ? base.concat(...st.tags.map((t) => runeSide(ctx, t, side, floor))) : base;
+  }
+  /** The rune pool a family belongs to on this side, when it is not a natural modifier of the base: {tag, rune} or null. */
+  function runePoolOf(ctx, fam, side) {
+    if (sidePool(ctx, side, 0).some((e) => e.fam === fam)) return null;
+    for (const p of runePoolsFor(ctx)) if (p.fams.has(fam) && [...p.mods].some(([id, pe]) => pe.side === side && ctx.kb.mods[id].fam === fam)) return { tag: p.tag, rune: p.rune };
+    return null;
+  }
+
   /**
    * Sides where a bone can place its desecrated modifier: the Well of Souls has something to offer there (see
    * revealPool), and the side has room, or the item is full and the side has a modifier the desecration may remove.
@@ -305,6 +343,8 @@
     const free = (e) => !e.grp.some((g) => taken.has(g));
     const excl = desPoolFor(ctx, side, floor, null).filter(free);
     const lichList = lich ? desPoolFor(ctx, side, floor, lich).filter(free) : null;
+    // the item's own modifiers only: whether the Well of Souls also offers the modifiers of a socketed rune's pool is
+    // not known (in-game test t33), so no plan counts on it
     const norm = sidePool(ctx, side, floor).filter((e) => free(e) && !(added && E.tagBlocked(ctx.kb.mods[e.id], ctx.baseTags, added)));
     return { excl, norm, lichList, any: lich ? lichList.length > 0 : excl.length + norm.length > 0 };
   }
@@ -383,6 +423,7 @@
       corrupted: !!f.corrupted, sanctified: !!f.sanctified, mirrored: !!f.mirrored, unidentified: !!f.unidentified,
       quality: item.quality || 0, catTag, catQ: catTag ? item.quality || 0 : 0,
       corruptEnchant: (item.implicits || []).some((m) => m.corruption), foresight: false,
+      tags: E.runeRules(item).pools, // modifier pools the socketed runes open ("Can roll Marksman modifiers")
     };
   }
 
@@ -547,7 +588,8 @@
       case 'rune_rule': {
         const rune = ctx.kb.augments && ctx.kb.augments[a.item];
         if (!rune || !rune.by_class[cls]) return `${a.item || 'This rune'} does not go on ${cls} items.`;
-        if ((rune.by_class[cls].txt || []).some((t) => /Soul modifiers/i.test(t))) return 'Soul modifiers are not supported.';
+        const opens = (rune.by_class[cls].txt || []).map((t) => /Can roll (\w+) modifiers/i.exec(t)).find(Boolean);
+        if (opens && (st.tags || []).some((t) => t !== opens[1].toLowerCase())) return 'One rune that opens a modifier pool per item: another one is socketed already.';
         const has = (st.runes || []).includes(a.item) || (ctx.item.runes || []).some((r) => (rune.by_class[cls].txt || []).includes(r.text));
         if (has && rune.limit === '1') return `${a.item} is already socketed (one per item).`;
         return freeSockets(ctx, st) < 1 ? NO_SOCKET : null;
@@ -565,7 +607,8 @@
       }
       case 'artificer': {
         if (!(MARTIAL.includes(cls) || cls === 'Wand' || cls === 'Staff' || ARMOUR.includes(cls))) return "Artificer's Orb works on martial weapons, wands, staves and armour.";
-        return socketsOf(ctx, st) >= maxSockets(cls) ? `The item already has ${socketsOf(ctx, st)} augment socket${socketsOf(ctx, st) === 1 ? '' : 's'}, the most for ${cls}.` : null;
+        if (socketsOf(ctx, st) > maxSockets(cls)) return `The item has ${socketsOf(ctx, st)} augment sockets, one more than ${cls} usually gets (an exceptional base, or a Vaal Orb's socket). Artificer's Orb adds none past the usual number.`;
+        return socketsOf(ctx, st) >= maxSockets(cls) ? `The item already has ${socketsOf(ctx, st)} augment socket${socketsOf(ctx, st) === 1 ? '' : 's'}, the most Artificer's Orb gives ${cls}. Only a Vaal Orb can add one more.` : null;
       }
       case 'extraction':
         if (!(WEAPON.includes(cls) || ARMOUR.includes(cls) || JEWELLERY.includes(cls) || cls === 'Quiver')) return 'Orb of Extraction works on equipment.';
@@ -627,6 +670,24 @@
     const st = toState(ctx, item);
     return freeSockets(ctx, st) > 0 || !validate(ctx, st, { op: 'artificer' }) ? name : null;
   }
+  /**
+   * Rune pools no plan can open on this item: {tag: reason}. A pool rune needs a free augment socket, or one an
+   * Artificer's Orb can add; with another pool rune socketed (they are socket-bound) no second pool opens.
+   */
+  function runeBlocks(ix, item) {
+    const out = {};
+    if (!item || !ix.kb.bases[item.base]) return out;
+    const ctx = makeContext(ix, item);
+    const st = toState(ctx, item);
+    const on = st.tags || [];
+    for (const p of runePoolsFor(ctx)) {
+      if (on.includes(p.tag)) continue;
+      if (on.length) { out[p.tag] = 'another pool rune is socketed (one per item)'; continue; }
+      const room = freeSockets(ctx, st) > 0 || validate(ctx, st, { op: 'artificer' }) === null;
+      if (!room) out[p.tag] = `needs the rune ${p.rune}: no free augment socket`;
+    }
+    return out;
+  }
   /** Augment sockets the item has now, and the most a base of the class gets without corruption. */
   function socketsOf(ctx, st) { return (ctx.item.sockets || []).length + (st.sockets || 0); }
   /**
@@ -638,7 +699,7 @@
     return Math.max((ctx.item.sockets || []).length, came) + (st.sockets || 0) - came - (st.socketed || 0);
   }
   const NO_SOCKET = "No free augment socket: an Artificer's Orb adds one where the item class takes it.";
-  function maxSockets(cls) { return cls === 'Body Armour' || /^Two Hand/.test(cls) || ['Bow', 'Staff', 'Warstaff', 'Crossbow', 'Talisman'].includes(cls) ? 2 : 1; }
+  const maxSockets = E.maxSockets;
   function sacrificeFor(cls) {
     return JEWELLERY.includes(cls) ? "Kamasa's Orb of Sacrifice" : ARMOUR.includes(cls) ? "Kopec's Orb of Sacrifice"
       : WEAPON.includes(cls) ? "Yaomac's Orb of Sacrifice" : cls === 'Jewel' ? "Yugul's Orb of Sacrifice" : null;
@@ -677,13 +738,13 @@
     const ctx = poolCtx(ctx0, st);
     const taken = groupsOf(st);
     const added = E.addedTags(ctx.kb, st.mods.map((m) => m.id));
-    const lists = sides.map((s) => sidePool(ctx, s, floor));
+    const lists = sides.map((s) => rollPool(ctx, st, s, floor));
     const cands = [], ws = [];
     let total = 0;
     for (const l of lists) for (const e of l) {
       if (e.grp.some((g) => taken.has(g))) continue;
       if (homog && !typesOf(ctx, e.id).some((t) => homog.has(t))) continue;
-      if (added && E.tagBlocked(ctx.kb.mods[e.id], ctx.baseTags, added)) continue;
+      if (added && !e.rune && E.tagBlocked(ctx.kb.mods[e.id], ctx.baseTags, added)) continue;
       const w = boost && ctx.kb.mods[e.id].mt.includes(boost.tag) ? e.w * boost.mult : e.w;
       cands.push(e); ws.push(w); total += w;
     }
@@ -933,7 +994,7 @@
     switch (a.op) {
       case 'newbase':
         // a fresh white base: nothing socketed, no catalyst quality, not runeforged
-        st.rarity = 'Normal'; st.mods = []; st.runes = []; st.socketed = 0; st.sockets = 0; st.soul = false; st.xCrafted = 0; st.xSuffix = 0; st.aldur = null;
+        st.rarity = 'Normal'; st.mods = []; st.runes = []; st.tags = []; st.socketed = 0; st.sockets = 0; st.xCrafted = 0; st.xSuffix = 0; st.aldur = null;
         st.catQ = 0; st.catTag = null; st.quality = 0; st.verisium = false;
         break;
       case 'transmute':
@@ -1073,11 +1134,13 @@
         break;
       case 'rune_rule': {
         // runes that change crafting (game data augments): Astrid's Creativity allows one more crafted modifier, Serle's
-        // Triumph one more suffix (Medved's Tending and its Soul modifiers are not supported, R_SOUL_MODS)
+        // Triumph one more suffix, a "Can roll ... modifiers" rune opens its pool (R_RUNE_POOLS)
         const txt = ((ctx.kb.augments[a.item] || {}).by_class || {})[ctx.cls];
         const t = txt ? (txt.txt || []).join('\n') : '';
         st.runes = (st.runes || []).concat([a.item]);
         st.socketed = (st.socketed || 0) + 1;
+        const opens = /Can roll (\w+) modifiers/i.exec(t);
+        if (opens) st.tags = (st.tags || []).concat([opens[1].toLowerCase()]);
         if (/additional Crafted Modifier/i.test(t)) st.xCrafted = (st.xCrafted || 0) + 1;
         const sx = /\+(\d+) Suffix Modifiers? allowed/i.exec(t);
         if (sx) st.xSuffix = (st.xSuffix || 0) + +sx[1];
@@ -1183,9 +1246,10 @@
     for (const [key, t] of Object.entries(targets || {})) {
       if (!t || !t.fam) continue;
       const slotSide = key.split('-')[0];
-      if (t.group === 'prefix' || t.group === 'suffix' || t.group === 'desecrated') {
+      if (t.group === 'prefix' || t.group === 'suffix' || t.group === 'desecrated' || t.group === 'rune') {
         const des = t.group === 'desecrated';
-        const side = des ? slotSide : t.group;
+        const side = des || t.group === 'rune' ? slotSide : t.group;
+        const rp = des ? null : runePoolOf(ctx, t.fam, side); // a modifier a rune opens: the rune is socketed for it
         let lich = null;
         if (des) {
           const ids = (ctx.ix.famMods.get(t.fam) || []).filter((id) => ctx.kb.mods[id].dom === 'd');
@@ -1195,7 +1259,8 @@
         const grp = any ? ctx.kb.mods[any].grp : [];
         const minValue = t.minValue > 0 ? +t.minValue : null;
         if (minValue != null) ctx.needValues = true;
-        goals.push({ key, fam: t.fam, side, des, grp, tier: minValue != null ? null : t.minTier || null, minValue, required: !!t.required, label: t.label, lich, ess: essencesFor(ctx, t.fam) });
+        goals.push({ key, fam: t.fam, side, des, grp, tier: minValue != null ? null : t.minTier || null, minValue, required: !!t.required, label: t.label, lich, ess: essencesFor(ctx, t.fam),
+          rune: rp ? rp.tag : null, runeItem: rp ? rp.rune : null });
       } else if ((t.group === 'essence' || t.group === 'alloy' || t.group === 'liquid') && essencesFor(ctx, t.fam).length) {
         const rec = essencesFor(ctx, t.fam)[0];
         const m = ctx.kb.mods[rec.mod];
@@ -1253,7 +1318,8 @@
       return (g.ess || []).length ? null : 'no essence gives this mod on this item class';
     }
     const viaEssence = essenceOptions(ctx, g, 'magic').length + essenceOptions(ctx, g, 'rare').length > 0;
-    const ok = sidePool(ctx, g.side, 0).some((e) => e.fam === g.fam && (!g.eff || e.tier <= g.eff) && reaches(ctx, e.id, g)) || viaEssence;
+    if (g.rune && (st.tags || []).some((t) => t !== g.rune)) return `needs the rune ${g.runeItem}, but the rune on the item opens another pool (one per item)`;
+    const ok = (g.rune ? runeSide(ctx, g.rune, g.side, 0) : sidePool(ctx, g.side, 0)).some((e) => e.fam === g.fam && (!g.eff || e.tier <= g.eff) && reaches(ctx, e.id, g)) || viaEssence;
     if (!ok) return g.minValue != null ? `no tier reaches ${g.minValue} at this item level` : 'this tier cannot roll at this item level';
     const blocker = st.mods.find((m) => (m.frac || m.lock) && !meets(m, g, g.eff) && m.grp.some((x) => (g.grp || []).includes(x)));
     if (blocker) return 'blocked by a kept or fractured mod of the same group';
@@ -1286,6 +1352,8 @@
     // Each setting is read only where its value can change the move (state checks come first). The exhaustive sweep
     // (scripts/selftest/sweep.js) records which settings a run reads to group strategies that behave the same.
     const unmet = (st) => goals.filter((g) => !goalMet(st, g));
+    /** A goal from a rune's pool while that rune is not socketed: nothing can roll it yet. */
+    const shut = (st, g) => !!g.rune && !(st.tags || []).includes(g.rune);
     /** The strategy's bone quality, or Preserved where the item class has no such bone (jewels). */
     const boneQ = (q) => (q && boneExists(ctx, q) ? q : 'Preserved');
     const resGoal = (g) => !g.des && /^(Fire|Cold|Lightning)Resistance$/.test(g.fam || '');
@@ -1314,6 +1382,14 @@
         if (!err) return a;
         return err === NO_SOCKET && !validate(ctx, st, { op: 'artificer' }) ? { op: 'artificer' } : null;
       };
+      // A goal from a pool that a rune opens ("Can roll Marksman modifiers"): the rune goes in once the goals that roll
+      // from the item's own pool are finished. While it is socketed its modifiers roll as well, so every Exalted or
+      // Chaos Orb for the other goals would hit less often; and a base that is thrown away before costs no rune.
+      const pooled = left.find((g) => shut(st, g));
+      if (pooled && !left.some((g) => !g.rune && !g.des && !g.essenceOnly)) {
+        const a = socket({ op: 'rune_rule', item: pooled.runeItem });
+        if (a) return a;
+      }
       // Astrid's Creativity: more crafted-modifier goals than crafted slots
       const cap = (ctx.craftedCap || 1) + (st.xCrafted || 0);
       if (goals.filter((g) => g.essenceOnly).length > cap) {
@@ -1335,7 +1411,8 @@
       // a Rune of Aldur that finishes element goals from the other elements' modifiers, keeping every finished goal.
       // Sockets go to the runes that open a slot first: with one socket (a spear, a one-hand mace) and a fourth suffix
       // goal, an Aldur rune would leave no socket for Serle's Triumph.
-      const reserve = (goals.filter((g) => g.side === 'suffix').length > sLim && runeFor(ctx, /Suffix Modifiers? allowed/i) ? 1 : 0)
+      const reserve = (goals.some((g) => shut(st, g)) ? 1 : 0)
+        + (goals.filter((g) => g.side === 'suffix').length > sLim && runeFor(ctx, /Suffix Modifiers? allowed/i) ? 1 : 0)
         + (goals.filter((g) => g.essenceOnly).length > cap && runeFor(ctx, /additional Crafted Modifier/i) ? 1 : 0);
       const canAdd = validate(ctx, Object.assign({}, st, { sockets: 0 }), { op: 'artificer' }) === null || socketsOf(ctx, st) < maxSockets(ctx.cls)
         ? Math.max(0, maxSockets(ctx.cls) - socketsOf(ctx, st)) : 0;
@@ -1505,8 +1582,9 @@
       if (left.every((x) => st.mods.some((m) => nearMiss(m, x)))) return { op: 'divine' };
       // Work on a goal that can be slammed into an open slot first; removals come after.
       const blocks = (g) => st.mods.some((m) => removable(m) && !useful(m, goals) && blocksGoal(ctx, m, g));
-      const ready = (g) => !blocks(g) && open(ctx, st, g.side) > 0 && (!g.des || !st.mods.some((m) => m.des));
-      const g = left.find((x) => x.required && ready(x)) || left.find((x) => x.required) || left.find(ready) || left[0];
+      const ready = (g) => !shut(st, g) && !blocks(g) && open(ctx, st, g.side) > 0 && (!g.des || !st.mods.some((m) => m.des));
+      const g = left.find((x) => x.required && ready(x)) || left.find((x) => x.required && !shut(st, x)) || left.find(ready) || left.find((x) => !shut(st, x)) || left[0];
+      if (shut(st, g)) return { fail: `needs the rune ${g.runeItem} (no free augment socket)` };
       // Perfect/special essence: removes a random mod (side chosen with Crystallisation) and adds the goal mod.
       if (craftedFree) {
         for (const eg of left) {
@@ -1551,7 +1629,7 @@
       const blocking = st.mods.find((m) => removable(m) && !useful(m, goals) && blocksGoal(ctx, m, g));
       if (blocking) return removal(st, blocking.side, desJunk, blocking);
       if (open(ctx, st, g.side) > 0) {
-        if (ctx.bone && !st.mods.some((m) => m.des) && !left.some((x) => x.des) && params.desSlam) {
+        if (ctx.bone && !g.rune && !st.mods.some((m) => m.des) && !left.some((x) => x.des) && params.desSlam) {
           const b = { op: 'bone', quality: boneQ(params.bone), side: params.sideOmens ? g.side : null, echoes: !!params.echoes };
           if (!validate(ctx, st, b)) return b;
         }
@@ -1619,12 +1697,26 @@
       return null;
     }
     const lim = E.slotLimits({ rarity: 'Rare', slotDelta: ctx.slotDelta }, ctx.cls);
-    // Serle's Triumph adds a suffix slot where the class takes the rune and the item has, or can get, a socket for it
-    const st0 = { sockets: 0, socketed: 0 };
+    // Sockets for runes: the free ones, and the ones an Artificer's Orb can still add (up to the class's usual number;
+    // an exceptional base that dropped with one more keeps it, and only a Vaal Orb adds beyond)
+    const st0 = { rarity: 'Rare', mods: [], sockets: 0, socketed: 0 };
+    const room = freeSockets(ctx, st0) + (validate(ctx, st0, { op: 'artificer' }) === null ? Math.max(0, maxSockets(ctx.cls) - socketsOf(ctx, st0)) : 0);
+    // a rune that opens a modifier pool: one per item
+    const pools = [...new Set(goals.filter((g) => g.rune).map((g) => g.rune))];
+    if (pools.length > 1) return `targets from two rune pools (${goals.filter((g) => g.rune).map((g) => g.runeItem).filter((x, i, a) => a.indexOf(x) === i).join(' and ')}): one rune that opens a pool per item`;
+    const onItem = E.runeRules(ctx.item).pools;
+    const needPool = pools.length && !onItem.includes(pools[0]) ? 1 : 0;
+    if (needPool && onItem.length) return `the ${goals.find((g) => g.rune).label} target needs the rune ${goals.find((g) => g.rune).runeItem}, and the item carries another pool rune already (socket-bound, one per item)`;
+    // Serle's Triumph adds a suffix slot where the class takes the rune
     const hasRune = (ctx.item.runes || []).some((r) => /Suffix Modifiers? allowed/i.test(r.text));
-    const extra = !hasRune && runeFor(ctx, /Suffix Modifiers? allowed/i) && (freeSockets(ctx, st0) > 0 || !validate(ctx, Object.assign({ rarity: 'Rare', mods: [] }, st0), { op: 'artificer' })) ? 1 : 0;
+    const extra = !hasRune && runeFor(ctx, /Suffix Modifiers? allowed/i) && room - needPool > 0 ? 1 : 0;
     if (n.prefix > lim.prefix) return `more prefix targets (${n.prefix}) than a Rare item of this class holds (${lim.prefix})`;
-    if (n.suffix > lim.suffix + extra) return `more suffix targets (${n.suffix}) than a Rare item of this class holds (${lim.suffix + extra})`;
+    if (n.suffix > lim.suffix + extra) {
+      return needPool && room === 1 && runeFor(ctx, /Suffix Modifiers? allowed/i) && !hasRune && n.suffix === lim.suffix + 1
+        ? `a fourth suffix needs the rune Serle's Triumph and the ${goals.find((g) => g.rune).label} target the rune ${goals.find((g) => g.rune).runeItem}: two augment sockets, and this item can have one (an exceptional base with one more socket has room for both)`
+        : `more suffix targets (${n.suffix}) than a Rare item of this class holds (${lim.suffix + extra})`;
+    }
+    if (needPool > room) return `the ${goals.find((g) => g.rune).label} target needs the rune ${goals.find((g) => g.rune).runeItem}, and the item has no free augment socket for it`;
     return null;
   }
   function goalClash(ctx, goals, g) {
@@ -1730,7 +1822,7 @@
       probe.rarity = 'Magic';
       const floor = floorFor(ctx, 'transmute', a.tier || 'base');
       const kept = { list: [], ws: [], total: 0 }, junk = { list: [], ws: [], total: 0 };
-      for (const side of openSides(ctx, probe)) for (const e of sidePool(ctx, side, floor)) {
+      for (const side of openSides(ctx, probe)) for (const e of rollPool(ctx, probe, side, floor)) {
         const s1 = cloneState(probe);
         addRolled(ctx, s1, e, null, null);
         const into = next(s1).op === 'newbase' ? junk : kept;
@@ -2793,9 +2885,9 @@
     const added = E.addedTags(ctx.kb, st.mods.map((m) => m.id));
     const out = { side: { prefix: {}, suffix: {} }, any: {}, des: { prefix: {}, suffix: {} }, weighted: !!opts.weights };
     const tot = { prefix: 0, suffix: 0 };
-    for (const side of SIDES) for (const e of sidePool(ctx, side, 0)) {
+    for (const side of SIDES) for (const e of rollPool(ctx, st, side, 0)) {
       if (e.grp.some((g) => taken.has(g))) continue;
-      if (added && E.tagBlocked(ctx.kb.mods[e.id], ctx.baseTags, added)) continue;
+      if (added && !e.rune && E.tagBlocked(ctx.kb.mods[e.id], ctx.baseTags, added)) continue;
       out.side[side][e.fam] = (out.side[side][e.fam] || 0) + e.w;
       tot[side] += e.w;
     }
@@ -2979,10 +3071,10 @@
       { cur: ['Divine Orb'], omens: ['Omen of the Blessed'].concat(R === 'Rare' ? ['Omen of Sanctification'] : []), planned: true });
     if (qualityCurrencyFor(cls)) add('quality', 'Add quality', { op: 'quality' }, { cur: [qualityCurrencyFor(cls)] });
     if (infuserFor(cls)) add('infuser', 'Quality past the maximum', { op: 'infuser' }, { cur: [infuserFor(cls)] });
-    add('artificer', 'Add an augment socket', { op: 'artificer' }, { cur: ["Artificer's Orb"], note: 'Game text: "Adds an Augment Socket to a Martial Weapon, wand, staff or Armour". Up to the base\'s usual number (2 on body armour and two-handed weapons, else 1); a Vaal Orb can add one more.' });
+    add('artificer', 'Add an augment socket', { op: 'artificer' }, { cur: ["Artificer's Orb"], note: 'Game text: "Adds an Augment Socket to a Martial Weapon, wand, staff or Armour". Up to the base\'s usual number (2 on body armour and two-handed weapons, else 1). An exceptional base can drop with one more; past the usual number only a Vaal Orb adds a socket.' });
     add('extraction', 'Destroy the item for its runes', { op: 'extraction' }, { cur: ['Orb of Extraction'],
       note: 'Game text: "Destroys an Equipment item, returning any non Socket-Bound Augments socketed in it". Socket-bound ones are lost.' });
-    // Runes that change crafting (game data augments): listed, not planned
+    // Runes that change crafting (game data augments): the plans socket one when a goal needs it
     const RUNE_NOTES = {
       "Astrid's Creativity": 'The item can then have 2 crafted modifiers (essences, alloys, liquid emotions); the planner counts it once the rune is on the item. Once socketed it cannot be taken out, but another augment can replace it.',
       "Serle's Triumph": 'It raises the suffix limit and the modifier total by 1. Once socketed it cannot be taken out or replaced.',
@@ -2990,7 +3082,12 @@
     for (const [rune, why] of Object.entries(RUNE_NOTES)) {
       const r = ix.kb.augments && ix.kb.augments[rune];
       if (!r || !r.by_class[cls]) continue;
-      add('rune_rule', `${r.by_class[cls].txt.join(' ')} (${rune})`, { op: 'rune_rule', item: rune }, { cur: [rune], note: 'Socket it in an augment socket. ' + why });
+      add('rune_rule', `${r.by_class[cls].txt.join(' ')} (${rune})`, { op: 'rune_rule', item: rune }, { cur: [rune], note: 'Socket it in an augment socket. ' + why, planned: true });
+    }
+    // Runes that open a modifier pool: socket-bound, one per item; the plans socket one for a target from its pool
+    for (const p of runePoolsFor(ctx)) {
+      add('rune_rule', `Can roll ${p.label} modifiers (${p.rune})`, { op: 'rune_rule', item: p.rune }, { cur: [p.rune], planned: true,
+        note: `Socket it in an augment socket: ${p.mods.size} more modifiers can roll on the item (pick them as targets). Once socketed it cannot be taken out or replaced; one such rune per item.` });
     }
     // Runes of Aldur: socketed, they turn the other elements' modifiers into their element (rune texts). Listed, not planned.
     for (const rune of ['Passion of Aldur', 'Breath of Aldur', 'Ire of Aldur', 'Betrayal of Aldur']) {
@@ -3024,6 +3121,6 @@
     goalsFromTargets, goalMet, meets, nearMiss, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
     availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, goalClash, essencesForBase, liquidFor, CATALYST_DEFAULT,
     emulate, chanceOf, familyChances, runStrategy, runStrategyAsync, groupsMet, revealOptions, desSides, DES_OPTIONS,
-    expandStrategy, recipeParams, relevantKeys, SPACE, SEARCH, improvePlan, searchOf: (plan) => SCREENS.get(plan), legacyItems, suffixRune,
+    expandStrategy, recipeParams, relevantKeys, SPACE, SEARCH, improvePlan, searchOf: (plan) => SCREENS.get(plan), legacyItems, suffixRune, runeBlocks,
   };
 });

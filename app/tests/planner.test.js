@@ -677,6 +677,96 @@ test("Serle's Triumph: a fourth suffix (seven modifiers), socketed when three su
   assert.equal(P.suffixRune(ix, ring), null);
 });
 
+test('rune pools: every modifier a socket-bound rune opens is a target; one pool per item; the plan sockets the rune', async () => {
+  // game data: six runes give the item a tag, and the modifiers with a spawn weight on that tag can roll
+  const pools = Object.fromEntries(E.runePools(ix).map((p) => [p.rune, p]));
+  assert.deepEqual(Object.keys(pools).sort(), ["Katla's Gloom", "Kolr's Hunt", "Medved's Tending", "Thrud's Might", "Uhtred's Sidereus", "Vorana's Carnage"]);
+  assert.deepEqual([pools["Kolr's Hunt"].tag, pools["Kolr's Hunt"].classes, pools["Kolr's Hunt"].mods.size], ['marksman', ['Gloves'], 28]);
+  assert.deepEqual([pools["Katla's Gloom"].tag, pools["Vorana's Carnage"].classes, pools["Uhtred's Sidereus"].classes, pools["Medved's Tending"].classes], ['decay', ['Helmet'], ['Boots'], ['Body Armour']]);
+  assert.ok(pools["Thrud's Might"].classes.includes('Bow') && pools["Thrud's Might"].classes.includes('Wand'));
+
+  const gloves = E.parseItem(ix, ['Item Class: Gloves', 'Rarity: Normal', 'Polished Bracers', '--------', 'Item Level: 82'].join('\n')).item;
+  const opts = (item, o) => E.pickerOptions(ix, item, Object.assign({ side: 'suffix', runeBlocked: P.runeBlocks(ix, item) }, o)).filter((x) => x.group === 'rune');
+  // gloves take two such runes: both pools are offered until a target is chosen from one of them
+  assert.deepEqual([...new Set(opts(gloves).map((o) => o.rune))].sort(), ['decay', 'marksman']);
+  assert.ok(opts(gloves).every((o) => o.ok), 'an Artificer\'s Orb gives the socket');
+  assert.deepEqual([...new Set(opts(gloves, { runePool: 'marksman' }).map((o) => o.rune))], ['marksman']);
+  // a ring has no augment socket and no rune pool
+  const ring = E.parseItem(ix, 'Item Class: Rings\nRarity: Normal\nRuby Ring\n--------\nItem Level: 82').item;
+  assert.equal(opts(ring).length, 0);
+  // with one rune socketed (socket-bound: it stays) only its pool is left, and the other rune is refused
+  const worn = E.parseItem(ix, ['Item Class: Gloves', 'Rarity: Rare', 'Demon Mitts', 'Polished Bracers', '--------', 'Sockets: S S', '--------', 'Item Level: 80', '--------',
+    '+1 Suffix Modifier allowed (rune)', 'Can roll Marksman modifiers (rune)', '--------', '33% increased Projectile Speed', '31% increased Projectile Damage',
+    'Adds 2 to 58 Lightning damage to Attacks', '+2 to Level of all Projectile Skills', '32% increased Critical Hit Chance',
+    'Gain Deflection Rating equal to 19% of Evasion Rating'].join('\n'));
+  assert.ok(worn.item.mods.every((m) => m.inPool), 'the Marksman modifiers are of the item\'s pool');
+  assert.ok(!worn.warnings.some((w) => /not in/i.test(w.msg)), JSON.stringify(worn.warnings));
+  assert.deepEqual([...new Set(opts(worn.item).map((o) => o.rune))], ['marksman']);
+  assert.match(P.runeBlocks(ix, worn.item).decay, /another pool rune is socketed/);
+  const wctx = P.makeContext(ix, worn.item);
+  const wst = P.toState(wctx, worn.item);
+  assert.deepEqual(wst.tags, ['marksman']);
+  assert.match(P.validate(wctx, Object.assign({}, wst, { sockets: 1 }), { op: 'rune_rule', item: "Katla's Gloom" }), /One rune that opens a modifier pool per item/);
+  // the socketed pool rolls with the item's own modifiers (Exalted Orb), a free suffix here
+  const seen = new Set();
+  for (let s = 1; s <= 300; s++) for (const m of P.apply(wctx, wst, { op: 'exalt', side: 'suffix' }, P.rngFrom(s)).added) seen.add(m.id);
+  assert.ok([...seen].some((id) => /^MarksmanInfluence/.test(id)) && [...seen].some((id) => !/^MarksmanInfluence/.test(id)), [...seen].join());
+  assert.ok(![...seen].some((id) => /^DecayInfluence/.test(id)));
+  const fc = P.familyChances(ix, worn.item, {});
+  const pierce = opts(worn.item).find((o) => o.fam === 'ChanceToPierce');
+  assert.ok(fc.side.suffix[pierce.fam] > 0, 'a chance once the rune is socketed');
+  assert.equal(P.familyChances(ix, gloves, {}).side.suffix[pierce.fam], undefined, 'none before');
+
+  // a target from the pool: the goal names the rune, and the plan sockets it (an Artificer's Orb first) once the
+  // targets of the item's own pool are done
+  const fire = E.parseItem(ix, ['Item Class: Gloves', 'Rarity: Rare', 'T', 'Polished Bracers', '--------', 'Item Level: 82', '--------', '+25% to Fire Resistance'].join('\n')).item.mods[0];
+  const crit = opts(gloves).find((o) => o.fam === 'CriticalStrikeChance');
+  const targets = {
+    'suffix-0': { fam: kb.mods[fire.modId].fam, group: 'suffix', minTier: null, required: true, label: 'fire resistance' },
+    'suffix-1': { fam: crit.fam, group: 'rune', rune: 'marksman', minTier: null, required: true, label: crit.label },
+  };
+  const ctx = P.makeContext(ix, gloves);
+  const { goals } = P.goalsFromTargets(ctx, targets);
+  goals.forEach((g) => { g.eff = g.tier; });
+  assert.deepEqual(goals.map((g) => [g.side, g.rune, g.runeItem]), [['suffix', null, null], ['suffix', 'marksman', "Kolr's Hunt"]]);
+  const r = P.simulate(ctx, P.toState(ctx, gloves), goals, P.expandStrategy({ sideOmens: true, removal: 'annul', restart: false }), { trials: 200, seed: 3, priceOf: () => 10 });
+  assert.ok(r.p > 0.9, 'finishes: ' + r.p);
+  const first = (name) => r.steps.findIndex((x) => x.names.includes(name));
+  assert.ok(first("Artificer's Orb") >= 0 && first("Kolr's Hunt") > first("Artificer's Orb"), r.steps.map((x) => x.key).join('; '));
+  assert.ok(Math.abs(r.steps[first("Kolr's Hunt")].avg - 1) < 0.01, 'socketed once');
+  // before the rune nothing rolls the Marksman goal: with the fire resistance still open the rune waits
+  const st = Object.assign(P.toState(ctx, gloves), { rarity: 'Rare' });
+  const pol = P.makePolicy(ctx, goals, P.expandStrategy({ sideOmens: true }));
+  assert.equal(pol(st).op, 'exalt');
+
+  const plan = async (item, t) => (await P.buildPlans({ ix, item, targets: t, locks: {}, priceOf: () => 10, baseCost: 1, trials: 100, screenTrials: 40, beamBudgetMs: 0 })).profiles.balanced;
+  const ok = await plan(gloves, targets);
+  assert.ok(ok.p > 0.5 && ok.steps.some((s) => s.names.includes("Kolr's Hunt")), JSON.stringify(ok.impossible || ok.p));
+  // two pools: refused
+  const decay = opts(gloves).find((o) => o.rune === 'decay');
+  const two = Object.assign({}, targets, { 'suffix-2': { fam: decay.fam, group: 'rune', rune: 'decay', minTier: null, required: true, label: decay.label } });
+  assert.match((await plan(gloves, two)).impossible[0], /two rune pools \(Kolr's Hunt and Katla's Gloom\): one rune that opens a pool per item/);
+  // a Decay target on the gloves that carry Kolr's Hunt: refused, the rune cannot be replaced
+  assert.match((await plan(worn.item, { 'suffix-3': two['suffix-2'] })).impossible[0], /Katla's Gloom, and the item carries another pool rune already/);
+  // four suffixes with one from a rune pool need two sockets (Serle's Triumph and the pool rune): gloves get one from
+  // an Artificer's Orb; an exceptional base that dropped with two has room
+  const res = ['+25% to Fire Resistance', '+25% to Cold Resistance', '+25% to Lightning Resistance'];
+  const rare = E.parseItem(ix, ['Item Class: Gloves', 'Rarity: Rare', 'T', 'Polished Bracers', '--------', 'Item Level: 82', '--------', ...res].join('\n')).item;
+  const four = {};
+  rare.mods.forEach((m, i) => { four['suffix-' + i] = { fam: kb.mods[m.modId].fam, group: 'suffix', minTier: null, required: true, label: m.text }; });
+  four['suffix-3'] = targets['suffix-1'];
+  assert.match((await plan(gloves, four)).impossible[0], /two augment sockets, and this item can have one/);
+  const exc = E.parseItem(ix, ['Item Class: Gloves', 'Rarity: Normal', 'Polished Bracers', '--------', 'Quality: +27% (augmented)', '--------', 'Sockets: S S', '--------', 'Item Level: 82'].join('\n'));
+  assert.ok(!exc.warnings.some((w) => w.level === 'error'), JSON.stringify(exc.warnings));
+  assert.deepEqual([(exc.item.sockets || []).length, exc.item.quality], [2, 27], 'an exceptional base: one more socket, quality past 20%');
+  assert.ok(exc.warnings.some((w) => w.level === 'info' && /one more than Gloves usually get: an exceptional base/.test(w.msg)));
+  const ectx = P.makeContext(ix, exc.item);
+  assert.match(P.validate(ectx, P.toState(ectx, exc.item), { op: 'artificer' }), /adds none past the usual number/);
+  const both = await plan(exc.item, four);
+  assert.ok(both.p > 0 && ["Kolr's Hunt", "Serle's Triumph"].every((n) => both.steps.some((s) => s.names.includes(n))) && !both.steps.some((s) => s.names.includes("Artificer's Orb")),
+    JSON.stringify(both.impossible || both.steps.map((s) => s.names)));
+});
+
 test('jewels are desecrated with the Preserved Cranium only (no Gnawed or Ancient Cranium in the game)', () => {
   const jewel = E.parseItem(ix, 'Item Class: Jewels\nRarity: Normal\nDiamond\n--------\nItem Level: 82').item;
   const ctx = P.makeContext(ix, jewel);
@@ -960,14 +1050,17 @@ test('Omens of Crystallisation are for Perfect and Corrupted essences, not Runic
   assert.equal(P.validate(ctx, st, { op: 'pessence', item: alloy.item, mod: alloy.mod }), null);
 });
 
-test("runes that change crafting: Astrid's Creativity a second crafted modifier; Soul modifiers are not supported", () => {
+test("runes that change crafting: Astrid's Creativity a second crafted modifier; Medved's Tending opens the Soul pool", () => {
   const armour = E.parseItem(ix, 'Item Class: Body Armours\nRarity: Rare\nTest\nHeavy Plate\n--------\nItem Level: 82\n--------\n+120 to maximum Life').item;
   const ctx = ctxOf(armour);
-  assert.match(P.validate(ctx, P.toState(ctx, armour), { op: 'rune_rule', item: "Medved's Tending" }), /not supported/);
-  assert.ok(!P.availableOps(ix, armour).some((o) => o.id === 'rune_rule' && /Medved/.test(o.label)));
-  // no Soul modifier in the stat picker
-  const soul = new Set(Object.entries(kb.mods).filter(([, m]) => m.dom === 'i' && m.sw.some(([t, w]) => t === 'soul' && w > 0)).map(([id]) => id));
-  for (const side of ['prefix', 'suffix']) assert.ok(!E.pickerOptions(ix, armour, { side }).some((o) => o.tiers.some((t) => soul.has(t.id))));
+  assert.match(P.validate(ctx, P.toState(ctx, armour), { op: 'rune_rule', item: "Medved's Tending" }), /No free augment socket/);
+  assert.ok(P.availableOps(ix, armour, { all: true }).some((o) => o.id === 'rune_rule' && /Soul modifiers \(Medved's Tending\)/.test(o.title)));
+  // the Soul modifiers are offered as targets from the rune's pool; the ones with two defences only for the base's own
+  // armour type (Heavy Plate is armour only: spawn weights name the other types with 0 before the soul tag)
+  const soul = [...E.pickerOptions(ix, armour, { side: 'prefix' }), ...E.pickerOptions(ix, armour, { side: 'suffix' })].filter((o) => o.group === 'rune');
+  assert.ok(soul.length >= 8 && soul.every((o) => o.rune === 'soul'), 'soul options: ' + soul.length);
+  const ids = soul.flatMap((o) => o.tiers.map((t) => t.id));
+  assert.ok(ids.includes('SoulInfluenceSpiritDefencesHybridArmour') && !ids.includes('SoulInfluenceSpiritDefencesHybridArmourEvasion') && !ids.includes('SoulInfluenceSpiritDefencesHybridEnergyShield'), ids.join());
   const sword = E.parseItem(ix, 'Item Class: One Hand Maces\nRarity: Rare\nTest\nMarauding Mace\n--------\nItem Level: 82\n--------\n+20% to Fire Resistance').item;
   const sc = ctxOf(sword);
   const st = P.toState(sc, sword);
@@ -1243,7 +1336,7 @@ test('Void Flux, Omen of Putrefaction, Homogenising omens, Altered Collarbone, c
   assert.equal((art.sockets || []).length, 1);
   const art2 = E.parseItem(ix, P.emulate(ix, art, { op: 'artificer' }, { seed: 1 }).text).item;
   assert.equal((art2.sockets || []).length, 2);
-  assert.match(P.emulate(ix, art2, { op: 'artificer' }).reason, /the most for Body Armour/);
+  assert.match(P.emulate(ix, art2, { op: 'artificer' }).reason, /the most Artificer.s Orb gives Body Armour/);
   assert.match(P.emulate(ix, armour, { op: 'extraction' }).reason, /No augment is socketed/);
   const runed = it(['Item Class: Body Armours', 'Rarity: Rare', 'Test Robe', 'Heavy Plate', '--------', 'Sockets: S S', '--------', 'Item Level: 82', '--------',
     '+15% to Fire Resistance (rune)', 'Can roll Soul modifiers (rune)', '--------', '+120 to maximum Life']);

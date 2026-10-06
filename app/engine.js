@@ -150,29 +150,98 @@
   }
 
   /**
-   * Socketed runes that change crafting (augment texts in the game data): Medved's Tending lets the item roll the Soul
-   * modifiers (spawn tag soul), Astrid's Creativity allows one more crafted modifier. item.runes holds the "(rune)" lines.
+   * Modifier pools that a socket-bound rune opens (game data: the augment gives the item a tag, and modifiers with a spawn
+   * weight on that tag can roll): Kolr's Hunt "Can roll Marksman modifiers" on gloves, Katla's Gloom (Decay, gloves),
+   * Vorana's Carnage (Berserking, helmets), Uhtred's Sidereus (Chronomancy, boots), Thrud's Might (Destruction, weapons),
+   * Medved's Tending (Soul, body armour). [{ rune, label, tag, classes, mods: Map id -> {tier, side, rune: tag} }];
+   * tiers are counted per family, the highest modifier level first.
+   */
+  function runePools(ix) {
+    if (ix._runePools) return ix._runePools;
+    const out = [];
+    for (const [name, a] of Object.entries(ix.kb.augments || {})) {
+      const classes = [];
+      let label = null;
+      for (const [cls, c] of Object.entries(a.by_class || {})) {
+        const m = (c.txt || []).map((t) => /^Can roll (\w+) modifiers$/i.exec(t)).find(Boolean);
+        if (m) { classes.push(cls); label = m[1]; }
+      }
+      if (!label) continue;
+      const tag = label.toLowerCase();
+      const byFam = new Map();
+      for (const [id, m] of Object.entries(ix.kb.mods)) {
+        if (m.dom !== 'i' || !m.txt || !(m.sw || []).some(([t, w]) => t === tag && w > 0)) continue;
+        if (!byFam.has(m.fam)) byFam.set(m.fam, []);
+        byFam.get(m.fam).push(id);
+      }
+      const mods = new Map();
+      for (const ids of byFam.values()) {
+        ids.sort((x, y) => ix.kb.mods[y].lvl - ix.kb.mods[x].lvl);
+        ids.forEach((id, i) => mods.set(id, { tier: i + 1, side: ix.kb.mods[id].gen === 'p' ? 'prefix' : 'suffix', rune: tag }));
+      }
+      out.push({ rune: name, label, tag, classes, mods, fams: new Set(byFam.keys()) });
+    }
+    return (ix._runePools = out);
+  }
+  /**
+   * Socketed runes that change crafting (augment texts in the game data): a "Can roll ... modifiers" rune opens its pool
+   * (pools: the tags), Astrid's Creativity allows one more crafted modifier. item.runes holds the "(rune)" lines.
    */
   function runeRules(item) {
-    const t = (item.runes || []).map((r) => r.text).join('\n');
-    return { soul: /Can roll Soul modifiers/i.test(t), extraCrafted: /Can have 1 additional Crafted Modifier/i.test(t) ? 1 : 0 };
+    const lines = (item.runes || []).map((r) => r.text);
+    const pools = lines.map((t) => /^Can roll (\w+) modifiers$/i.exec(t)).filter(Boolean).map((m) => m[1].toLowerCase());
+    return { pools, soul: pools.includes('soul'), extraCrafted: lines.some((t) => /Can have 1 additional Crafted Modifier/i.test(t)) ? 1 : 0 };
   }
-  /** Natural pool of the item: its base's, plus the Soul modifiers while Medved's Tending is socketed. */
-  function poolForItem(ix, item) {
+  /**
+   * The rune pools on one base. Spawn weights are read in order, the first tag the item has decides: the Soul modifiers
+   * with two defences ("increased Armour and Evasion, +Spirit") name the other body armour types with weight 0 before
+   * the soul tag, so each rolls only on the armour type it is for. Modifiers the base rolls anyway are left out.
+   * Same shape as runePools; tiers are counted among the modifiers the base can get.
+   */
+  function runePoolsOn(ix, baseName) {
+    if (!ix._runeOn) ix._runeOn = new Map();
+    if (ix._runeOn.has(baseName)) return ix._runeOn.get(baseName);
+    const base = ix.kb.bases[baseName];
+    const out = [];
+    if (base) {
+      const nat = poolFor(ix, base.sig);
+      for (const p of runePools(ix)) {
+        if (!p.classes.includes(base.cls)) continue;
+        const tags = new Set((base.tags || []).concat([p.tag]));
+        const byFam = new Map();
+        for (const id of p.mods.keys()) {
+          const m = ix.kb.mods[id];
+          if (nat.has(id) || !swEligible(m, tags)) continue;
+          if (!byFam.has(m.fam)) byFam.set(m.fam, []);
+          byFam.get(m.fam).push(id);
+        }
+        const mods = new Map();
+        for (const ids of byFam.values()) {
+          ids.sort((x, y) => ix.kb.mods[y].lvl - ix.kb.mods[x].lvl);
+          ids.forEach((id, i) => mods.set(id, { tier: i + 1, side: ix.kb.mods[id].gen === 'p' ? 'prefix' : 'suffix', rune: p.tag }));
+        }
+        out.push({ rune: p.rune, label: p.label, tag: p.tag, classes: p.classes, mods, fams: new Set(byFam.keys()) });
+      }
+    }
+    ix._runeOn.set(baseName, out);
+    return out;
+  }
+  /** The pool entry of a modifier that one of the item's socketed runes lets it roll, or undefined. */
+  function runePoolEntry(ix, item, id) {
+    for (const tag of runeRules(item).pools) {
+      const p = runePoolsOn(ix, item.base).find((x) => x.tag === tag);
+      if (p && p.mods.has(id)) return p.mods.get(id);
+    }
+    return undefined;
+  }
+  /** Pool of the item: its base's natural pool, plus the pools its socketed runes open (and of extraTags, when given). */
+  function poolForItem(ix, item, extraTags) {
     const base = ix.kb.bases[item.base];
     const pool = poolFor(ix, base.sig);
-    if (!runeRules(item).soul) return pool;
+    const tags = runeRules(item).pools.concat(extraTags || []);
+    if (!tags.length) return pool;
     const out = new Map(pool);
-    const byFam = new Map();
-    for (const [id, m] of Object.entries(ix.kb.mods)) {
-      if (m.dom !== 'i' || !m.sw.some(([t, w]) => t === 'soul' && w > 0)) continue;
-      if (!byFam.has(m.fam)) byFam.set(m.fam, []);
-      byFam.get(m.fam).push(id);
-    }
-    for (const ids of byFam.values()) {
-      ids.sort((a, b) => ix.kb.mods[b].lvl - ix.kb.mods[a].lvl);
-      ids.forEach((id, i) => out.set(id, { tier: i + 1, side: ix.kb.mods[id].gen === 'p' ? 'prefix' : 'suffix', soul: true }));
-    }
+    for (const p of runePoolsOn(ix, item.base)) if (tags.includes(p.tag)) for (const [id, pe] of p.mods) if (!out.has(id)) out.set(id, pe);
     return out;
   }
 
@@ -436,7 +505,10 @@
 
     // ---------------------------------------------------------- resolve lines to mods
     const sig = item.base ? ix.kb.bases[item.base].sig : null;
-    const pool = sig ? poolFor(ix, sig) : new Map();
+    const basePool = sig ? poolFor(ix, sig) : new Map();
+    // modifiers a socketed rune lets the item roll ("Can roll Marksman modifiers") are of its pool as well; the rune
+    // lines come before the modifiers in the item text
+    const pool = { get: (id) => basePool.get(id) || runePoolEntry(ix, item, id), has: (id) => basePool.has(id) || !!runePoolEntry(ix, item, id) };
     const desPool = item.base ? desecratedPoolFor(ix, item.base) : new Map();
     const crafts = item.base ? liquidModsFor(ix, item.base) : null;
     const known = uniqueLinesFor(ix, item);
@@ -682,6 +754,8 @@
     return lim;
   }
 
+  /** Augment sockets a base of the class gets from Artificer's Orbs: 2 on body armour and two-handed weapons, else 1. */
+  function maxSockets(cls) { return cls === 'Body Armour' || /^Two Hand/.test(cls) || ['Bow', 'Staff', 'Warstaff', 'Crossbow', 'Talisman'].includes(cls) ? 2 : 1; }
   function validateItem(ix, item, warnings) {
     if (!item) return warnings;
     const lim = itemLimits(ix, item);
@@ -711,12 +785,17 @@
       if (m.gameTier && m.tier && m.gameTier !== m.tier) warnings.push({ level: 'warn', msg: `"${m.text}": game says T${m.gameTier}, computed T${m.tier}. Showing the game's tier.` });
       if (m.gameTier) m.tier = m.gameTier;
       if (m.ambiguous) warnings.push({ level: 'info', msg: `"${m.text}" matches more than one mod; pick the right one from the candidates.` });
-      if (!m.inPool && !m.desecrated && !m.crafted && !(runeRules(item).soul && ix.kb.mods[m.modId].sw.some(([t, w]) => t === 'soul' && w > 0))) {
+      if (!m.inPool && !m.desecrated && !m.crafted && !runePoolEntry(ix, item, m.modId)) {
         // a socketed Rune of Aldur turns other elements' modifiers into its element (Mind Roar: Cold lines shown as Fire)
         const aldur = (item.runes || []).map((r) => (/Forged by the (Passion|Breath|Ire|Betrayal) of Aldur/.exec(r.text) || [])[1]).find(Boolean);
         warnings.push({ level: 'info', msg: aldur ? `"${m.text}" is not in this base's natural pool: the socketed ${aldur} of Aldur rune transformed it from another element.`
           : `"${m.text}" is not in this base's natural pool (from an essence, the Genesis Tree or another mechanic).` });
       }
+    }
+    // one socket over the class's usual number: an exceptional base dropped with it, or a Vaal Orb added it (R_EXCEPTIONAL)
+    const cls0 = ix.kb.bases[item.base] && ix.kb.bases[item.base].cls;
+    if (cls0 && (item.sockets || []).length > maxSockets(cls0)) {
+      warnings.push({ level: 'info', msg: `${item.sockets.length} augment sockets, one more than ${cls0} usually ${/s$/.test(cls0) ? 'get' : 'gets'}: ${item.flags.corrupted ? "an exceptional base or a Vaal Orb's socket" : 'an exceptional base'}. Artificer's Orb adds none past the usual number.` });
     }
     if (item.flags.corrupted) warnings.push({ level: 'info', msg: "Corrupted: only corrupted-item currency applies (Architect's Orb, Orbs of Sacrifice, Vaal Cultivation Orb)." });
     if (item.flags.sanctified) warnings.push({ level: 'info', msg: 'Sanctified: most crafting is locked (single source, verify in game).' });
@@ -743,7 +822,7 @@
     const base = ix.kb.bases[item.base];
     const ilvl = item.ilvl == null ? 100 : item.ilvl;
     const side = opts.side;
-    const pool = poolFor(ix, base.sig); // Soul modifiers are not offered (not supported)
+    const pool = poolFor(ix, base.sig); // the pools of the runes are added below (group 'rune')
     const others = item.mods.filter((m) => m.modId && m.modId !== opts.exclude);
     const takenGroups = new Map();
     for (const m of others) for (const g of ix.kb.mods[m.modId].grp) takenGroups.set(g, m.text);
@@ -763,7 +842,7 @@
         const g = m.grp.find((x) => takenGroups.has(x));
         if (g) reason = `conflicts with: ${takenGroups.get(g)}`;
       }
-      if (!reason && group !== 'essence' && group !== 'alloy' && group !== 'liquid' && tagBlocked(m, baseTags, added)) {
+      if (!reason && group !== 'essence' && group !== 'alloy' && group !== 'liquid' && group !== 'rune' && tagBlocked(m, baseTags, added)) {
         const t = m.sw.find(([x]) => added.has(x));
         reason = `blocked by: ${tagText.get(t[0])}`;
       }
@@ -772,6 +851,20 @@
 
     for (const [id, pe] of pool) if (pe.side === side) add(id, pe.tier, side, null);
     for (const [id, pe] of desecratedPoolFor(ix, item.base)) if (pe.side === side) add(id, pe.tier, 'desecrated', null);
+
+    // Modifiers a socket-bound rune opens. One pool per item: the pool of a rune that is socketed (it cannot be taken
+    // out), else the pool the targets already use (opts.runePool), else every pool the class has a rune for.
+    // opts.runeBlocked: {tag: reason} for runes no plan can socket (no free augment socket).
+    const socketed = runeRules(item).pools;
+    for (const p of runePoolsOn(ix, item.base)) {
+      if (socketed.length ? !socketed.includes(p.tag) : opts.runePool && opts.runePool !== p.tag) continue;
+      const why = socketed.includes(p.tag) ? null : (opts.runeBlocked || {})[p.tag] || null;
+      for (const [id, pe] of p.mods) {
+        if (pe.side !== side || pool.has(id)) continue;
+        add(id, pe.tier, 'rune', why, p.rune);
+        fams.get('rune|' + ix.kb.mods[id].fam).rune = p.tag;
+      }
+    }
 
     const hasCrafted = item.mods.filter((m) => m.crafted && m.modId !== opts.exclude).length >= 1 + runeRules(item).extraCrafted;
     const hasDes = item.mods.some((m) => m.desecrated && m.modId !== opts.exclude);
@@ -976,7 +1069,7 @@
   return {
     cleanLine, normalize, template, templateRanges, lineValues, valuesFit,
     buildIndex, poolFor, desecratedPoolFor, swEligible, familyTiersByTags, applyFloor,
-    parseItem, validateItem, slotLimits, itemLimits, pickerOptions, addedTags, tagBlocked, runeRules, poolForItem, searchOptions, searchScore, resolveTemplateTarget,
+    parseItem, validateItem, slotLimits, itemLimits, pickerOptions, addedTags, tagBlocked, runeRules, runePools, runePoolsOn, maxSockets, poolForItem, searchOptions, searchScore, resolveTemplateTarget,
     leakScan, legacyScan, explanationProblems, lichOf, diffItems,
   };
 });

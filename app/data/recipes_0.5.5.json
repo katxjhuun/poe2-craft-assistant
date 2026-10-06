@@ -1891,6 +1891,12 @@
       "claims": [
         "k56"
       ]
+    },
+    {
+      "id": "t33",
+      "question": "With a rune that opens a modifier pool socketed (Kolr's Hunt, Katla's Gloom, Vorana's Carnage, Uhtred's Sidereus, Thrud's Might, Medved's Tending): does the Well of Souls offer that pool's modifiers, and how often do they roll against the item's own?",
+      "how": "Desecrate such an item a few times and note whether a Marksman (Decay, Soul...) modifier is among the three options. For the weights: use Exalted Orbs on a few such items and count how many of the new modifiers are from the rune's pool. The planner assumes the Well of Souls does not offer them and gives them an estimated weight.",
+      "claims": []
     }
   ]
 }

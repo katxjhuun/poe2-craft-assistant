@@ -30,7 +30,7 @@ function candidates(ctx, st, r) {
     const c = (aug.by_class || {})[ctx.cls];
     if (!c) continue;
     if (/of Aldur$/.test(name)) A.push({ op: 'aldur', item: name });
-    else if ((c.txt || []).some((t) => /additional Crafted Modifier|Modifiers? allowed/i.test(t))) A.push({ op: 'rune_rule', item: name });
+    else if ((c.txt || []).some((t) => /additional Crafted Modifier|Modifiers? allowed|Can roll \w+ modifiers/i.test(t))) A.push({ op: 'rune_rule', item: name });
   }
   for (const q of ['Gnawed', 'Preserved', 'Ancient']) {
     const side = SIDES[Math.floor(r() * 3)];
@@ -155,7 +155,9 @@ function checkStep(ctx, before, a, r) {
   // added modifiers must be able to spawn on this base
   for (const m of r.added) {
     if (m.crafted || a.op === 'flux' || a.op === 'aldur') continue;
-    if (after.soul && !m.des && !ctx.pool.has(m.id) && P.makeContext(ctx.ix, Object.assign({}, ctx.item, { runes: (ctx.item.runes || []).concat([{ text: 'Can roll Soul modifiers', kind: 'rune' }]) })).pool.has(m.id)) continue;
+    // a modifier of the pool a socketed rune opens ("Can roll Marksman modifiers"): only with that rune's tag on the item
+    const rp = !m.des && !ctx.pool.has(m.id) ? E.runePoolsOn(ctx.ix, ctx.item.base).find((p) => p.mods.has(m.id)) : null;
+    if (rp) { if (!(before.tags || []).includes(rp.tag)) fail('rune-pool', `${m.id} came in without the rune ${rp.rune}`); continue; }
     // a desecrated modifier is desecrated-only or a base modifier the Well of Souls offered
     if (m.des ? !ctx.desPool.has(m.id) && !ctx.pool.has(m.id) : !ctx.pool.has(m.id)) fail('pool', `${m.id} cannot spawn on ${ctx.item.base}`);
   }
@@ -177,10 +179,10 @@ function checkStep(ctx, before, a, r) {
 function roundTrip(ctx, st, r) {
   const { ix, kb } = load();
   const out = [];
-  // a Rune of Aldur shows transformed modifiers only while socketed; Soul modifiers (Medved's Tending socketed during the
-  // walk) share their text with natural ones, so without the mod name a plain copy cannot tell them apart (the page asks
-  // with "Pick"): skip both
-  if (st.rarity === 'Normal' || st.mods.some((m) => !m.id) || st.aldur || st.soul) return out;
+  // a Rune of Aldur shows transformed modifiers only while socketed; modifiers of a rune's pool (Medved's Tending and
+  // the like socketed during the walk) can share their text with natural ones, so without the mod name a plain copy
+  // cannot tell them apart (the page asks with "Pick"): skip both
+  if (st.rarity === 'Normal' || st.mods.some((m) => !m.id) || st.aldur || (st.tags || []).length) return out;
   const item = { base: ctx.item.base, cls: ctx.cls, rarity: st.rarity, ilvl: ctx.ilvl, mods: st.mods, runes: st.runes };
   for (const mode of ['adv', 'simple']) {
     const t = renderItem(item, r, mode);

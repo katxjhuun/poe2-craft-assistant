@@ -751,9 +751,24 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   const FALLBACK_LEAGUES = ['Forbidden Rites', 'Runes of Aldur', 'Standard', 'HC Forbidden Rites'];
   const LOCK = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.2" fill="currentColor"/><path d="M5 7V5a3 3 0 0 1 6 0v2" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>';
   const UNLOCK = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="1.2" fill="currentColor" opacity=".5"/><path d="M5 7V5a3 3 0 0 1 5.6-1.5" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>';
-  const GROUP_LABEL = { prefix: 'Prefix', suffix: 'Suffix', desecrated: 'Desecrated', essence: 'Essence', genesis: 'Genesis Tree', alloy: 'Alloy', liquid: 'Liquid emotion' };
-  const GROUP_ORDER = ['prefix', 'suffix', 'desecrated', 'essence', 'liquid', 'genesis', 'alloy'];
+  const GROUP_LABEL = { prefix: 'Prefix', suffix: 'Suffix', rune: 'Rune pool', desecrated: 'Desecrated', essence: 'Essence', genesis: 'Genesis Tree', alloy: 'Alloy', liquid: 'Liquid emotion' };
+  const GROUP_ORDER = ['prefix', 'suffix', 'rune', 'desecrated', 'essence', 'liquid', 'genesis', 'alloy'];
   const groupCls = (g) => (g === 'desecrated' ? 'g-desecrated' : ['essence', 'genesis', 'alloy', 'liquid'].includes(g) ? 'g-crafted' : '');
+  /** A rune pool's heading in the target list: "Marksman · rune Kolr's Hunt". */
+  function runeHeading(tag) {
+    const p = E.runePools(S.ix).find((x) => x.tag === tag);
+    return p ? `${p.label} · rune ${p.rune}` : GROUP_LABEL.rune;
+  }
+  /** The rune pool the other target rows already use (one pool per item), or null. */
+  function chosenRunePool(exceptKey) {
+    for (const [k, t] of Object.entries(S.targets)) {
+      if (k === exceptKey || !t || t.group !== 'rune' || !t.fam) continue;
+      if (t.rune) return t.rune;
+      const p = E.runePools(S.ix).find((x) => x.fams.has(t.fam));
+      if (p) return p.tag;
+    }
+    return null;
+  }
 
   const TEMPLATES = [
     { id: 'minion-sceptre', label: 'Minion sceptre', cls: ['Sceptre'], stats: [
@@ -1840,7 +1855,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       const c = (a.by_class || {})[cls];
       if (!c) continue;
       if (/of Aldur$/.test(name)) L.push({ k: 'aldur:' + name, g: 'Runes and sockets', label: `${name}: ${(c.txt || []).join('; ')}` });
-      else if ((c.txt || []).some((t) => /additional Crafted Modifier|Modifiers? allowed/i.test(t))) L.push({ k: 'rune:' + name, g: 'Runes and sockets', label: `${name}: ${(c.txt || []).join('; ')}` });
+      else if ((c.txt || []).some((t) => /additional Crafted Modifier|Modifiers? allowed|Can roll \w+ modifiers/i.test(t))) L.push({ k: 'rune:' + name, g: 'Runes and sockets', label: `${name}: ${(c.txt || []).join('; ')}` });
     }
     L.push({ k: 'artificer', g: 'Runes and sockets', label: "Artificer's Orb (adds an augment socket)" }, { k: 'extraction', g: 'Runes and sockets', label: 'Orb of Extraction (destroys the item, returns its runes)' });
     for (const r of itemEssences()) {
@@ -1889,7 +1904,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (!S.item || S.item.unsupported) return;
     S.bench = { hist: [{ text: S.text, item: S.item, note: 'Your item' }], idx: 0, sel: { m: 'exalt', tier: 'base', omen: '', lich: '', echoes: false }, msg: null, calc: null, strat: Object.assign({ res: null, running: false, token: null }, stratLoad()),
       groups: [{ type: 'and', n: 1, reqs: Object.entries(S.targets).filter(([, t]) => t && t.fam && t.group !== 'essence' && t.group !== 'alloy' && t.group !== 'liquid')
-        .map(([k, t]) => ({ fam: t.fam, side: t.group === 'desecrated' ? k.split('-')[0] : t.group, des: t.group === 'desecrated', minTier: t.minTier || null, label: t.label })) }] };
+        .map(([k, t]) => ({ fam: t.fam, side: t.group === 'prefix' || t.group === 'suffix' ? t.group : k.split('-')[0], des: t.group === 'desecrated', minTier: t.minTier || null, label: t.label })) }] };
     renderBench();
     benchDlg.showModal();
   }
@@ -2551,11 +2566,15 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   const optCache = new Map();
   function optionsFor(side, key) {
     const m = modAt(side, +key.split('-')[1]);
-    const ck = [S.histIdx, side, m ? m.modId : '', S.showImpossible, ruleName(), S.item.mods.map((x) => x.modId).join()].join('|');
+    // one rune pool per item: with a target from one pool in another row, the other pools are not offered
+    const runePool = chosenRunePool(key);
+    const ck = [S.histIdx, side, m ? m.modId : '', S.showImpossible, ruleName(), S.item.mods.map((x) => x.modId).join(), runePool || ''].join('|');
     if (!optCache.has(ck)) {
       if (optCache.size > 60) optCache.clear();
+      let runeBlocked = {};
+      try { runeBlocked = P.runeBlocks(S.ix, S.item); } catch (e) { runeBlocked = {}; }
       optCache.set(ck, E.pickerOptions(S.ix, S.item, { side, showImpossible: S.showImpossible, league: ruleName(), exclude: m ? m.modId : null,
-        essences: itemEssences() }));
+        essences: itemEssences(), runePool, runeBlocked }));
     }
     return optCache.get(ck);
   }
@@ -2569,7 +2588,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     let list;
     if (!query.trim()) {
       const recent = S.recent.map((r) => opts.find((o) => o.key === r && o.ok)).filter(Boolean);
-      const rest = opts.filter((o) => !recent.includes(o)).sort((a, b) => (b.ok - a.ok) || GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group) || a.label.localeCompare(b.label));
+      const rest = opts.filter((o) => !recent.includes(o)).sort((a, b) => (b.ok - a.ok) || GROUP_ORDER.indexOf(a.group) - GROUP_ORDER.indexOf(b.group) || (a.rune || '').localeCompare(b.rune || '') || a.label.localeCompare(b.label));
       list = [...recent.map((o) => Object.assign({}, o, { _recent: true })), ...rest].slice(0, 150);
     } else list = E.searchOptions(opts, query, 80);
     S.open.list = list;
@@ -2577,7 +2596,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (!list.length) { dd.innerHTML = `<div class="dd-empty">No matching stat${S.showImpossible ? '' : ' can roll here. Turn on Show impossible to see the rest'}.</div>`; dd.hidden = false; return; }
     let html = '', last = null;
     list.forEach((o, i) => {
-      const g = o._recent ? 'Recent' : GROUP_LABEL[o.group];
+      const g = o._recent ? 'Recent' : o.group === 'rune' ? runeHeading(o.rune) : GROUP_LABEL[o.group];
       if (g !== last) { html += `<div class="dd-group ${o._recent ? '' : groupCls(o.group)}">${esc(g)}</div>`; last = g; }
       const title = o.ok ? '' : ` title="${esc(o.reason || '')}"`;
       html += `<div class="dd-opt ${groupCls(o.group)} ${o.ok ? '' : 'bad'}" role="option" id="opt-${key}-${i}" data-opt="${i}" aria-selected="${i === S.open.active}"${title}><span class="dd-t">${esc(o.label.replace(/\n/g, ' / '))}</span>${o.ok ? shareHtml(o, side, key) : ''}</div>`;
@@ -2606,12 +2625,14 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const fc = sharesFor(key);
     if (!fc) return '';
     const des = o.group === 'desecrated';
-    const p = des ? fc.des[side][o.fam] : (o.group === 'prefix' || o.group === 'suffix') ? fc.side[o.group][o.fam] : null;
+    // a rune pool's modifier rolls like a prefix or suffix once its rune is socketed (no chance to show before)
+    const og = o.group === 'rune' ? side : o.group;
+    const p = des ? fc.des[side][o.fam] : (og === 'prefix' || og === 'suffix') ? fc.side[og][o.fam] : null;
     if (p == null || !(p > 0)) return '';
-    const any = des ? null : fc.any[o.group + '|' + o.fam];
+    const any = des ? null : fc.any[og + '|' + o.fam];
     const pc = (x) => (x >= 0.1 ? (x * 100).toFixed(0) : x >= 0.01 ? (x * 100).toFixed(1) : (x * 100).toFixed(2)) + '%';
     const t = des ? `Chance a desecrated ${side} is this stat (equal weights: none are published).`
-      : `Chance a random ${o.group} (Exalted Orb, Augmentation, Regal…) is this stat, any tier: ${pc(p)} of ${o.group}es, ${pc(any)} of any new modifier. ${fc.weighted ? 'poe2db weights.' : 'Equal weights.'}`;
+      : `Chance a random ${og} (Exalted Orb, Augmentation, Regal…) is this stat, any tier: ${pc(p)} of ${og}es, ${pc(any)} of any new modifier. ${o.group === 'rune' ? 'No weight is published for rune pool modifiers: an estimate.' : fc.weighted ? 'poe2db weights.' : 'Equal weights.'}`;
     return `<span class="dd-p" title="${esc(t)}">${pc(p)}</span>`;
   }
   function choose(o) {
@@ -2619,6 +2640,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const key = S.open.key;
     const best = o.tiers.find((t) => t.ok);
     S.targets[key] = { key: o.key, fam: o.fam, group: o.group, label: o.label, minTier: best ? best.tier : null, required: true };
+    if (o.rune) S.targets[key].rune = o.rune;
     S.recent = [o.key, ...S.recent.filter((r) => r !== o.key)].slice(0, 6);
     store.set('recent', S.recent);
     saveTargets();
@@ -2937,6 +2959,13 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       case 'fracture': return 'Locks one random mod for good. It cannot be undone; the plan uses it only when a finished goal is among 4 mods (or 5 with two goals).';
       case 'divine': return 'Rerolls the values of every mod except fractured ones; the mods themselves stay. Comes last, because later currency does not change existing values.';
       case 'flux': return `Turns every resistance mod of the other elements into the same tier of ${a.to === 'fire' ? 'Fire' : a.to === 'cold' ? 'Cold' : 'Lightning'} Resistance, with its value rolled again. An item that has that resistance already keeps both.`;
+      case 'artificer': return 'Adds an augment socket, for the rune of a later step.';
+      case 'rune_rule': {
+        const pool = E.runePools(S.ix).find((p) => p.rune === a.item);
+        if (pool) return `Socket it: ${pool.label} modifiers can then roll on the item like its own prefixes and suffixes. Socket-bound: it cannot be taken out or replaced, and the item takes one such rune.`;
+        const c = S.item && ((S.ix.kb.augments[a.item] || {}).by_class || {})[S.ix.kb.bases[S.item.base].cls];
+        return `Socket it${c ? ': ' + (c.txt || []).join('; ') : ''}.`;
+      }
       default: return '';
     }
   }
@@ -2963,6 +2992,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (pl.steps.some((s) => s.action.whittle)) b.push('<span class="badge verify">Whittling: hover-check the mod</span>');
     if (ops.has('flux')) b.push('<span class="badge verify" title="Game text: transforms the resistance mods to equivalent ones. The planner keeps the tier number (the value ranges match).">Flux: same tier assumed</span>');
     if (pl.steps.some((s) => s.action.catalyse)) b.push(`<span class="badge verify" title="Omen of Catalysing Exaltation raises matching mods; the size is not published. You set it in the plan settings (in-game test t8).">Catalyst boost: your estimate ×${esc(fmt(catMult()))}</span>`);
+    if (pl.steps.some((s) => s.action.op === 'rune_rule' && E.runePools(S.ix).some((p) => p.rune === s.action.item))) b.push('<span class="badge verify" title="No roll weights are published for the modifiers a rune opens. Each gets the lowest known weight of its family, or the middle weight of the table: the chances for these targets are an estimate.">Rune pool chances: estimate</span>');
     if (pl.steps.some((s) => s.action.op === 'newbase')) b.push(`<span class="badge">White base priced at ${esc(fmt(parseFloat(S.baseCost) || 0))} ex</span>`);
     return b.join('');
   }

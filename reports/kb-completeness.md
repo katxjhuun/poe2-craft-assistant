@@ -152,3 +152,12 @@ and, for bases without it, from trade listings; the Recombinator was disabled in
 
 - 27 Sept 2026: plan written. Findings so far: real weights are server-side; RePoE keywords.json added (game texts);
   alloys trade in every league; desecrated equipment mods are level 65 only.
+
+- 6 Oct 2026: rune pools and exceptional bases (the player). Six socket-bound runes give the item a tag and open a
+  modifier pool (game data: Kolr's Hunt Marksman 28, Katla's Gloom Decay 23, Vorana's Carnage Berserking 30, Uhtred's
+  Sidereus Chronomancy 17, Thrud's Might Destruction 9, Medved's Tending Soul 21; the Soul modifiers with two defences
+  roll only on the base's own armour type, 11 per typed body armour). All are offered as targets (group "rune"), one
+  pool per item; the planner sockets the rune once the targets of the item's own pool are done (rule R_RUNE_POOLS).
+  Not known: their roll weights (estimated) and whether the Well of Souls offers them (test t33, not used by plans).
+  Exceptional bases: one socket over the class's usual number and quality above 20% are read as they are; Artificer's
+  Orb stops at the usual number, only a Vaal Orb adds past it (rule R_EXCEPTIONAL, single source: the player).
