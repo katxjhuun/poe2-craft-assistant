@@ -802,10 +802,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   </div>
 </dialog>
 
-<script>
+<script id="srcEngine">
 /*__ENGINE__*/
 </script>
-<script>
+<script id="srcPlanner">
 /*__PLANNER__*/
 </script>
 <script>
@@ -2988,9 +2988,9 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   // ============================================================ plans (F2)
   const PROFILE_KEYS = ['cheap', 'balanced', 'premium'];
   const PROFILE_HINT = {
-    cheap: 'Lowest expected cost. Required goals only, T3 or better accepted.',
-    balanced: 'Cost and success in balance. Required goals at T1–T2, nice-to-have at T3 or better.',
-    premium: 'Highest chance at your exact tiers. Perfect orbs and omens.',
+    cheap: 'The lowest cost per finished craft.',
+    balanced: 'Cost weighed by the chance to finish.',
+    premium: 'The highest chance to finish.',
   };
   let planGen = 0, planTimer = null;
   /** Plan again when a route was asked for (Find craft route); otherwise drop the old result and wait for the button. */
@@ -2998,6 +2998,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     clearTimeout(planTimer);
     if (S.planArmed) { planTimer = setTimeout(runPlans, 450); return; }
     planGen++;
+    cancelWorkers(); stopJobTimer();
     const had = S.plans || S.planState !== 'idle';
     S.plans = null; S.planState = 'idle';
     renderPlan();
@@ -3054,39 +3055,118 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (!p) return null;
     return S.weightSource === 'coe' && p.coe ? Object.assign({}, p.weights, p.coe) : p.weights;
   }
+  // ------------------------------------------------------------ planning in workers
+  // One worker per profile: the three routes are found at the same time, and the work goes on while the tab is in the
+  // background (timers of a hidden page are slowed down, a worker's own work is not).
+  const WORKER_MAIN = `
+    const E = self.PoE2Engine, P = self.PoE2Planner;
+    let ix = null, active = 0;
+    const ch = new MessageChannel(), waiting = [];
+    ch.port1.onmessage = () => { const r = waiting.shift(); if (r) r(); };
+    P.setTick(() => new Promise((r) => { waiting.push(r); ch.port2.postMessage(0); }));
+    self.onmessage = async (e) => {
+      const m = e.data;
+      if (m.type === 'init') { ix = E.buildIndex(m.kb); return; }
+      if (m.type === 'cancel') { active = 0; return; }
+      if (m.type !== 'plan') return;
+      const id = m.id; active = id;
+      const prices = m.prices;
+      const input = Object.assign({}, m.input, { ix, priceOf: (n) => (Object.prototype.hasOwnProperty.call(prices, n) ? prices[n] : null), cancelled: () => active !== id });
+      try {
+        const res = await P.planProfile(input, m.profile, { runs: m.runs, onStage: (stage) => self.postMessage({ type: 'stage', id, stage }) });
+        self.postMessage({ type: 'done', id, out: res.out, plan: res.plan });
+      } catch (err) {
+        self.postMessage({ type: 'error', id, message: String((err && err.message) || err) });
+      }
+    };`;
+  const PW = { list: null, failed: false, seq: 0 };
+  function planWorkers() {
+    if (PW.failed || typeof Worker === 'undefined') return null;
+    if (PW.list) return PW.list;
+    try {
+      const src = [document.getElementById('srcEngine').textContent, document.getElementById('srcPlanner').textContent, WORKER_MAIN].join('\n;\n');
+      const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+      PW.list = PROFILE_KEYS.map(() => { const w = new Worker(url); w.postMessage({ type: 'init', kb: S.ix.kb }); return w; });
+    } catch (e) { killWorkers(); }
+    return PW.list;
+  }
+  function killWorkers() { for (const w of PW.list || []) { try { w.terminate(); } catch (e) { /* gone */ } } PW.list = null; PW.failed = true; }
+  function cancelWorkers() { for (const w of PW.list || []) { try { w.postMessage({ type: 'cancel' }); } catch (e) { /* gone */ } } }
+  /** The three profiles, each in its worker. Resolves with {profile: {out, plan}}; null when workers cannot be used. */
+  function planInWorkers(gen, input) {
+    const ws = planWorkers();
+    if (!ws) return null;
+    const id = ++PW.seq;
+    const prices = {};
+    for (const n of Object.keys(S.sidByName)) { const v = priceEx(n); if (v != null) prices[n] = v; }
+    const plain = { item: input.item, targets: input.targets, locks: input.locks, baseCost: input.baseCost, budget: input.budget, baseLimit: input.baseLimit,
+      weights: input.weights, essences: input.essences, catalystMult: input.catalystMult, recipes: input.recipes };
+    S.planStages = PROFILE_KEYS.map(() => 0);
+    return new Promise((resolve, reject) => {
+      const res = {};
+      let left = ws.length;
+      ws.forEach((w, i) => {
+        w.onerror = (e) => { if (e && e.preventDefault) e.preventDefault(); reject(new Error('worker')); };
+        w.onmessage = (e) => {
+          const m = e.data;
+          if (!m || m.id !== id || gen !== planGen) return;
+          if (m.type === 'stage') S.planStages[i] = Math.max(S.planStages[i], m.stage);
+          else if (m.type === 'done') { res[PROFILE_KEYS[i]] = m; S.planStages[i] = 3; if (--left === 0) resolve(res); }
+          else if (m.type === 'error') reject(new Error(m.message === 'cancelled' ? 'cancelled' : 'worker: ' + m.message));
+        };
+        try { w.postMessage({ type: 'plan', id, profile: PROFILE_KEYS[i], input: plain, prices, runs: +S.simRuns || 20000 }); } catch (e) { reject(new Error('worker')); }
+      });
+    });
+  }
+  /** The same job on the page's own thread (no workers): the profiles one after the other. */
+  async function planInPage(gen, input) {
+    S.planStages = null; S.planStageNow = 0;
+    const out = await P.buildPlans(Object.assign({}, input, { beamBudgetMs: 0 }));
+    if (gen !== planGen) return null;
+    const todo = PROFILE_KEYS.filter((k) => out.profiles[k] && out.profiles[k].steps && out.profiles[k].steps.length);
+    S.planStageNow = 1;
+    for (const k of todo) {
+      out.profiles[k] = await P.improvePlan(Object.assign({}, input, { beamBudgetMs: P.SEARCH.budgetMs }), out.profiles[k]);
+      if (gen !== planGen) return null;
+    }
+    S.planStageNow = 2;
+    const runs = +S.simRuns || 20000;
+    for (const k of todo) {
+      out.profiles[k] = await P.refinePlan(Object.assign({}, input, { refineBudgetMs: Math.round(runs * 0.3) }), out.profiles[k], runs);
+      if (gen !== planGen) return null;
+    }
+    return out;
+  }
   async function runPlans() {
     if (!S.item || !S.ix || S.item.unsupported || !S.item.base) return;
     const gen = ++planGen;
+    cancelWorkers();
     const input = Object.assign(planInput(), { cancelled: () => gen !== planGen });
-    S.planState = 'running'; S.planProgress = 0; S.planOverall = 0; S.planT0 = Date.now(); renderPlan();
+    S.plans = null; S.planState = 'running'; S.planOverall = 0; S.planT0 = Date.now(); S.planStageT = S.planT0; S.planStages = null; S.planStageNow = 0;
+    S.planExpect = expectedMs();
+    renderPlan(); renderPrice(); startJobTimer();
     try {
-      // grid and recipe candidates first, so plans show quickly; the beam search follows per profile (7.4)
-      const out = await P.buildPlans(Object.assign({}, input, { beamBudgetMs: 0, onProgress: (f) => { if (gen === planGen) { S.planProgress = f; drawProgress(); } } }));
-      if (gen !== planGen) return;
-      S.plans = out; S.planState = 'searching'; S.planProgress = 0;
-      renderPlan(); renderPrice();
-      if (S.preview) renderItem();
-      const todo = PROFILE_KEYS.filter((k) => out.profiles[k] && out.profiles[k].steps && out.profiles[k].steps.length);
-      S.planState = 'searching'; S.planProgress = 0; renderPlan();
-      for (let i = 0; i < todo.length; i++) {
-        const k = todo[i];
-        const imp = await P.improvePlan(Object.assign({}, input, { beamBudgetMs: P.SEARCH.budgetMs }), out.profiles[k], (f) => { if (gen === planGen) { S.planProgress = (i + f) / todo.length; drawProgress(); } });
-        if (gen !== planGen) return;
-        out.profiles[k] = imp;
-        renderPlan(); renderPrice();
+      let out = null;
+      const job = planInWorkers(gen, input);
+      if (job) {
+        try {
+          const res = await job;
+          if (gen !== planGen) return;
+          out = Object.assign({}, res[PROFILE_KEYS[0]].out, { profiles: {} });
+          for (const k of PROFILE_KEYS) if (res[k].plan) out.profiles[k] = res[k].plan;
+        } catch (e) {
+          if (gen !== planGen || (e && e.message === 'cancelled')) return;
+          killWorkers(); // no workers here (or one failed): the same job on the page's thread
+        }
       }
-      S.planState = 'refining'; S.planProgress = 0; renderPlan();
-      for (let i = 0; i < todo.length; i++) {
-        const k = todo[i];
-        // simulated runs per plan (master prompt 7.3: 20,000 by default, adjustable); the time budget scales with it
-        const runs = +S.simRuns || 20000;
-        const r = await P.refinePlan(Object.assign({}, input, { refineBudgetMs: Math.round(runs * 0.3) }), out.profiles[k], runs, (f) => { if (gen === planGen) { S.planProgress = (i + f) / todo.length; drawProgress(); } });
-        if (gen !== planGen) return;
-        out.profiles[k] = r;
-        renderPlan(); renderPrice();
-      }
+      if (!out) out = await planInPage(gen, input);
+      if (!out || gen !== planGen) return;
+      out.profiles = P.rankProfiles(out.profiles);
+      stopJobTimer();
       S.planTook = Date.now() - (S.planT0 || Date.now());
-      S.planState = 'ready'; renderPlan();
+      rememberMs(S.planTook);
+      S.plans = out; S.planState = 'ready';
+      renderPlan(); renderPrice();
       if (S.preview) renderItem();
       if (S.planShow) { S.planShow = false; planEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
       logTest('ready');
@@ -3094,25 +3174,60 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       if (cur && cur.steps && cur.steps.length) announce(`Plans ready. ${cur.label}: ${successFail(cur.p).s} success, a finished craft costs about ${fmtShort(planCost(cur))} Exalted Orbs.`);
     } catch (e) {
       if (e && e.message === 'cancelled') return;
+      if (gen !== planGen) return;
+      stopJobTimer();
       S.planState = 'error'; S.planError = e && e.message; renderPlan();
       logTest('error', S.planError || 'error');
     }
   }
-  /**
-   * Progress of the whole job, 0 to 1. The three stages (first routes, search, final simulation) share one number that
-   * only goes up, so the display never runs to the end and starts over.
-   */
-  const RING = 2 * Math.PI * 52;
+  // ------------------------------------------------------------ the job's progress
+  // One number for the whole job that follows the clock: how long a job like this one took before (kept per item
+  // class, rarity and number of targets), spread over the three stages. A stage that ends early moves it forward, one
+  // that takes longer slows it down; it never goes back.
+  const STAGE_AT = [0, 0.58, 0.82, 1];
+  const STAGE_NAMES = ['Finding routes', 'Searching for a better route', 'Final simulation'];
+  function jobStage() { return S.planStages ? Math.min(2, ...S.planStages) : Math.min(2, S.planStageNow || 0); }
+  function nTargetsNow() { return Object.values(S.targets).filter((t) => t && t.fam).length; }
+  function planKey() { return [S.item.itemClass, S.item.rarity, nTargetsNow(), +S.simRuns || 20000].join('|'); }
+  function expectedMs() {
+    const h = store.get('planTimes', {});
+    if (h[planKey()] > 0) return h[planKey()];
+    const n = nTargetsNow();
+    const near = Object.entries(h).filter(([k]) => +k.split('|')[2] === n).map(([, v]) => v);
+    return near.length ? near.reduce((a, b) => a + b, 0) / near.length : 10000 + 11000 * n;
+  }
+  function rememberMs(ms) {
+    const h = store.get('planTimes', {});
+    h[planKey()] = Math.round(ms);
+    const keys = Object.keys(h);
+    if (keys.length > 40) delete h[keys[0]];
+    store.set('planTimes', h);
+  }
   function jobProgress() {
-    const f = Math.max(0, Math.min(1, S.planProgress || 0));
-    const v = S.planState === 'running' ? 0.45 * f : S.planState === 'searching' ? 0.45 + 0.3 * f : S.planState === 'refining' ? 0.75 + 0.25 * f : 1;
-    S.planOverall = Math.max(S.planOverall || 0, Math.min(v, 0.99));
+    const st = jobStage();
+    const span = STAGE_AT[st + 1] - STAGE_AT[st];
+    const x = (Date.now() - (S.planStageT || Date.now())) / Math.max(1, (S.planExpect || 30000) * span);
+    // steady up to the expected time of the stage, then creeping on instead of standing still
+    const f = x <= 1 ? 0.88 * x : 0.88 + 0.11 * (1 - Math.exp(-(x - 1)));
+    S.planOverall = Math.max(S.planOverall || 0, Math.min(0.99, STAGE_AT[st] + span * f));
     return S.planOverall;
   }
   function drawProgress() {
     const p = jobProgress();
     const c = $('#planRing'); if (c) c.style.strokeDashoffset = String(RING * (1 - p));
     const t = $('#planPct'); if (t) t.textContent = Math.round(p * 100) + '%';
+  }
+  const RING = 2 * Math.PI * 52;
+  let jobTimer = null, jobStageShown = 0;
+  function stopJobTimer() { if (jobTimer) clearInterval(jobTimer); jobTimer = null; }
+  function startJobTimer() {
+    stopJobTimer();
+    jobStageShown = 0;
+    jobTimer = setInterval(() => {
+      if (S.planState !== 'running') { stopJobTimer(); return; }
+      const st = jobStage();
+      if (st !== jobStageShown) { jobStageShown = st; S.planStageT = Date.now(); renderPlan(); } else drawProgress();
+    }, 200);
   }
   function pctHit(p) { return p < 0.001 ? '<0.1%' : p < 0.1 ? (p * 100).toFixed(1) + '%' : Math.round(p * 100) + '%'; }
   function nextChanceHtml(pl, nx) {
@@ -3400,8 +3515,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     let html = '<div class="panel-head"><h2>Craft route</h2></div>';
     if (!it) { el.innerHTML = html; return; }
     if (it.unsupported) { el.innerHTML = html + `<div class="plan-card sub">${esc(it.unsupported)}</div>`; return; }
-    const busy = S.planState === 'running' || S.planState === 'searching' || S.planState === 'refining';
-    const status = S.planState === 'running' ? 'Simulating…' : S.planState === 'searching' ? 'Searching for a cheaper route…' : S.planState === 'refining' ? 'Refining…' : '';
+    const busy = S.planState === 'running';
+    const status = busy ? STAGE_NAMES[jobStage()] + '…' : '';
     const nTargets = Object.values(S.targets).filter((t) => t && t.fam).length;
     // options, one row each
     const optSum = [`${(+S.simRuns || 20000).toLocaleString('en-US')} runs`, S.budget ? `budget ${S.budget} ex` : 'no budget']
@@ -3438,8 +3553,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     // a job in progress: one ring with one percentage, the stages below it, nothing else
     if (busy) {
       const p = jobProgress();
-      const stage = S.planState === 'running' ? 0 : S.planState === 'searching' ? 1 : 2;
-      const stages = ['First routes', 'Search for a cheaper route', 'Final simulation'];
+      const stage = jobStage();
+      const stages = STAGE_NAMES;
       html += `<div class="job">
         <div class="job-status">Job status:<b>${esc(status)}</b></div>
         <div class="ring" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(p * 100)}" aria-label="Simulation progress">

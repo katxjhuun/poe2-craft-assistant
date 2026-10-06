@@ -712,7 +712,10 @@
       : cls === 'Ring' || cls === 'Amulet' ? 'Vaal Catalysing Infuser' : null;
   }
 
-  const tick = () => new Promise((r) => setTimeout(r, 0));
+  let tickFn = () => new Promise((r) => setTimeout(r, 0));
+  const tick = () => tickFn();
+  /** Replace the pause the long loops take between slices (a worker passes one that timers' throttling does not touch). */
+  function setTick(fn) { tickFn = fn; }
 
   // ---------------------------------------------------------------- randomness
 
@@ -2049,7 +2052,9 @@
   const PROFILES = {
     cheap: {
       label: 'Cheap',
-      goals: (gs) => gs.filter((g) => g.required).map((g) => Object.assign({}, g, { eff: g.tier ? Math.max(g.tier, 3) : null })),
+      // every profile works on the same goals, at the tiers the player asked for: the three routes differ in cost and
+      // in how often they finish, not in the item they make
+      goals: (gs) => gs.map((g) => Object.assign({}, g, { eff: g.tier || null })),
       grid: () => cross({ tier: ['base', 'greater'], sideOmens: [false, true], greaterExalt: [false], removal: ['chaos', 'erasure', 'annul'],
         start: ['alchemy', 'transmute'], restart: [true], bone: ['Preserved'], echoes: [false], lich: [false], essence: [false, true] }),
       // cheapest per success among strategies that succeed at least one run in five (else the most likely one)
@@ -2057,7 +2062,7 @@
     },
     balanced: {
       label: 'Balanced',
-      goals: (gs) => gs.map((g) => Object.assign({}, g, { eff: !g.tier ? null : g.required ? (g.tier === 1 ? 2 : g.tier) : Math.max(g.tier, 3) })),
+      goals: (gs) => gs.map((g) => Object.assign({}, g, { eff: g.tier || null })),
       grid: () => cross({ tier: ['greater', 'perfect'], sideOmens: [true], greaterExalt: [false, true], removal: ['chaos', 'erasure', 'whittle', 'annul'],
         start: ['transmute', 'alchemy'], restart: [true], bone: ['Preserved'], echoes: [true], lich: [true], essence: [false, true] }),
       // cost per success, weighed by the chance to finish; strategies that fail more often than not only as a last resort
@@ -2068,9 +2073,9 @@
       goals: (gs) => gs.map((g) => Object.assign({}, g, { eff: g.tier || null })),
       grid: () => cross({ tier: ['perfect', 'greater'], sideOmens: [true], greaterExalt: [false, true], removal: ['whittle', 'erasure', 'annul'],
         start: ['transmute'], restart: [true], bone: ['Ancient', 'Preserved'], echoes: [true], lich: [true], essence: [false, true] }),
-      // Highest success first, but a 10x cost must buy at least 5 points of success; near-certain (98%+) strategies
-      // compare on cost alone.
-      score: (r) => unpriced(r) + (!fits(r) ? 10 + r.basesPerSuccess / 1e9 : -(Math.min(r.p, 0.98) - 0.05 * Math.log10(1 + r.costPerSuccess))),
+      // Highest success first: cost only separates strategies within a point of success of each other (a 10x cost
+      // must buy that point); near-certain (98%+) strategies compare on cost alone.
+      score: (r) => unpriced(r) + (!fits(r) ? 10 + r.basesPerSuccess / 1e9 : -(Math.min(r.p, 0.98) - 0.01 * Math.log10(1 + r.costPerSuccess))),
     },
   };
 
@@ -2449,9 +2454,11 @@
     if (!goals.length) { out.empty = true; return out; }
     const names = Object.keys(PROFILES);
     const grids = names.map((n) => withRestarts(st, PROFILES[n].grid().filter((p) => st.rarity === 'Normal' || p.start === 'transmute' || !p.start)));
-    const total = grids.reduce((a, g) => a + g.length, 0) + names.length;
+    const wanted = (i) => !input.only || names[i] === input.only; // input.only: one profile (the page plans each in a worker)
+    const total = grids.reduce((a, g, i) => a + (wanted(i) ? g.length + 1 : 0), 0);
     let done = 0;
     for (let i = 0; i < names.length; i++) {
+      if (!wanted(i)) continue;
       const prof = PROFILES[names[i]];
       const pg = prof.goals(goals);
       const infeasible = pg.map((g) => ({ g, why: goalFeasible(ctx, st, g) || goalClash(ctx, pg, g) })).filter((x) => x.why);
@@ -2538,6 +2545,52 @@
     final.moreBases = moreBasesHint(prof, sc.results(), final);
     SCREENS.set(final, sc);
     return final;
+  }
+
+  /**
+   * One profile from start to finish, as the page runs it: the first routes, the search for a better one, the final
+   * simulation. The page runs the three profiles at the same time, each in a worker. hooks: { runs, onStage(stage) }
+   * with stage 0, 1, 2. Returns { out, plan }: buildPlans' result without its profiles, and the profile's plan.
+   */
+  async function planProfile(input, name, hooks) {
+    hooks = hooks || {};
+    const at = (s) => { if (hooks.onStage) hooks.onStage(s); };
+    at(0);
+    const out = await buildPlans(Object.assign({}, input, { only: name, beamBudgetMs: 0, onProgress: null }));
+    let plan = out.profiles[name] || null;
+    delete out.profiles;
+    if (plan && plan.steps && plan.steps.length) {
+      at(1);
+      plan = await improvePlan(Object.assign({}, input, { beamBudgetMs: SEARCH.budgetMs }), plan);
+      at(2);
+      const runs = hooks.runs || 20000;
+      plan = await refinePlan(Object.assign({}, input, { refineBudgetMs: Math.round(runs * 0.3) }), plan, runs);
+    }
+    return { out, plan };
+  }
+  /**
+   * The three finished plans work on the same goals, so each profile takes the one it scores best among them (a plan
+   * another profile found may beat its own): Cheap the lowest cost per finished craft, Balanced cost weighed by the
+   * chance to finish, Premium the highest success, the cheaper one among those within half a point of it.
+   */
+  function rankProfiles(profiles) {
+    const names = Object.keys(PROFILES);
+    const done = names.map((n) => profiles[n]).filter((p) => p && p.steps && p.steps.length && p.p > 0);
+    if (done.length < 2) return profiles;
+    const sig = (p) => JSON.stringify(p.goals.map((g) => [g.key, g.eff, g.minValue, g.required]));
+    if (!done.every((p) => sig(p) === sig(done[0]))) return profiles;
+    const out = Object.assign({}, profiles);
+    for (const n of names) {
+      const own = profiles[n];
+      if (!own || !own.steps || !own.steps.length) continue;
+      let best;
+      if (n === 'premium') {
+        const top = Math.max(...done.map((p) => p.p));
+        best = done.filter((p) => p.p >= top - 0.005).sort((a, b) => a.costPerSuccess - b.costPerSuccess)[0];
+      } else best = done.slice().sort((a, b) => PROFILES[n].score(a) - PROFILES[n].score(b))[0];
+      out[n] = best === own ? own : Object.assign({}, best, { label: PROFILES[n].label, profile: n });
+    }
+    return out;
   }
 
   /** Re-run a finished plan with more trials (same strategy, goals and seed family). */
@@ -3178,6 +3231,7 @@
     goalsFromTargets, goalMet, meets, nearMiss, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
     availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, goalClash, essencesForBase, liquidFor, CATALYST_DEFAULT,
     emulate, chanceOf, familyChances, runStrategy, runStrategyAsync, groupsMet, revealOptions, desSides, DES_OPTIONS,
+    planProfile, rankProfiles, setTick,
     expandStrategy, recipeParams, relevantKeys, SPACE, SEARCH, improvePlan, searchOf: (plan) => SCREENS.get(plan), legacyItems, suffixRune, runeBlocks,
   };
 });

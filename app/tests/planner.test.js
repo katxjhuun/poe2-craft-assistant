@@ -156,9 +156,21 @@ test('buildPlans returns three profiles with costs from the price function', asy
     assert.ok(p.meanCost > 0 && isFinite(p.costPerSuccess));
     assert.ok(p.steps.length > 0);
   }
-  assert.equal(out.profiles.cheap.goals.length, 2, 'cheap drops nice-to-have goals');
-  assert.ok(out.profiles.cheap.goals.every((g) => g.eff === 3), 'cheap accepts T3');
-  assert.equal(out.profiles.premium.goals.length, 3);
+  // the three profiles work on the same goals, at the tiers asked for
+  for (const k of ['cheap', 'balanced', 'premium']) {
+    assert.equal(out.profiles[k].goals.length, 3, k);
+    assert.ok(out.profiles[k].goals.every((g) => g.eff === g.tier), k + ' keeps the tiers');
+  }
+  // so each profile takes the plan it scores best among the three: Premium has the highest success, Cheap the lowest cost
+  const ranked = P.rankProfiles(out.profiles);
+  const all = ['cheap', 'balanced', 'premium'].map((k) => out.profiles[k]);
+  assert.ok(ranked.premium.p >= Math.max(...all.map((x) => x.p)) - 0.005, 'premium success ' + ranked.premium.p);
+  assert.ok(all.every((x) => P.PROFILES.cheap.score(ranked.cheap) <= P.PROFILES.cheap.score(x)));
+  assert.deepEqual([ranked.premium.label, ranked.premium.profile, ranked.cheap.profile], ['Premium', 'premium', 'cheap']);
+  // one profile on its own (the page plans each in a worker): the same goals, a finished plan
+  const solo = await P.planProfile({ ix, item, targets, locks: {}, priceOf: () => 10, trials: 800, screenTrials: 100 }, 'premium', { runs: 1500 });
+  assert.ok(!solo.out.profiles && solo.out.goals.length === 3);
+  assert.ok(solo.plan.profile === 'premium' && solo.plan.p > 0 && solo.plan.trials >= 800, JSON.stringify([solo.plan.profile, solo.plan.p, solo.plan.trials]));
 });
 
 test('impossible goals are reported instead of planned', async () => {
