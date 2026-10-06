@@ -39,7 +39,7 @@ namespace PoE2CraftAssistant
     /// <summary>Settings, kept in config.json next to the program.</summary>
     class Config
     {
-        public string Hotkey = "Ctrl+D";
+        public string Hotkey = "Alt+E";
         public int Port = 47652;
         public bool Topmost = true;        // keep the assistant's window above the game
         public bool AdvancedCopy = true;   // Alt+Ctrl+C (modifier tiers) instead of Ctrl+C
@@ -274,6 +274,8 @@ namespace PoE2CraftAssistant
         }
 
         [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+        [DllImport("user32.dll")] public static extern uint GetClipboardSequenceNumber();
+        [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int index);
         [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr hWnd, uint msg, IntPtr w, IntPtr l);
 
         /// <summary>
@@ -317,6 +319,9 @@ namespace PoE2CraftAssistant
         readonly NotifyIcon tray;
         readonly HotkeyWindow win = new HotkeyWindow();
         readonly System.Windows.Forms.Timer focus = new System.Windows.Forms.Timer();
+        readonly System.Windows.Forms.Timer copy = new System.Windows.Forms.Timer();
+        uint seqBefore;
+        int copyTicks, seenAt;
         readonly bool anyWindow, noWindow;
         readonly string dir;
         bool registered;
@@ -349,6 +354,8 @@ namespace PoE2CraftAssistant
             if (!ParseHotkey(cfg.Hotkey, out mods, out vk))
                 tray.ShowBalloonTip(6000, PAGE_TITLE, "The hotkey \"" + cfg.Hotkey + "\" in config.json is not understood. Examples: Ctrl+D, F4, Alt+Q.", ToolTipIcon.Warning);
             win.Pressed += delegate { OnHotkey(); };
+            copy.Interval = 15;
+            copy.Tick += delegate { CopyTick(); };
             focus.Interval = 400;
             focus.Tick += delegate { WatchFocus(); };
             focus.Start();
@@ -432,12 +439,16 @@ namespace PoE2CraftAssistant
             else if (!game && registered) { Native.UnregisterHotKey(win.Handle, 1); registered = false; }
         }
 
-        /// <summary>Copy the item under the cursor the way the player would (the game's own keys) and hand it to the page.</summary>
+        /// <summary>
+        /// Copy the item under the cursor the way the player would (the game's own keys) and hand it to the page.
+        /// The clipboard is only watched, never emptied or written: a program that owns the clipboard and is busy makes
+        /// the game wait when it copies (the game froze for a moment on every press). The wait is a timer, so this
+        /// program keeps answering Windows while the game writes the item.
+        /// </summary>
         void OnHotkey()
         {
-            string before = null;
-            try { if (Clipboard.ContainsText()) before = Clipboard.GetText(); Clipboard.Clear(); } catch (Exception) { }
-
+            if (copy.Enabled) return; // the copy of the last press is still under way
+            seqBefore = Native.GetClipboardSequenceNumber();
             List<Native.INPUT> keys = new List<Native.INPUT>();
             bool hasCtrl = (mods & Native.MOD_CONTROL) != 0, hasAlt = (mods & Native.MOD_ALT) != 0, hasShift = (mods & Native.MOD_SHIFT) != 0;
             bool needAlt = cfg.AdvancedCopy && !hasAlt;
@@ -449,19 +460,26 @@ namespace PoE2CraftAssistant
             if (needAlt) keys.Add(Native.Key(Native.VK_MENU, true));
             if (!hasCtrl) keys.Add(Native.Key(Native.VK_CONTROL, true));
             Native.SendInput((uint)keys.Count, keys.ToArray(), Marshal.SizeOf(typeof(Native.INPUT)));
+            copyTicks = 0; seenAt = -1;
+            copy.Start();
+        }
 
-            string text = null;
-            for (int i = 0; i < 25 && text == null; i++) // the game writes the clipboard within a few frames
+        /// <summary>Every 15 ms after a press: has the game written the clipboard? Then read it once and pass it on.</summary>
+        void CopyTick()
+        {
+            copyTicks++;
+            if (seenAt < 0)
             {
-                Thread.Sleep(20);
-                try { if (Clipboard.ContainsText()) text = Clipboard.GetText(); } catch (Exception) { }
-            }
-            if (text == null || text.IndexOf("Rarity:", StringComparison.Ordinal) < 0)
-            {
-                // nothing under the cursor (or not an item): the clipboard as it was
-                try { if (text == null && before != null) Clipboard.SetText(before); } catch (Exception) { }
+                if (Native.GetClipboardSequenceNumber() != seqBefore) seenAt = copyTicks; // a counter: the clipboard is not opened
+                else if (copyTicks > 40) copy.Stop(); // nothing under the cursor
                 return;
             }
+            if (copyTicks < seenAt + 2) return; // let the game finish writing
+            string text = null;
+            try { if (Clipboard.ContainsText()) text = Clipboard.GetText(); } catch (Exception) { }
+            if (text == null && copyTicks < seenAt + 12) return; // still busy: once more
+            copy.Stop();
+            if (text == null || text.IndexOf("Rarity:", StringComparison.Ordinal) < 0) return; // not an item
             int reached = server.Push(text, "hotkey");
             if (reached == 0) OpenWindow(false); // the window was closed: open it, the page takes the item on the next press
             else ShowAbove();
@@ -474,7 +492,8 @@ namespace PoE2CraftAssistant
             IntPtr h = Native.FindWindowByTitle(PAGE_TITLE);
             if (h == IntPtr.Zero) return;
             if (Native.IsIconic(h)) Native.ShowWindow(h, 4); // SW_SHOWNOACTIVATE
-            Native.SetWindowPos(h, Native.HWND_TOPMOST, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE | Native.SWP_SHOWWINDOW);
+            // only when it is not above already: every change of the window order makes the game redraw
+            if ((Native.GetWindowLong(h, -20) & 8) == 0) Native.SetWindowPos(h, Native.HWND_TOPMOST, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
         }
 
         void OpenWindow(bool activate)
@@ -523,7 +542,7 @@ namespace PoE2CraftAssistant
 
         void Quit()
         {
-            try { focus.Stop(); if (registered) Native.UnregisterHotKey(win.Handle, 1); } catch (Exception) { }
+            try { focus.Stop(); copy.Stop(); if (registered) Native.UnregisterHotKey(win.Handle, 1); } catch (Exception) { }
             // the window goes with the program: without it the page has nothing to load from
             try { IntPtr h = Native.FindWindowByTitle(PAGE_TITLE); if (h != IntPtr.Zero) Native.PostMessage(h, 0x0010, IntPtr.Zero, IntPtr.Zero); } catch (Exception) { }
             if (server != null) server.Stop();

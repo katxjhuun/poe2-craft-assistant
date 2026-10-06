@@ -128,7 +128,7 @@ Amaç: yapıştırılan item hangi durumda olursa olsun, hedef item'e giden craf
 downloaded) and puts a copy of the page next to it. Run the exe: a tray icon appears and the Craft Assistant opens in its
 own window (Edge's app mode), kept above the game.
 
-- With Path of Exile 2 in front, hover an item and press the hotkey (default `Ctrl+D`). The program presses the game's
+- With Path of Exile 2 in front, hover an item and press the hotkey (default `Alt+E`). The program presses the game's
   own copy keys (Alt+Ctrl+C) for that item, reads the clipboard and hands the text to the page: the item is loaded and
   its price check opens. One key press, one copy; nothing else is read from the game.
 - While a route is running, the same item coming back changed counts as the result of the route's next step, so the
