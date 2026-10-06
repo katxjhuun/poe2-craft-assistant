@@ -186,6 +186,11 @@ details.panel.optrow > #pricePanel { padding: 4px 0 14px; }
 .rrow .rcost .money { gap: 5px; }
 .rrow .rok { font-size: 14px; font-variant-numeric: tabular-nums; }
 .rrow .rbar { grid-column: 1 / -1; position: relative; height: 12px; }
+.rrow .rdrv { grid-column: 1 / -1; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; padding: 2px 0 6px; font-size: 13px; color: var(--muted); }
+.rdrv .drv { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.rdrv .drv .ci, .rdrv .drv .ci-ph { width: 16px; height: 16px; vertical-align: 0; font-size: 9px; }
+.rdrv .drv b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+.rdrv .drv-l { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; align-self: center; }
 .rrow .rbar i { position: absolute; top: 5px; height: 2px; background: var(--accent); opacity: .75; min-width: 2px; }
 .rrow .rbar u { position: absolute; top: 2px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; border: 2px solid var(--accent); background: var(--bar); }
 #planPanel { scroll-margin-top: 64px; }
@@ -910,7 +915,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const a = Math.abs(v);
     if (a >= 1000) return Math.round(v).toLocaleString('en-US');
     if (a >= 100) return v.toFixed(0);
-    if (a >= 10) return v.toFixed(1);
+    if (a >= 10) return v.toFixed(1).replace(/\.0$/, '');
     if (a >= 1) return v.toFixed(2).replace(/\.?0+$/, '');
     if (a >= 0.01) return v.toFixed(3).replace(/0+$/, '');
     return v.toPrecision(2);
@@ -3376,6 +3381,33 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   const usesText = (x) => (x >= 9.95 ? String(Math.round(x)) : x >= 0.95 ? String(+x.toFixed(1)) : String(+x.toFixed(2)));
   /** What a finished craft costs: the average over the simulated crafts that reach every target. The step rows add up to it. */
   function planCost(pl) { return pl.okCost ? pl.okCost.mean : pl.meanCost; }
+  /** What a route's cost is made of: its materials by their share of the cost, largest first. uses(step) -> uses per craft. */
+  function costDrivers(steps, uses) {
+    const by = new Map();
+    let total = 0;
+    for (const st of steps || []) {
+      const n = uses(st);
+      if (!(n > 0)) continue;
+      for (const name of st.names) {
+        const price = name === 'New base' ? (parseFloat(S.baseCost) || 0) : (priceEx(name) || 0);
+        if (!(price > 0)) continue;
+        by.set(name, (by.get(name) || 0) + n * price);
+        total += n * price;
+      }
+    }
+    return [...by.entries()].map(([name, ex]) => ({ name, ex, share: total ? ex / total : 0 })).sort((a, b) => b.ex - a.ex);
+  }
+  /** The row under a route: the materials that make up most of its cost, each with its share. */
+  function driversHtml(pl) {
+    const planned = pl && pl.steps && pl.steps.length;
+    const list = planned ? costDrivers(pl.steps, stepUses) : pl && pl.tried ? costDrivers(pl.tried, (st) => st.avg) : [];
+    if (!list.length) return '';
+    const top = list.slice(0, 4);
+    const rest = 1 - top.reduce((t, x) => t + x.share, 0);
+    const pc = (x) => (x > 0 && x < 0.01 ? '<1%' : Math.round(x * 100) + '%');
+    const chip = (x) => `<span class="drv" title="${esc(x.name)}: ${fmt(x.ex)} Exalted Orbs per craft, ${pc(x.share)} of the cost">${x.name === 'New base' ? '' : icon(S.sidByName[x.name], x.name, 'sm')}<span>${esc(x.name)}</span><b>${pc(x.share)}</b></span>`;
+    return `<span class="rdrv" ${planned ? '' : 'title="Where the money goes before the limit is reached, in the first route tried"'}>${planned ? '' : '<span class="drv-l">spent on</span>'}${top.map(chip).join('')}${rest > 0.005 ? `<span class="drv other"><span>other</span><b>${pc(rest)}</b></span>` : ''}</span>`;
+  }
   /** A profile's spending range for one craft, as text with currency icons ('' without limits). */
   function spendText(sp) {
     if (!sp) return '';
@@ -3613,7 +3645,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
           <span class="rname">${nameOf(k)}<small>${k === 'cheap' ? 'early game' : k === 'balanced' ? 'mid game' : 'end game'}${pl && pl.spend && spendText(pl.spend) ? ' · ' + spendText(pl.spend) : ''}</small></span>
           <span class="rcost">${has ? money(planCost(pl)) : pl && pl.steps ? 'Done' : pl && pl.impossible ? 'Not possible' : pl && pl.noSuccess && pl.spend && pl.spend.hi != null ? 'Not within the limit' : '—'}</span>
           <span class="rok ${has ? (pl.p >= 0.5 ? 'up' : pl.p < 0.25 ? 'down' : '') : ''}">${has ? successFail(pl.p).s + ' success' : ''}</span>
-          <span class="rbar" ${ok ? `title="8 of 10 finished crafts cost between ${fmt(ok.p10)} and ${fmt(ok.p90)} Exalted Orbs"` : ''}>${bar}</span></button>`;
+          <span class="rbar" ${ok ? `title="8 of 10 finished crafts cost between ${fmt(ok.p10)} and ${fmt(ok.p90)} Exalted Orbs"` : ''}>${bar}</span>
+          ${driversHtml(pl)}</button>`;
       }).join('')}</div>`;
       html += `<div id="planCard" role="tabpanel" aria-labelledby="ptab-${S.planTab}">${planCard(sel, true)}</div>`;
     }

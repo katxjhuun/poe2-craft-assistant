@@ -2565,7 +2565,7 @@
       }
       if (!best) {
         const r = simulate(ctx, st, pg, clampStrategy(expandStrategy(grids[i][0]), prof.mat, ctx, input.priceOf), { trials: 400, seed: 3, priceOf: input.priceOf, baseCost: input.baseCost, budget: pin.budget, baseLimit: input.baseLimit });
-        out.profiles[names[i]] = { label: prof.label, noSuccess: true, fails: r.fails, spend: pin.spend };
+        out.profiles[names[i]] = { label: prof.label, noSuccess: true, fails: r.fails, spend: pin.spend, tried: r.steps.map((x) => ({ names: x.names, avg: x.avg })) };
         done++;
         continue;
       }
