@@ -144,12 +144,19 @@ own window (Edge's app mode), kept above the game.
   Exchange 2 and PoE Overlay II do. Those endpoints are not in Grinding Gear Games' documented API (its developer
   documentation calls their use a breach of the terms, 7i); the player chose to use them knowingly, no further than
   those tools go. The limits kept here: only on a key press, a Search click or a change the player makes to the
-  search, never in the background; one search and one fetch of ten listings; the site's rate limit headers obeyed
-  with a margin; no account cookies (a search the site wants a login for is refused and left to the trade site); a
+  search, never in the background; one search and one fetch of ten listings; the site's rate limit kept with a
+  margin (below); no account cookies (a search the site wants a login for is refused and left to the trade site); a
   refusal by the site is never worked around. The tray menu turns it off (`priceCheck` in `config.json`).
 - A change to the search (a line clicked on or off, a minimum or maximum, a preset) is searched by itself after a short
-  pause, so the estimate follows; several changes in a row are one search, and a search that comes too soon for the
-  trade site waits the time the site asks for and runs once more. The last answer stays on screen, dimmed, meanwhile.
+  pause, so the estimate follows; several changes in a row are one search. The last answer stays on screen, dimmed,
+  meanwhile.
+- The trade site's rate limit is kept the way other price check tools keep it: by the site's own windows. With every
+  answer the site tells its rules (so many requests in so many seconds) and how many it has counted, other tools on
+  the computer included; a search goes at once as long as every window has room for it and one more, and waits only
+  for the time a full window needs. A wait of up to three seconds is simply waited out; a longer one is shown and the
+  search runs by itself when it is over. (Until 7 Oct 2026 the program also held every search back for two seconds
+  after the last one and slowed down from half a window on: that was its own rule, not the site's, and it showed as
+  "wait 2 s" on nearly every change.) `GET /pace` on the program shows the windows and what is counted in them.
 - The listings: each row says how many lines of the search the listed item has higher (▲) and lower (▼) than the
   player's item, worked out with the same rules for both (totals, armour at 20% quality). The eye at the end of a row
   shows that item in a card beside the price check while the cursor is on it: the item as the game would draw it
@@ -219,7 +226,10 @@ own window (Edge's app mode), kept above the game.
   question for a weapon's physical damage is open (no weapon was looked at). In the stand-in: the card on either
   side, kept open by a click, closed by Esc; the search after a change, the wait and second try, the dot moving to
   a measured line. On the real window: the cut with a card beside the price check (two rectangles, 6 px apart), and
-  that the keyboard goes back to the window that had it when the price check is put away. The other kinds of items (7 Oct 2026): the searches are built from Exiled Exchange 2's source
+  that the keyboard goes back to the window that had it when the price check is put away. The pace keeper with
+  made-up answers of the trade site (no request sent): four searches in a row go without a wait, the fifth of a
+  five-in-ten-seconds window waits for the window, another tool's requests count, a penalty and Retry-After are sat
+  out; the site's real rules were not looked at (they come with the player's next search). The other kinds of items (7 Oct 2026): the searches are built from Exiled Exchange 2's source
   (create-item-filters.ts, create-stat-filters.ts, pathofexile-trade.ts) and tested on item texts written from the
   layout of the game's copy text, not copied in game (`app/tests/fixtures/other-items.js`): a text copied in game may
   differ around the lines the reader looks for, and none of these searches has been run against the trade site

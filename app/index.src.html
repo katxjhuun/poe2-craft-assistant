@@ -2016,7 +2016,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     }
     // the answer: an estimate from the listings, then the listings
     // while a search runs, the last answer stays (dimmed) until the new one is there
-    const wait = PV.busy ? `<div class="pv-note">${PV.wait ? `Waiting ${PV.wait} s for the trade site, then searching…` : 'Searching…'}</div>` : '';
+    const wait = PV.busy ? `<div class="pv-note">${PV.wait ? `The trade site allows only so many searches in a row: searching in ${PV.wait} s…` : 'Searching…'}</div>` : '';
     const peeks = !(PV.info && PV.info.price && PV.info.price.peek === 0); // no room for a card beside the price check: no eyes
     let answer = wait;
     if (PV.err && !PV.busy) answer = `<div class="pv-err">${esc(PV.err.message || 'The search failed.')}</div>${PV.err.login ? '<div class="pv-note">The trade site wants a login for a search with this many lines. Click some lines off, or open the search on the trade site.</div>' : ''}`;

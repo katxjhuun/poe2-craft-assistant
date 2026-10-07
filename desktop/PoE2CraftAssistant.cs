@@ -100,12 +100,108 @@ namespace PoE2CraftAssistant
     }
 
     /// <summary>
+    /// The trade site's pace for one kind of request (the search, the fetch), kept the way price check tools keep it.
+    /// With every answer the site tells its rules ("5:10:60": 5 requests in 10 seconds, 60 seconds of penalty beyond)
+    /// and how many requests it has counted in each window; other tools on this computer count there too. A request
+    /// goes at once as long as every window has room for it and one more (the margin), and waits only for the time a
+    /// full window needs to make room. Nothing else holds a request back.
+    /// </summary>
+    class Pace
+    {
+        class Rule { public int Max, Period; public List<DateTime> Hits = new List<DateTime>(); }
+        readonly Dictionary<string, Rule> rules = new Dictionary<string, Rule>();
+        DateTime penaltyUntil = DateTime.MinValue;
+
+        /// <summary>Seconds until the next request may go (0: now).</summary>
+        public double Wait()
+        {
+            DateTime now = DateTime.UtcNow;
+            double wait = Math.Max(0, (penaltyUntil - now).TotalSeconds);
+            foreach (Rule r in rules.Values)
+            {
+                r.Hits.RemoveAll(delegate(DateTime t) { return (now - t).TotalSeconds >= r.Period; });
+                int room = Math.Max(1, r.Max - 1); // one request of every window stays unused
+                if (r.Hits.Count < room) continue;
+                // it may go when so many of the counted requests have left the window that there is room again
+                DateTime free = r.Hits[r.Hits.Count - room].AddSeconds(r.Period);
+                wait = Math.Max(wait, (free - now).TotalSeconds + 0.25);
+            }
+            return wait;
+        }
+
+        /// <summary>A request is going out now.</summary>
+        public void Sent()
+        {
+            DateTime now = DateTime.UtcNow;
+            foreach (Rule r in rules.Values) r.Hits.Add(now);
+        }
+
+        /// <summary>The site's answer: its rules, a penalty in force, and requests it counted that are not known here.</summary>
+        public void Learn(WebHeaderCollection h)
+        {
+            if (h == null) return;
+            DateTime now = DateTime.UtcNow;
+            double v;
+            if (h["Retry-After"] != null && double.TryParse(h["Retry-After"], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out v) && v > 0)
+                penaltyUntil = now.AddSeconds(v) > penaltyUntil ? now.AddSeconds(v) : penaltyUntil;
+            string names = h["X-Rate-Limit-Rules"];
+            if (names == null) return;
+            HashSet<string> seen = new HashSet<string>();
+            foreach (string raw in names.Split(','))
+            {
+                string name = raw.Trim();
+                string lim = h["X-Rate-Limit-" + name], state = h["X-Rate-Limit-" + name + "-State"];
+                if (lim == null) continue;
+                string[] L = lim.Split(','), S = state != null ? state.Split(',') : new string[0];
+                for (int i = 0; i < L.Length; i++)
+                {
+                    string[] l = L[i].Split(':'); // max:period:penalty
+                    int max, period;
+                    if (l.Length < 2 || !int.TryParse(l[0], out max) || !int.TryParse(l[1], out period) || max < 1 || period < 1) continue;
+                    string key = name + ":" + period;
+                    seen.Add(key);
+                    Rule r;
+                    if (!rules.TryGetValue(key, out r)) { r = new Rule(); rules[key] = r; }
+                    r.Max = max; r.Period = period;
+                    if (i >= S.Length) continue;
+                    string[] st = S[i].Split(':'); // hits:period:penalty in force
+                    int hits, active;
+                    if (st.Length < 3 || !int.TryParse(st[0], out hits) || !int.TryParse(st[2], out active)) continue;
+                    if (active > 0 && now.AddSeconds(active) > penaltyUntil) penaltyUntil = now.AddSeconds(active);
+                    r.Hits.RemoveAll(delegate(DateTime t) { return (now - t).TotalSeconds >= r.Period; });
+                    // requests the site counted and this program did not make (another tool, the trade site in a
+                    // browser): taken as made now, which is the careful reading
+                    for (int k = r.Hits.Count; k < hits; k++) r.Hits.Add(now);
+                }
+            }
+            List<string> gone = new List<string>();
+            foreach (string k in rules.Keys) if (!seen.Contains(k)) gone.Add(k);
+            foreach (string k in gone) rules.Remove(k);
+        }
+
+        /// <summary>The rules and what is counted in them, to look at: "Ip:10 2/5, Ip:60 2/15".</summary>
+        public string Describe()
+        {
+            DateTime now = DateTime.UtcNow;
+            List<string> parts = new List<string>();
+            foreach (KeyValuePair<string, Rule> kv in rules)
+            {
+                int n = 0;
+                foreach (DateTime t in kv.Value.Hits) if ((now - t).TotalSeconds < kv.Value.Period) n++;
+                parts.Add(kv.Key + " " + n + "/" + kv.Value.Max);
+            }
+            return string.Join(", ", parts.ToArray());
+        }
+    }
+
+    /// <summary>
     /// One price check: the trade site's search for an item and its first listings, the way price check tools do it
     /// (Exiled Exchange 2, PoE Overlay II). These endpoints are not in Grinding Gear Games' documented API; the player
     /// chose to use them knowingly, no further than those tools go (6 Oct 2026). So the limits are kept tight:
     /// only on the player's key press or Search click, never in the background; one search and one fetch of ten
-    /// listings; the site's rate limit headers obeyed with a margin; no account cookies (a search the site wants a
-    /// login for is refused here and left to the trade site itself); a refusal by the site is never worked around.
+    /// listings; the site's rate limit kept with a margin (see Pace: its own windows, nothing stricter); no account
+    /// cookies (a search the site wants a login for is refused here and left to the trade site itself); a refusal by
+    /// the site is never worked around.
     /// </summary>
     class Trade
     {
@@ -113,7 +209,10 @@ namespace PoE2CraftAssistant
         readonly object gate = new object();
         readonly JavaScriptSerializer ser = new JavaScriptSerializer();
         readonly Dictionary<string, KeyValuePair<DateTime, string>> cache = new Dictionary<string, KeyValuePair<DateTime, string>>();
-        DateTime nextSearch = DateTime.MinValue, nextFetch = DateTime.MinValue;
+        readonly Pace searchPace = new Pace(), fetchPace = new Pace();
+        // a search whose listings could not be fetched yet (the fetch had to wait): asked again, it is not searched twice
+        string heldKey, heldId; int heldTotal; List<string> heldIds; DateTime heldAt;
+        const double HOLD = 3.0; // a wait up to this many seconds is waited out here; a longer one is told to the page
         /// <summary>The trade site's last answer with listings, as it came (to look at when the page reads one wrongly).</summary>
         public volatile string LastRaw = "{}";
 
@@ -123,7 +222,10 @@ namespace PoE2CraftAssistant
             ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072; // TLS 1.2
         }
 
-        class Reply { public int Status; public string Body = ""; public double Wait; public string Message; public bool Login; }
+        class Reply { public int Status; public string Body = ""; public WebHeaderCollection Headers; public string Message; public bool Login; }
+
+        /// <summary>The pace of the two kinds of request, to look at (GET /pace).</summary>
+        public string PaceText() { lock (gate) return "search: " + searchPace.Describe() + " | fetch: " + fetchPace.Describe(); }
 
         static object Get(object o, string key)
         {
@@ -137,31 +239,6 @@ namespace PoE2CraftAssistant
             Dictionary<string, object> m = new Dictionary<string, object>();
             m["ok"] = false; m["message"] = message; m["wait"] = Math.Max(0, Math.Ceiling(wait)); m["login"] = login;
             return ser.Serialize(m);
-        }
-
-        /// <summary>Seconds to leave before the next request, from the site's own rate limit headers (with a margin).</summary>
-        static double WaitFrom(WebHeaderCollection h)
-        {
-            double wait = 0, v;
-            if (h["Retry-After"] != null && double.TryParse(h["Retry-After"], out v)) wait = Math.Max(wait, v);
-            string rules = h["X-Rate-Limit-Rules"];
-            if (rules == null) return wait;
-            foreach (string rule in rules.Split(','))
-            {
-                string lim = h["X-Rate-Limit-" + rule.Trim()], state = h["X-Rate-Limit-" + rule.Trim() + "-State"];
-                if (lim == null || state == null) continue;
-                string[] L = lim.Split(','), S = state.Split(',');
-                for (int i = 0; i < L.Length && i < S.Length; i++)
-                {
-                    string[] l = L[i].Split(':'), st = S[i].Split(':'); // limit: max:period:penalty, state: hits:period:penalty in force
-                    int max, period, hits, active;
-                    if (l.Length < 2 || st.Length < 3 || !int.TryParse(l[0], out max) || !int.TryParse(l[1], out period) || !int.TryParse(st[0], out hits) || !int.TryParse(st[2], out active)) continue;
-                    if (active > 0) wait = Math.Max(wait, active);
-                    else if (hits >= max - 1) wait = Math.Max(wait, period);                 // one below the limit: sit the window out
-                    else if (hits * 2 >= max) wait = Math.Max(wait, (double)period / max);   // half used: spread the rest
-                }
-            }
-            return wait;
         }
 
         Reply Send(string method, string url, string body)
@@ -190,13 +267,13 @@ namespace PoE2CraftAssistant
                     if (resp == null) { r.Status = 0; r.Message = "The trade site could not be reached (" + e.Message + ")."; return r; }
                 }
                 r.Status = (int)resp.StatusCode;
-                r.Wait = WaitFrom(resp.Headers);
+                r.Headers = resp.Headers;
                 using (StreamReader sr = new StreamReader(resp.GetResponseStream(), Encoding.UTF8)) r.Body = sr.ReadToEnd();
                 if (r.Status != 200)
                 {
                     string msg = null;
                     try { msg = Convert.ToString(Get(Get(ser.DeserializeObject(r.Body), "error"), "message")); } catch (Exception) { msg = null; }
-                    if (r.Status == 429) r.Message = "The trade site's rate limit was reached. Wait " + Math.Ceiling(Math.Max(r.Wait, 1)) + " s.";
+                    if (r.Status == 429) r.Message = "The trade site's rate limit was reached.";
                     else if (!string.IsNullOrEmpty(msg)) r.Message = msg;
                     else r.Message = "The trade site refused the request (HTTP " + r.Status + "). Use the trade site itself for this search.";
                     r.Login = msg != null && msg.IndexOf("log", StringComparison.OrdinalIgnoreCase) >= 0;
@@ -216,27 +293,42 @@ namespace PoE2CraftAssistant
                 KeyValuePair<DateTime, string> hit;
                 // the same search again within a minute: the answer already here (Refresh asks the site again)
                 if (!fresh && cache.TryGetValue(key, out hit) && (DateTime.UtcNow - hit.Key).TotalSeconds < 60) return hit.Value;
-                double wait = (nextSearch - DateTime.UtcNow).TotalSeconds;
-                if (wait > 0) return Fail("Too soon after the last search: wait " + Math.Ceiling(wait) + " s (the trade site's rate limit).", wait, false);
-                Reply sr = Send("POST", "https://www.pathofexile.com/api/trade2/search/poe2/" + Uri.EscapeDataString(league), body);
-                nextSearch = DateTime.UtcNow.AddSeconds(Math.Max(2.0, sr.Wait));
-                if (sr.Status != 200) return Fail(sr.Message, sr.Wait, sr.Login);
-                object found;
-                try { found = ser.DeserializeObject(sr.Body); } catch (Exception) { return Fail("The trade site's answer could not be read.", 0, false); }
-                string id = Convert.ToString(Get(found, "id"));
-                int total = 0;
-                try { total = Convert.ToInt32(Get(found, "total")); } catch (Exception) { total = 0; }
-                List<string> ids = new List<string>();
-                System.Collections.IEnumerable res = Get(found, "result") as System.Collections.IEnumerable;
-                if (res != null) foreach (object x in res) { if (ids.Count >= 10) break; ids.Add(Convert.ToString(x)); }
+                string id; int total; List<string> ids;
+                if (heldKey == key && (DateTime.UtcNow - heldAt).TotalSeconds < 60) { id = heldId; total = heldTotal; ids = heldIds; }
+                else
+                {
+                    double wait = searchPace.Wait();
+                    if (wait > HOLD) return Fail("The trade site's rate limit: the next search can go in " + Math.Ceiling(wait) + " s.", wait, false);
+                    if (wait > 0) Thread.Sleep((int)Math.Ceiling(wait * 1000));
+                    searchPace.Sent();
+                    Reply sr = Send("POST", "https://www.pathofexile.com/api/trade2/search/poe2/" + Uri.EscapeDataString(league), body);
+                    searchPace.Learn(sr.Headers);
+                    if (sr.Status != 200) return Fail(sr.Message, sr.Status == 429 ? Math.Max(1, searchPace.Wait()) : 0, sr.Login);
+                    object found;
+                    try { found = ser.DeserializeObject(sr.Body); } catch (Exception) { return Fail("The trade site's answer could not be read.", 0, false); }
+                    id = Convert.ToString(Get(found, "id"));
+                    total = 0;
+                    try { total = Convert.ToInt32(Get(found, "total")); } catch (Exception) { total = 0; }
+                    ids = new List<string>();
+                    System.Collections.IEnumerable res = Get(found, "result") as System.Collections.IEnumerable;
+                    if (res != null) foreach (object x in res) { if (ids.Count >= 10) break; ids.Add(Convert.ToString(x)); }
+                }
+                heldKey = null;
                 List<object> listings = new List<object>();
                 if (ids.Count > 0)
                 {
-                    double fw = (nextFetch - DateTime.UtcNow).TotalSeconds;
-                    if (fw > 0) return Fail("Too soon after the last search: wait " + Math.Ceiling(fw) + " s (the trade site's rate limit).", fw, false);
+                    double fw = fetchPace.Wait();
+                    if (fw > HOLD)
+                    {
+                        // the search is kept: when the page asks again, only its listings are fetched
+                        heldKey = key; heldId = id; heldTotal = total; heldIds = ids; heldAt = DateTime.UtcNow;
+                        return Fail("The trade site's rate limit: the listings can be fetched in " + Math.Ceiling(fw) + " s.", fw, false);
+                    }
+                    if (fw > 0) Thread.Sleep((int)Math.Ceiling(fw * 1000));
+                    fetchPace.Sent();
                     Reply fr = Send("GET", "https://www.pathofexile.com/api/trade2/fetch/" + string.Join(",", ids.ToArray()) + "?query=" + Uri.EscapeDataString(id) + "&realm=poe2", null);
-                    nextFetch = DateTime.UtcNow.AddSeconds(Math.Max(1.0, fr.Wait));
-                    if (fr.Status != 200) return Fail(fr.Message, fr.Wait, fr.Login);
+                    fetchPace.Learn(fr.Headers);
+                    if (fr.Status != 200) return Fail(fr.Message, fr.Status == 429 ? Math.Max(1, fetchPace.Wait()) : 0, fr.Login);
                     LastRaw = fr.Body;
                     System.Collections.IEnumerable rows = null;
                     try { rows = Get(ser.DeserializeObject(fr.Body), "result") as System.Collections.IEnumerable; } catch (Exception) { rows = null; }
@@ -379,6 +471,7 @@ namespace PoE2CraftAssistant
             }
             if (path == "/last") { Text(r, 200, "application/json", lastJson); return; } // the item copied last (a window opened after it)
             if (path == "/lasttrade") { Text(r, 200, "application/json", trade.LastRaw); return; } // the trade site's last answer, as it came
+            if (path == "/pace") { Text(r, 200, "text/plain", trade.PaceText()); return; } // the trade site's windows and what is counted in them
             if (path == "/trade" && q.HttpMethod == "POST")
             {
                 string origin = q.Headers["Origin"];
