@@ -745,7 +745,7 @@ namespace PoE2CraftAssistant
         bool stepsShown, stepsMoving;
         Rectangle stepsAt = Rectangle.Empty;
         IntPtr lastGame = IntPtr.Zero;
-        int moveSeen;
+        int moveSeen, findTicks;
 
         public Host(string[] args)
         {
@@ -969,6 +969,18 @@ namespace PoE2CraftAssistant
             return area.Width >= 320 && area.Height >= 240;
         }
 
+        IntPtr FindGame()
+        {
+            IntPtr found = IntPtr.Zero;
+            Native.EnumWindows(delegate(IntPtr h, IntPtr l)
+            {
+                if (!Native.IsWindowVisible(h) || !IsGame(h)) return true;
+                found = h;
+                return false;
+            }, IntPtr.Zero);
+            return found;
+        }
+
         bool GameThere()
         {
             return lastGame != IntPtr.Zero && Native.IsWindow(lastGame) && Native.IsWindowVisible(lastGame) && !Native.IsIconic(lastGame);
@@ -1003,6 +1015,8 @@ namespace PoE2CraftAssistant
             IntPtr fg = Native.GetForegroundWindow();
             bool game = IsGame(fg);
             if (game) lastGame = fg;
+            // the game has not been in front since the program started (the assistant on a second screen): look for it
+            else if (steps.HasSteps && !Native.IsWindow(lastGame) && ++findTicks >= 7) { findTicks = 0; lastGame = FindGame(); }
             bool want = stepsMoving || (cfg.StepsOverlay && steps.HasSteps && server.Clients > 0
                 && (game || anyWindow || (GameThere() && Native.TitleOf(fg) == PAGE_TITLE)));
             if (!want)
