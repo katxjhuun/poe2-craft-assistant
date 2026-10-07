@@ -39,7 +39,8 @@
   /**
    * input: { ix, item, targets, locks, priceOf(name) -> Exalted Orbs or null, baseCost, weights, essences, catalystMult,
    *          quality?: 'lock' | 'use' | 'raise' (catalyst quality: leave it alone, the default; let Omen of Catalysing
-   *          Exaltation use up what the item has; or also add catalysts for it) }
+   *          Exaltation use up what the item has; or also add catalysts for it),
+   *          lite?: 0 | 1 | 2, maxStates? (see route: a smaller network for requests with very many targets) }
    * Returns a solved network; { blocked } for an item no currency changes; { impossible: [{label, why}] } for targets
    * the item cannot have; { unsupported: reason } for what is left outside.
    */
@@ -283,6 +284,16 @@
       return w / L.total;
     }
 
+    // A smaller network for a request with very many targets (see route): no Fracturing Orb, and an essence or the
+    // Well of Souls as the source of a natural target only for the two hardest of them (lite 1) or for none (lite 2).
+    const lite = input.lite | 0;
+    if (lite) {
+      const nat = [];
+      for (let i = 0; i < G; i++) if (goals[i].kind === 'nat' && !goals[i].kept) { const st = stats(goals[i].si, 0, 1, R_POOL | R_ALDUR); nat.push([i, (st.ok[i] + st.nearW[i]) / (st.W || 1)]); }
+      nat.sort((a, b) => a[1] - b[1]);
+      const keep = new Set(nat.slice(0, lite === 1 ? 2 : 0).map((x) => x[0]));
+      for (const [i] of nat) if (!keep.has(i)) { goals[i].magicEss = goals[i].rareEss = null; goals[i].noWell = true; }
+    }
     const floorOf = (op, tier) => { const fl = ctx.floors[op]; return !fl || tier === 'base' ? 0 : tier === 'greater' ? fl.Greater || 0 : fl.Perfect || 0; };
     /** The orb tiers worth a node: priced, and a higher one only where its floor raises some target's share of the pool. */
     function orbTiers(op) {
@@ -302,7 +313,7 @@
     }
     const T = { transmute: orbTiers('transmute'), augment: orbTiers('augment'), regal: orbTiers('regal'), exalt: orbTiers('exalt'), chaos: orbTiers('chaos') };
     const PR = {
-      annul: price('Orb of Annulment'), fracture: price('Fracturing Orb'), alchemy: price('Orb of Alchemy'), divine: price('Divine Orb'),
+      annul: price('Orb of Annulment'), fracture: lite ? null : price('Fracturing Orb'), alchemy: price('Orb of Alchemy'), divine: price('Divine Orb'),
       exaltSide: [price(OMEN.exalt.prefix), price(OMEN.exalt.suffix)], erasure: [price(OMEN.erasure.prefix), price(OMEN.erasure.suffix)],
       annulSide: [price(OMEN.annul.prefix), price(OMEN.annul.suffix)], light: price(OMEN.light),
       necro: [price(OMEN.necro.prefix), price(OMEN.necro.suffix)], echoes: price(OMEN.echoes),
@@ -501,7 +512,7 @@
           const hit = (e) => e.fam === g.fam && fits(g, e);
           const c = ex.filter(hit).length, cl = ll ? ll.filter(hit).length : 0;
           if (c || cl) want.push({ i, des: true, c, cl, share: pv[i] });
-        } else if (g.kind === 'nat' && s.ok[i] + s.nearW[i] > 0) {
+        } else if (g.kind === 'nat' && !g.noWell && s.ok[i] + s.nearW[i] > 0) {
           const beta = n && s0.W > 0 ? Math.pow(1 - Math.min(1, s0.low[i] / s0.W), n) : 1;
           want.push({ i, des: false, w: Math.min(avail, (s.ok[i] + s.nearW[i]) * beta), share: s.ok[i] / (s.ok[i] + s.nearW[i]) });
         }
@@ -865,7 +876,7 @@
     const start = idOf(startS), n0 = idOf(cp(N0));
     for (const e of entries) e.id = idOf(e.S);
     for (let q = 0; q < states.length; q++) {
-      if (states.length > MAX_STATES) return { unsupported: 'too many item states', states: states.length };
+      if (states.length > (input.maxStates || MAX_STATES)) return { unsupported: 'too many item states', states: states.length };
       expand(q);
     }
     const N = states.length;
@@ -910,39 +921,62 @@
       }
       return (luCache[bi] = { A, perm: luFactor(A, m), pol: mine });
     }
-    function evaluate(rhs) {
+    let maxBlock = 0;
+    for (const b of blocks) if (b.length > maxBlock) maxBlock = b.length;
+    /** maxPasses, tol: a rough answer is enough while the rule set still changes a lot (see solve). */
+    function evaluate(rhs, maxPasses, tol) {
       const K = rhs.length;
+      maxPasses = maxPasses || 600; tol = tol || 1e-11;
       const X = rhs.map((r) => { if (r.x0) return Float64Array.from(r.x0); const a = new Float64Array(N); if (r.term) for (let s = 0; s < N; s++) if (pol[s] === -1) a[s] = r.term; return a; });
+      // the rule set's edges that leave their block, as flat rows (what stays inside a block is in its factors)
+      const row = new Int32Array(N + 1);
+      let nnz = 0;
+      for (let s = 0; s < N; s++) { row[s] = nnz; if (pol[s] >= 0) nnz += acts[s][pol[s]].out.length >> 1; }
+      row[N] = nnz;
+      const col = new Int32Array(nnz), val = new Float64Array(nnz), back = new Float64Array(N);
+      nnz = 0;
+      for (let s = 0; s < N; s++) {
+        row[s] = nnz;
+        if (pol[s] < 0) continue;
+        const o = acts[s][pol[s]].out, bi = blockOf[s];
+        for (let t = 0; t < o.length; t += 2) {
+          const s2 = o[t + 1];
+          if (s2 === RESTART) back[s] += GAMMA * o[t];
+          else if (blockOf[s2] !== bi) { col[nnz] = s2; val[nnz++] = GAMMA * o[t]; }
+        }
+      }
+      row[N] = nnz;
+      const R = new Float64Array(maxBlock * K), Y = new Float64Array(maxBlock * K);
       // a block is solved again only while something it reads has changed
       const dirty = new Uint8Array(blocks.length).fill(1);
       let left = blocks.length;
-      for (let pass = 0; pass < 600 && left > 0; pass++) {
+      for (let pass = 0; pass < maxPasses && left > 0; pass++) {
         for (let bi = 0; bi < blocks.length; bi++) {
           if (!dirty[bi]) continue;
           dirty[bi] = 0; left--;
           const b = blocks[bi], m = b.length;
-          const R = new Float64Array(m * K);
-          for (let li = 0; li < m; li++) {
-            const s = b[li];
-            if (pol[s] < 0) { for (let k = 0; k < K; k++) R[li * K + k] = pol[s] === -1 ? rhs[k].term || 0 : rhs[k].stuck || 0; continue; }
-            const o = acts[s][pol[s]].out;
-            for (let k = 0; k < K; k++) R[li * K + k] = rhs[k].d ? rhs[k].d[s] : 0;
-            for (let t = 0; t < o.length; t += 2) {
-              const p = GAMMA * o[t], s2 = o[t + 1];
-              if (s2 === RESTART) { for (let k = 0; k < K; k++) R[li * K + k] += p * rhs[k].bnd; }
-              else if (blockOf[s2] !== bi) for (let k = 0; k < K; k++) R[li * K + k] += p * X[k][s2];
+          for (let k = 0; k < K; k++) {
+            const r = rhs[k], d = r.d, Xk = X[k], bnd = r.bnd || 0, term = r.term || 0, stuck = r.stuck || 0;
+            for (let li = 0; li < m; li++) {
+              const s = b[li];
+              if (pol[s] < 0) { R[li * K + k] = pol[s] === -1 ? term : stuck; continue; }
+              let v = (d ? d[s] : 0) + back[s] * bnd;
+              for (let t = row[s], e = row[s + 1]; t < e; t++) v += val[t] * Xk[col[t]];
+              R[li * K + k] = v;
             }
           }
           const f = luOf(bi);
-          luSolve(f.A, f.perm, R, m, K);
+          luSolve(f.A, f.perm, R, m, K, Y);
           let delta = 0;
-          for (let li = 0; li < m; li++) for (let k = 0; k < K; k++) {
-            const v = R[li * K + k], old = X[k][b[li]];
-            const dv = Math.abs(v - old) / (Math.abs(v) + 1e-300);
-            if (dv > delta && Math.abs(v - old) > 1e-300) delta = dv;
-            X[k][b[li]] = v;
+          for (let k = 0; k < K; k++) {
+            const Xk = X[k];
+            for (let li = 0; li < m; li++) {
+              const v = R[li * K + k], old = Xk[b[li]], ch = Math.abs(v - old);
+              if (ch > 1e-300) { const dv = ch / (Math.abs(v) + 1e-300); if (dv > delta) delta = dv; }
+              Xk[b[li]] = v;
+            }
           }
-          if (delta > 1e-11) for (const r of readerList[bi]) if (!dirty[r]) { dirty[r] = 1; left++; }
+          if (delta > tol) { const rl = readerList[bi]; for (let i = 0; i < rl.length; i++) if (!dirty[rl[i]]) { dirty[rl[i]] = 1; left++; } }
         }
       }
       return X;
@@ -978,24 +1012,36 @@
       pol[s] = a < 0 ? 0 : a;
     }
     let Fv = new Float64Array(N), Av = null, rounds = 0, sol = null;
+    // the search for the base charge holds a white base's value still while it probes (see fitBases)
+    let holdX = false;
     /** Improve the rule set until no node has a cheaper edge (it starts from the rule set of the last solve). */
-    function solve() {
-      for (let it = 0; it < 100; it++, rounds++) {
+    function solve(exact) {
+      // exact === false: a probe of the search for the base charge. It only has to tell on which side of the limit the
+      // charge lands, so it stops when the roughly valued rule set has all but settled.
+      // While many nodes still change their edge, the rule set is valued roughly (a few passes over the blocks) and
+      // improved again; the exact values come once it has settled, and it must stand unchanged against those.
+      let rough = true, last = N;
+      for (let it = 0; it < 400; it++, rounds++) {
         const d = new Float64Array(N);
         for (let s = 0; s < N; s++) if (pol[s] >= 0) d[s] = costOf(acts[s][pol[s]]);
-        const [A, F] = evaluate([{ d, bnd: 0, stuck: BIG, x0: Av }, { bnd: 0, term: 1, x0: Av ? Fv : null }]);
-        x = F[n0] > 1e-250 ? A[n0] / F[n0] : BIG;
+        const passes = !rough ? 600 : last > N / 20 ? 3 : last > N / 300 ? 8 : 24;
+        const [A, F] = evaluate([{ d, bnd: 0, stuck: BIG, x0: Av }, { bnd: 0, term: 1, x0: Av ? Fv : null }], passes, rough ? 1e-7 : 1e-11);
+        if (!holdX) x = F[n0] > 1e-250 ? A[n0] / F[n0] : BIG;
         for (let s = 0; s < N; s++) V[s] = Math.min(BIG, A[s] + (1 - F[s]) * x);
         Fv = F; Av = A;
         let changed = 0;
         for (let s = 0; s < N; s++) {
           const list = acts[s];
-          if (!list.length) continue;
+          if (list.length < 2) continue;
           let best = pol[s], bq = qOf(s, list[pol[s]]);
-          for (let a = 0; a < list.length; a++) { if (a === pol[s]) continue; const v = qOf(s, list[a]); if (v < bq - 1e-9 * (1 + Math.abs(bq))) { bq = v; best = a; } }
+          // against rough values an edge must be clearly cheaper to be taken (else the rule set flutters)
+          const slack = (rough ? 1e-6 : 1e-9) * (1 + Math.abs(bq));
+          for (let a = 0; a < list.length; a++) { if (a === pol[s]) continue; const v = qOf(s, list[a]); if (v < bq - slack) { bq = v; best = a; } }
           if (best !== pol[s]) { pol[s] = best; changed++; }
         }
-        if (!changed) break;
+        last = changed;
+        if (exact === false && changed <= N / 2000) break;
+        if (!changed) { if (!rough) break; rough = false; }
       }
       sol = null;
     }
@@ -1034,18 +1080,14 @@
       return sol;
     }
     const usesOf = (s, name) => { const so = solution(), k = so.names.indexOf(name); return k < 0 ? 0 : so.uses(s, k); };
-    /** New bases from node s on average, without the rest of the solution (the search of the charge asks often). */
-    function basesAt(s) {
-      const d = new Float64Array(N);
-      let any = false;
-      for (let t = 0; t < N; t++) if (pol[t] >= 0 && acts[t][pol[t]].a.op === 'newbase') { d[t] = 1; any = true; }
-      if (!any) return 0;
-      const X = evaluate([{ d, bnd: 0 }])[0];
-      return X[s] + (1 - Fv[s]) * (Fv[n0] > 1e-250 ? X[n0] / Fv[n0] : 0);
-    }
+    /**
+     * New bases from node s on average. An item ends finished or given up for a new base, so the item in hand is given
+     * up with chance 1 - F(s), and every white base after it with chance 1 - F(N0): (1 - F(s)) / F(N0) bases in all.
+     */
+    const basesAt = (s) => (Fv[n0] > 1e-250 ? (1 - Fv[s]) / Fv[n0] : Infinity);
 
     const net = {
-      ctx, goals, states, acts, pol, start, n0, N, timing, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
+      ctx, goals, states, acts, pol, start, n0, N, timing, lite, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
       get rounds() { return rounds; },
       get base() { return solution().money[n0]; },
       nodeOf(st) {
@@ -1091,18 +1133,30 @@
       fitBases(s, max) {
         if (charge) { charge = 0; solve(); }
         const free = basesAt(s);
-        if (!(max >= 0) || free <= max) return 0;
-        // a first guess from how far over the limit the free route is, then up until it holds
-        let lo = 0, hi = Math.max(1, baseCost) * Math.max(2, free / Math.max(0.5, max)), at = Infinity;
-        for (let k = 0; k < 30; k++) { charge = hi; solve(); at = basesAt(s); if (at <= max) break; lo = hi; hi *= 3; }
-        // back down while the route is far under the limit (a cheaper one may still keep to it)
-        for (let k = 0; k < 6 && at < 0.6 * max; k++) {
-          const mid = Math.sqrt(Math.max(lo, hi * 0.02) * hi);
-          charge = mid; solve();
-          const b = basesAt(s);
-          if (b <= max) { hi = mid; at = b; } else { lo = mid; charge = hi; solve(); if (hi / lo < 1.3) break; }
+        if (!(max >= 0) || free <= max || !(x < BIG)) return 0;
+        // For the rule set a charge on bases and a white base's own value come to one number: what giving the item up
+        // costs (z = base price + charge + the value of a white base). The search moves z with the base's value held
+        // still, so a probe has nothing to settle but the rule set; the probes are valued roughly.
+        const z0 = baseCost + x;
+        holdX = true;
+        let on = 0;
+        const probe = (z) => { charge = z - z0; on = z; solve(false); return basesAt(s); };
+        let lo = z0, hi = z0 * Math.min(3, Math.max(1.3, Math.sqrt(free / Math.max(0.5, max)))), at = Infinity;
+        for (let k = 0; k < 40; k++) { at = probe(hi); if (at <= max) break; lo = hi; hi *= 1.6; }
+        // back down while the route is far under the limit (a cheaper one may still keep to it); a very large
+        // network gets fewer of these steps
+        for (let k = 0, steps = N > 25000 ? 3 : 8; k < steps && at < 0.75 * max && hi / lo > 1.02; k++) {
+          const mid = Math.sqrt(lo * hi), b = probe(mid);
+          if (b <= max) { hi = mid; at = b; } else lo = mid;
         }
-        if (charge !== hi) { charge = hi; solve(); }
+        if (on !== hi) probe(hi);
+        // the charge that puts giving up at this price when a white base has its own value again, and the exact route
+        const F0 = Fv[n0], A0 = Av[n0] - (1 - F0) * (baseCost + charge);
+        charge = Math.max(0, F0 * hi - baseCost - A0);
+        holdX = false;
+        solve();
+        // the exact values can sit a little over the rough ones: one step up when they break the limit
+        for (let k = 0; k < 4 && basesAt(s) > max * 1.02; k++) { charge *= 1.25; solve(); }
         return charge;
       },
       /** Every edge of node s with what the craft costs in all when it is used there and the route's rules after it (cheapest first). */
@@ -1180,9 +1234,8 @@
     }
     return perm;
   }
-  /** Solve with the factors: R (m x K) becomes x. */
-  function luSolve(A, perm, R, m, K) {
-    const Y = new Float64Array(m * K);
+  /** Solve with the factors: R (m x K) becomes x. Y: room for m x K numbers. */
+  function luSolve(A, perm, R, m, K, Y) {
     for (let i = 0; i < m; i++) for (let k = 0; k < K; k++) Y[i * K + k] = R[perm[i] * K + k];
     for (let i = 1; i < m; i++) for (let j = 0; j < i; j++) { const f = A[i * m + j]; if (f) for (let k = 0; k < K; k++) Y[i * K + k] -= f * Y[j * K + k]; }
     for (let i = m - 1; i >= 0; i--) {
@@ -1193,7 +1246,7 @@
         Y[i * K + k] = v / d;
       }
     }
-    R.set(Y);
+    for (let i = 0, n = m * K; i < n; i++) R[i] = Y[i];
   }
 
   /** Regularised lower incomplete gamma P(a, x). */
@@ -1227,5 +1280,20 @@
     return -tmp + Math.log(2.5066282746310005 * ser / x);
   }
 
-  return { build, gammaP };
+  /**
+   * The network for a request, always: the full one, and for requests with so many targets that it would not fit, a
+   * smaller one (net.lite 1 or 2: see build). The route of a smaller network is a route of the full one, perhaps not
+   * its cheapest.
+   */
+  function route(input) {
+    const many = Object.values(input.targets || {}).filter((t) => t && t.fam).length >= 7;
+    let net = null;
+    for (const [lite, maxStates] of many ? [[1, 150000], [2, 1000000]] : [[0, 60000], [1, 150000], [2, 1000000]]) {
+      net = build(Object.assign({}, input, { lite, maxStates }));
+      if (net.unsupported !== 'too many item states') return net;
+    }
+    return net;
+  }
+
+  return { build, route, gammaP };
 });
