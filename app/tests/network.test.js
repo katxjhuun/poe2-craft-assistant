@@ -88,7 +88,8 @@ test('network: a fractured target is never removed, and buying a start is worth 
   const net = NW.build(inputFor(frac, [['prefix', /increased Movement Speed$/, 1], ['suffix', /to Fire Resistance$/, 2]]));
   const d = net.describe(net.start);
   assert.ok(d.has.some((x) => /fractured/.test(x)));
-  for (const r of net.rules(net.start, 40)) assert.ok(r.done || r.when.has.some((x) => /Movement Speed/.test(x)), 'the fractured target stays on every node of the route');
+  // (lines after "New base" are about the white base that replaces the item)
+  for (const r of net.rules(net.start, 40)) assert.ok(r.done || r.fresh || r.when.has.some((x) => /Movement Speed/.test(x)), 'the fractured target stays on every node of the route');
   const white = NW.build(inputFor(boots(WHITE), [['prefix', /increased Movement Speed$/, 1], ['suffix', /to Fire Resistance$/, 2]]));
   assert.ok(white.entries().some((e) => e.kind === 'magic' && e.worth > 0));
 });

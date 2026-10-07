@@ -1170,16 +1170,19 @@
         const so = solution();
         return entries.map((e) => ({ kind: e.kind, goal: goals[e.goal], cost: so.money[e.id], worth: baseCost + so.moneyBase - so.money[e.id] })).filter((e) => e.worth > 0.005);
       },
-      /** The rule set as lines, from node s along every outcome that is not rare: [{node, share, when, names, a, cost}]. */
+      /**
+       * The rule set as lines, from node s along every outcome that is not rare: [{node, share, when, names, a, cost,
+       * done, fresh}]. After "New base" the lines go on from the white base (fresh: true).
+       */
       rules(s, max) {
-        const seen = new Set([s]), q = [[s, 1]], out = [];
+        const seen = new Set([s]), q = [[s, 1, false]], out = [];
         while (q.length && out.length < (max || 16)) {
-          const [n, p] = q.shift();
+          const [n, p, fresh] = q.shift();
           const st = net.step(n);
-          out.push({ node: n, share: p, when: describe(states[n]), names: st ? st.names : [], a: st ? st.a : null, cost: solution().money[n], done: done(states[n]) });
+          out.push({ node: n, share: p, when: describe(states[n]), names: st ? st.names : [], a: st ? st.a : null, cost: solution().money[n], done: done(states[n]), fresh });
           if (!st) continue;
           const o = st.out, next = [];
-          for (let t = 0; t < o.length; t += 2) if (o[t + 1] !== RESTART && !seen.has(o[t + 1]) && o[t] >= 0.02) next.push([o[t + 1], p * o[t]]);
+          for (let t = 0; t < o.length; t += 2) { const to = o[t + 1] === RESTART ? n0 : o[t + 1]; if (!seen.has(to) && o[t] >= 0.02) next.push([to, p * o[t], fresh || o[t + 1] === RESTART]); }
           next.sort((a, b) => b[1] - a[1]);
           for (const e of next) { seen.add(e[0]); q.push(e); }
         }
@@ -1295,5 +1298,39 @@
     return net;
   }
 
-  return { build, route, gammaP };
+  /**
+   * The route for a request as plain data: what the page shows (it can cross a worker's boundary).
+   * opts: {budget: the player's ceiling in Exalted Orbs (0: none), baseLimit: white bases per finished item at most}.
+   * Returns {blocked} for an item no currency works on, {impossible: [text]} for a target the item cannot have,
+   * {unsupported: reason} when there is nothing to solve (no targets, unknown base), else the route.
+   */
+  function answer(input, opts) {
+    opts = opts || {};
+    const t0 = Date.now();
+    const net = route(input);
+    if (net.blocked) return { net: true, label: 'Route', blocked: net.blocked };
+    if (net.unsupported) return { net: true, label: 'Route', unsupported: net.unsupported };
+    if (net.impossible) return { net: true, label: 'Route', impossible: net.impossible.map((x) => `${x.label}: ${x.why}`), steps: null };
+    const s = net.start, done = net.done(s);
+    const charge = !done && opts.baseLimit > 0 ? net.fitBases(s, +opts.baseLimit) : 0;
+    const step = net.step(s), B = opts.budget > 0 ? +opts.budget : 0;
+    const well = (names) => (names.length ? names : ['Well of Souls']);
+    const plain = (g) => { const o = {}; for (const k of Object.keys(g)) { const v = g[k]; if (v == null || typeof v !== 'object' || (Array.isArray(v) && v.every((e) => e == null || typeof e !== 'object'))) o[k] = v; } return o; };
+    const seen = new Set();
+    return {
+      net: true, label: 'Route', goals: net.goals.map(plain), params: null, nodes: net.N, lite: net.lite, ms: Date.now() - t0,
+      meanCost: net.cost(s), sd: net.sd(s), budget: B, p: B > 0 ? net.within(s, B) : null, bases: net.bases(s), charge,
+      next: done ? { done: true } : step ? Object.assign({}, step.a, { names: well(step.names), hit: net.hit(s) }) : { fail: 'No currency brings this item to the targets.' },
+      // the materials of the whole craft
+      steps: done ? [] : net.materials(s).map((m) => ({ names: [m.name], avg: m.uses, ok: m.uses, cost: m.price })),
+      // other first steps, one per kind of currency, with what the whole craft then costs
+      options: done ? [] : net.options(s).filter((o) => { const k = o.names.join('+') + (o.a.hide ? '|hide' : ''); if (o.best || seen.has(k)) return false; seen.add(k); return true; }).slice(0, 4)
+        .map((o) => ({ names: well(o.names), total: o.total, hide: !!o.a.hide })),
+      entries: net.entries().sort((a, b) => b.worth - a.worth).slice(0, 4).map((e) => ({ kind: e.kind, label: e.goal.label, tier: e.goal.tier, worth: e.worth })),
+      rules: net.rules(s, 14).map((r) => ({ share: r.share, when: r.when, names: r.names.length ? r.names : r.a ? ['Well of Souls'] : [], op: r.a ? r.a.op : null, hide: !!(r.a && r.a.hide), done: r.done, fresh: r.fresh })),
+      missingPrices: [],
+    };
+  }
+
+  return { build, route, answer, gammaP };
 });
