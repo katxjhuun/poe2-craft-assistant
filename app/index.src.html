@@ -194,6 +194,9 @@ details.panel.optrow > #pricePanel { padding: 4px 0 14px; }
 .rdrv .drv b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
 .rdrv .drv-l { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; align-self: center; }
 .rrow .rbar i { position: absolute; top: 5px; height: 2px; background: var(--accent); opacity: .75; min-width: 2px; }
+.ingame { display: flex; align-items: center; justify-content: space-between; gap: 6px 14px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); }
+.ingame.on { color: var(--up); }
+.ingame-act { display: inline-flex; gap: 14px; }
 .rrow .rbar u { position: absolute; top: 2px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; border: 2px solid var(--accent); background: var(--bar); }
 #planPanel { scroll-margin-top: 64px; }
 details.more { border-top: 1px solid var(--line); margin-top: 4px; }
@@ -909,6 +912,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     budget: store.get('budget', ''), baseCost: store.get('baseCost', '1'), baseLimit: store.get('baseLimit', '100'), spent: store.get('spent', []),
     lastEval: null, pendingStep: null, opsOpen: false, buyPrice: store.get('buyPrice', ''), preview: store.get('preview', false), ack: {}, catMult: store.get('catMult', null), weightSource: store.get('weightSource', 'poe2db'), priceSource: store.get('priceSource', 'ee2'), myLeagues: [].concat(store.get('myLeagues', []) || []).filter((l) => l && typeof l.name === 'string' && l.name), simRuns: store.get('simRuns', 20000),
     sample: null, explain: {},
+    inGame: null, inGameOff: false, // the route whose steps the desktop program draws over the game; turned off in its tray menu
   };
 
   // ============================================================ formatting
@@ -1507,7 +1511,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   $('#quickPaste').addEventListener('change', (e) => { const t = e.target.value; e.target.value = ''; if (t.trim()) quickImport(t); });
   // ------------------------------------------------------------ desktop program (desktop/PoE2CraftAssistant.cs)
   // Served by the desktop helper, the page receives the item the player copied in game with the helper's hotkey (hover
-  // an item, press the key). It is loaded like a paste and its price check opens; when a route is running and the same
+  // an item, press the key). It is loaded like a paste; when a route is running and the same
   // item comes back changed, it counts as the result of the route's next step, so no step asks for a paste.
   async function connectBridge() {
     if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname) || typeof EventSource === 'undefined') return;
@@ -1526,6 +1530,74 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       try { m = JSON.parse(e.data); } catch (x) { return; }
       if (m && typeof m.text === 'string') bridgeItem(m.text, m.source);
     };
+    // connected (again, when the program was started again): it draws nothing over the game until told
+    es.onopen = () => { stepsLast = null; gameStepsSync(S.planState === 'running'); };
+    window.addEventListener('pagehide', () => { try { navigator.sendBeacon('/steps', '{"show":false}'); } catch (e) { /* closing anyway */ } });
+  }
+  // ------------------------------------------------------------ the route's steps on the game screen (desktop program)
+  // After a simulation, the route the player clicks is also drawn by the desktop program over the game: its steps in
+  // order and the one to use now. It follows the item (each step result loaded with the hotkey) until the route is
+  // dropped: the targets change, another item is loaded, or the player hides it.
+  function moneyText(ex) {
+    if (ex == null || isNaN(ex)) return '';
+    const u = unitFor(ex);
+    return `${fmt(u === 'div' ? ex / S.prices.divine : u === 'chaos' ? ex / S.prices.chaos : ex)} ${u}`;
+  }
+  /** What the program draws. busy: the route is being simulated again (after a step); its last plan stays up meanwhile. */
+  function gamePayload(busy) {
+    const g = S.inGame;
+    if (!g || !S.item) return { show: false };
+    const live = S.plans && S.plans.profiles && S.plans.profiles[S.planTab];
+    if (live) g.pl = live;
+    const pl = g.pl;
+    if (!pl) return { show: false };
+    const out = { show: true, title: `${pl.label || 'Craft'} route`, sub: busy ? 'updating\u2026' : '', rows: [], now: null, msg: null, foot: '' };
+    const v = S.lastEval;
+    out.foot = v ? `Last step: ${v.verdict === 'expected' ? 'on plan' : v.verdict === 'acceptable' ? 'no hit yet' : 'off plan'}` : `${S.bridge.hotkey} on the item after each step`;
+    if (pl.none) { out.msg = { t: pl.none, kind: '' }; return out; }
+    if (pl.impossible) { out.msg = { t: 'Not possible on this item: ' + pl.impossible.join(' '), kind: 'bad' }; return out; }
+    if (pl.noSuccess) { out.msg = { t: pl.spend && pl.spend.hi != null ? `No route reaches the targets for ${moneyText(pl.spend.hi)} or less.` : 'No strategy reached the targets.', kind: 'bad' }; return out; }
+    if (!pl.steps || !pl.steps.length) { out.msg = { t: 'Targets already met.', kind: 'ok' }; return out; }
+    if (!busy) out.sub = `${moneyText(planCost(pl))} \u00B7 ${successFail(pl.p).s}`;
+    // the step to use now on the item as it is: the route's own rule, so it is known at once after a step result
+    let nx = null;
+    try { nx = P.nextAction(S.ix, S.item, S.locks, pl.goals, pl.params, priceEx); } catch (e) { nx = null; }
+    const key = nx && nx.names ? nx.names.join(' + ') : null;
+    out.rows = pl.steps.filter((st) => stepUses(st) >= 0.005).map((st) => ({ t: st.names.join(' + '), u: '\u00D7' + usesText(stepUses(st)), now: st.names.join(' + ') === key }));
+    if (nx && nx.done) out.msg = { t: 'All targets of this route are met.', kind: 'ok' };
+    else if (nx && nx.fail) out.msg = { t: nx.fail.charAt(0).toUpperCase() + nx.fail.slice(1) + '.', kind: 'bad' };
+    else if (key) {
+      let chance = '';
+      try {
+        const c = !busy && !nx.error ? (previewFor(pl, nx) || {}).pv : null;
+        if (c && c.success > 0.0005) chance = ` ${successFail(c.success).s} per use.`;
+      } catch (e) { chance = ''; }
+      out.now = { t: key, help: stepHelp(nx, pl.params) + chance, warn: [IRREVERSIBLE[nx.op] ? 'Cannot be undone. ' + IRREVERSIBLE[nx.op] : '', nx.error || ''].filter(Boolean).join(' ') };
+    }
+    return out;
+  }
+  // One request at a time and the newest state last, so the program never ends on an older one.
+  let stepsLast = null, stepsNext = null, stepsBusy = false;
+  function gameStepsSync(busy) {
+    if (!S.bridge || !S.bridge.steps) return;
+    let body;
+    try { body = JSON.stringify(gamePayload(!!busy)); } catch (e) { body = '{"show":false}'; }
+    if (body === stepsLast) return;
+    stepsLast = stepsNext = body;
+    if (!stepsBusy) stepsPump();
+  }
+  async function stepsPump() {
+    stepsBusy = true;
+    while (stepsNext != null) {
+      const body = stepsNext; stepsNext = null;
+      try {
+        const r = await fetch('/steps', { method: 'POST', body });
+        const a = r.ok ? await r.json() : null;
+        const off = !!a && a.overlay === false; // turned off in the program's tray menu
+        if (off !== S.inGameOff) { S.inGameOff = off; if (S.planState !== 'running') renderPlan(); }
+      } catch (e) { stepsLast = null; /* the program is closed: nothing draws over the game */ }
+    }
+    stepsBusy = false;
   }
   /** source: 'hotkey' (the program's own key), 'clipboard' (any copy in game, e.g. another tool's price check), 'push'. */
   function bridgeItem(text, source) {
@@ -3087,11 +3159,12 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   /** Plan again when a route was asked for (Find craft route); otherwise drop the old result and wait for the button. */
   function schedulePlans() {
     clearTimeout(planTimer);
-    if (S.planArmed) { planTimer = setTimeout(runPlans, 450); return; }
+    if (S.planArmed) { planTimer = setTimeout(runPlans, 450); gameStepsSync(true); return; }
     planGen++;
     cancelWorkers(); stopJobTimer();
     const had = S.plans || S.planState !== 'idle';
     S.plans = null; S.planState = 'idle';
+    S.inGame = null; gameStepsSync();
     renderPlan();
     if (had) { renderPrice(); if (S.preview) renderItem(); }
   }
@@ -3236,6 +3309,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     S.plans = null; S.planState = 'running'; S.planOverall = 0; S.planT0 = Date.now(); S.planStageT = S.planT0; S.planStages = null; S.planStageNow = 0;
     S.planExpect = expectedMs();
     renderPlan(); renderPrice(); startJobTimer();
+    gameStepsSync(true);
     try {
       let out = null;
       const job = planInWorkers(gen, input);
@@ -3257,6 +3331,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       S.planTook = Date.now() - (S.planT0 || Date.now());
       rememberMs(S.planTook);
       S.plans = out; S.planState = 'ready';
+      gameStepsSync();
       renderPlan(); renderPrice();
       if (S.preview) renderItem();
       if (S.planShow) { S.planShow = false; planEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
@@ -3268,6 +3343,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       if (gen !== planGen) return;
       stopJobTimer();
       S.planState = 'error'; S.planError = e && e.message; renderPlan();
+      gameStepsSync();
       logTest('error', S.planError || 'error');
     }
   }
@@ -3725,6 +3801,9 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
           <span class="rbar" ${ok ? `title="8 of 10 finished crafts cost between ${fmt(ok.p10)} and ${fmt(ok.p90)} Exalted Orbs"` : ''}>${bar}</span>
           ${driversHtml(pl)}</button>`;
       }).join('')}</div>`;
+      if (S.bridge && S.bridge.steps) html += `<div class="ingame${S.inGame && !S.inGameOff ? ' on' : ''}">${S.inGame
+        ? `<span>${S.inGameOff ? 'Route steps on the game screen are turned off in the tray menu of the desktop program.' : `${nameOf(S.planTab)} route: its steps are on the game screen.`}</span><span class="ingame-act">${S.inGameOff ? '' : '<button class="linkish" type="button" id="inGameMove" title="The steps on the game screen take the mouse: drag them where you want them, then right-click them (or click Move again).">Move</button>'}<button class="linkish" type="button" id="inGameOff">Hide</button></span>`
+        : '<span>Click a route to show its steps on the game screen.</span>'}</div>`;
       html += `<div id="planCard" role="tabpanel" aria-labelledby="ptab-${S.planTab}">${planCard(sel, true)}</div>`;
     }
     html += '</div>';
@@ -3747,7 +3826,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (b.id === 'stopBtn') { S.planArmed = false; schedulePlans(); return; }
     if (b.dataset.tiers) { S.tierSlack = b.dataset.tiers === 'big' ? 'big' : +b.dataset.tiers || 1; store.set('tierSlack', S.tierSlack); S.planArmed = false; schedulePlans(); return; }
     if (b.dataset.browse) { S.ex.cat = b.dataset.browse; S.ex.q = ''; openExchange(); return; }
-    if (b.dataset.ptab) { S.planTab = b.dataset.ptab; store.set('planTab', S.planTab); renderPlan(); renderPrice(); if (S.preview) renderItem(); return; }
+    // picking a route also puts its steps on the game screen (desktop program)
+    if (b.dataset.ptab) { S.planTab = b.dataset.ptab; store.set('planTab', S.planTab); if (S.bridge && S.bridge.steps && !S.inGame) S.inGame = {}; renderPlan(); renderPrice(); if (S.preview) renderItem(); gameStepsSync(); return; }
+    if (b.id === 'inGameOff') { S.inGame = null; renderPlan(); gameStepsSync(); return; }
+    if (b.id === 'inGameMove') { fetch('/steps/move', { method: 'POST' }).catch(() => {}); announce('Drag the steps on the game screen where you want them, then right-click them.'); return; }
     if (b.dataset.bases) { S.baseLimit = b.dataset.bases; store.set('baseLimit', S.baseLimit); schedulePlans(); return; }
     if (b.id === 'explainBtn') { explainPlan(); return; }
     if (b.id === 'libBtn') { openLib(); return; }

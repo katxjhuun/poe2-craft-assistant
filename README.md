@@ -133,10 +133,25 @@ own window (Edge's app mode), kept above the game.
   One key press, one copy; nothing else is read from the game, and the program asks nothing of any web site.
 - While a route is running, the same item coming back changed counts as the result of the route's next step: after
   each craft, press the hotkey on the item and the assistant is up to date, with no copy and paste.
+- The route's steps on the game screen: after "Find craft route", click one of the three routes and the program draws
+  that route over the game in a small panel of its own: the steps in order with their uses, the step to use now
+  marked, with what it does, its chance per use and a warning when it cannot be undone. After each step, the hotkey on
+  the item moves it on at once (the route's own rule on the item as it is now; "updating..." until the route is
+  simulated again) and says how the step went (on plan, no hit yet, off plan). The panel has no frame, never takes the
+  keyboard and lets every click through to the game. It is shown while the game is the window in front, or the
+  assistant's window with the game behind it (a second screen); any other program in front hides it. It goes when the
+  route is dropped (other targets, another item, Cancel) or with "Hide" under the routes.
+- Where it is: top middle of the game's picture by default, as large as the game draws its own interface (by the
+  picture's height). "Move" under the routes, or the tray menu, lets the panel take the mouse: drag it, then
+  right-click it. The tray menu turns it off altogether.
+- With the steps on the game screen, the hotkey leaves a minimised assistant window minimised, and the page keeps
+  planning while its window is minimised or covered (the browser's background throttling is off for this window).
 - An item the assistant does not craft (currency, gems, waystones and the like) is not loaded: the item being worked
   on stays.
-- The hotkey is taken only while the game window is in front. Settings are in `config.json` next to the exe
-  (`hotkey`, `port`, `topmost`, `advancedCopy`, `gameTitle`, `watchClipboard`); the tray menu opens it.
+- The hotkey is taken only while the game window is in front (a browser tab whose title merely starts with the
+  game's name does not count). Settings are in `config.json` next to the exe (`hotkey`, `port`, `topmost`,
+  `advancedCopy`, `gameTitle`, `watchClipboard`, and for the steps panel `stepsOverlay`, `stepsX` and `stepsY` in
+  percent of the game's picture, `stepsScale` and `stepsOpacity` in percent); the tray menu opens it.
 - Other tools: an item copied in game by any means (Ctrl+C, another tool's own copy) is loaded as well
   (`watchClipboard`). With a route running, only the route's own item comes in that way.
 - The browser does not offer to translate the program's page (it is in English on purpose): the page is marked "do
@@ -152,4 +167,12 @@ own window (Edge's app mode), kept above the game.
 - Tested by the author: the page is served, an item text pushed to `POST /push` is loaded, counted as a step result and
   the route goes on; the window opens and stays on top; after the price check was taken out, the page loads and shows
   its item, and the program answers with the new hotkey. The player confirmed the hotkey in game earlier (as Alt+E).
-  Not tested: the hotkey as Alt+D in game, and the clipboard watcher with another tool.
+  The steps panel (7 Oct 2026), with a test copy of the program on its own port: nothing is sent before a route is
+  clicked; the click sends the route (the same next step, uses and chance as the page shows); a step result pushed to
+  `POST /push` changes the step within 0.1 s and the simulated route follows; Hide, another route and another item
+  do what they should; the panel as a real window is where the settings put it, 507 pixels wide on a 1440 pixels high
+  screen, without a frame, click-through, never the window in front (the window in front stayed the same), and "Move"
+  switches the click-through off and on. Its look was checked from a picture the program draws itself
+  (`PoE2CraftAssistant.exe --render-steps steps.json out.png`), not from the screen.
+  Not tested: the panel over the game itself (shown and hidden with the game in front, dragging it), the hotkey as
+  Alt+D in game, and the clipboard watcher with another tool.
