@@ -644,6 +644,10 @@ namespace PoE2CraftAssistant
         readonly object told = new object();
         int toldW, toldH, toldX, toldPanel; string toldSide = "";
         Native.RECT peek; bool peekOn;
+        // The page numbers what it tells, and an older word that arrives after a newer one is dropped: the requests are
+        // answered on several threads, and "close the card" overtaken by the "show the card" before it left the card's
+        // rectangle cut open with nothing in it (seen in game as an empty box beside the price check).
+        long toldSeq, peekSeq;
         int titleBar = -1;          // height of the browser's title bar above that page in pixels (-1: not measured yet)
         long away;                  // since when another program has been in front (ticks; 0: it is not)
         IntPtr lastFront = IntPtr.Zero; // the window that was in front last, the price check aside
@@ -696,28 +700,35 @@ namespace PoE2CraftAssistant
             {
                 string[] p = cmd.Split(' ');
                 int a = 0, b = 0, x = 0, w = 0;
+                long n = 0;
                 if (p[0] == "size")
                 {
-                    // "size W H X P side": the page's size, its price check column from X, P wide, laid out for that side
-                    if (p.Length >= 3 && int.TryParse(p[1], out a) && int.TryParse(p[2], out b) && a > 0 && b > 0)
+                    // "size N W H X P side": the page's size, its price check column from X, P wide, laid out for that side
+                    if (p.Length >= 4 && long.TryParse(p[1], out n) && int.TryParse(p[2], out a) && int.TryParse(p[3], out b) && a > 0 && b > 0)
                     {
                         lock (told)
                         {
+                            if (n <= toldSeq) return;
+                            toldSeq = n;
                             toldW = a; toldH = b; toldX = 0; toldPanel = 0; toldSide = "";
-                            if (p.Length >= 6 && int.TryParse(p[3], out x) && int.TryParse(p[4], out w)) { toldX = x; toldPanel = w; toldSide = p[5]; }
+                            if (p.Length >= 7 && int.TryParse(p[4], out x) && int.TryParse(p[5], out w)) { toldX = x; toldPanel = w; toldSide = p[6]; }
                         }
                     }
                     return;
                 }
                 if (p[0] == "peek")
                 {
-                    // "peek X Y W H": the card of a listed item beside the price check (in the page's pixels); "peek off"
+                    // "peek N X Y W H": the card of a listed item beside the price check (in the page's pixels); "peek N off"
+                    if (p.Length < 3 || !long.TryParse(p[1], out n)) return;
                     Native.RECT r = new Native.RECT();
-                    bool on = p.Length == 5 && int.TryParse(p[1], out x) && int.TryParse(p[2], out a) && int.TryParse(p[3], out w) && int.TryParse(p[4], out b) && w > 0 && b > 0;
+                    bool on = p.Length == 6 && int.TryParse(p[2], out x) && int.TryParse(p[3], out a) && int.TryParse(p[4], out w) && int.TryParse(p[5], out b) && w > 0 && b > 0;
                     if (on) { r.Left = x; r.Top = a; r.Right = x + w; r.Bottom = a + b; }
+                    long seq = n;
                     ui.Post(delegate
                     {
-                        peek = r; peekOn = on;
+                        if (seq <= peekSeq) return;
+                        peekSeq = seq;
+                        peek = r; peekOn = on && panelOn; // a card belongs to a price check that is shown
                         IntPtr t = PriceWindow();
                         if (t != IntPtr.Zero && panelOn) Fit(t, false);
                     }, null);
@@ -1125,6 +1136,7 @@ namespace PoE2CraftAssistant
             {
                 Measure(t);
                 Place(t);
+                peekOn = false; // a new showing starts without a card
                 Fit(t, true);
                 away = 0;
                 // what is held now is not a new press
@@ -1155,6 +1167,7 @@ namespace PoE2CraftAssistant
         {
             IntPtr t = PriceWindow();
             panelOn = false;
+            peekOn = false;
             panel.Interval = 120;
             if (t == IntPtr.Zero || !Native.IsWindowVisible(t)) return;
             GiveBack(t); // put away with its own button it has the keyboard

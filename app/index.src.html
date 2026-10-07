@@ -1074,11 +1074,15 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   if (PRICE_VIEW) { document.title = 'PoE2 Price Check'; document.documentElement.classList.add('pv'); document.documentElement.dataset.side = 'left'; }
   // The program shows the price check without the browser's frame: it cuts the window down to what the page shows, and
   // for that the page tells how large it is inside its window and where its price check column lies (in pixels).
+  // What the page tells is numbered (a clock reading, so the numbers grow across reloads too): two messages can reach
+  // the program in the other order, and it keeps to the newer one.
+  let pvSeq = 0;
+  const pvNext = () => (pvSeq = Math.max(pvSeq + 1, Date.now()));
   function pvSize() {
     if (!PRICE_VIEW) return;
     const d = window.devicePixelRatio || 1, el = document.getElementById('priceView'), r = el ? el.getBoundingClientRect() : null;
     const own = r && r.width > 0 ? ' ' + Math.round(r.left * d) + ' ' + Math.round(r.width * d) + ' ' + (document.documentElement.dataset.side || 'left') : '';
-    fetch('/overlay', { method: 'POST', body: 'size ' + Math.round(window.innerWidth * d) + ' ' + Math.round(window.innerHeight * d) + own }).catch(() => { /* the program is gone */ });
+    fetch('/overlay', { method: 'POST', body: 'size ' + pvNext() + ' ' + Math.round(window.innerWidth * d) + ' ' + Math.round(window.innerHeight * d) + own }).catch(() => { /* the program is gone */ });
   }
   if (PRICE_VIEW) { pvSize(); window.addEventListener('resize', pvSize); }
   // English by design (the game's own names): no "translate this page?" from the browser
@@ -1890,12 +1894,12 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const eye = document.querySelector(`[data-pveye="${i}"]`), at = eye ? eye.getBoundingClientRect() : { top: 0, height: 0 }, h = box.offsetHeight;
     box.style.top = Math.round(Math.max(0, Math.min(window.innerHeight - h, at.top + at.height / 2 - h / 2))) + 'px';
     const r = box.getBoundingClientRect(), d = window.devicePixelRatio || 1;
-    pvPost(`peek ${Math.floor(r.left * d)} ${Math.floor(r.top * d)} ${Math.ceil(r.width * d)} ${Math.ceil(r.height * d)}`);
+    pvPost(`peek ${pvNext()} ${Math.floor(r.left * d)} ${Math.floor(r.top * d)} ${Math.ceil(r.width * d)} ${Math.ceil(r.height * d)}`);
   }
   function pvPeekHide() {
     const box = $('#pvPeek');
     PV.peek = null;
-    if (box && box.classList.contains('on')) { box.classList.remove('on'); box.innerHTML = ''; pvPost('peek off'); }
+    if (box && box.classList.contains('on')) { box.classList.remove('on'); box.innerHTML = ''; pvPost(`peek ${pvNext()} off`); }
   }
   /** Let go of the card that is kept open, and of the one shown. */
   function pvUnpin() { PV.pin = null; pvEyes(); pvPeekHide(); }

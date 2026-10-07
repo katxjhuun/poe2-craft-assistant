@@ -172,7 +172,10 @@ own window (Edge's app mode), kept above the game.
   them as always. It is opened once, hidden, when the program starts. The browser's window is wider than the price
   check (`peekWidth`, the room for a listed item's card on the far side); the program cuts it down to what is shown
   and sets the cut again whenever the browser drops it (the browser does when Windows tells it about the window's
-  frame: seen in game, the title bar came back).
+  frame: seen in game, the title bar came back). What the page tells the program (its size, a card shown or closed)
+  is numbered, and an older message that arrives after a newer one is dropped: "close the card" overtaken by the
+  "show the card" before it left the card's place cut open with nothing in it (seen in game as an empty box beside
+  the price check).
 - The browser does not offer to translate the program's pages (they are in English on purpose): the pages are marked
   "do not translate", and translation is turned off in the program's own browser profile.
 - Other tools: an item copied in game by any means (Ctrl+C, another tool's price check) is loaded as well
