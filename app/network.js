@@ -60,7 +60,6 @@
     let raw = gt.goals;
     if (raw.some((g) => g.required)) raw = raw.filter((g) => g.required);
     if (!raw.length) return { unsupported: 'no targets' };
-    if (ctx.cls === 'Jewel' && raw.length > 4) return { unsupported: 'five modifier jewel' };
 
     // a target this base and item level cannot have (the planner's own check) ends it here
     raw.forEach((g) => { g.eff = g.tier; });
@@ -182,8 +181,28 @@
     const POOL = pooled.length ? { tag: pooled[0].rune, item: pooled[0].runeItem, price: price(pooled[0].runeItem) } : null;
     const hasPool = !!(POOL && (st0.tags || []).includes(POOL.tag));
     if (POOL && POOL.price == null && !hasPool) return { impossible: pooled.map((g) => ({ label: g.label, why: `needs the rune ${POOL.item}, which has no price` })) };
+    // ---- liquid emotions (jewels): each adds its crafted modifier on a prefix or on a suffix. Potent Liquid Contempt
+    // adds "+1 Suffix Modifier allowed" as a prefix or "+1 Prefix Modifier allowed" as a suffix: with it a side takes
+    // a third modifier, which stays when the allowance is removed again (rules R_JEWEL_SLOTS, R_NO_SPACE; recipe c15).
+    const EMO = [];
+    const over = [0, 1].map((si) => goals.filter((g) => g.si === si).length > LIM[si]);
+    if (jewel) {
+      const by = new Map();
+      for (const r of ctx.essences) if (r.liquid && kb.mods[r.mod]) { if (!by.has(r.item)) by.set(r.item, []); by.get(r.item).push(r.mod); }
+      for (const [name, mods] of by) {
+        const pr = price(name);
+        if (pr == null) continue;
+        const outs = mods.map((id) => {
+          const m = kb.mods[id], cap = ctx.capMods.get(id);
+          return { mod: id, si: m.gen === 'p' ? 0 : 1, cap: cap ? (cap.prefix ? 0 : 1) : -1, goal: goals.findIndex((g) => g.kind !== 'des' && g.fam === m.fam && g.si === (m.gen === 'p' ? 0 : 1)) };
+        });
+        if (outs.some((o) => o.goal >= 0 || (o.cap >= 0 && over[o.cap]))) EMO.push({ item: name, price: pr, outs });
+      }
+    }
+    const allowance = [0, 1].map((si) => EMO.some((e) => e.outs.some((o) => o.cap === si)));
+    if (over[0] && over[1]) return { impossible: goals.map((g) => ({ label: g.label, why: 'three targets on both sides: a jewel takes a third modifier on one side only' })) };
     for (let si = 0; si < 2; si++) {
-      const n = goals.filter((g) => g.si === si).length, room = LIM[si] + (si === 1 && SER ? 1 : 0);
+      const n = goals.filter((g) => g.si === si).length, room = LIM[si] + (si === 1 && SER ? 1 : 0) + (allowance[si] ? 1 : 0);
       if (n > room) return { impossible: goals.filter((g) => g.si === si).map((g) => ({ label: g.label, why: `${n} ${SIDES[si]} targets, and the item holds ${room}` })) };
     }
     const RUNES = !!(AST || SER || POOL || ALD);
@@ -325,8 +344,15 @@
 
     // ---- nodes
     const states = [], index = new Map(), acts = [];
-    const keyOf = (S) => S.r + '|' + S.g.join('') + '|' + S.j[0] + S.j[1] + '|' + S.fg + '|' + S.fj + S.cx + S.dj + S.du + S.q + '|' + S.u + S.fs + S.ad;
-    const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad });
+    // a node's key as one number: the targets' statuses in base 9, then the small fields (it stays under 2^53)
+    const keyOf = (S) => {
+      let k = 0;
+      for (let i = 0; i < G; i++) k = k * 9 + S.g[i];
+      k = k * 3 + S.r; k = k * 4 + S.j[0]; k = k * 4 + S.j[1]; k = k * 10 + (S.fg + 1); k = k * 3 + S.fj; k = k * 3 + S.cx; k = k * 3 + S.dj; k = k * 3 + S.du;
+      k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw;
+      return k;
+    };
+    const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad, aw: S.aw });
     function idOf(S) {
       const k = keyOf(S);
       let i = index.get(k);
@@ -334,15 +360,17 @@
       return i;
     }
     const others = (S, si) => S.j[si] + (S.fj === si + 1 ? 1 : 0) + (S.cx === si + 1 ? 1 : 0) + (S.dj === si + 1 ? 1 : 0);
+    // the allowance modifier: aw 1 "+1 Prefix Modifier allowed" (it is a suffix), aw 2 "+1 Suffix Modifier allowed" (a prefix)
+    const awSide = (S) => (S.aw === 1 ? 1 : 0);
     function slots(S, si) {
-      let n = others(S, si) + (S.du === si + 1 ? 1 : 0);
+      let n = others(S, si) + (S.du === si + 1 ? 1 : 0) + (S.aw && awSide(S) === si ? 1 : 0);
       for (let i = 0; i < G; i++) if (S.g[i] && goals[i].si === si) n++;
       return n;
     }
-    const limOf = (S, si) => (S.r === 2 ? LIM[si] + (si === 1 && (S.u & R_SERLE) ? 1 : 0) : S.r === 1 ? 1 : 0);
+    const limOf = (S, si) => (S.r === 2 ? LIM[si] + (si === 1 && (S.u & R_SERLE) ? 1 : 0) + (S.aw === si + 1 ? 1 : 0) : S.r === 1 ? 1 : 0);
     const open = (S, si) => Math.max(0, limOf(S, si) - slots(S, si));
     const done = (S) => { for (let i = 0; i < G; i++) if (!met(S.g[i])) return false; return true; };
-    const craftedUsed = (S) => { let n = S.cx ? 1 : 0; for (let i = 0; i < G; i++) if (kindOf(S.g[i]) === CRAFTED) n++; return n; };
+    const craftedUsed = (S) => { let n = (S.cx ? 1 : 0) + (S.aw ? 1 : 0); for (let i = 0; i < G; i++) if (kindOf(S.g[i]) === CRAFTED) n++; return n; };
     const desUsed = (S) => { let n = (S.dj ? 1 : 0) + (S.du ? 1 : 0); for (let i = 0; i < G; i++) if (kindOf(S.g[i]) === DESECRATED) n++; return n; };
     /** A target the item does not have yet (nothing of it, or only its twin of another element). */
     const wanted = (x) => x === ABSENT || x === TWIN;
@@ -401,6 +429,7 @@
       if (S.cx && pred(S.cx - 1, false)) out.push({ w: 1, k: 'cx', si: S.cx - 1 });
       if (S.dj && pred(S.dj - 1, true)) out.push({ w: 1, k: 'dj', si: S.dj - 1 });
       if (S.du && pred(S.du - 1, true)) out.push({ w: 1, k: 'du', si: S.du - 1 });
+      if (S.aw && pred(awSide(S), false)) out.push({ w: 1, k: 'aw', si: awSide(S) });
       return out;
     }
     function removeUnit(S, u) {
@@ -434,6 +463,7 @@
       for (let si = 0; si < 2; si++) if (S.j[si]) unk.push({ k: 'j', si, w: S.j[si] });
       if (S.cx) unk.push({ k: 'cx', si: S.cx - 1, w: 1 });
       if (S.dj) unk.push({ k: 'dj', si: S.dj - 1, w: 1 });
+      if (S.aw) unk.push({ k: 'aw', si: awSide(S), w: 1 });
       if (!known.length && !unk.length) return null;
       const lmin = known.length ? Math.min(...known.map((u) => u.lvl)) : Infinity;
       const below = (si) => (lmin === Infinity ? 1 : under(si, lmin));
@@ -515,7 +545,7 @@
     const revealed = (S1, si, i, status) => { const S2 = addRolled(S1, i, si, status); if (i < 0) { S2.j[si]--; S2.dj = si + 1; } return S2; };
 
     // ---- edges
-    const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FS0, ad: AD0 };
+    const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FS0, ad: AD0, aw: 0 };
     const RESTART = -1; // edge target: a fresh white base (its value is solved as one number, see solve)
     /** A socket for a rune: the node with one socket less and what it costs first (an Artificer's Orb), or null. */
     function socket(S) {
@@ -629,7 +659,7 @@
       for (const t of T.chaos) {
         for (let v = -1; v < 2; v++) {
           if (v >= 0 && PR.erasure[v] == null) continue;
-          const us = units(S, (si) => v < 0 || si === v), tw = us.reduce((x, u) => x + u.w, 0);
+          const us = units(S, (si) => v < 0 || si === v).filter((u) => openMask(removeUnit(S, u)) !== 0), tw = us.reduce((x, u) => x + u.w, 0);
           if (!tw) continue;
           const outs = [];
           for (const u of us) { const S1 = removeUnit(S, u); outs.push(...rolled(S1, openMask(S1), t.floor, u.w / tw)); }
@@ -658,9 +688,9 @@
       // a Perfect essence, an alloy or a liquid emotion: one modifier goes, the target comes as the crafted modifier
       if (craftedUsed(S) < capOf(S)) for (let i = 0; i < G; i++) {
         const g = goals[i], r = g.rareEss;
-        if (!wanted(S.g[i]) || !r) continue;
+        if (!wanted(S.g[i]) || !r || r.liquid) continue;
         // Crystallisation omens aim Perfect and Corrupted Essences only: not alloys (game text; the player, 8 Oct 2026), not liquid emotions
-        const aim = r.liquid || r.alloy ? [-1] : [-1, 0, 1];
+        const aim = r.alloy ? [-1] : [-1, 0, 1];
         for (const v of aim) {
           if (v >= 0 && PR.crystal[v] == null) continue;
           const from = v >= 0 ? v : open(S, g.si) === 0 ? g.si : -1; // R_SWAP_REMOVAL
@@ -678,6 +708,26 @@
           if (tw) for (const u of us) give(removeUnit(S, u), u.w / tw); else if (v < 0) give(S, 1);
           push(Object.assign({ op: 'pessence', item: r.item, mod: r.mod }, v >= 0 ? { side: SIDES[v] } : null), r.price + (v >= 0 ? PR.crystal[v] : 0), outs);
         }
+      }
+      // a liquid emotion: a modifier goes, and its crafted modifier comes on the side that opened (one of two for some)
+      if (craftedUsed(S) < capOf(S)) for (const em of EMO) {
+        if (!em.outs.some((o) => (o.goal >= 0 && wanted(S.g[o.goal])) || (o.cap >= 0 && over[o.cap] && !S.aw))) continue;
+        const sides = [...new Set(em.outs.map((o) => o.si))];
+        const from = sides.some((si) => open(S, si) > 0) ? -1 : sides.length === 1 ? sides[0] : -1; // R_SWAP_REMOVAL
+        const fitAt = (S1) => em.outs.filter((o) => open(S1, o.si) > 0 && (o.goal < 0 || wanted(S1.g[o.goal])));
+        const us = units(S, (si) => from < 0 || si === from).filter((u) => fitAt(removeUnit(S, u)).length), tw = us.reduce((x, u) => x + u.w, 0);
+        if (!tw) continue;
+        const outs = [];
+        for (const u of us) {
+          const S1 = removeUnit(S, u), fit = fitAt(S1);
+          for (const o of fit) {
+            let S2;
+            if (o.goal >= 0) S2 = addRolled(S1, o.goal, o.si, CRAFTED);
+            else { S2 = cp(S1); if (o.cap >= 0) S2.aw = o.cap + 1; else if (!S2.cx) S2.cx = o.si + 1; else S2.j[o.si]++; }
+            outs.push([u.w / tw / fit.length, S2]);
+          }
+        }
+        push({ op: 'liquid', item: em.item }, em.price, outs);
       }
       // another element's modifier becomes the target: a Flux for resistances, a Rune of Aldur for the rest
       const fluxes = new Map();
@@ -723,7 +773,8 @@
             const c = (v < 0 ? [0, 1] : [v]).filter((si) => open(S, si) > 0);
             for (const si of c) land.push([1 / c.length, si, S]);
           } else {
-            const us = units(S, (si) => v < 0 || si === v), tw = us.reduce((x, u) => x + u.w, 0);
+            // only from a side the removal opens (one over its limit stays full)
+            const us = units(S, (si) => (v < 0 || si === v) && slots(S, si) <= limOf(S, si)), tw = us.reduce((x, u) => x + u.w, 0);
             for (const u of us) land.push([u.w / tw, u.si, removeUnit(S, u)]);
           }
           if (!land.length) continue;
@@ -790,6 +841,7 @@
         else if (v >= 0) set(v, kind + NEAR);
         else if (t >= 0) set(t, TWIN);
         else if (b >= 0) set(b, BLOCKED);
+        else if (m.id && ctx.capMods.get(m.id) && !m.frac) S.aw = ctx.capMods.get(m.id).prefix ? 1 : 2;
         else if (m.frac) S.fj = si + 1;
         else if (m.unrevealed) S.du = si + 1;
         else if (m.des) S.dj = si + 1;
@@ -808,6 +860,8 @@
       const F = cp(N0); F.r = 2; F.g[i] = NATURAL; F.fg = i;
       entries.push({ kind: 'magic', goal: i, S: M }, { kind: 'fractured', goal: i, S: F });
     }
+    const timing = { expand: 0, solve: 0 };
+    let tick = Date.now();
     const start = idOf(startS), n0 = idOf(cp(N0));
     for (const e of entries) e.id = idOf(e.S);
     for (let q = 0; q < states.length; q++) {
@@ -815,6 +869,7 @@
       expand(q);
     }
     const N = states.length;
+    timing.expand = Date.now() - tick; tick = Date.now();
 
     // ---- solve: for every node the cheapest edge on average
     // Nodes are solved in blocks that share rarity stage, targets and fracture: the long loops (roll, miss, roll again)
@@ -945,6 +1000,7 @@
       sol = null;
     }
     solve();
+    timing.solve = Date.now() - tick;
 
     // ---- what the rule set uses: every currency's expected count, and how far the cost spreads
     const actNames = (a) => (a.op === 'reveal' ? (a.echoes ? [OMEN.echoes] : []) : (a.pre ? P.actionNames(a.pre, ctx) : []).concat(P.actionNames(a, ctx)));
@@ -989,7 +1045,7 @@
     }
 
     const net = {
-      ctx, goals, states, acts, pol, start, n0, N, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
+      ctx, goals, states, acts, pol, start, n0, N, timing, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
       get rounds() { return rounds; },
       get base() { return solution().money[n0]; },
       nodeOf(st) {
@@ -1097,7 +1153,8 @@
       if (S.u & R_SERLE) runes.push(SER.item);
       if ((S.u & R_POOL) && POOL) runes.push(POOL.item);
       if (S.u & R_ALDUR) runes.push(ALD.rune);
-      return { rarity: ['Normal', 'Magic', 'Rare'][S.r], has, miss, inWay, low, twin, runes, otherPrefixes: junk[0], otherSuffixes: junk[1], hidden: S.du ? SIDES[S.du - 1] : null,
+      if (S.aw) junk[awSide(S)]++;
+      return { rarity: ['Normal', 'Magic', 'Rare'][S.r], has, miss, inWay, low, twin, runes, allowance: S.aw ? SIDES[S.aw - 1] : null, otherPrefixes: junk[0], otherSuffixes: junk[1], hidden: S.du ? SIDES[S.du - 1] : null,
         fracturedOther: S.fj ? SIDES[S.fj - 1] : null, desecratedOther: S.dj ? SIDES[S.dj - 1] : null };
     }
     return net;
