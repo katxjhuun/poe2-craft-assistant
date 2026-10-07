@@ -1269,14 +1269,13 @@
      ]
     },
     {
-     "text": "Add a suffix, then Celestial Alloy with Omen of Dextral Crystallisation so the alloy replaces that suffix.",
+     "text": "Add a suffix, then Celestial Alloy: it replaces one modifier at random (the source names Omen of Dextral Crystallisation here, but that omen does not work with alloys). Have only modifiers you can lose on the item, or accept the risk to the Chaos Orb result.",
      "names": [
-      "Omen of Dextral Crystallisation",
       "Celestial Alloy"
      ]
     },
     {
-     "text": "Socket Astrid's Creativity (a second crafted modifier is allowed), add a suffix again and replace it with Transcendent Alloy the same way.",
+     "text": "Socket Astrid's Creativity (a second crafted modifier is allowed), add a suffix again and use Transcendent Alloy the same way.",
      "names": [
       "Astrid's Creativity",
       "Transcendent Alloy"
@@ -1302,8 +1301,8 @@
     "Price the staff before the Whittling uses: each costs as much as several bases."
    ],
    "risks": [
-    "The game text of the Crystallisation omens names only Perfect and Corrupted Essences; the creator uses one with an alloy (open test t34). Try it on a cheap item first.",
-    "The Chaos Orb step is the cost: about 1 in 1,400 by the creator's count."
+    "The Chaos Orb step is the cost: about 1 in 1,400 by the creator's count.",
+    "The source aims its alloys with a Crystallisation omen; the omen works with Perfect and Corrupted Essences only (game text, confirmed by the player on 8 Oct 2026). Without it each alloy removes a random modifier that is not fractured: the T1 prefix from the Chaos Orbs is at risk."
    ],
    "sources": [
     {
@@ -1416,10 +1415,9 @@
      ]
     },
     {
-     "text": "Socket Astrid's Creativity, then Transcendent Alloy with a Crystallisation omen for cast speed: one of the three prefixes goes, the two suffixes stay.",
+     "text": "Socket Astrid's Creativity, then Transcendent Alloy for cast speed: it replaces one modifier at random (the source names a Crystallisation omen, which does not work with alloys), so the essence's modifier or a prefix can go.",
      "names": [
       "Astrid's Creativity",
-      "Omen of Sinistral Crystallisation",
       "Transcendent Alloy"
      ]
     },
@@ -1436,7 +1434,7 @@
    ],
    "risks": [
     "Written for 0.5.0; Greater and Perfect orbs and omens cost other amounts in Forbidden Rites.",
-    "Crystallisation omen with an alloy: see open test t34."
+    "The source aims the alloy with a Crystallisation omen; the omen works with Perfect and Corrupted Essences only (game text, confirmed by the player on 8 Oct 2026)."
    ],
    "sources": [
     {
@@ -1949,14 +1947,14 @@
   {
    "id": "k57",
    "claim": "A Fracturing Orb never picks a Desecrated modifier, but a hidden one counts for the four modifiers the orb needs (1 in 3 with three others)",
-   "verdict": "plausible",
-   "reason": "Three sources that do not copy each other: a creator's Mobalytics guide for an energy shield body armour (\"1/3 chance\"), a creator's written steps of 26 Sept 2026 (\"add to 3 mods, desecrate, fracture: 1/3 to hit\"), and a seller site's Fracturing Orb guide for 0.5.4. No game text says it. The planner and the craft network follow it since 7 Oct 2026; in-game test t35."
+   "verdict": "verified",
+   "reason": "The player confirmed it on 8 Oct 2026 for a hidden Desecrated modifier (1 in 3 with three others). Before that: a creator's Mobalytics guide, a creator's written steps of 26 Sept 2026 and a seller site's Fracturing Orb guide for 0.5.4. The planner and the craft network follow it."
   },
   {
    "id": "k58",
    "claim": "Omens of Crystallisation also aim Runic Alloys",
-   "verdict": "plausible",
-   "reason": "The omens' game text names \"your next Perfect or Corrupted Essence\". Two creators use the omen with an alloy (written steps of 4 July and 26 Sept 2026). The craft network keeps to the game text until test t34 is done."
+   "verdict": "rejected",
+   "reason": "The omens' game text names only Perfect and Corrupted Essences, and the player confirmed on 8 Oct 2026 that an alloy is not used with a Crystallisation omen. Two creators' written steps pair them (4 July and 26 Sept 2026); those steps are not followed."
   }
  ],
  "tests": [
@@ -2299,18 +2297,20 @@
    "claims": [
     "k58"
    ],
-   "note": "Game text against two creators' steps (Opulent Exile, 26 Sept 2026; note.com/poe2_sat, 4 July 2026).",
-   "status": "open"
+   "note": "An alloy is not used with a Crystallisation omen: the omen aims Perfect and Corrupted Essences only, as its text says.",
+   "status": "refuted",
+   "source": "game text of Omen of Sinistral/Dextral Crystallisation; the player (8 Oct 2026)"
   },
   {
    "id": "t35",
    "question": "Does a Fracturing Orb ever fracture a Desecrated modifier (hidden or revealed)?",
    "how": "Rare item with three modifiers and one hidden Desecrated modifier: use a Fracturing Orb. If the orb works at all, a hidden modifier counts for the four; note which modifier is fractured over a few items.",
    "claims": [
-    "k57"
+    "!k57"
    ],
-   "note": "The planner assumes never (since 7 Oct 2026).",
-   "status": "open"
+   "note": "A Fracturing Orb does not land on a hidden Desecrated modifier: with four modifiers of which one is a hidden Desecrated one, the fracture is one of the other three (1 in 3).",
+   "status": "refuted",
+   "source": "the player (8 Oct 2026); three guides and creators say the same (see claim k57)"
   }
  ]
 }

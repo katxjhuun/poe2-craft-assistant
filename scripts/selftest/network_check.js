@@ -27,8 +27,10 @@ function inputFor(sc) {
     quality: sc.qualityMode || (sc.quality ? 'use' : 'lock') };
 }
 
-/** Play the network's rule set on the item `runs` times. Returns { mean, se, done, steps, off }. */
-function play(net, input, runs, seed, maxSteps) {
+/** Play the network's rule set on the item `runs` times (fewer when `limitMs` runs out). Returns { mean, se, done, steps, off, runs }. */
+function play(net, input, runs, seed, maxSteps, limitMs) {
+  const until = limitMs > 0 ? Date.now() + limitMs : 0;
+  let played = 0;
   const ctx = net.ctx;
   const r = rng(seed);
   const lim = E.slotLimits({ rarity: 'Rare', slotDelta: ctx.slotDelta }, ctx.cls);
@@ -47,6 +49,9 @@ function play(net, input, runs, seed, maxSteps) {
   const st0 = P.toState(ctx, input.item, input.locks);
   let sum = 0, sq = 0, done = 0, steps = 0, off = 0;
   for (let n = 0; n < runs; n++) {
+    if (until && (n & 255) === 0 && n >= 2000 && Date.now() > until) break;
+    if (n === 40 && done === 0) break; // not one of forty crafts ends: the rules and the simulator disagree, more plays say nothing
+    played++;
     let st = { ...st0, mods: st0.mods.map((m) => ({ ...m })) };
     let cost = 0, k = 0, ok = false;
     for (; k < maxSteps; k++) {
@@ -89,7 +94,7 @@ function play(net, input, runs, seed, maxSteps) {
   }
   const mean = done ? sum / done : NaN;
   const sd = done > 1 ? Math.sqrt(Math.max(0, sq / done - mean * mean)) : 0;
-  return { mean, se: done ? sd / Math.sqrt(done) : NaN, sd, done, steps: steps / runs, off };
+  return { mean, se: done ? sd / Math.sqrt(done) : NaN, sd, done, steps: steps / Math.max(1, played), off, runs: played };
 }
 
 function check(sc, runs, seed, tol) {

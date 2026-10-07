@@ -186,10 +186,11 @@ function runOne(sc, runs, withRivals, deep) {
   if (!(want < 1e12)) return Object.assign(out, { skipped: 'no route with the priced materials' });
   const stepsGuess = net.materials(s).reduce((x, m) => x + m.uses, 0);
   const n = deep ? runs : Math.max(120, Math.min(runs, Math.round(6e5 / Math.max(1, stepsGuess))));
-  const got = play(net, input, n, sc.seed, Math.max(5000, Math.round(stepsGuess * 60)));
+  // a craft of thousands of uses, played 100,000 times, takes hours: such a scenario stops after 40 minutes and says how far it got
+  const got = play(net, input, n, sc.seed, Math.max(5000, Math.round(stepsGuess * 60)), deep ? 40 * 60000 : 0);
   const ratio = got.mean / want, z = (got.mean - want) / (got.se || 1);
-  Object.assign(out, { nodes: net.N, runs: n, network: want, played: got.mean, se: got.se, ratio, z, done: got.done, off: got.off,
-    pass: got.done === n && got.off === 0 && (Math.abs(ratio - 1) <= 0.15 || Math.abs(z) <= 3) });
+  Object.assign(out, { nodes: net.N, runs: got.runs, asked: n, uses: got.steps, network: want, played: got.mean, se: got.se, ratio, z, done: got.done, off: got.off,
+    pass: got.done === got.runs && got.off === 0 && (Math.abs(ratio - 1) <= 0.15 || Math.abs(z) <= 3) });
   if (withRivals) {
     const b = rivals(sc, input);
     if (b) Object.assign(out, { rival: b.cps, rivalRoute: b.route, rivalParams: b.params, rivalCheaper: b.cps < 0.85 * want });
@@ -234,6 +235,7 @@ if (require.main === module) {
   lines.push(`## Craft network sweep, shard ${shard + 1} of ${shards}`, '',
     `${out.length} scenarios in ${minutes} min (rounds: ${round + 1} per base${deep ? `; every scenario played ${runs.toLocaleString('en-US')} times` : ''}): ${checked.length} checked against the simulator, ${checked.length - bad.length} agree, ${bad.length} do not, ${skipped.length} outside the network, ${errors.length} errors.`,
     `Played cost / promised cost: median ${q(0.5)}, 5% ${q(0.05)}, 95% ${q(0.95)}.`,
+    `Crafts played: ${checked.reduce((x, r) => x + r.runs, 0).toLocaleString('en-US')} in all${deep ? `; ${checked.filter((r) => r.runs >= r.asked).length} scenarios with all ${runs.toLocaleString('en-US')}, ${checked.filter((r) => r.runs < r.asked).length} cut short at 40 minutes` : ''}.`,
     `Old routes simulated on ${riv.length} scenarios: clearly cheaper than the network's route on ${cheaper.length}.`, '',
     '| Class | Scenarios | Agree | Do not | Outside | Errors |', '|---|---|---|---|---|---|',
     ...[...byCls.entries()].sort().map(([c, v]) => `| ${c} | ${v.n} | ${v.ok} | ${v.bad} | ${v.skip} | ${v.err} |`), '',

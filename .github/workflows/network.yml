@@ -3,17 +3,29 @@
 # base can have and start items in every kind of state; it compares the network's promised cost with the simulator
 # playing its rules, and on a share of the scenarios simulates the planner's old routes to see whether one is cheaper.
 #
-# Cost: it starts by hand only (never by itself), and every job stops itself: one price job of at most 8 minutes and
-# six check jobs of at most 22 minutes, 140 minutes at most per start. A private repository has 2,000 free minutes a
-# month; the price job (prices.yml) uses about 300 of them.
+# Two modes:
+#   broad  five jobs; a craft of very many uses is played fewer times, so that many scenarios fit (minutes: 17).
+#   deep   every scenario is played 100,000 times (one that would take longer than 40 minutes says how far it got).
+#          `jobs` runners, four processes each, for `minutes` (330 is five and a half hours; a job may run six).
+#
+# Cost: the repository is public since 8 Oct 2026, and GitHub does not charge public repositories for standard
+# runners. It starts by hand only, and every process stops itself after `minutes`.
 name: Craft network sweep
 
 on:
   workflow_dispatch:
     inputs:
+      mode:
+        description: 'broad (many scenarios, fewer plays) or deep (100,000 plays a scenario)'
+        type: choice
+        options: [broad, deep]
+        default: broad
       minutes:
-        description: 'Minutes of checking per job (each job stops itself; at most 18)'
+        description: 'Minutes of checking per process (broad: up to 18; deep: up to 330)'
         default: '17'
+      jobs:
+        description: 'deep only: runners (four processes each; leave a few of the 20 free for the price job)'
+        default: '16'
 
 permissions:
   contents: read
@@ -23,6 +35,36 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+      minutes: ${{ steps.m.outputs.minutes }}
+      timeout: ${{ steps.m.outputs.timeout }}
+    steps:
+      - id: m
+        env:
+          MODE: ${{ inputs.mode }}
+          MINUTES: ${{ inputs.minutes }}
+          JOBS: ${{ inputs.jobs }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          mode = os.environ.get('MODE') or 'broad'
+          if mode == 'deep':
+              jobs = min(19, max(1, int(float(os.environ.get('JOBS') or 16))))
+              minutes = min(330.0, max(1.0, float(os.environ.get('MINUTES') or 330)))
+              procs, total = 4, jobs * 4
+              matrix = [{'name': f'deep {j + 1} of {jobs}', 'procs': procs, 'first': j * procs, 'total': total, 'args': '--deep --runs 100000 --rivals 10'} for j in range(jobs)]
+          else:
+              minutes = min(18.0, max(1.0, float(os.environ.get('MINUTES') or 17)))
+              matrix = [{'name': f'broad {j + 1} of 5', 'procs': 1, 'first': j, 'total': 5, 'args': '--runs 1200'} for j in range(5)]
+          print('matrix=' + json.dumps({'include': matrix}))
+          print('minutes=%g' % minutes)
+          print('timeout=%d' % int(minutes + 20))
+          PY
+
   prices:
     runs-on: ubuntu-latest
     timeout-minutes: 8
@@ -48,19 +90,12 @@ jobs:
           retention-days: 3
 
   sweep:
-    needs: prices
+    needs: [plan, prices]
     runs-on: ubuntu-latest
-    timeout-minutes: 22
+    timeout-minutes: ${{ fromJSON(needs.plan.outputs.timeout) }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { name: 'broad 1 of 5', args: '--shard 0/5 --runs 1200' }
-          - { name: 'broad 2 of 5', args: '--shard 1/5 --runs 1200' }
-          - { name: 'broad 3 of 5', args: '--shard 2/5 --runs 1200' }
-          - { name: 'broad 4 of 5', args: '--shard 3/5 --runs 1200' }
-          - { name: 'broad 5 of 5', args: '--shard 4/5 --runs 1200' }
-          - { name: '100,000 plays each', args: '--deep --runs 100000 --rivals 0' }
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     name: ${{ matrix.name }}
     steps:
       - uses: actions/checkout@v7
@@ -73,13 +108,22 @@ jobs:
           path: .kb_cache/out
       - name: Sweep
         env:
-          MINUTES: ${{ inputs.minutes }}
+          MINUTES: ${{ needs.plan.outputs.minutes }}
+          PROCS: ${{ matrix.procs }}
+          FIRST: ${{ matrix.first }}
+          TOTAL: ${{ matrix.total }}
         run: |
-          m=$(python3 -c "import os; print(min(18.0, max(1.0, float(os.environ.get('MINUTES') or 17))))")
-          node scripts/selftest/network_sweep.js ${{ matrix.args }} --minutes "$m" --json sweep.json
+          mkdir -p out
+          fail=0
+          for p in $(seq 0 $((PROCS - 1))); do
+            node scripts/selftest/network_sweep.js --shard "$((FIRST + p))/$TOTAL" ${{ matrix.args }} --minutes "$MINUTES" --json "out/sweep-$((FIRST + p)).json" > "out/log-$p.txt" 2>&1 &
+          done
+          for job in $(jobs -p); do wait "$job" || fail=1; done
+          cat out/log-*.txt
+          exit $fail
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: sweep-${{ strategy.job-index }}
-          path: sweep.json
-          retention-days: 14
+          path: out/*.json
+          retention-days: 30

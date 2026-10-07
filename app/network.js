@@ -30,8 +30,6 @@
 
   /**
    * input: { ix, item, targets, locks, priceOf(name) -> Exalted Orbs or null, baseCost, weights, essences, catalystMult,
-   *          crystalAlloy?: bool (Crystallisation omens also aim Runic Alloys: crafters do it, the game text names
-   *          only Perfect and Corrupted Essences; off until checked in game),
    *          quality?: 'lock' | 'use' | 'raise' (catalyst quality: leave it alone, the default; let Omen of Catalysing
    *          Exaltation use up what the item has; or also add catalysts for it) }
    * Returns a solved network, or { unsupported: reason } when the item or the targets are outside what it models.
@@ -425,7 +423,8 @@
       if (craftedUsed(S) < CAP_CRAFTED) for (let i = 0; i < G; i++) {
         const g = goals[i], r = g.rareEss;
         if (S.g[i] || !r) continue;
-        const aim = r.liquid || (r.alloy && !input.crystalAlloy) ? [-1] : [-1, 0, 1];
+        // Crystallisation omens aim Perfect and Corrupted Essences only: not alloys (game text; the player, 8 Oct 2026), not liquid emotions
+        const aim = r.liquid || r.alloy ? [-1] : [-1, 0, 1];
         for (const v of aim) {
           if (v >= 0 && PR.crystal[v] == null) continue;
           const from = v >= 0 ? v : open(S, g.si) === 0 ? g.si : -1; // R_SWAP_REMOVAL
