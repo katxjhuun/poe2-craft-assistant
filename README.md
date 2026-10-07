@@ -128,112 +128,28 @@ Amaç: yapıştırılan item hangi durumda olursa olsun, hedef item'e giden craf
 downloaded) and puts a copy of the page next to it. Run the exe: a tray icon appears and the Craft Assistant opens in its
 own window (Edge's app mode), kept above the game.
 
-- With Path of Exile 2 in front, hover an item and press the hotkey (default `Alt+E`). The program presses the game's
-  own copy keys (Alt+Ctrl+C) for that item, reads the clipboard and hands the text to the page: the item is loaded and
-  its price check opens. One key press, one copy; nothing else is read from the game.
-- While a route is running, the same item coming back changed counts as the result of the route's next step, so the
-  steps no longer ask for a paste.
+- With Path of Exile 2 in front, hover an item and press the hotkey (default `Alt+D`). The program presses the game's
+  own copy keys (Alt+Ctrl+C) for that item, reads the clipboard and hands the text to the page, which loads the item.
+  One key press, one copy; nothing else is read from the game, and the program asks nothing of any web site.
+- While a route is running, the same item coming back changed counts as the result of the route's next step: after
+  each craft, press the hotkey on the item and the assistant is up to date, with no copy and paste.
+- An item the assistant does not craft (currency, gems, waystones and the like) is not loaded: the item being worked
+  on stays.
 - The hotkey is taken only while the game window is in front. Settings are in `config.json` next to the exe
-  (`hotkey`, `port`, `topmost`, `advancedCopy`, `gameTitle`, `priceWidth`, `priceHeight`, `peekWidth`); the tray menu
-  opens it.
-- Price check on the hotkey: a panel over the game shows the item as the game draws it, every line a
-  search filter (click a line to use it or leave it out; its tier at the left, minimum and maximum at the right;
-  Exact match or Broad), an estimate from the listings (their middle price, with range and how far they agree), and
-  the ten cheapest listings as a table (price, item level, quality, account, age), with the currency, the kind of
-  listing and its age as options. The program asks the trade site for them the way Exiled
-  Exchange 2 and PoE Overlay II do. Those endpoints are not in Grinding Gear Games' documented API (its developer
-  documentation calls their use a breach of the terms, 7i); the player chose to use them knowingly, no further than
-  those tools go. The limits kept here: only on a key press, a Search click or a change the player makes to the
-  search, never in the background; one search and one fetch of ten listings; the site's rate limit kept with a
-  margin (below); no account cookies (a search the site wants a login for is refused and left to the trade site); a
-  refusal by the site is never worked around. The tray menu turns it off (`priceCheck` in `config.json`).
-- A change to the search (a line clicked on or off, a minimum or maximum, a preset) is searched by itself after a short
-  pause, so the estimate follows; several changes in a row are one search. The last answer stays on screen, dimmed,
-  meanwhile.
-- The trade site's rate limit is kept the way other price check tools keep it: by the site's own windows. With every
-  answer the site tells its rules (so many requests in so many seconds) and how many it has counted, other tools on
-  the computer included; a search goes at once as long as every window has room for it and one more, and waits only
-  for the time a full window needs. A wait of up to three seconds is simply waited out; a longer one is shown and the
-  search runs by itself when it is over. (Until 7 Oct 2026 the program also held every search back for two seconds
-  after the last one and slowed down from half a window on: that was its own rule, not the site's, and it showed as
-  "wait 2 s" on nearly every change.) `GET /pace` on the program shows the windows and what is counted in them.
-- The listings: each row says how many lines of the search the listed item has higher (▲) and lower (▼) than the
-  player's item, worked out with the same rules for both (totals, armour at 20% quality). The eye at the end of a row
-  shows that item in a card beside the price check while the cursor is on it: the item as the game would draw it
-  (tiers before its lines), then the lines of the search with both values and the difference. A click on the eye
-  keeps the card open until it is closed (its close button, Esc, or a new answer). The listed items come with the
-  same answer of the trade site; nothing more is asked for.
-- The item's most valuable line carries a dot. Filled: measured from the player's own searches (two searches that
-  differ by one line give the price with it and without it; the line whose leaving lowers the listed prices most).
-  A ring: until then a guess from the game data, the rarest roll on the item (the share of its slot's pool that gives
-  it at this tier or better), on a unique its best roll. The guess says that it is one; no search is run to find it.
-- Every item is price checked, not only gear. What a copied item is comes from the trade item list
-  (`app/data/trade_items_0.5.5.json`, built by `scripts/trade_items.py` from Exiled Exchange 2's item list: 1616
-  names that are not gear bases), and each kind is searched the way Exiled Exchange 2 searches it:
-  - what trades like currency (currency, omens, runes and cores, essences, catalysts, fragments, reliquary keys, uncut
-    gems by their level, lineage support gems): its market price from the Currency Exchange prices the assistant
-    already has, with the worth of the stack in hand. The trade site is not asked; "Search listings" asks it for the
-    listings when the player wants them, and it is asked by itself only when no market price is known;
-  - skill, support and meta gems: by name, with gem level (from 19), support sockets (from 3) and quality (from 16);
-  - waystones: any waystone of the same tier; its properties (drop chance, item rarity, pack size, rare and magic
-    monsters, revives) and its modifiers are lines to switch on;
-  - tablets: any tablet with the same lines at their own values and the uses remaining; relics and charms: any of
-    their kind with the same lines; flasks: the flask's own base type;
-  - trial keys (Djinn Barya, Inscribed Ultimatum) and Expedition Logbooks: by name and area level;
-  - anything the list does not know is still searched by its name.
-  Such items are not loaded into the Craft Assistant (it does not craft them): the item being worked on stays.
-- Every stat of the trade site is a line that can be searched (all 2526 stats of its list are in the knowledge base).
-  A stat written on two lines of the item text is found as one (62 stats), and "Grants Skill: Level # ..." is a
-  line of the search; relic lines are searched as relic stats. A line the trade site has no stat for is shown struck
-  through instead of being left out. Of the 3308 modifier lines the knowledge base knows (modifiers, implicits,
-  runes, unique items), 2802 can be searched (2696 before); for the other 506 the trade list has no stat (internal
-  lines of the game data, trap modifiers not in 0.5.5, skills granted without a level): only one of them has a
-  near-match there.
-- Where the price check is: at the top, in the free space beside the game's side panel the cursor is over (left of the
-  inventory; right of the stash for an item there). The side panels are 370/600 of the game's height wide at every
-  resolution, which is where the place comes from. The size is fixed (`priceWidth` x `priceHeight`, 455 x 1110 at
-  100% scaling, never taller than the game) and the same on every press. The window has no frame: the browser's
-  title bar and resize borders are cut away (the page tells the program how large it is inside its window), so it
-  cannot be moved or resized by hand. It is no taskbar button and not among the Alt+Tab windows, it never takes the
-  keyboard from the game, and it is put away by Esc, by a click anywhere beside it, by its own close button, when
-  another program comes in front (Alt+Tab), and when the hotkey is pressed over nothing. Esc and the mouse buttons
-  are only looked at (their state, 30 times a second while the price check is shown), never caught: the game gets
-  them as always. It is opened once, hidden, when the program starts. The browser's window is wider than the price
-  check (`peekWidth`, the room for a listed item's card on the far side); the program cuts it down to what is shown
-  and sets the cut again whenever the browser drops it (the browser does when Windows tells it about the window's
-  frame: seen in game, the title bar came back). What the page tells the program (its size, a card shown or closed)
-  is numbered, and an older message that arrives after a newer one is dropped: "close the card" overtaken by the
-  "show the card" before it left the card's place cut open with nothing in it (seen in game as an empty box beside
-  the price check).
-- The browser does not offer to translate the program's pages (they are in English on purpose): the pages are marked
-  "do not translate", and translation is turned off in the program's own browser profile.
-- Other tools: an item copied in game by any means (Ctrl+C, another tool's price check) is loaded as well
+  (`hotkey`, `port`, `topmost`, `advancedCopy`, `gameTitle`, `watchClipboard`); the tray menu opens it.
+- Other tools: an item copied in game by any means (Ctrl+C, another tool's own copy) is loaded as well
   (`watchClipboard`). With a route running, only the route's own item comes in that way.
-- "Search on trade" in the page still opens the official trade site with the search prefilled.
-- To work on the price check window without the game and without the trade site: `node desktop/pricedev.js`, then
-  `http://localhost:47700/price` (a sample item, ten listings kept from one real answer with the account names
-  replaced; `?slow=1`, `?side=right`). `GET /lasttrade` on the program gives the trade site's last answer as it came.
+- The browser does not offer to translate the program's page (it is in English on purpose): the page is marked "do
+  not translate", and translation is turned off in the program's own browser profile.
+- "Search on trade" in the page opens the official trade site with the search prefilled, on the player's click.
+- The price check window the program had for a day (6 and 7 Oct 2026: a panel over the game with the trade site's
+  listings) was taken out again at the player's wish, with everything that asked the trade site; the hotkey only loads
+  the item. What it left behind on purpose: the search builders in `app/pricecheck.js` for every kind of item, the
+  reader of listed items and their tests (`app/tests/pricecheck.test.js`, `app/data/trade_items_0.5.5.json`,
+  `scripts/trade_items.py`), which the page does not use; and three corrections the page's own trade search uses: a
+  defence at 20% quality is the shown value x 1.2 (the trade site's own numbers), a stat written on two lines of the
+  item text is one line of the search, and "Grants Skill: Level # ..." is a line of the search.
 - Tested by the author: the page is served, an item text pushed to `POST /push` is loaded, counted as a step result and
-  the route goes on; the window opens and stays on top; one real price check returned listings. The price check
-  window, shown without an item on a 2560x1440 game: the page lies at 1215..1670 x 29..1139 (the inventory starts at
-  1672), title bar and borders cut, above every other window, the keyboard left where it was, hidden again a quarter
-  of a second later because another program was in front. The player confirmed the hotkey in game, and that the
-  price check opens beside the inventory. Listed items (7 Oct 2026): one search was run by the author through the
-  program to read their shape (the lines are records with a text, a kind and the modifiers they come from, not plain
-  text); the ten listings of that answer are the test fixture. They also showed that quality multiplies a defence
-  (the trade site's own quality-20 values are the shown value x 1.2 within 1 on all ten, not the value with quality
-  added to the local modifiers), which the armour, evasion and energy shield lines of a search now follow; the same
-  question for a weapon's physical damage is open (no weapon was looked at). In the stand-in: the card on either
-  side, kept open by a click, closed by Esc; the search after a change, the wait and second try, the dot moving to
-  a measured line. On the real window: the cut with a card beside the price check (two rectangles, 6 px apart), and
-  that the keyboard goes back to the window that had it when the price check is put away. The pace keeper with
-  made-up answers of the trade site (no request sent): four searches in a row go without a wait, the fifth of a
-  five-in-ten-seconds window waits for the window, another tool's requests count, a penalty and Retry-After are sat
-  out; the site's real rules were not looked at (they come with the player's next search). The other kinds of items (7 Oct 2026): the searches are built from Exiled Exchange 2's source
-  (create-item-filters.ts, create-stat-filters.ts, pathofexile-trade.ts) and tested on item texts written from the
-  layout of the game's copy text, not copied in game (`app/tests/fixtures/other-items.js`): a text copied in game may
-  differ around the lines the reader looks for, and none of these searches has been run against the trade site
-  (its page shows a bot check to this tool, which was left alone). Not tested: all of this
-  from a real key press with the game in front (Esc and a click beside the price check in game, the card over the
-  game, the cut staying), the translation prompt being gone (it was never seen by the author), and the clipboard
-  watcher with another tool.
+  the route goes on; the window opens and stays on top; after the price check was taken out, the page loads and shows
+  its item, and the program answers with the new hotkey. The player confirmed the hotkey in game earlier (as Alt+E).
+  Not tested: the hotkey as Alt+D in game, and the clipboard watcher with another tool.

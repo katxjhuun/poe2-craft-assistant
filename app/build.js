@@ -21,8 +21,6 @@ const kb = JSON.parse(fs.readFileSync(path.join(here, '..', 'poe2_kb_0.5.5.json'
 fs.writeFileSync(path.join(dist, 'data', 'poe2_kb_0.5.5.json'), JSON.stringify(kb));
 fs.copyFileSync(path.join(here, 'data', 'icons.json'), path.join(dist, 'data', 'icons.json'));
 fs.copyFileSync(path.join(here, 'data', 'recipes_0.5.5.json'), path.join(dist, 'data', 'recipes_0.5.5.json'));
-// What every item of the trade item list is that is not gear (scripts/trade_items.py), for the price check.
-if (fs.existsSync(path.join(here, 'data', 'trade_items_0.5.5.json'))) fs.copyFileSync(path.join(here, 'data', 'trade_items_0.5.5.json'), path.join(dist, 'data', 'trade_items_0.5.5.json'));
 // Self-test results (scripts/selftest/run.js), shown in Recipes & guides.
 if (fs.existsSync(path.join(here, 'data', 'insights_0.5.5.json'))) fs.writeFileSync(path.join(dist, 'data', 'insights_0.5.5.json'), JSON.stringify(JSON.parse(fs.readFileSync(path.join(here, 'data', 'insights_0.5.5.json'), 'utf8'))));
 if (fs.existsSync(path.join(here, 'data', 'weights_0.5.5.json'))) fs.copyFileSync(path.join(here, 'data', 'weights_0.5.5.json'), path.join(dist, 'data', 'weights_0.5.5.json'));

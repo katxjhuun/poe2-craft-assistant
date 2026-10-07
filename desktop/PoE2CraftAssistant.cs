@@ -1,10 +1,11 @@
 // PoE2 Craft Assistant, desktop helper.
 //
 // A tray program that serves the Craft Assistant page from this folder on localhost, opens it in its own window, and
-// while Path of Exile 2 is the window in front listens for one hotkey (default Alt+E). On the hotkey it presses the
+// while Path of Exile 2 is the window in front listens for one hotkey (default Alt+D). On the hotkey it presses the
 // game's own "copy item" keys (Alt+Ctrl+C: the item text with modifier tiers) for the item under the cursor, reads the
-// clipboard and hands the text to the page, which loads the item and checks its price. One key press, one copy: the
-// same thing the player would do by hand. It reads nothing from the game but the clipboard text the game writes.
+// clipboard and hands the text to the page, which loads the item (or, with a route running, takes it as the result
+// of the route's next step). One key press, one copy: the same thing the player would do by hand. It reads nothing
+// from the game but the clipboard text the game writes, and asks nothing of any web site.
 //
 // Built with the C# compiler that ships with Windows (.NET Framework 4, C# 5): see build.cmd.
 using System;
@@ -30,7 +31,6 @@ namespace PoE2CraftAssistant
             using (Mutex one = new Mutex(true, "PoE2CraftAssistant.single", out first))
             {
                 if (!first) { MessageBox.Show("PoE2 Craft Assistant is already running (see the tray icon).", "PoE2 Craft Assistant"); return; }
-                try { Native.SetProcessDPIAware(); } catch (Exception) { }
                 Application.EnableVisualStyles();
                 Application.Run(new Host(args));
             }
@@ -40,17 +40,11 @@ namespace PoE2CraftAssistant
     /// <summary>Settings, kept in config.json next to the program.</summary>
     class Config
     {
-        public string Hotkey = "Alt+E";
+        public string Hotkey = "Alt+D";
         public int Port = 47652;
         public bool Topmost = true;        // keep the assistant's window above the game
         public bool AdvancedCopy = true;   // Alt+Ctrl+C (modifier tiers) instead of Ctrl+C
-        public bool Overlay = false;       // the trade search of a copied item as a panel over the game
-        public bool WatchClipboard = true; // take every item copied in game (Ctrl+C, another tool's price check)
-        public bool PriceCheck = true;     // on the hotkey, ask the trade site for the item's listings (see Trade)
-        public int PriceWidth = 455;       // the price check window's size (at 100% display scaling); it is placed
-        public int PriceHeight = 1110;     // beside the game's inventory and is never taller than the game
-        public int PeekWidth = 380;        // width of a listed item's card, shown beside the price check
-        public double OverlayWidth = 0.42; // the panel's share of the game window's width
+        public bool WatchClipboard = true; // take every item copied in game (Ctrl+C, another tool's copy)
         public string GameTitle = "Path of Exile 2";
         public string File;
 
@@ -68,14 +62,9 @@ namespace PoE2CraftAssistant
                     if (d.ContainsKey("topmost")) c.Topmost = Convert.ToBoolean(d["topmost"]);
                     if (d.ContainsKey("advancedCopy")) c.AdvancedCopy = Convert.ToBoolean(d["advancedCopy"]);
                     if (d.ContainsKey("gameTitle")) c.GameTitle = Convert.ToString(d["gameTitle"]);
-                    if (d.ContainsKey("overlay")) c.Overlay = Convert.ToBoolean(d["overlay"]);
                     if (d.ContainsKey("watchClipboard")) c.WatchClipboard = Convert.ToBoolean(d["watchClipboard"]);
-                    if (d.ContainsKey("priceCheck")) c.PriceCheck = Convert.ToBoolean(d["priceCheck"]);
-                    if (d.ContainsKey("priceWidth")) c.PriceWidth = Convert.ToInt32(d["priceWidth"]);
-                    if (d.ContainsKey("priceHeight")) c.PriceHeight = Convert.ToInt32(d["priceHeight"]);
-                    if (d.ContainsKey("peekWidth")) c.PeekWidth = Convert.ToInt32(d["peekWidth"]);
-                    else c.Save(); // a file from before this setting: written again with every setting in it
-                    if (d.ContainsKey("overlayWidth")) c.OverlayWidth = Convert.ToDouble(d["overlayWidth"], System.Globalization.CultureInfo.InvariantCulture);
+                    // settings of the price check, which the program no longer has: the file is written without them
+                    if (d.ContainsKey("priceCheck") || d.ContainsKey("overlay")) c.Save();
                 }
                 else c.Save();
             }
@@ -89,8 +78,7 @@ namespace PoE2CraftAssistant
             {
                 string json = "{\r\n  \"hotkey\": " + Json(Hotkey) + ",\r\n  \"port\": " + Port + ",\r\n  \"topmost\": " + (Topmost ? "true" : "false")
                     + ",\r\n  \"advancedCopy\": " + (AdvancedCopy ? "true" : "false") + ",\r\n  \"gameTitle\": " + Json(GameTitle)
-                    + ",\r\n  \"watchClipboard\": " + (WatchClipboard ? "true" : "false") + ",\r\n  \"priceCheck\": " + (PriceCheck ? "true" : "false") + ",\r\n  \"priceWidth\": " + PriceWidth + ",\r\n  \"priceHeight\": " + PriceHeight + ",\r\n  \"peekWidth\": " + PeekWidth
-                    + ",\r\n  \"overlay\": " + (Overlay ? "true" : "false") + ",\r\n  \"overlayWidth\": " + OverlayWidth.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "\r\n}\r\n";
+                    + ",\r\n  \"watchClipboard\": " + (WatchClipboard ? "true" : "false") + "\r\n}\r\n";
                 System.IO.File.WriteAllText(File, json);
             }
             catch (Exception) { /* read-only folder: the settings last until exit */ }
@@ -99,307 +87,17 @@ namespace PoE2CraftAssistant
         public static string Json(string s) { return new JavaScriptSerializer().Serialize(s); }
     }
 
-    /// <summary>
-    /// The trade site's pace for one kind of request (the search, the fetch), kept the way price check tools keep it.
-    /// With every answer the site tells its rules ("5:10:60": 5 requests in 10 seconds, 60 seconds of penalty beyond)
-    /// and how many requests it has counted in each window; other tools on this computer count there too. A request
-    /// goes at once as long as every window has room for it and one more (the margin), and waits only for the time a
-    /// full window needs to make room. Nothing else holds a request back.
-    /// </summary>
-    class Pace
-    {
-        class Rule { public int Max, Period; public List<DateTime> Hits = new List<DateTime>(); }
-        readonly Dictionary<string, Rule> rules = new Dictionary<string, Rule>();
-        DateTime penaltyUntil = DateTime.MinValue;
-
-        /// <summary>Seconds until the next request may go (0: now).</summary>
-        public double Wait()
-        {
-            DateTime now = DateTime.UtcNow;
-            double wait = Math.Max(0, (penaltyUntil - now).TotalSeconds);
-            foreach (Rule r in rules.Values)
-            {
-                r.Hits.RemoveAll(delegate(DateTime t) { return (now - t).TotalSeconds >= r.Period; });
-                int room = Math.Max(1, r.Max - 1); // one request of every window stays unused
-                if (r.Hits.Count < room) continue;
-                // it may go when so many of the counted requests have left the window that there is room again
-                DateTime free = r.Hits[r.Hits.Count - room].AddSeconds(r.Period);
-                wait = Math.Max(wait, (free - now).TotalSeconds + 0.25);
-            }
-            return wait;
-        }
-
-        /// <summary>A request is going out now.</summary>
-        public void Sent()
-        {
-            DateTime now = DateTime.UtcNow;
-            foreach (Rule r in rules.Values) r.Hits.Add(now);
-        }
-
-        /// <summary>The site's answer: its rules, a penalty in force, and requests it counted that are not known here.</summary>
-        public void Learn(WebHeaderCollection h)
-        {
-            if (h == null) return;
-            DateTime now = DateTime.UtcNow;
-            double v;
-            if (h["Retry-After"] != null && double.TryParse(h["Retry-After"], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out v) && v > 0)
-                penaltyUntil = now.AddSeconds(v) > penaltyUntil ? now.AddSeconds(v) : penaltyUntil;
-            string names = h["X-Rate-Limit-Rules"];
-            if (names == null) return;
-            HashSet<string> seen = new HashSet<string>();
-            foreach (string raw in names.Split(','))
-            {
-                string name = raw.Trim();
-                string lim = h["X-Rate-Limit-" + name], state = h["X-Rate-Limit-" + name + "-State"];
-                if (lim == null) continue;
-                string[] L = lim.Split(','), S = state != null ? state.Split(',') : new string[0];
-                for (int i = 0; i < L.Length; i++)
-                {
-                    string[] l = L[i].Split(':'); // max:period:penalty
-                    int max, period;
-                    if (l.Length < 2 || !int.TryParse(l[0], out max) || !int.TryParse(l[1], out period) || max < 1 || period < 1) continue;
-                    string key = name + ":" + period;
-                    seen.Add(key);
-                    Rule r;
-                    if (!rules.TryGetValue(key, out r)) { r = new Rule(); rules[key] = r; }
-                    r.Max = max; r.Period = period;
-                    if (i >= S.Length) continue;
-                    string[] st = S[i].Split(':'); // hits:period:penalty in force
-                    int hits, active;
-                    if (st.Length < 3 || !int.TryParse(st[0], out hits) || !int.TryParse(st[2], out active)) continue;
-                    if (active > 0 && now.AddSeconds(active) > penaltyUntil) penaltyUntil = now.AddSeconds(active);
-                    r.Hits.RemoveAll(delegate(DateTime t) { return (now - t).TotalSeconds >= r.Period; });
-                    // requests the site counted and this program did not make (another tool, the trade site in a
-                    // browser): taken as made now, which is the careful reading
-                    for (int k = r.Hits.Count; k < hits; k++) r.Hits.Add(now);
-                }
-            }
-            List<string> gone = new List<string>();
-            foreach (string k in rules.Keys) if (!seen.Contains(k)) gone.Add(k);
-            foreach (string k in gone) rules.Remove(k);
-        }
-
-        /// <summary>The rules and what is counted in them, to look at: "Ip:10 2/5, Ip:60 2/15".</summary>
-        public string Describe()
-        {
-            DateTime now = DateTime.UtcNow;
-            List<string> parts = new List<string>();
-            foreach (KeyValuePair<string, Rule> kv in rules)
-            {
-                int n = 0;
-                foreach (DateTime t in kv.Value.Hits) if ((now - t).TotalSeconds < kv.Value.Period) n++;
-                parts.Add(kv.Key + " " + n + "/" + kv.Value.Max);
-            }
-            return string.Join(", ", parts.ToArray());
-        }
-    }
-
-    /// <summary>
-    /// One price check: the trade site's search for an item and its first listings, the way price check tools do it
-    /// (Exiled Exchange 2, PoE Overlay II). These endpoints are not in Grinding Gear Games' documented API; the player
-    /// chose to use them knowingly, no further than those tools go (6 Oct 2026). So the limits are kept tight:
-    /// only on the player's key press or Search click, never in the background; one search and one fetch of ten
-    /// listings; the site's rate limit kept with a margin (see Pace: its own windows, nothing stricter); no account
-    /// cookies (a search the site wants a login for is refused here and left to the trade site itself); a refusal by
-    /// the site is never worked around.
-    /// </summary>
-    class Trade
-    {
-        const string UA = "PoE2CraftAssistant/1.0 (personal price check, one search per key press)";
-        readonly object gate = new object();
-        readonly JavaScriptSerializer ser = new JavaScriptSerializer();
-        readonly Dictionary<string, KeyValuePair<DateTime, string>> cache = new Dictionary<string, KeyValuePair<DateTime, string>>();
-        readonly Pace searchPace = new Pace(), fetchPace = new Pace();
-        // a search whose listings could not be fetched yet (the fetch had to wait): asked again, it is not searched twice
-        string heldKey, heldId; int heldTotal; List<string> heldIds; DateTime heldAt;
-        const double HOLD = 3.0; // a wait up to this many seconds is waited out here; a longer one is told to the page
-        /// <summary>The trade site's last answer with listings, as it came (to look at when the page reads one wrongly).</summary>
-        public volatile string LastRaw = "{}";
-
-        public Trade()
-        {
-            ser.MaxJsonLength = 16 * 1024 * 1024;
-            ServicePointManager.SecurityProtocol = (SecurityProtocolType)3072; // TLS 1.2
-        }
-
-        class Reply { public int Status; public string Body = ""; public WebHeaderCollection Headers; public string Message; public bool Login; }
-
-        /// <summary>The pace of the two kinds of request, to look at (GET /pace).</summary>
-        public string PaceText() { lock (gate) return "search: " + searchPace.Describe() + " | fetch: " + fetchPace.Describe(); }
-
-        static object Get(object o, string key)
-        {
-            Dictionary<string, object> d = o as Dictionary<string, object>;
-            object v;
-            return d != null && d.TryGetValue(key, out v) ? v : null;
-        }
-
-        string Fail(string message, double wait, bool login)
-        {
-            Dictionary<string, object> m = new Dictionary<string, object>();
-            m["ok"] = false; m["message"] = message; m["wait"] = Math.Max(0, Math.Ceiling(wait)); m["login"] = login;
-            return ser.Serialize(m);
-        }
-
-        Reply Send(string method, string url, string body)
-        {
-            Reply r = new Reply();
-            HttpWebResponse resp = null;
-            try
-            {
-                HttpWebRequest q = (HttpWebRequest)WebRequest.Create(url);
-                q.Method = method;
-                q.UserAgent = UA;
-                q.Accept = "application/json";
-                q.Timeout = 12000;
-                q.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
-                if (body != null)
-                {
-                    byte[] b = Encoding.UTF8.GetBytes(body);
-                    q.ContentType = "application/json";
-                    q.ContentLength = b.Length;
-                    using (Stream o = q.GetRequestStream()) o.Write(b, 0, b.Length);
-                }
-                try { resp = (HttpWebResponse)q.GetResponse(); }
-                catch (WebException e)
-                {
-                    resp = e.Response as HttpWebResponse;
-                    if (resp == null) { r.Status = 0; r.Message = "The trade site could not be reached (" + e.Message + ")."; return r; }
-                }
-                r.Status = (int)resp.StatusCode;
-                r.Headers = resp.Headers;
-                using (StreamReader sr = new StreamReader(resp.GetResponseStream(), Encoding.UTF8)) r.Body = sr.ReadToEnd();
-                if (r.Status != 200)
-                {
-                    string msg = null;
-                    try { msg = Convert.ToString(Get(Get(ser.DeserializeObject(r.Body), "error"), "message")); } catch (Exception) { msg = null; }
-                    if (r.Status == 429) r.Message = "The trade site's rate limit was reached.";
-                    else if (!string.IsNullOrEmpty(msg)) r.Message = msg;
-                    else r.Message = "The trade site refused the request (HTTP " + r.Status + "). Use the trade site itself for this search.";
-                    r.Login = msg != null && msg.IndexOf("log", StringComparison.OrdinalIgnoreCase) >= 0;
-                }
-            }
-            catch (Exception e) { r.Status = 0; r.Message = "The price check failed (" + e.Message + ")."; }
-            finally { if (resp != null) resp.Close(); }
-            return r;
-        }
-
-        /// <summary>The search and its first ten listings as JSON for the page: {ok, total, id, listings} or {ok:false, message, wait, login}.</summary>
-        public string Check(string league, string body, bool fresh)
-        {
-            lock (gate)
-            {
-                string key = league + "\n" + body;
-                KeyValuePair<DateTime, string> hit;
-                // the same search again within a minute: the answer already here (Refresh asks the site again)
-                if (!fresh && cache.TryGetValue(key, out hit) && (DateTime.UtcNow - hit.Key).TotalSeconds < 60) return hit.Value;
-                string id; int total; List<string> ids;
-                if (heldKey == key && (DateTime.UtcNow - heldAt).TotalSeconds < 60) { id = heldId; total = heldTotal; ids = heldIds; }
-                else
-                {
-                    double wait = searchPace.Wait();
-                    if (wait > HOLD) return Fail("The trade site's rate limit: the next search can go in " + Math.Ceiling(wait) + " s.", wait, false);
-                    if (wait > 0) Thread.Sleep((int)Math.Ceiling(wait * 1000));
-                    searchPace.Sent();
-                    Reply sr = Send("POST", "https://www.pathofexile.com/api/trade2/search/poe2/" + Uri.EscapeDataString(league), body);
-                    searchPace.Learn(sr.Headers);
-                    if (sr.Status != 200) return Fail(sr.Message, sr.Status == 429 ? Math.Max(1, searchPace.Wait()) : 0, sr.Login);
-                    object found;
-                    try { found = ser.DeserializeObject(sr.Body); } catch (Exception) { return Fail("The trade site's answer could not be read.", 0, false); }
-                    id = Convert.ToString(Get(found, "id"));
-                    total = 0;
-                    try { total = Convert.ToInt32(Get(found, "total")); } catch (Exception) { total = 0; }
-                    ids = new List<string>();
-                    System.Collections.IEnumerable res = Get(found, "result") as System.Collections.IEnumerable;
-                    if (res != null) foreach (object x in res) { if (ids.Count >= 10) break; ids.Add(Convert.ToString(x)); }
-                }
-                heldKey = null;
-                List<object> listings = new List<object>();
-                if (ids.Count > 0)
-                {
-                    double fw = fetchPace.Wait();
-                    if (fw > HOLD)
-                    {
-                        // the search is kept: when the page asks again, only its listings are fetched
-                        heldKey = key; heldId = id; heldTotal = total; heldIds = ids; heldAt = DateTime.UtcNow;
-                        return Fail("The trade site's rate limit: the listings can be fetched in " + Math.Ceiling(fw) + " s.", fw, false);
-                    }
-                    if (fw > 0) Thread.Sleep((int)Math.Ceiling(fw * 1000));
-                    fetchPace.Sent();
-                    Reply fr = Send("GET", "https://www.pathofexile.com/api/trade2/fetch/" + string.Join(",", ids.ToArray()) + "?query=" + Uri.EscapeDataString(id) + "&realm=poe2", null);
-                    fetchPace.Learn(fr.Headers);
-                    if (fr.Status != 200) return Fail(fr.Message, fr.Status == 429 ? Math.Max(1, fetchPace.Wait()) : 0, fr.Login);
-                    LastRaw = fr.Body;
-                    System.Collections.IEnumerable rows = null;
-                    try { rows = Get(ser.DeserializeObject(fr.Body), "result") as System.Collections.IEnumerable; } catch (Exception) { rows = null; }
-                    if (rows != null) foreach (object row in rows)
-                    {
-                        object listing = Get(row, "listing"), price = Get(listing, "price"), account = Get(listing, "account");
-                        if (price == null) continue;
-                        Dictionary<string, object> o = new Dictionary<string, object>();
-                        o["amount"] = Get(price, "amount");
-                        o["currency"] = Get(price, "currency");
-                        o["indexed"] = Get(listing, "indexed");
-                        o["seller"] = Get(account, "name");
-                        o["online"] = Get(account, "online") != null;
-                        object item = Get(row, "item");
-                        o["ilvl"] = Get(item, "ilvl");
-                        // quality from the item's property line ("Quality": "+20%")
-                        System.Collections.IEnumerable props = Get(item, "properties") as System.Collections.IEnumerable;
-                        if (props != null) foreach (object pr in props)
-                        {
-                            if (Convert.ToString(Get(pr, "name")).IndexOf("Quality", StringComparison.OrdinalIgnoreCase) < 0) continue;
-                            System.Collections.IEnumerable vals = Get(pr, "values") as System.Collections.IEnumerable;
-                            if (vals != null) foreach (object v in vals)
-                            {
-                                System.Collections.IEnumerable pair = v as System.Collections.IEnumerable;
-                                if (pair != null) foreach (object x in pair) { o["quality"] = Convert.ToString(x).Trim('+', '%'); break; }
-                                break;
-                            }
-                            break;
-                        }
-                        // the listed item itself (its lines as the trade site gives them), for the page to show and to compare;
-                        // it came with the same answer, nothing more is asked for
-                        Dictionary<string, object> full = item as Dictionary<string, object>;
-                        if (full != null)
-                        {
-                            Dictionary<string, object> slim = new Dictionary<string, object>();
-                            foreach (KeyValuePair<string, object> kv in full) if (kv.Key != "icon" && kv.Key != "socketedItems" && kv.Key != "id") slim[kv.Key] = kv.Value;
-                            o["item"] = slim;
-                        }
-                        listings.Add(o);
-                    }
-                }
-                Dictionary<string, object> m = new Dictionary<string, object>();
-                m["ok"] = true; m["total"] = total; m["id"] = id; m["listings"] = listings;
-                string json = ser.Serialize(m);
-                if (cache.Count > 40) cache.Clear();
-                cache[key] = new KeyValuePair<DateTime, string>(DateTime.UtcNow, json);
-                return json;
-            }
-        }
-    }
-
     /// <summary>Serves the page and pushes copied items to it (server-sent events).</summary>
     class Server
     {
         readonly HttpListener listener = new HttpListener();
         readonly List<HttpListenerResponse> clients = new List<HttpListenerResponse>();
-        readonly HashSet<HttpListenerResponse> viewers = new HashSet<HttpListenerResponse>(); // price check windows among them
         readonly string root;
         readonly Config cfg;
         Thread thread;
         System.Threading.Timer ping;
         public string Url;
-        /// <summary>
-        /// The page asks for the price panel over the game ("show") or to put it away ("hide"); the price check's page
-        /// tells how large it is inside its window ("size W H", in pixels).
-        /// </summary>
-        public Action<string> OnOverlay;
-        readonly Trade trade = new Trade();
         string lastJson = "{}";
-        /// <summary>On which side of the price check the card of a listed item goes ("left" or "right").</summary>
-        public volatile string Side = "left";
 
         public Server(string appDir, Config c)
         {
@@ -442,8 +140,7 @@ namespace PoE2CraftAssistant
             string path = Uri.UnescapeDataString(q.Url.AbsolutePath);
             if (path == "/bridge")
             {
-                Text(r, 200, "application/json", "{\"bridge\":true,\"hotkey\":" + Config.Json(cfg.Hotkey) + ",\"game\":" + Config.Json(cfg.GameTitle)
-                    + ",\"price\":{\"width\":" + Math.Max(320, cfg.PriceWidth) + ",\"peek\":" + Math.Max(0, cfg.PeekWidth) + ",\"side\":" + Config.Json(Side) + "}}");
+                Text(r, 200, "application/json", "{\"bridge\":true,\"hotkey\":" + Config.Json(cfg.Hotkey) + ",\"game\":" + Config.Json(cfg.GameTitle) + "}");
                 return;
             }
             if (path == "/events")
@@ -455,7 +152,7 @@ namespace PoE2CraftAssistant
                 byte[] hello = Encoding.UTF8.GetBytes(": connected\n\n");
                 r.OutputStream.Write(hello, 0, hello.Length);
                 r.OutputStream.Flush();
-                lock (clients) { clients.Add(r); if (q.QueryString["view"] == "price") viewers.Add(r); }
+                lock (clients) clients.Add(r);
                 return; // kept open: items are written to it as they are copied
             }
             if (path == "/push" && q.HttpMethod == "POST")
@@ -470,32 +167,8 @@ namespace PoE2CraftAssistant
                 return;
             }
             if (path == "/last") { Text(r, 200, "application/json", lastJson); return; } // the item copied last (a window opened after it)
-            if (path == "/lasttrade") { Text(r, 200, "application/json", trade.LastRaw); return; } // the trade site's last answer, as it came
-            if (path == "/pace") { Text(r, 200, "text/plain", trade.PaceText()); return; } // the trade site's windows and what is counted in them
-            if (path == "/trade" && q.HttpMethod == "POST")
-            {
-                string origin = q.Headers["Origin"];
-                if (origin != null && origin.TrimEnd('/') != Url.TrimEnd('/')) { Text(r, 403, "text/plain", "forbidden"); return; }
-                string body;
-                using (StreamReader sr = new StreamReader(q.InputStream, Encoding.UTF8)) body = sr.ReadToEnd();
-                string league = q.QueryString["league"];
-                if (!cfg.PriceCheck) { Text(r, 200, "application/json", "{\"ok\":false,\"message\":\"The price check is turned off (tray menu).\",\"wait\":0,\"login\":false}"); return; }
-                if (string.IsNullOrEmpty(league) || string.IsNullOrEmpty(body)) { Text(r, 400, "text/plain", "league and search needed"); return; }
-                Text(r, 200, "application/json", trade.Check(league, body, q.QueryString["fresh"] == "1"));
-                return;
-            }
-            if (path == "/overlay" && q.HttpMethod == "POST")
-            {
-                string origin = q.Headers["Origin"];
-                if (origin != null && origin.TrimEnd('/') != Url.TrimEnd('/')) { Text(r, 403, "text/plain", "forbidden"); return; }
-                string cmd;
-                using (StreamReader sr = new StreamReader(q.InputStream, Encoding.UTF8)) cmd = sr.ReadToEnd().Trim();
-                if (OnOverlay != null) OnOverlay(cmd);
-                Text(r, 200, "text/plain", "ok");
-                return;
-            }
             if (q.HttpMethod != "GET") { Text(r, 405, "text/plain", "method not allowed"); return; }
-            if (path == "/" || path == "/price") path = "/index.html"; // "/price": the price check window (the same page)
+            if (path == "/") path = "/index.html";
             string file = Path.GetFullPath(Path.Combine(root, path.TrimStart('/').Replace('/', Path.DirectorySeparatorChar)));
             if (!file.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) || !File.Exists(file)) { Text(r, 404, "text/plain", "not found"); return; }
             byte[] data = File.ReadAllBytes(file);
@@ -534,7 +207,7 @@ namespace PoE2CraftAssistant
             r.OutputStream.Close();
         }
 
-        /// <summary>An item text for the pages. Returns the number of assistant pages it reached (price check windows aside).</summary>
+        /// <summary>An item text for the page. Returns the number of open pages it reached.</summary>
         public int Push(string text, string source)
         {
             Dictionary<string, object> m = new Dictionary<string, object>();
@@ -545,9 +218,6 @@ namespace PoE2CraftAssistant
             return Send("data: " + lastJson + "\n\n");
         }
 
-        /// <summary>A note for the open pages (not an item): {"side": "left"}.</summary>
-        public void Tell(string json) { Send("data: " + json + "\n\n"); }
-
         int Send(string frame)
         {
             byte[] b = Encoding.UTF8.GetBytes(frame);
@@ -556,8 +226,8 @@ namespace PoE2CraftAssistant
             {
                 for (int i = clients.Count - 1; i >= 0; i--)
                 {
-                    try { clients[i].OutputStream.Write(b, 0, b.Length); clients[i].OutputStream.Flush(); if (!viewers.Contains(clients[i])) ok++; }
-                    catch (Exception) { try { clients[i].Abort(); } catch (Exception) { } viewers.Remove(clients[i]); clients.RemoveAt(i); }
+                    try { clients[i].OutputStream.Write(b, 0, b.Length); clients[i].OutputStream.Flush(); ok++; }
+                    catch (Exception) { try { clients[i].Abort(); } catch (Exception) { } clients.RemoveAt(i); }
                 }
             }
             return ok;
@@ -570,8 +240,7 @@ namespace PoE2CraftAssistant
         public const uint MOD_ALT = 1, MOD_CONTROL = 2, MOD_SHIFT = 4, MOD_WIN = 8, MOD_NOREPEAT = 0x4000;
         public const ushort VK_SHIFT = 0x10, VK_CONTROL = 0x11, VK_MENU = 0x12, VK_C = 0x43;
         public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1), HWND_NOTOPMOST = new IntPtr(-2);
-        public const uint SWP_NOSIZE = 1, SWP_NOMOVE = 2, SWP_NOZORDER = 4, SWP_NOACTIVATE = 0x10, SWP_FRAMECHANGED = 0x20, SWP_SHOWWINDOW = 0x40;
-        public const int GWL_EXSTYLE = -20, WS_EX_TOPMOST = 8, WS_EX_TOOLWINDOW = 0x80, WS_EX_APPWINDOW = 0x40000;
+        public const uint SWP_NOSIZE = 1, SWP_NOMOVE = 2, SWP_NOACTIVATE = 0x10;
 
         [DllImport("user32.dll")] public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
         [DllImport("user32.dll")] public static extern bool UnregisterHotKey(IntPtr hWnd, int id);
@@ -615,44 +284,9 @@ namespace PoE2CraftAssistant
 
         [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
         [DllImport("user32.dll")] public static extern uint GetClipboardSequenceNumber();
-        [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
-        [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hWnd);
-        [DllImport("user32.dll")] public static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool redraw);
-        [DllImport("user32.dll")] public static extern int GetWindowRgnBox(IntPtr hWnd, out RECT box);
-        [DllImport("gdi32.dll")] public static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
-        [DllImport("gdi32.dll")] public static extern int CombineRgn(IntPtr dest, IntPtr a, IntPtr b, int mode);
-        [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int key);
-        [DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr obj);
-        [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
-        [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
-        [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr hWnd, out RECT r);
-        [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr hWnd, ref POINT p);
-        [DllImport("user32.dll")] public static extern bool IsWindow(IntPtr hWnd);
-        [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint thread, uint to, bool attach);
-        [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
-
-        /// <summary>
-        /// Give the keyboard to a window. Windows lets only the program in front do that, so for the moment of the
-        /// request this thread joins the input of the window that has the keyboard now.
-        /// </summary>
-        public static void Focus(IntPtr h)
-        {
-            IntPtr fg = GetForegroundWindow();
-            if (fg == h || h == IntPtr.Zero) return;
-            uint pid, mine = GetCurrentThreadId(), other = fg != IntPtr.Zero ? GetWindowThreadProcessId(fg, out pid) : 0;
-            bool joined = other != 0 && other != mine && AttachThreadInput(mine, other, true);
-            SetForegroundWindow(h);
-            if (joined) AttachThreadInput(mine, other, false);
-        }
-        [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hWnd);
-        [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr hWnd, uint cmd);
-        [DllImport("user32.dll")] public static extern int SetWindowLong(IntPtr hWnd, int index, int value);
-        [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern int GetClassName(IntPtr hWnd, StringBuilder text, int max);
         public const int WM_CLIPBOARDUPDATE = 0x031D;
         [DllImport("user32.dll")] public static extern bool AddClipboardFormatListener(IntPtr hWnd);
         [DllImport("user32.dll")] public static extern bool RemoveClipboardFormatListener(IntPtr hWnd);
-        [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
-        [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT r);
 
         /// <summary>The visible, titled top-level windows of a process.</summary>
         public static List<IntPtr> WindowsOf(uint pid)
@@ -673,21 +307,13 @@ namespace PoE2CraftAssistant
         /// <summary>
         /// The assistant's own window: a visible Edge window whose title is exactly the page's (an app-mode window has
         /// no browser suffix). Other windows that merely mention the name (a chat, a folder, a browser tab) do not count.
-        /// With "hidden" a window that is not shown counts as well (the price check between two key presses).
         /// </summary>
-        public static IntPtr FindWindowByTitle(string title, bool hidden = false)
+        public static IntPtr FindWindowByTitle(string title)
         {
             IntPtr found = IntPtr.Zero;
             EnumWindows(delegate(IntPtr h, IntPtr l)
             {
-                if (TitleOf(h) != title) return true;
-                if (!IsWindowVisible(h))
-                {
-                    if (!hidden) return true;
-                    StringBuilder cls = new StringBuilder(64);
-                    GetClassName(h, cls, cls.Capacity);
-                    if (cls.ToString() != "Chrome_WidgetWin_1") return true; // the browser's own window, not one of its helpers
-                }
+                if (!IsWindowVisible(h) || TitleOf(h) != title) return true;
                 uint pid;
                 GetWindowThreadProcessId(h, out pid);
                 try { if (!Process.GetProcessById((int)pid).ProcessName.Equals("msedge", StringComparison.OrdinalIgnoreCase)) return true; }
@@ -716,40 +342,17 @@ namespace PoE2CraftAssistant
     class Host : ApplicationContext
     {
         const string PAGE_TITLE = "PoE2 Craft Assistant";
-        const string PRICE_TITLE = "PoE2 Price Check";
         readonly Config cfg;
         readonly Server server;
         readonly NotifyIcon tray;
         readonly HotkeyWindow win = new HotkeyWindow();
         readonly System.Windows.Forms.Timer focus = new System.Windows.Forms.Timer();
         readonly System.Windows.Forms.Timer copy = new System.Windows.Forms.Timer();
-        readonly System.Windows.Forms.Timer panel = new System.Windows.Forms.Timer();
         uint seqBefore;
         int copyTicks, seenAt;
         IntPtr gameWnd = IntPtr.Zero;
         string copySource = "hotkey", lastText;
         DateTime lastAt = DateTime.MinValue;
-        long panelWanted; // ticks until which the price panel is to be placed over the game (0: nothing asked, -1: hide)
-        IntPtr priceWnd = IntPtr.Zero, priceReady = IntPtr.Zero; // the price check window (shown or hidden); the one made ready
-        long priceAsked, openAhead; // ticks: when the browser was last asked for that window; when to open it ahead of its use
-        // what the price check's page tells about itself, in pixels: its size inside the window, where its own column
-        // (the price check) lies in it and for which side that was said; and the card of a listed item it shows beside it
-        readonly object told = new object();
-        int toldW, toldH, toldX, toldPanel; string toldSide = "";
-        Native.RECT peek; bool peekOn;
-        // The page numbers what it tells, and an older word that arrives after a newer one is dropped: the requests are
-        // answered on several threads, and "close the card" overtaken by the "show the card" before it left the card's
-        // rectangle cut open with nothing in it (seen in game as an empty box beside the price check).
-        long toldSeq, peekSeq;
-        int titleBar = -1;          // height of the browser's title bar above that page in pixels (-1: not measured yet)
-        long away;                  // since when another program has been in front (ticks; 0: it is not)
-        IntPtr lastFront = IntPtr.Zero; // the window that was in front last, the price check aside
-        bool panelOn;               // the price check is shown because a key press asked for it
-        Native.RECT panelRect;      // where on the screen the price check is to be
-        Native.RECT shownA, shownB; // what is on the screen of it: the price check, and the card beside it (empty: none)
-        string cutKey = "";         // the cut of the window as it was set last
-        bool wasEsc, wasLeft, wasRight; // keys held at the last look
-        readonly SynchronizationContext ui; // to do window work on the program's own thread
         readonly bool anyWindow, noWindow;
         readonly string dir;
         bool registered;
@@ -762,7 +365,6 @@ namespace PoE2CraftAssistant
             anyWindow = Array.IndexOf(args, "--any-window") >= 0; // the hotkey also outside the game (for trying it out)
             noWindow = Array.IndexOf(args, "--no-window") >= 0;   // do not open the assistant's window
             cfg = Config.Load(Path.Combine(dir, "config.json"));
-            ui = new WindowsFormsSynchronizationContext();
 
             tray = new NotifyIcon();
             tray.Icon = MakeIcon();
@@ -788,60 +390,11 @@ namespace PoE2CraftAssistant
             Native.AddClipboardFormatListener(win.Handle);
             copy.Interval = 15;
             copy.Tick += delegate { CopyTick(); };
-            // the page asks for the panel from the server's thread; the window work is done here, on the program's own
-            server.OnOverlay = delegate(string cmd)
-            {
-                string[] p = cmd.Split(' ');
-                int a = 0, b = 0, x = 0, w = 0;
-                long n = 0;
-                if (p[0] == "size")
-                {
-                    // "size N W H X P side": the page's size, its price check column from X, P wide, laid out for that side
-                    if (p.Length >= 4 && long.TryParse(p[1], out n) && int.TryParse(p[2], out a) && int.TryParse(p[3], out b) && a > 0 && b > 0)
-                    {
-                        lock (told)
-                        {
-                            if (n <= toldSeq) return;
-                            toldSeq = n;
-                            toldW = a; toldH = b; toldX = 0; toldPanel = 0; toldSide = "";
-                            if (p.Length >= 7 && int.TryParse(p[4], out x) && int.TryParse(p[5], out w)) { toldX = x; toldPanel = w; toldSide = p[6]; }
-                        }
-                    }
-                    return;
-                }
-                if (p[0] == "peek")
-                {
-                    // "peek N X Y W H": the card of a listed item beside the price check (in the page's pixels); "peek N off"
-                    if (p.Length < 3 || !long.TryParse(p[1], out n)) return;
-                    Native.RECT r = new Native.RECT();
-                    bool on = p.Length == 6 && int.TryParse(p[2], out x) && int.TryParse(p[3], out a) && int.TryParse(p[4], out w) && int.TryParse(p[5], out b) && w > 0 && b > 0;
-                    if (on) { r.Left = x; r.Top = a; r.Right = x + w; r.Bottom = a + b; }
-                    long seq = n;
-                    ui.Post(delegate
-                    {
-                        if (seq <= peekSeq) return;
-                        peekSeq = seq;
-                        peek = r; peekOn = on && panelOn; // a card belongs to a price check that is shown
-                        IntPtr t = PriceWindow();
-                        if (t != IntPtr.Zero && panelOn) Fit(t, false);
-                    }, null);
-                    return;
-                }
-                Interlocked.Exchange(ref panelWanted, cmd == "hide" ? -1 : DateTime.UtcNow.AddSeconds(4).Ticks);
-            };
-            panel.Interval = 120;
-            panel.Tick += delegate { PanelTick(); };
-            panel.Start();
             focus.Interval = 400;
             focus.Tick += delegate { WatchFocus(); };
             focus.Start();
 
-            if (!noWindow)
-            {
-                OpenWindow(true);
-                // the price check window is opened ahead and kept hidden, so a key press in game only has to show it
-                openAhead = DateTime.UtcNow.AddSeconds(3).Ticks;
-            }
+            if (!noWindow) OpenWindow(true);
         }
 
         void BuildMenu()
@@ -857,14 +410,9 @@ namespace PoE2CraftAssistant
             topItem.Checked = cfg.Topmost;
             menu.MenuItems.Add(topItem);
             MenuItem watchItem = null;
-            watchItem = new MenuItem("Take items copied in game (Ctrl+C, other price check tools)", delegate { cfg.WatchClipboard = !cfg.WatchClipboard; cfg.Save(); watchItem.Checked = cfg.WatchClipboard; });
+            watchItem = new MenuItem("Take items copied in game (Ctrl+C, other tools)", delegate { cfg.WatchClipboard = !cfg.WatchClipboard; cfg.Save(); watchItem.Checked = cfg.WatchClipboard; });
             watchItem.Checked = cfg.WatchClipboard;
             menu.MenuItems.Add(watchItem);
-            MenuItem panelItem = null;
-            panelItem = new MenuItem("Price check on the hotkey (asks the trade site)", delegate { cfg.PriceCheck = !cfg.PriceCheck; cfg.Save(); panelItem.Checked = cfg.PriceCheck; if (!cfg.PriceCheck) HidePanel(); });
-            panelItem.Checked = cfg.PriceCheck;
-            menu.MenuItems.Add(panelItem);
-            menu.MenuItems.Add("Hide the price check", delegate { HidePanel(); });
             keyItem = new MenuItem("Hotkey: " + cfg.Hotkey + " (edit config.json)", delegate { try { Process.Start("notepad.exe", "\"" + cfg.File + "\""); } catch (Exception) { } });
             menu.MenuItems.Add(keyItem);
             menu.MenuItems.Add("-");
@@ -979,7 +527,7 @@ namespace PoE2CraftAssistant
             if (seenAt < 0)
             {
                 if (Native.GetClipboardSequenceNumber() != seqBefore) seenAt = copyTicks; // a counter: the clipboard is not opened
-                else if (copyTicks > 40) { copy.Stop(); HidePanel(); } // nothing under the cursor: the price panel goes away
+                else if (copyTicks > 40) copy.Stop(); // nothing under the cursor: nothing was copied
                 return;
             }
             if (copyTicks < seenAt + 2) return; // let the game finish writing
@@ -995,280 +543,6 @@ namespace PoE2CraftAssistant
             if (copySource != "hotkey") return; // another tool's copy: its own window is what the player looks at
             if (reached == 0) OpenWindow(false); // the window was closed: open it, the page takes the item on the next press
             else ShowAbove();
-            if (cfg.PriceCheck)
-            {
-                // the price check window over the game (a window that was closed opens again and reads the item it missed)
-                EnsurePrice();
-                Interlocked.Exchange(ref panelWanted, DateTime.UtcNow.AddSeconds(10).Ticks);
-                PanelTick(); // now, not on the next tick
-            }
-        }
-
-        bool IsGame(IntPtr h) { return h != IntPtr.Zero && Native.TitleOf(h).StartsWith(cfg.GameTitle, StringComparison.OrdinalIgnoreCase); }
-
-        /// <summary>The price check window, shown or hidden; none when it is not open (or still opening).</summary>
-        IntPtr PriceWindow()
-        {
-            if (priceWnd != IntPtr.Zero && Native.IsWindow(priceWnd) && Native.TitleOf(priceWnd) == PRICE_TITLE) return priceWnd;
-            priceWnd = Native.FindWindowByTitle(PRICE_TITLE, true);
-            return priceWnd;
-        }
-
-        /// <summary>Ask the browser for the price check window unless it is there (or was asked for a moment ago).</summary>
-        void EnsurePrice()
-        {
-            if (!cfg.PriceCheck || PriceWindow() != IntPtr.Zero) return;
-            long now = DateTime.UtcNow.Ticks;
-            if (now - priceAsked < 8 * TimeSpan.TicksPerSecond) return; // the browser is still opening it
-            priceAsked = now;
-            // its own address: the browser remembers a window's place by the address, and this one's is not the assistant's
-            Launch(server.Url + "price", (cfg.PriceWidth + (cfg.PeekWidth > 0 ? cfg.PeekWidth + PEEK_GAP : 0) + 16) + "," + (cfg.PriceHeight + 39));
-        }
-
-        /// <summary>
-        /// A price check window the browser has just opened: put away until a key press asks for it, marked as a tool
-        /// window (no button on the taskbar, not among the windows of Alt+Tab) and set above the other windows.
-        /// </summary>
-        void Prepare(IntPtr t)
-        {
-            priceReady = t;
-            panelOn = false;
-            cutKey = "";
-            GiveBack(t);
-            Native.ShowWindow(t, 0); // SW_HIDE
-            int ex = Native.GetWindowLong(t, Native.GWL_EXSTYLE);
-            Native.SetWindowLong(t, Native.GWL_EXSTYLE, (ex | Native.WS_EX_TOOLWINDOW) & ~Native.WS_EX_APPWINDOW);
-            Above(t);
-        }
-
-        /// <summary>
-        /// Before the price check is put away while it has the keyboard (the browser opened it this moment, or the player
-        /// clicked in it): the keyboard goes back to the game, or to the window that was in front before. Windows does
-        /// not do that by itself for a window hidden from outside (seen: the hidden window stayed "in front", and the
-        /// keyboard was with no window at all).
-        /// </summary>
-        void GiveBack(IntPtr t)
-        {
-            if (Native.GetForegroundWindow() != t) return;
-            IntPtr to = IsGame(gameWnd) && !Native.IsIconic(gameWnd) ? gameWnd : lastFront;
-            if (to == IntPtr.Zero || !Native.IsWindow(to) || !Native.IsWindowVisible(to)) to = Native.FindWindowByTitle(PAGE_TITLE);
-            if (to != IntPtr.Zero) Native.Focus(to);
-        }
-
-        /// <summary>
-        /// The window above the game ("always on top"). Asked for in two steps: a window the browser has just opened
-        /// answers "done" to the plain request and stays below the other windows, until its place in the order has been
-        /// set once (tried on the price check window: "not on top" first, then "on top", works every time).
-        /// </summary>
-        static void Above(IntPtr t)
-        {
-            if ((Native.GetWindowLong(t, Native.GWL_EXSTYLE) & Native.WS_EX_TOPMOST) != 0) return;
-            Native.SetWindowPos(t, Native.HWND_NOTOPMOST, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
-            Native.SetWindowPos(t, Native.HWND_TOPMOST, 0, 0, 0, 0, Native.SWP_NOMOVE | Native.SWP_NOSIZE | Native.SWP_NOACTIVATE);
-        }
-
-        /// <summary>The game's picture on the screen; with no game window known, the screen the cursor is on.</summary>
-        Native.RECT GameArea()
-        {
-            Native.RECT g, c;
-            Native.POINT o = new Native.POINT();
-            if (IsGame(gameWnd) && !Native.IsIconic(gameWnd) && Native.GetClientRect(gameWnd, out c) && c.Right > 0 && c.Bottom > 0 && Native.ClientToScreen(gameWnd, ref o))
-            {
-                g.Left = o.X; g.Top = o.Y; g.Right = o.X + c.Right; g.Bottom = o.Y + c.Bottom;
-                return g;
-            }
-            Rectangle s = Screen.FromPoint(Cursor.Position).Bounds;
-            g.Left = s.Left; g.Top = s.Top; g.Right = s.Right; g.Bottom = s.Bottom;
-            return g;
-        }
-
-        static double ScaleOf(IntPtr t)
-        {
-            try { uint dpi = Native.GetDpiForWindow(t); if (dpi >= 96) return dpi / 96.0; } catch (Exception) { }
-            return 1.0;
-        }
-
-        /// <summary>
-        /// Where the price check goes: at the top, beside the game's side panel the cursor is over. The side panels (the
-        /// inventory at the right, the stash or a vendor at the left) are 370/600 of the game's height wide at every
-        /// resolution, so the window lies in the free space left of the inventory, or right of the stash. Its size is
-        /// the same on every key press. The card of a listed item goes on its far side, toward the middle of the screen.
-        /// </summary>
-        void Place(IntPtr t)
-        {
-            Native.RECT g = GameArea();
-            int gw = g.Right - g.Left, gh = g.Bottom - g.Top;
-            double scale = ScaleOf(t);
-            int w = Math.Min(gw, (int)Math.Round(Math.Max(320, cfg.PriceWidth) * scale));
-            int top = (int)Math.Round(gh * 0.02);
-            int h = Math.Min(gh - 2 * top, (int)Math.Round(Math.Max(320, cfg.PriceHeight) * scale));
-            int side = (int)Math.Round(gh * 370.0 / 600.0);
-            Native.POINT cur;
-            bool inventory = !Native.GetCursorPos(out cur) || cur.X >= g.Left + gw / 2;
-            int x = inventory ? g.Right - side - w - 2 : g.Left + side + 2;
-            x = Math.Max(g.Left, Math.Min(g.Right - w, x));
-            panelRect.Left = x; panelRect.Top = g.Top + top; panelRect.Right = x + w; panelRect.Bottom = g.Top + top + h;
-            string s = inventory ? "left" : "right";
-            if (s != server.Side) { server.Side = s; server.Tell("{\"side\":\"" + s + "\"}"); } // the page lays itself out for it
-        }
-
-        /// <summary>
-        /// How high the browser's title bar is above the page: the inside of the window less the page's own height,
-        /// which the page tells (the browser draws its title bar inside the window, there is nothing to ask Windows).
-        /// </summary>
-        void Measure(IntPtr t)
-        {
-            int w, h;
-            lock (told) { w = toldW; h = toldH; }
-            Native.RECT c;
-            if (w == 0 || !Native.GetClientRect(t, out c)) return;
-            int bar = (c.Bottom - c.Top) - h;
-            if (Math.Abs((c.Right - c.Left) - w) > 2 || bar < 0 || bar > 200) return; // told at another size
-            titleBar = bar;
-        }
-
-        const int PEEK_GAP = 6; // between the price check and the card beside it
-
-        /// <summary>
-        /// Put the price check on its rectangle of the screen and cut the rest of the browser's window away: the title
-        /// bar above the page, the borders around it (with them go moving and resizing), and the part of the page that
-        /// is kept free for the card of a listed item, except where such a card is shown. Called on every tick while
-        /// the price check is shown: the browser sets a cut of its own when Windows tells it about the frame (seen in
-        /// game: the title bar came back), and this puts it right again.
-        /// </summary>
-        void Fit(IntPtr t, bool show)
-        {
-            if (Native.IsIconic(t) || Native.IsZoomed(t)) Native.ShowWindow(t, 4); // SW_SHOWNOACTIVATE: a plain window again
-            Native.RECT wr, c, box;
-            Native.POINT o = new Native.POINT();
-            if (!Native.GetWindowRect(t, out wr) || !Native.GetClientRect(t, out c) || !Native.ClientToScreen(t, ref o)) return;
-            double scale = ScaleOf(t);
-            int bar = titleBar >= 0 ? titleBar : (int)Math.Round(31 * scale); // the usual one until the page has told its size
-            // the page inside the window: below the title bar, within the borders for resizing
-            int L = o.X - wr.Left, T = o.Y - wr.Top + bar, R = wr.Right - (o.X + c.Right), B = wr.Bottom - (o.Y + c.Bottom);
-            int w = panelRect.Right - panelRect.Left, h = panelRect.Bottom - panelRect.Top;
-            // the page is wider than the price check: a column for the card of a listed item lies on its far side
-            int extra = cfg.PeekWidth > 0 ? (int)Math.Round((cfg.PeekWidth + PEEK_GAP) * scale) : 0;
-            int pageW = w + extra;
-            bool left = server.Side == "left";
-            int px = left ? extra : 0, pw = w; // where the page has its price check column
-            lock (told)
-            {
-                // the page's own word on that, when it was said for this layout (it differs when the page is zoomed)
-                if (toldSide == server.Side && Math.Abs(toldW - pageW) <= 2 && toldPanel > 100) { px = toldX; pw = toldPanel; }
-            }
-            int nx = left ? panelRect.Right - (L + px + pw) : panelRect.Left - (L + px), ny = panelRect.Top - T, nw = L + pageW + R, nh = h + T + B;
-            bool sized = wr.Right - wr.Left != nw || wr.Bottom - wr.Top != nh;
-            if (sized) lock (told) { toldW = 0; toldH = 0; toldSide = ""; } // told at the old size: the page tells its new one
-            if (sized || wr.Left != nx || wr.Top != ny) Native.SetWindowPos(t, IntPtr.Zero, nx, ny, nw, nh, Native.SWP_NOACTIVATE | Native.SWP_NOZORDER);
-            // the cut, in the window's own coordinates: the price check, and the card when one is shown
-            int ax = L + px, bx = 0, by = 0, bw = 0, bh = 0;
-            if (peekOn && extra > 0)
-            {
-                bx = L + Math.Max(0, peek.Left); by = T + Math.Max(0, peek.Top);
-                bw = Math.Min(peek.Right, pageW) - Math.Max(0, peek.Left); bh = Math.Min(peek.Bottom, h) - Math.Max(0, peek.Top);
-                if (bw <= 0 || bh <= 0) bw = bh = 0;
-            }
-            int l0 = bw > 0 ? Math.Min(ax, bx) : ax, t0 = bw > 0 ? Math.Min(T, by) : T, r0 = bw > 0 ? Math.Max(ax + pw, bx + bw) : ax + pw, b0 = bw > 0 ? Math.Max(T + h, by + bh) : T + h;
-            string key = t + ":" + ax + "," + T + "," + pw + "," + h + "/" + bx + "," + by + "," + bw + "," + bh;
-            if (key != cutKey || Native.GetWindowRgnBox(t, out box) == 0 || box.Left != l0 || box.Top != t0 || box.Right != r0 || box.Bottom != b0)
-            {
-                IntPtr rgn = Native.CreateRectRgn(ax, T, ax + pw, T + h);
-                if (bw > 0)
-                {
-                    IntPtr card = Native.CreateRectRgn(bx, by, bx + bw, by + bh);
-                    Native.CombineRgn(rgn, rgn, card, 2); // RGN_OR
-                    Native.DeleteObject(card);
-                }
-                if (Native.SetWindowRgn(t, rgn, true) == 0) Native.DeleteObject(rgn); // taken over by Windows when it is set
-                cutKey = key;
-            }
-            shownA.Left = nx + ax; shownA.Top = ny + T; shownA.Right = nx + ax + pw; shownA.Bottom = ny + T + h;
-            shownB.Left = nx + bx; shownB.Top = ny + by; shownB.Right = nx + bx + bw; shownB.Bottom = ny + by + bh;
-            if (!show) return;
-            panelOn = true;
-            panel.Interval = 30; // while it is shown: the cut is watched, and a click beside it or Esc puts it away
-            if (!Native.IsWindowVisible(t)) Native.ShowWindow(t, 4); // SW_SHOWNOACTIVATE: the keyboard stays with the game
-            Above(t);
-        }
-
-        /// <summary>A key or mouse button pressed since the last look (held keys count once).</summary>
-        static bool Pressed(int key, ref bool was)
-        {
-            short s = Native.GetAsyncKeyState(key);
-            bool down = (s & 0x8000) != 0;
-            bool hit = down ? !was : !was && (s & 1) != 0; // down now, or down and up again between two looks
-            was = down;
-            return hit;
-        }
-
-        static bool Inside(Native.RECT r, Native.POINT p) { return p.X >= r.Left && p.X < r.Right && p.Y >= r.Top && p.Y < r.Bottom; }
-
-        /// <summary>
-        /// The price check window over the game: shown where it belongs when a key press asks for it, without its frame
-        /// and without the keyboard. It is put away by its own close button, by Esc, by a click anywhere beside it, and
-        /// when another program comes in front (Alt+Tab): it belongs to the game and is not to lie over other programs.
-        /// </summary>
-        void PanelTick()
-        {
-            long now = DateTime.UtcNow.Ticks;
-            if (openAhead != 0 && now > openAhead) { openAhead = 0; EnsurePrice(); }
-            long want = Interlocked.Read(ref panelWanted);
-            IntPtr t = PriceWindow();
-            IntPtr front = Native.GetForegroundWindow();
-            if (front != IntPtr.Zero && front != t) lastFront = front;
-            if (t == IntPtr.Zero)
-            {
-                if (want < 0 || (want > 0 && now > want)) Interlocked.Exchange(ref panelWanted, 0);
-                return; // not open, or still opening
-            }
-            if (t != priceReady) Prepare(t);
-            // put away and "in front" all the same (the browser activates its new window a moment after it is hidden):
-            // the keyboard would be with a window nobody sees
-            if (!panelOn && front == t) GiveBack(t);
-            if (want != 0) Interlocked.Exchange(ref panelWanted, 0);
-            if (want < 0) { HidePanel(); return; }
-            if (want > 0 && now <= want)
-            {
-                Measure(t);
-                Place(t);
-                peekOn = false; // a new showing starts without a card
-                Fit(t, true);
-                away = 0;
-                // what is held now is not a new press
-                wasEsc = (Native.GetAsyncKeyState(0x1B) & 0x8000) != 0; wasLeft = (Native.GetAsyncKeyState(1) & 0x8000) != 0; wasRight = (Native.GetAsyncKeyState(2) & 0x8000) != 0;
-                // a window that took the keyboard all the same (the browser opened it this moment): back to the game
-                if (IsGame(gameWnd)) GiveBack(t);
-                return;
-            }
-            if (!Native.IsWindowVisible(t)) return;
-            if (!panelOn) { Native.ShowWindow(t, 0); return; } // shown by the browser itself (as it opened): not asked for
-            Measure(t);
-            Fit(t, false);
-            IntPtr fg = Native.GetForegroundWindow();
-            bool esc = Pressed(0x1B, ref wasEsc), click = Pressed(1, ref wasLeft) | Pressed(2, ref wasRight); // Esc, left and right button
-            // Esc: with the keyboard in the price check itself, its page decides what Esc closes (a card kept open first)
-            if (esc && fg != t) { HidePanel(); return; }
-            Native.POINT cur;
-            if (click && Native.GetCursorPos(out cur) && !Inside(shownA, cur) && !Inside(shownB, cur)) { HidePanel(); return; }
-            if (anyWindow) return;
-            bool with = fg == IntPtr.Zero || fg == t || IsGame(fg) || Native.GetWindow(fg, 4) == t; // 4: its owner (a list the page opened)
-            // a quarter of a second of it: the moment between two windows, or a notice that takes the front, is not Alt+Tab
-            if (with) away = 0;
-            else if (away == 0) away = now;
-            else if (now - away > 250 * TimeSpan.TicksPerMillisecond) { away = 0; HidePanel(); }
-        }
-
-        void HidePanel()
-        {
-            IntPtr t = PriceWindow();
-            panelOn = false;
-            peekOn = false;
-            panel.Interval = 120;
-            if (t == IntPtr.Zero || !Native.IsWindowVisible(t)) return;
-            GiveBack(t); // put away with its own button it has the keyboard
-            Native.ShowWindow(t, 0); // SW_HIDE
-            server.Tell("{\"hidden\":true}"); // the page lets go of a card it had pinned
         }
 
         /// <summary>
@@ -1360,15 +634,12 @@ namespace PoE2CraftAssistant
 
         void Quit()
         {
-            try { focus.Stop(); copy.Stop(); panel.Stop(); Native.RemoveClipboardFormatListener(win.Handle); if (registered) Native.UnregisterHotKey(win.Handle, 1); } catch (Exception) { }
+            try { focus.Stop(); copy.Stop(); Native.RemoveClipboardFormatListener(win.Handle); if (registered) Native.UnregisterHotKey(win.Handle, 1); } catch (Exception) { }
             // the window goes with the program: without it the page has nothing to load from
             try
             {
-                foreach (string title in new string[] { PRICE_TITLE, PAGE_TITLE })
-                {
-                    IntPtr h = Native.FindWindowByTitle(title, title == PRICE_TITLE);
-                    if (h != IntPtr.Zero) Native.PostMessage(h, 0x0010, IntPtr.Zero, IntPtr.Zero);
-                }
+                IntPtr h = Native.FindWindowByTitle(PAGE_TITLE);
+                if (h != IntPtr.Zero) Native.PostMessage(h, 0x0010, IntPtr.Zero, IntPtr.Zero);
             }
             catch (Exception) { }
             if (server != null) server.Stop();
