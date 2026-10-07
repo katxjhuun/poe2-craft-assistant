@@ -141,7 +141,7 @@
   // ------------------------------------------------------------------ filters of one stat (calculatedStatToFilter)
   function statFilter(calc, item, percent, tag, disabled) {
     const f = { id: calc.ids[calc.type === 'pseudo' ? 'pseudo' : calc.type] || calc.ids.explicit || null, ids: calc.ids, ref: calc.ref, type: calc.type,
-      text: calc.text, tag: tag || calc.type, disabled: disabled !== false, hidden: null, roll: null };
+      text: calc.text, tag: tag || calc.type, disabled: disabled !== false, hidden: null, roll: null, sources: calc.sources || [] };
     if (!f.id && calc.type !== 'veiled') return null;
     if (calc.value == null) return f;
     const unique = item.rarity === 'Unique';
@@ -168,10 +168,11 @@
     for (const rule of pseudoRules()) {
       const want = rule.stats.map((x) => Object.assign({}, x, { ref: refOf(x.ref) }));
       let value = 0, min = 0, max = 0, any = false, srcTypes = new Set();
+      const sources = [];
       for (const s of stats) {
         const w = want.find((x) => x.ref === s.ref);
         if (!w || s.value == null) continue;
-        any = true; srcTypes.add(s.type);
+        any = true; srcTypes.add(s.type); sources.push(...(s.sources || []));
         const k = w.multiplier || 1;
         value += s.value * k; min += s.min * k; max += s.max * k;
       }
@@ -179,7 +180,7 @@
       if (want.some((x) => x.required && !stats.some((s) => s.ref === x.ref))) continue;
       const pseudo = ix.statByNorm.get(E.normalize(rule.pseudo));
       if (!pseudo) continue;
-      const f = statFilter({ ref: pseudo.r, ids: pseudo.ids, type: 'pseudo', value, min, max, text: rule.pseudo.replace('#', roundRoll(value, false)) }, item, percent, 'pseudo', rule.disabled === false ? false : true);
+      const f = statFilter({ ref: pseudo.r, ids: pseudo.ids, type: 'pseudo', value, min, max, text: rule.pseudo.replace('#', roundRoll(value, false)), sources }, item, percent, 'pseudo', rule.disabled === false ? false : true);
       if (rule.chaos) f.disabled = srcTypes.size === 1 && srcTypes.has('rune'); // chaos from a rune alone: hidden in Exiled Exchange 2
       if (rule.movement) f.disabled = srcTypes.size === 1 && srcTypes.has('implicit');
       for (const x of want) used.add(x.ref);
@@ -204,7 +205,17 @@
   // ------------------------------------------------------------------ armour and weapon properties (item-property.ts)
   function propLines(item) { return (item.props || []).flat(); }
   function propNum(item, re) { for (const l of propLines(item)) { const m = re.exec(l); if (m) return m; } return null; }
-  /** A defence or physical damage value at 20% quality (propAt20Quality): the local "increased" mods stay. */
+  /**
+   * A defence at 20% quality. Quality multiplies the value the item shows, on top of its local "increased" modifiers:
+   * ten listed body armours (7 Oct 2026, 0.5.5), nine of them with such a modifier, all carry the trade site's own
+   * quality-20 value (extended.ar, .ev, .es) within 1 of shown x 1.2, and up to 8% above the value with quality
+   * added to the modifiers (Exiled Exchange 2's propAt20Quality, which this file followed before).
+   */
+  function defenceAtQ20(value, item) {
+    const q = item.quality || 0;
+    return q >= 20 || !value ? value : Math.round(value * 120 / (100 + q));
+  }
+  /** A physical damage value at 20% quality (propAt20Quality): the local "increased" mods stay. */
   function atQ20(value, item, incrRe) {
     const q = item.quality || 0;
     if (q >= 20 || !value) return value;
@@ -223,9 +234,9 @@
     };
     if (ARMOUR.has(cls)) {
       const ar = propNum(item, /^Armour:\s*(\d+)/), ev = propNum(item, /^Evasion Rating:\s*(\d+)/), es = propNum(item, /^Energy Shield:\s*(\d+)/);
-      if (ar) prop('Armour: #', 'item.armour', atQ20(+ar[1], item, /^(\d+)% increased Armour(?: and| ,|$)/), false);
-      if (ev) prop('Evasion Rating: #', 'item.evasion_rating', atQ20(+ev[1], item, /^(\d+)% increased (?:Armour and )?Evasion(?: Rating| and|$)/), false);
-      if (es) prop('Energy Shield: #', 'item.energy_shield', atQ20(+es[1], item, /^(\d+)% increased (?:Armour and |Evasion and |Armour, Evasion and )?Energy Shield$/), false);
+      if (ar) prop('Armour: #', 'item.armour', defenceAtQ20(+ar[1], item), false);
+      if (ev) prop('Evasion Rating: #', 'item.evasion_rating', defenceAtQ20(+ev[1], item), false);
+      if (es) prop('Energy Shield: #', 'item.energy_shield', defenceAtQ20(+es[1], item), false);
       const bl = propNum(item, /^Block chance:\s*(\d+)%/i); if (bl) prop('Block: #%', 'item.block', +bl[1], true);
       const rw = propNum(item, /^Runic Ward:\s*(\d+)/i); if (rw) prop('Runic Ward: #', 'item.runic_ward', +rw[1], true);
     }
@@ -455,5 +466,92 @@
     return `https://www.pathofexile.com/trade2/search/poe2/${encodeURIComponent(league || 'Standard')}?q=${encodeURIComponent(JSON.stringify(body))}`;
   }
 
-  return { createPresets, createFilters, statsOf, pseudoStats, exactStats, tradeRequest, tradeUrl, CATEGORY, percentRoll, percentRollDelta, SEARCH_RANGE };
+  // ------------------------------------------------------------------ listed items (the trade site's own records)
+  /** A text of the trade site without its link marks: "[Resistances|Fire Resistance]" -> "Fire Resistance", "[Quality]" -> "Quality". */
+  function plain(t) { return String(t == null ? '' : t).replace(/\[([^\]|]*)\|([^\]]*)\]/g, '$2').replace(/\[([^\]|]*)\]/g, '$1'); }
+  const RARITY = ['Normal', 'Magic', 'Rare', 'Unique'];
+  /**
+   * A listed item (the "item" of a listing) in the shape the rest of this file reads: modifiers, implicits, runes and
+   * properties as the game's own lines. The same totals can then be worked out for it as for the player's item.
+   */
+  function listedItem(raw) {
+    raw = raw || {};
+    // a line is a record {description, domain, mods: [{name, tier: "P7", level, magnitudes}]}; older answers gave plain text
+    const list = (k) => (Array.isArray(raw[k]) ? raw[k] : []).map((m) => {
+      if (m && typeof m === 'object') return { text: plain(m.description).trim(), domain: m.domain || '', from: Array.isArray(m.mods) ? m.mods : [] };
+      return { text: plain(m).trim(), domain: '', from: [] };
+    }).filter((m) => m.text);
+    const line = (p) => {
+      const name = plain(p && p.name), vals = (p && Array.isArray(p.values) ? p.values : []).map((v) => plain(Array.isArray(v) ? v[0] : v));
+      if (!name) return vals.join(', ');
+      if (/\{\d\}/.test(name)) return name.replace(/\{(\d)\}/g, (m, i) => (vals[+i] != null ? vals[+i] : ''));
+      if (!vals.length) return name;
+      return p.displayMode === 1 ? `${vals.join(', ')} ${name}` : `${name}: ${vals.join(', ')}`;
+    };
+    const props = (Array.isArray(raw.properties) ? raw.properties : []).map(line).filter(Boolean);
+    const req = (Array.isArray(raw.requirements) ? raw.requirements : []).map((p) => {
+      const name = plain(p && p.name), vals = (p && Array.isArray(p.values) ? p.values : []).map((v) => plain(Array.isArray(v) ? v[0] : v));
+      return p && p.displayMode === 1 ? `${vals.join(' ')} ${name}` : `${name} ${vals.join(' ')}`;
+    }).filter((x) => x.trim());
+    const mods = [];
+    const add = (k, kind) => {
+      for (const m of list(k)) {
+        // "P7": a prefix of tier 7; a line two modifiers add up to names both ("P5 P5")
+        const tiers = m.from.map((x) => String(x.tier || '')).filter((t) => /^[PS]\d+$/.test(t));
+        const k2 = ['fractured', 'desecrated', 'crafted'].includes(m.domain) ? m.domain : kind;
+        const slot = tiers.length ? (tiers[0][0] === 'P' ? 'prefix' : 'suffix') : k2 === 'explicit' ? 'explicit' : 'prefix';
+        const o = { slot, text: m.text, kind: k2, tier: tiers.length ? +tiers[0].slice(1) : null, tiers, names: m.from.map((x) => x.name).filter(Boolean) };
+        if (k2 !== 'explicit') o[k2] = true; // the totals take fractured, desecrated and crafted lines apart
+        mods.push(o);
+      }
+    };
+    add('fracturedMods', 'fractured');
+    add('explicitMods', 'explicit');
+    add('desecratedMods', 'desecrated');
+    add('craftedMods', 'crafted');
+    const q = /^Quality[^:]*:\s*\+?(\d+)%/.exec(props.find((l) => /^Quality/.test(l)) || '');
+    const rarity = RARITY.includes(raw.rarity) ? raw.rarity : RARITY[raw.frameType] || 'Normal';
+    return {
+      name: rarity === 'Rare' || rarity === 'Unique' ? plain(raw.name) : '', base: plain(raw.baseType || raw.typeLine), typeLine: plain(raw.typeLine || raw.baseType),
+      rarity, ilvl: raw.ilvl || null, props: [props], requires: req.length ? 'Requires: ' + req.join(', ') : '', quality: q ? +q[1] : 0,
+      sockets: Array.isArray(raw.sockets) ? raw.sockets.map(() => 'S') : [],
+      mods,
+      implicits: list('implicitMods').map((m) => ({ text: m.text })).concat(list('enchantMods').map((m) => ({ text: m.text, corruption: true }))),
+      runes: list('runeMods').map((m) => ({ text: m.text, kind: 'rune' })),
+      skills: (Array.isArray(raw.grantedSkills) ? raw.grantedSkills : []).map(line).filter(Boolean),
+      flags: { corrupted: !!raw.corrupted, sanctified: !!raw.sanctified, mirrored: !!(raw.mirrored || raw.duplicated), unidentified: raw.identified === false },
+    };
+  }
+  /**
+   * The lines of the player's search against a listed item: for every line the listed item's value of the same
+   * stat (null when it has none) and the difference. stats: the search's lines; mine: the player's item; theirs: a
+   * listedItem. The same rules give both sides their totals, so "total maximum Life" means the same on both.
+   */
+  function compare(ix, E, stats, mine, theirs) {
+    const base = mine && mine.base && ix.kb.bases[mine.base];
+    const cls = base ? base.cls : null;
+    let other = [];
+    // a unique with sockets gets no totals here (see pseudoStats): both sides by the player's item
+    try { other = pseudoStats(ix, E, Object.assign({}, theirs, { sockets: (mine && mine.sockets) || [], rarity: (mine && mine.rarity) || theirs.rarity, name: (mine && mine.name) || theirs.name }), cls); } catch (e) { other = []; }
+    const by = new Map(other.map((f) => [f.ref + '|' + f.tag, f]));
+    const rows = [];
+    for (const st of stats || []) {
+      if (st.hidden === 'fixed' || st.id === 'item.has_empty_modifier' || !st.roll || typeof st.roll.value !== 'number') continue;
+      const o = by.get(st.ref + '|' + st.tag);
+      const v = o && o.roll && typeof o.roll.value === 'number' ? o.roll.value : null;
+      const d = v == null ? null : Math.round((v - st.roll.value) * 100) / 100;
+      rows.push({ ref: st.ref, tag: st.tag, text: st.text, mine: st.roll.value, theirs: v, delta: d, used: !st.disabled, hidden: !!st.hidden });
+    }
+    // a difference counts from one whole step (a hundredth on lines with decimals)
+    const step = (r) => (/\./.test(String(r.mine)) || /\./.test(String(r.theirs)) ? 0.01 : 1);
+    const shown = rows.filter((r) => !r.hidden || r.used);
+    return {
+      rows,
+      up: shown.filter((r) => r.delta != null && r.delta >= step(r)).length,
+      down: shown.filter((r) => (r.delta != null && r.delta <= -step(r)) || (r.theirs == null && !r.used)).length,
+      known: shown.filter((r) => r.theirs != null).length,
+    };
+  }
+
+  return { createPresets, createFilters, statsOf, pseudoStats, exactStats, tradeRequest, tradeUrl, CATEGORY, percentRoll, percentRollDelta, SEARCH_RANGE, plain, listedItem, compare };
 });

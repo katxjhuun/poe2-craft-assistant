@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "craft-dist", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "8765", "--directory", "app/dist"], "port": 8765 }
+    { "name": "craft-dist", "runtimeExecutable": "python", "runtimeArgs": ["-m", "http.server", "8765", "--directory", "app/dist"], "port": 8765 },
+    { "name": "price-dev", "runtimeExecutable": "node", "runtimeArgs": ["desktop/pricedev.js"], "port": 47700 }
   ]
 }

@@ -49,6 +49,7 @@ namespace PoE2CraftAssistant
         public bool PriceCheck = true;     // on the hotkey, ask the trade site for the item's listings (see Trade)
         public int PriceWidth = 455;       // the price check window's size (at 100% display scaling); it is placed
         public int PriceHeight = 1110;     // beside the game's inventory and is never taller than the game
+        public int PeekWidth = 380;        // width of a listed item's card, shown beside the price check
         public double OverlayWidth = 0.42; // the panel's share of the game window's width
         public string GameTitle = "Path of Exile 2";
         public string File;
@@ -72,6 +73,7 @@ namespace PoE2CraftAssistant
                     if (d.ContainsKey("priceCheck")) c.PriceCheck = Convert.ToBoolean(d["priceCheck"]);
                     if (d.ContainsKey("priceWidth")) c.PriceWidth = Convert.ToInt32(d["priceWidth"]);
                     if (d.ContainsKey("priceHeight")) c.PriceHeight = Convert.ToInt32(d["priceHeight"]);
+                    if (d.ContainsKey("peekWidth")) c.PeekWidth = Convert.ToInt32(d["peekWidth"]);
                     else c.Save(); // a file from before this setting: written again with every setting in it
                     if (d.ContainsKey("overlayWidth")) c.OverlayWidth = Convert.ToDouble(d["overlayWidth"], System.Globalization.CultureInfo.InvariantCulture);
                 }
@@ -87,7 +89,7 @@ namespace PoE2CraftAssistant
             {
                 string json = "{\r\n  \"hotkey\": " + Json(Hotkey) + ",\r\n  \"port\": " + Port + ",\r\n  \"topmost\": " + (Topmost ? "true" : "false")
                     + ",\r\n  \"advancedCopy\": " + (AdvancedCopy ? "true" : "false") + ",\r\n  \"gameTitle\": " + Json(GameTitle)
-                    + ",\r\n  \"watchClipboard\": " + (WatchClipboard ? "true" : "false") + ",\r\n  \"priceCheck\": " + (PriceCheck ? "true" : "false") + ",\r\n  \"priceWidth\": " + PriceWidth + ",\r\n  \"priceHeight\": " + PriceHeight
+                    + ",\r\n  \"watchClipboard\": " + (WatchClipboard ? "true" : "false") + ",\r\n  \"priceCheck\": " + (PriceCheck ? "true" : "false") + ",\r\n  \"priceWidth\": " + PriceWidth + ",\r\n  \"priceHeight\": " + PriceHeight + ",\r\n  \"peekWidth\": " + PeekWidth
                     + ",\r\n  \"overlay\": " + (Overlay ? "true" : "false") + ",\r\n  \"overlayWidth\": " + OverlayWidth.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "\r\n}\r\n";
                 System.IO.File.WriteAllText(File, json);
             }
@@ -112,6 +114,8 @@ namespace PoE2CraftAssistant
         readonly JavaScriptSerializer ser = new JavaScriptSerializer();
         readonly Dictionary<string, KeyValuePair<DateTime, string>> cache = new Dictionary<string, KeyValuePair<DateTime, string>>();
         DateTime nextSearch = DateTime.MinValue, nextFetch = DateTime.MinValue;
+        /// <summary>The trade site's last answer with listings, as it came (to look at when the page reads one wrongly).</summary>
+        public volatile string LastRaw = "{}";
 
         public Trade()
         {
@@ -233,6 +237,7 @@ namespace PoE2CraftAssistant
                     Reply fr = Send("GET", "https://www.pathofexile.com/api/trade2/fetch/" + string.Join(",", ids.ToArray()) + "?query=" + Uri.EscapeDataString(id) + "&realm=poe2", null);
                     nextFetch = DateTime.UtcNow.AddSeconds(Math.Max(1.0, fr.Wait));
                     if (fr.Status != 200) return Fail(fr.Message, fr.Wait, fr.Login);
+                    LastRaw = fr.Body;
                     System.Collections.IEnumerable rows = null;
                     try { rows = Get(ser.DeserializeObject(fr.Body), "result") as System.Collections.IEnumerable; } catch (Exception) { rows = null; }
                     if (rows != null) foreach (object row in rows)
@@ -260,6 +265,15 @@ namespace PoE2CraftAssistant
                                 break;
                             }
                             break;
+                        }
+                        // the listed item itself (its lines as the trade site gives them), for the page to show and to compare;
+                        // it came with the same answer, nothing more is asked for
+                        Dictionary<string, object> full = item as Dictionary<string, object>;
+                        if (full != null)
+                        {
+                            Dictionary<string, object> slim = new Dictionary<string, object>();
+                            foreach (KeyValuePair<string, object> kv in full) if (kv.Key != "icon" && kv.Key != "socketedItems" && kv.Key != "id") slim[kv.Key] = kv.Value;
+                            o["item"] = slim;
                         }
                         listings.Add(o);
                     }
@@ -292,6 +306,8 @@ namespace PoE2CraftAssistant
         public Action<string> OnOverlay;
         readonly Trade trade = new Trade();
         string lastJson = "{}";
+        /// <summary>On which side of the price check the card of a listed item goes ("left" or "right").</summary>
+        public volatile string Side = "left";
 
         public Server(string appDir, Config c)
         {
@@ -334,7 +350,8 @@ namespace PoE2CraftAssistant
             string path = Uri.UnescapeDataString(q.Url.AbsolutePath);
             if (path == "/bridge")
             {
-                Text(r, 200, "application/json", "{\"bridge\":true,\"hotkey\":" + Config.Json(cfg.Hotkey) + ",\"game\":" + Config.Json(cfg.GameTitle) + "}");
+                Text(r, 200, "application/json", "{\"bridge\":true,\"hotkey\":" + Config.Json(cfg.Hotkey) + ",\"game\":" + Config.Json(cfg.GameTitle)
+                    + ",\"price\":{\"width\":" + Math.Max(320, cfg.PriceWidth) + ",\"peek\":" + Math.Max(0, cfg.PeekWidth) + ",\"side\":" + Config.Json(Side) + "}}");
                 return;
             }
             if (path == "/events")
@@ -361,6 +378,7 @@ namespace PoE2CraftAssistant
                 return;
             }
             if (path == "/last") { Text(r, 200, "application/json", lastJson); return; } // the item copied last (a window opened after it)
+            if (path == "/lasttrade") { Text(r, 200, "application/json", trade.LastRaw); return; } // the trade site's last answer, as it came
             if (path == "/trade" && q.HttpMethod == "POST")
             {
                 string origin = q.Headers["Origin"];
@@ -434,6 +452,9 @@ namespace PoE2CraftAssistant
             return Send("data: " + lastJson + "\n\n");
         }
 
+        /// <summary>A note for the open pages (not an item): {"side": "left"}.</summary>
+        public void Tell(string json) { Send("data: " + json + "\n\n"); }
+
         int Send(string frame)
         {
             byte[] b = Encoding.UTF8.GetBytes(frame);
@@ -506,6 +527,8 @@ namespace PoE2CraftAssistant
         [DllImport("user32.dll")] public static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool redraw);
         [DllImport("user32.dll")] public static extern int GetWindowRgnBox(IntPtr hWnd, out RECT box);
         [DllImport("gdi32.dll")] public static extern IntPtr CreateRectRgn(int left, int top, int right, int bottom);
+        [DllImport("gdi32.dll")] public static extern int CombineRgn(IntPtr dest, IntPtr a, IntPtr b, int mode);
+        [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int key);
         [DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr obj);
         [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
         [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
@@ -616,11 +639,20 @@ namespace PoE2CraftAssistant
         long panelWanted; // ticks until which the price panel is to be placed over the game (0: nothing asked, -1: hide)
         IntPtr priceWnd = IntPtr.Zero, priceReady = IntPtr.Zero; // the price check window (shown or hidden); the one made ready
         long priceAsked, openAhead; // ticks: when the browser was last asked for that window; when to open it ahead of its use
-        long pageSize;              // the price check page's size in pixels as the page tells it (width << 32 | height; 0: not told)
+        // what the price check's page tells about itself, in pixels: its size inside the window, where its own column
+        // (the price check) lies in it and for which side that was said; and the card of a listed item it shows beside it
+        readonly object told = new object();
+        int toldW, toldH, toldX, toldPanel; string toldSide = "";
+        Native.RECT peek; bool peekOn;
         int titleBar = -1;          // height of the browser's title bar above that page in pixels (-1: not measured yet)
-        int away;                   // ticks in a row with another program in front
+        long away;                  // since when another program has been in front (ticks; 0: it is not)
+        IntPtr lastFront = IntPtr.Zero; // the window that was in front last, the price check aside
         bool panelOn;               // the price check is shown because a key press asked for it
-        Native.RECT panelRect;      // where on the screen the price check's page is to be
+        Native.RECT panelRect;      // where on the screen the price check is to be
+        Native.RECT shownA, shownB; // what is on the screen of it: the price check, and the card beside it (empty: none)
+        string cutKey = "";         // the cut of the window as it was set last
+        bool wasEsc, wasLeft, wasRight; // keys held at the last look
+        readonly SynchronizationContext ui; // to do window work on the program's own thread
         readonly bool anyWindow, noWindow;
         readonly string dir;
         bool registered;
@@ -633,6 +665,7 @@ namespace PoE2CraftAssistant
             anyWindow = Array.IndexOf(args, "--any-window") >= 0; // the hotkey also outside the game (for trying it out)
             noWindow = Array.IndexOf(args, "--no-window") >= 0;   // do not open the assistant's window
             cfg = Config.Load(Path.Combine(dir, "config.json"));
+            ui = new WindowsFormsSynchronizationContext();
 
             tray = new NotifyIcon();
             tray.Icon = MakeIcon();
@@ -661,11 +694,33 @@ namespace PoE2CraftAssistant
             // the page asks for the panel from the server's thread; the window work is done here, on the program's own
             server.OnOverlay = delegate(string cmd)
             {
-                if (cmd.StartsWith("size ", StringComparison.Ordinal))
+                string[] p = cmd.Split(' ');
+                int a = 0, b = 0, x = 0, w = 0;
+                if (p[0] == "size")
                 {
-                    string[] p = cmd.Split(' ');
-                    int w, h;
-                    if (p.Length == 3 && int.TryParse(p[1], out w) && int.TryParse(p[2], out h) && w > 0 && h > 0) Interlocked.Exchange(ref pageSize, ((long)w << 32) | (uint)h);
+                    // "size W H X P side": the page's size, its price check column from X, P wide, laid out for that side
+                    if (p.Length >= 3 && int.TryParse(p[1], out a) && int.TryParse(p[2], out b) && a > 0 && b > 0)
+                    {
+                        lock (told)
+                        {
+                            toldW = a; toldH = b; toldX = 0; toldPanel = 0; toldSide = "";
+                            if (p.Length >= 6 && int.TryParse(p[3], out x) && int.TryParse(p[4], out w)) { toldX = x; toldPanel = w; toldSide = p[5]; }
+                        }
+                    }
+                    return;
+                }
+                if (p[0] == "peek")
+                {
+                    // "peek X Y W H": the card of a listed item beside the price check (in the page's pixels); "peek off"
+                    Native.RECT r = new Native.RECT();
+                    bool on = p.Length == 5 && int.TryParse(p[1], out x) && int.TryParse(p[2], out a) && int.TryParse(p[3], out w) && int.TryParse(p[4], out b) && w > 0 && b > 0;
+                    if (on) { r.Left = x; r.Top = a; r.Right = x + w; r.Bottom = a + b; }
+                    ui.Post(delegate
+                    {
+                        peek = r; peekOn = on;
+                        IntPtr t = PriceWindow();
+                        if (t != IntPtr.Zero && panelOn) Fit(t, false);
+                    }, null);
                     return;
                 }
                 Interlocked.Exchange(ref panelWanted, cmd == "hide" ? -1 : DateTime.UtcNow.AddSeconds(4).Ticks);
@@ -863,7 +918,7 @@ namespace PoE2CraftAssistant
             if (now - priceAsked < 8 * TimeSpan.TicksPerSecond) return; // the browser is still opening it
             priceAsked = now;
             // its own address: the browser remembers a window's place by the address, and this one's is not the assistant's
-            Launch(server.Url + "price", (cfg.PriceWidth + 16) + "," + (cfg.PriceHeight + 39));
+            Launch(server.Url + "price", (cfg.PriceWidth + (cfg.PeekWidth > 0 ? cfg.PeekWidth + PEEK_GAP : 0) + 16) + "," + (cfg.PriceHeight + 39));
         }
 
         /// <summary>
@@ -874,10 +929,26 @@ namespace PoE2CraftAssistant
         {
             priceReady = t;
             panelOn = false;
-            Native.ShowWindow(t, 0); // SW_HIDE: Windows hands the keyboard back to the window that had it
+            cutKey = "";
+            GiveBack(t);
+            Native.ShowWindow(t, 0); // SW_HIDE
             int ex = Native.GetWindowLong(t, Native.GWL_EXSTYLE);
             Native.SetWindowLong(t, Native.GWL_EXSTYLE, (ex | Native.WS_EX_TOOLWINDOW) & ~Native.WS_EX_APPWINDOW);
             Above(t);
+        }
+
+        /// <summary>
+        /// Before the price check is put away while it has the keyboard (the browser opened it this moment, or the player
+        /// clicked in it): the keyboard goes back to the game, or to the window that was in front before. Windows does
+        /// not do that by itself for a window hidden from outside (seen: the hidden window stayed "in front", and the
+        /// keyboard was with no window at all).
+        /// </summary>
+        void GiveBack(IntPtr t)
+        {
+            if (Native.GetForegroundWindow() != t) return;
+            IntPtr to = IsGame(gameWnd) && !Native.IsIconic(gameWnd) ? gameWnd : lastFront;
+            if (to == IntPtr.Zero || !Native.IsWindow(to) || !Native.IsWindowVisible(to)) to = Native.FindWindowByTitle(PAGE_TITLE);
+            if (to != IntPtr.Zero) Native.Focus(to);
         }
 
         /// <summary>
@@ -907,18 +978,23 @@ namespace PoE2CraftAssistant
             return g;
         }
 
+        static double ScaleOf(IntPtr t)
+        {
+            try { uint dpi = Native.GetDpiForWindow(t); if (dpi >= 96) return dpi / 96.0; } catch (Exception) { }
+            return 1.0;
+        }
+
         /// <summary>
         /// Where the price check goes: at the top, beside the game's side panel the cursor is over. The side panels (the
         /// inventory at the right, the stash or a vendor at the left) are 370/600 of the game's height wide at every
         /// resolution, so the window lies in the free space left of the inventory, or right of the stash. Its size is
-        /// the same on every key press.
+        /// the same on every key press. The card of a listed item goes on its far side, toward the middle of the screen.
         /// </summary>
         void Place(IntPtr t)
         {
             Native.RECT g = GameArea();
             int gw = g.Right - g.Left, gh = g.Bottom - g.Top;
-            double scale = 1.0;
-            try { uint dpi = Native.GetDpiForWindow(t); if (dpi >= 96) scale = dpi / 96.0; } catch (Exception) { }
+            double scale = ScaleOf(t);
             int w = Math.Min(gw, (int)Math.Round(Math.Max(320, cfg.PriceWidth) * scale));
             int top = (int)Math.Round(gh * 0.02);
             int h = Math.Min(gh - 2 * top, (int)Math.Round(Math.Max(320, cfg.PriceHeight) * scale));
@@ -928,28 +1004,33 @@ namespace PoE2CraftAssistant
             int x = inventory ? g.Right - side - w - 2 : g.Left + side + 2;
             x = Math.Max(g.Left, Math.Min(g.Right - w, x));
             panelRect.Left = x; panelRect.Top = g.Top + top; panelRect.Right = x + w; panelRect.Bottom = g.Top + top + h;
+            string s = inventory ? "left" : "right";
+            if (s != server.Side) { server.Side = s; server.Tell("{\"side\":\"" + s + "\"}"); } // the page lays itself out for it
         }
 
         /// <summary>
         /// How high the browser's title bar is above the page: the inside of the window less the page's own height,
         /// which the page tells (the browser draws its title bar inside the window, there is nothing to ask Windows).
-        /// True when the height is another than it was thought to be.
         /// </summary>
-        bool Measure(IntPtr t)
+        void Measure(IntPtr t)
         {
-            long ps = Interlocked.Read(ref pageSize);
+            int w, h;
+            lock (told) { w = toldW; h = toldH; }
             Native.RECT c;
-            if (ps == 0 || !Native.GetClientRect(t, out c)) return false;
-            int pw = (int)(ps >> 32), ph = (int)(ps & 0xFFFFFFFF);
-            int bar = (c.Bottom - c.Top) - ph;
-            if (Math.Abs((c.Right - c.Left) - pw) > 2 || bar < 0 || bar > 200 || bar == titleBar) return false; // told at another size
+            if (w == 0 || !Native.GetClientRect(t, out c)) return;
+            int bar = (c.Bottom - c.Top) - h;
+            if (Math.Abs((c.Right - c.Left) - w) > 2 || bar < 0 || bar > 200) return; // told at another size
             titleBar = bar;
-            return true;
         }
 
+        const int PEEK_GAP = 6; // between the price check and the card beside it
+
         /// <summary>
-        /// Put the page of the price check window on its rectangle of the screen and cut the rest of the window away:
-        /// the browser's title bar above the page and the borders around it. With the frame go moving and resizing.
+        /// Put the price check on its rectangle of the screen and cut the rest of the browser's window away: the title
+        /// bar above the page, the borders around it (with them go moving and resizing), and the part of the page that
+        /// is kept free for the card of a listed item, except where such a card is shown. Called on every tick while
+        /// the price check is shown: the browser sets a cut of its own when Windows tells it about the frame (seen in
+        /// game: the title bar came back), and this puts it right again.
         /// </summary>
         void Fit(IntPtr t, bool show)
         {
@@ -957,31 +1038,72 @@ namespace PoE2CraftAssistant
             Native.RECT wr, c, box;
             Native.POINT o = new Native.POINT();
             if (!Native.GetWindowRect(t, out wr) || !Native.GetClientRect(t, out c) || !Native.ClientToScreen(t, ref o)) return;
-            double scale = 1.0;
-            try { uint dpi = Native.GetDpiForWindow(t); if (dpi >= 96) scale = dpi / 96.0; } catch (Exception) { }
+            double scale = ScaleOf(t);
             int bar = titleBar >= 0 ? titleBar : (int)Math.Round(31 * scale); // the usual one until the page has told its size
             // the page inside the window: below the title bar, within the borders for resizing
             int L = o.X - wr.Left, T = o.Y - wr.Top + bar, R = wr.Right - (o.X + c.Right), B = wr.Bottom - (o.Y + c.Bottom);
             int w = panelRect.Right - panelRect.Left, h = panelRect.Bottom - panelRect.Top;
-            int nx = panelRect.Left - L, ny = panelRect.Top - T, nw = w + L + R, nh = h + T + B;
-            bool sized = wr.Right - wr.Left != nw || wr.Bottom - wr.Top != nh;
-            if (sized) Interlocked.Exchange(ref pageSize, 0); // told at the old size: the page tells its new one
-            if (sized || wr.Left != nx || wr.Top != ny) Native.SetWindowPos(t, IntPtr.Zero, nx, ny, nw, nh, Native.SWP_NOACTIVATE | Native.SWP_NOZORDER);
-            if (Native.GetWindowRgnBox(t, out box) == 0 || box.Left != L || box.Top != T || box.Right != L + w || box.Bottom != T + h)
+            // the page is wider than the price check: a column for the card of a listed item lies on its far side
+            int extra = cfg.PeekWidth > 0 ? (int)Math.Round((cfg.PeekWidth + PEEK_GAP) * scale) : 0;
+            int pageW = w + extra;
+            bool left = server.Side == "left";
+            int px = left ? extra : 0, pw = w; // where the page has its price check column
+            lock (told)
             {
-                IntPtr rgn = Native.CreateRectRgn(L, T, L + w, T + h);
-                if (Native.SetWindowRgn(t, rgn, true) == 0) Native.DeleteObject(rgn); // taken over by Windows when it is set
+                // the page's own word on that, when it was said for this layout (it differs when the page is zoomed)
+                if (toldSide == server.Side && Math.Abs(toldW - pageW) <= 2 && toldPanel > 100) { px = toldX; pw = toldPanel; }
             }
+            int nx = left ? panelRect.Right - (L + px + pw) : panelRect.Left - (L + px), ny = panelRect.Top - T, nw = L + pageW + R, nh = h + T + B;
+            bool sized = wr.Right - wr.Left != nw || wr.Bottom - wr.Top != nh;
+            if (sized) lock (told) { toldW = 0; toldH = 0; toldSide = ""; } // told at the old size: the page tells its new one
+            if (sized || wr.Left != nx || wr.Top != ny) Native.SetWindowPos(t, IntPtr.Zero, nx, ny, nw, nh, Native.SWP_NOACTIVATE | Native.SWP_NOZORDER);
+            // the cut, in the window's own coordinates: the price check, and the card when one is shown
+            int ax = L + px, bx = 0, by = 0, bw = 0, bh = 0;
+            if (peekOn && extra > 0)
+            {
+                bx = L + Math.Max(0, peek.Left); by = T + Math.Max(0, peek.Top);
+                bw = Math.Min(peek.Right, pageW) - Math.Max(0, peek.Left); bh = Math.Min(peek.Bottom, h) - Math.Max(0, peek.Top);
+                if (bw <= 0 || bh <= 0) bw = bh = 0;
+            }
+            int l0 = bw > 0 ? Math.Min(ax, bx) : ax, t0 = bw > 0 ? Math.Min(T, by) : T, r0 = bw > 0 ? Math.Max(ax + pw, bx + bw) : ax + pw, b0 = bw > 0 ? Math.Max(T + h, by + bh) : T + h;
+            string key = t + ":" + ax + "," + T + "," + pw + "," + h + "/" + bx + "," + by + "," + bw + "," + bh;
+            if (key != cutKey || Native.GetWindowRgnBox(t, out box) == 0 || box.Left != l0 || box.Top != t0 || box.Right != r0 || box.Bottom != b0)
+            {
+                IntPtr rgn = Native.CreateRectRgn(ax, T, ax + pw, T + h);
+                if (bw > 0)
+                {
+                    IntPtr card = Native.CreateRectRgn(bx, by, bx + bw, by + bh);
+                    Native.CombineRgn(rgn, rgn, card, 2); // RGN_OR
+                    Native.DeleteObject(card);
+                }
+                if (Native.SetWindowRgn(t, rgn, true) == 0) Native.DeleteObject(rgn); // taken over by Windows when it is set
+                cutKey = key;
+            }
+            shownA.Left = nx + ax; shownA.Top = ny + T; shownA.Right = nx + ax + pw; shownA.Bottom = ny + T + h;
+            shownB.Left = nx + bx; shownB.Top = ny + by; shownB.Right = nx + bx + bw; shownB.Bottom = ny + by + bh;
             if (!show) return;
             panelOn = true;
+            panel.Interval = 30; // while it is shown: the cut is watched, and a click beside it or Esc puts it away
             if (!Native.IsWindowVisible(t)) Native.ShowWindow(t, 4); // SW_SHOWNOACTIVATE: the keyboard stays with the game
             Above(t);
         }
 
+        /// <summary>A key or mouse button pressed since the last look (held keys count once).</summary>
+        static bool Pressed(int key, ref bool was)
+        {
+            short s = Native.GetAsyncKeyState(key);
+            bool down = (s & 0x8000) != 0;
+            bool hit = down ? !was : !was && (s & 1) != 0; // down now, or down and up again between two looks
+            was = down;
+            return hit;
+        }
+
+        static bool Inside(Native.RECT r, Native.POINT p) { return p.X >= r.Left && p.X < r.Right && p.Y >= r.Top && p.Y < r.Bottom; }
+
         /// <summary>
         /// The price check window over the game: shown where it belongs when a key press asks for it, without its frame
-        /// and without the keyboard; put away when the page's close button asks, and when another program comes in front
-        /// (Alt+Tab): it belongs to the game and is not to lie over other programs.
+        /// and without the keyboard. It is put away by its own close button, by Esc, by a click anywhere beside it, and
+        /// when another program comes in front (Alt+Tab): it belongs to the game and is not to lie over other programs.
         /// </summary>
         void PanelTick()
         {
@@ -989,6 +1111,8 @@ namespace PoE2CraftAssistant
             if (openAhead != 0 && now > openAhead) { openAhead = 0; EnsurePrice(); }
             long want = Interlocked.Read(ref panelWanted);
             IntPtr t = PriceWindow();
+            IntPtr front = Native.GetForegroundWindow();
+            if (front != IntPtr.Zero && front != t) lastFront = front;
             if (t == IntPtr.Zero)
             {
                 if (want < 0 || (want > 0 && now > want)) Interlocked.Exchange(ref panelWanted, 0);
@@ -1003,28 +1127,39 @@ namespace PoE2CraftAssistant
                 Place(t);
                 Fit(t, true);
                 away = 0;
+                // what is held now is not a new press
+                wasEsc = (Native.GetAsyncKeyState(0x1B) & 0x8000) != 0; wasLeft = (Native.GetAsyncKeyState(1) & 0x8000) != 0; wasRight = (Native.GetAsyncKeyState(2) & 0x8000) != 0;
                 // a window that took the keyboard all the same (the browser opened it this moment): back to the game
-                if (IsGame(gameWnd) && Native.GetForegroundWindow() == t) Native.Focus(gameWnd);
+                if (IsGame(gameWnd)) GiveBack(t);
                 return;
             }
             if (!Native.IsWindowVisible(t)) return;
             if (!panelOn) { Native.ShowWindow(t, 0); return; } // shown by the browser itself (as it opened): not asked for
-            if (Measure(t)) Fit(t, false); // the page told its size: the cut follows the real title bar
-            if (anyWindow) return;
+            Measure(t);
+            Fit(t, false);
             IntPtr fg = Native.GetForegroundWindow();
+            bool esc = Pressed(0x1B, ref wasEsc), click = Pressed(1, ref wasLeft) | Pressed(2, ref wasRight); // Esc, left and right button
+            // Esc: with the keyboard in the price check itself, its page decides what Esc closes (a card kept open first)
+            if (esc && fg != t) { HidePanel(); return; }
+            Native.POINT cur;
+            if (click && Native.GetCursorPos(out cur) && !Inside(shownA, cur) && !Inside(shownB, cur)) { HidePanel(); return; }
+            if (anyWindow) return;
             bool with = fg == IntPtr.Zero || fg == t || IsGame(fg) || Native.GetWindow(fg, 4) == t; // 4: its owner (a list the page opened)
-            away = with ? 0 : away + 1;
-            if (away >= 2) { away = 0; HidePanel(); }
+            // a quarter of a second of it: the moment between two windows, or a notice that takes the front, is not Alt+Tab
+            if (with) away = 0;
+            else if (away == 0) away = now;
+            else if (now - away > 250 * TimeSpan.TicksPerMillisecond) { away = 0; HidePanel(); }
         }
 
         void HidePanel()
         {
             IntPtr t = PriceWindow();
             panelOn = false;
+            panel.Interval = 120;
             if (t == IntPtr.Zero || !Native.IsWindowVisible(t)) return;
-            // put away with its own button it has the keyboard: that goes back to the game, not to the next window in line
-            if (Native.GetForegroundWindow() == t && IsGame(gameWnd) && !Native.IsIconic(gameWnd)) Native.Focus(gameWnd);
+            GiveBack(t); // put away with its own button it has the keyboard
             Native.ShowWindow(t, 0); // SW_HIDE
+            server.Tell("{\"hidden\":true}"); // the page lets go of a card it had pinned
         }
 
         /// <summary>

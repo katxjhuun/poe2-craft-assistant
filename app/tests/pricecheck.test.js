@@ -27,8 +27,8 @@ test('rare item: category search with the pseudo totals and armour at 20% qualit
   // 55% total elemental resistance, -10%; life 120 + 2 per Strength
   assert.equal(b.query.stats[0].filters[0].value.min, 49);
   assert.equal(pr.presets[0].stats.find((s) => s.ref === '+# total maximum Life').roll.value, 160);
-  // armour at 20% quality: 402 x (100 + 35 + 20) / (100 + 35 + 12)
-  assert.equal(b.query.filters.equipment_filters.filters.ar.min, Math.floor(Math.round(402 * 155 / 147) * 0.9));
+  // armour at 20% quality: quality multiplies the shown value, 402 x 120 / 112 (the trade site's own numbers, see defenceAtQ20)
+  assert.equal(b.query.filters.equipment_filters.filters.ar.min, Math.floor(Math.round(402 * 120 / 112) * 0.9));
   assert.deepEqual(b.query.filters.misc_filters.filters, { corrupted: { option: 'false' }, mirrored: { option: 'false' }, sanctified: { option: 'false' } });
   assert.equal(b.query.status.option, 'securable');
   assert.deepEqual(b.sort, { price: 'asc' });
@@ -77,4 +77,38 @@ test('corrupted, twice corrupted, sanctified, desecrated and Magic jewels', () =
   const bj = body(jewel);
   assert.equal(bj.query.filters.type_filters.filters.rarity.option, 'magic');
   assert.equal(bj.query.filters.type_filters.filters.category.option, 'jewel');
+});
+
+test('listed items: the trade site\'s records are read into lines, tiers and totals, and compared with the player\'s item', () => {
+  const f = require('./fixtures/trade-listings.json');
+  const it = parse(f.item);
+  const pr = presets(it);
+  const p = pr.presets.find((x) => x.id === pr.active);
+  for (const st of p.stats) if (!st.hidden && st.id !== 'item.has_empty_modifier') st.disabled = false;
+  assert.equal(PC.plain('+35% to [Resistances|Fire Resistance], [Quality]'), '+35% to Fire Resistance, Quality');
+  // a Soldier Cuirass with runes, a crafted and a desecrated modifier, and a line two modifiers add up to
+  const x = PC.listedItem(f.listings[4].item);
+  assert.deepEqual([x.name, x.base, x.rarity, x.ilvl, x.sockets.length], ['Oblivion Coat', 'Soldier Cuirass', 'Rare', f.listings[4].item.ilvl, 2]);
+  assert.deepEqual(x.props[0], ['Body Armour', 'Armour: 998']);
+  assert.equal(x.requires, 'Requires: Level 65, 121 Str');
+  assert.deepEqual(x.mods.map((m) => [m.kind, m.tiers.join('+'), m.text]), [['explicit', 'P6', '9% increased Armour'], ['explicit', 'P2+P6', '+197 to maximum Life'],
+    ['explicit', 'S4', '+22 to Strength'], ['explicit', 'S2', '+40% to Cold Resistance'], ['crafted', 'S3', '+17% to Chaos Resistance'], ['desecrated', 'P5', '66% increased Armour']]);
+  assert.deepEqual(x.runes.map((r) => r.text), ['+20% to Lightning Resistance', 'Bonded: +40 to maximum Life', 'Bonded: +40 to maximum Mana']);
+  // against the Heavy Plate: armour at 20% quality, resistances with the rune's, life with 2 per Strength
+  const c = PC.compare(ix, E, p.stats, it, x);
+  const row = (ref) => c.rows.find((r) => r.ref === ref);
+  assert.deepEqual([row('Armour: #').mine, row('Armour: #').theirs], [431, 1198]);
+  assert.deepEqual([row('#% total Elemental Resistance').theirs, row('+# total to Strength').theirs, row('+# total maximum Life').theirs], [60, 22, 241]);
+  assert.deepEqual([row('+# total maximum Life').delta, c.up, c.down, c.known], [81, 4, 0, 4]);
+  // every listing: all lines of the search are found, and the armour is the trade site's own quality-20 value within 1
+  for (const l of f.listings) {
+    const k = PC.compare(ix, E, p.stats, it, PC.listedItem(l.item));
+    assert.equal(k.known, 4, l.item.name);
+    assert.ok(Math.abs(k.rows.find((r) => r.ref === 'Armour: #').theirs - l.item.extended.ar) <= 1, l.item.name);
+  }
+  // a line that is not in use and that the listed item lacks counts as lower
+  const none = PC.compare(ix, E, p.stats.map((st) => (st.ref === '+# total to Strength' ? Object.assign({}, st, { disabled: true }) : st)), it, PC.listedItem(Object.assign({}, f.listings[4].item, { explicitMods: f.listings[4].item.explicitMods.filter((m) => !/Strength/.test(m.description)) })));
+  assert.deepEqual([none.rows.find((r) => r.ref === '+# total to Strength').theirs, none.down], [null, 1]);
+  // the lines of a search know the modifiers they come from (what tells how rare a line is)
+  assert.deepEqual(p.stats.find((st) => st.ref === '+# total maximum Life').sources.map((s) => s.tier), [5, 6]);
 });

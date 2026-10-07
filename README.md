@@ -134,7 +134,8 @@ own window (Edge's app mode), kept above the game.
 - While a route is running, the same item coming back changed counts as the result of the route's next step, so the
   steps no longer ask for a paste.
 - The hotkey is taken only while the game window is in front. Settings are in `config.json` next to the exe
-  (`hotkey`, `port`, `topmost`, `advancedCopy`, `gameTitle`, `priceWidth`, `priceHeight`); the tray menu opens it.
+  (`hotkey`, `port`, `topmost`, `advancedCopy`, `gameTitle`, `priceWidth`, `priceHeight`, `peekWidth`); the tray menu
+  opens it.
 - Price check on the hotkey: a panel over the game shows the item as the game draws it, every line a
   search filter (click a line to use it or leave it out; its tier at the left, minimum and maximum at the right;
   Exact match or Broad), an estimate from the listings (their middle price, with range and how far they agree), and
@@ -142,28 +143,58 @@ own window (Edge's app mode), kept above the game.
   listing and its age as options. The program asks the trade site for them the way Exiled
   Exchange 2 and PoE Overlay II do. Those endpoints are not in Grinding Gear Games' documented API (its developer
   documentation calls their use a breach of the terms, 7i); the player chose to use them knowingly, no further than
-  those tools go. The limits kept here: only on a key press or a Search click, never in the background; one search and
-  one fetch of ten listings; the site's rate limit headers obeyed with a margin; no account cookies (a search the site
-  wants a login for is refused and left to the trade site); a refusal by the site is never worked around. The tray
-  menu turns it off (`priceCheck` in `config.json`).
+  those tools go. The limits kept here: only on a key press, a Search click or a change the player makes to the
+  search, never in the background; one search and one fetch of ten listings; the site's rate limit headers obeyed
+  with a margin; no account cookies (a search the site wants a login for is refused and left to the trade site); a
+  refusal by the site is never worked around. The tray menu turns it off (`priceCheck` in `config.json`).
+- A change to the search (a line clicked on or off, a minimum or maximum, a preset) is searched by itself after a short
+  pause, so the estimate follows; several changes in a row are one search, and a search that comes too soon for the
+  trade site waits the time the site asks for and runs once more. The last answer stays on screen, dimmed, meanwhile.
+- The listings: each row says how many lines of the search the listed item has higher (▲) and lower (▼) than the
+  player's item, worked out with the same rules for both (totals, armour at 20% quality). The eye at the end of a row
+  shows that item in a card beside the price check while the cursor is on it: the item as the game would draw it
+  (tiers before its lines), then the lines of the search with both values and the difference. A click on the eye
+  keeps the card open until it is closed (its close button, Esc, or a new answer). The listed items come with the
+  same answer of the trade site; nothing more is asked for.
+- The item's most valuable line carries a dot. Filled: measured from the player's own searches (two searches that
+  differ by one line give the price with it and without it; the line whose leaving lowers the listed prices most).
+  A ring: until then a guess from the game data, the rarest roll on the item (the share of its slot's pool that gives
+  it at this tier or better), on a unique its best roll. The guess says that it is one; no search is run to find it.
 - Where the price check is: at the top, in the free space beside the game's side panel the cursor is over (left of the
   inventory; right of the stash for an item there). The side panels are 370/600 of the game's height wide at every
   resolution, which is where the place comes from. The size is fixed (`priceWidth` x `priceHeight`, 455 x 1110 at
   100% scaling, never taller than the game) and the same on every press. The window has no frame: the browser's
   title bar and resize borders are cut away (the page tells the program how large it is inside its window), so it
   cannot be moved or resized by hand. It is no taskbar button and not among the Alt+Tab windows, it never takes the
-  keyboard from the game, and it is put away when another program comes in front (Alt+Tab), when its own close
-  button is clicked, and when the hotkey is pressed over nothing. It is opened once, hidden, when the program starts.
+  keyboard from the game, and it is put away by Esc, by a click anywhere beside it, by its own close button, when
+  another program comes in front (Alt+Tab), and when the hotkey is pressed over nothing. Esc and the mouse buttons
+  are only looked at (their state, 30 times a second while the price check is shown), never caught: the game gets
+  them as always. It is opened once, hidden, when the program starts. The browser's window is wider than the price
+  check (`peekWidth`, the room for a listed item's card on the far side); the program cuts it down to what is shown
+  and sets the cut again whenever the browser drops it (the browser does when Windows tells it about the window's
+  frame: seen in game, the title bar came back).
 - The browser does not offer to translate the program's pages (they are in English on purpose): the pages are marked
   "do not translate", and translation is turned off in the program's own browser profile.
 - Other tools: an item copied in game by any means (Ctrl+C, another tool's price check) is loaded as well
   (`watchClipboard`). With a route running, only the route's own item comes in that way.
 - "Search on trade" in the page still opens the official trade site with the search prefilled.
+- To work on the price check window without the game and without the trade site: `node desktop/pricedev.js`, then
+  `http://localhost:47700/price` (a sample item, ten listings kept from one real answer with the account names
+  replaced; `?slow=1`, `?side=right`). `GET /lasttrade` on the program gives the trade site's last answer as it came.
 - Tested by the author: the page is served, an item text pushed to `POST /push` is loaded, counted as a step result and
   the route goes on; the window opens and stays on top; one real price check returned listings. The price check
   window, shown without an item on a 2560x1440 game: the page lies at 1215..1670 x 29..1139 (the inventory starts at
   1672), title bar and borders cut, above every other window, the keyboard left where it was, hidden again a quarter
-  of a second later because another program was in front. The player confirmed the hotkey in game. Not tested: a
-  price check from a real key press with the game in front since the window lost its frame (how it looks beside the
-  inventory, and that it stays while the game is in front), the translation prompt being gone (it was never seen by
-  the author), and the clipboard watcher with another tool.
+  of a second later because another program was in front. The player confirmed the hotkey in game, and that the
+  price check opens beside the inventory. Listed items (7 Oct 2026): one search was run by the author through the
+  program to read their shape (the lines are records with a text, a kind and the modifiers they come from, not plain
+  text); the ten listings of that answer are the test fixture. They also showed that quality multiplies a defence
+  (the trade site's own quality-20 values are the shown value x 1.2 within 1 on all ten, not the value with quality
+  added to the local modifiers), which the armour, evasion and energy shield lines of a search now follow; the same
+  question for a weapon's physical damage is open (no weapon was looked at). In the stand-in: the card on either
+  side, kept open by a click, closed by Esc; the search after a change, the wait and second try, the dot moving to
+  a measured line. On the real window: the cut with a card beside the price check (two rectangles, 6 px apart), and
+  that the keyboard goes back to the window that had it when the price check is put away. Not tested: all of this
+  from a real key press with the game in front (Esc and a click beside the price check in game, the card over the
+  game, the cut staying), the translation prompt being gone (it was never seen by the author), and the clipboard
+  watcher with another tool.

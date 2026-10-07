@@ -89,10 +89,39 @@ h2 { margin: 0; font: 700 14px/1.2 var(--f-ui); letter-spacing: .14em; text-tran
 /* the desktop program's price check window (?view=price): the item as the game shows it, every line a search filter */
 #priceView { display: none; }
 html.pv .wrap { display: none; }
-html.pv #priceView { display: block; }
-html.pv body { padding: 0; background: #0B0B0D; }
-/* the window has no frame of its own (the program cuts the browser's away): a line around the page stands for it */
-html.pv body::after { content: ''; position: fixed; inset: 0; border: 1px solid #3A3B43; pointer-events: none; z-index: 60; }
+html.pv body { padding: 0; background: #0B0B0D; height: 100vh; overflow: hidden; }
+/* The window is wider than the price check: the price check is the column at the end that lies beside the game's panel
+   (data-side: the side the other column is on), the rest is kept free for the card of a listed item. The program cuts
+   the window down to what is shown, so each part draws its own line around itself. */
+html.pv #priceView { display: block; position: fixed; top: 0; bottom: 0; right: 0; width: var(--pv-w, 455px); overflow-y: auto; box-sizing: border-box; border: 1px solid #3A3B43; background: #0B0B0D; }
+html.pv[data-side="right"] #priceView { right: auto; left: 0; }
+#pvPeek { display: none; }
+html.pv #pvPeek.on { display: block; position: fixed; top: 0; left: 0; width: var(--pv-peek, 380px); max-height: 100vh; overflow-y: auto; box-sizing: border-box; border: 1px solid #3A3B43; background: #0B0B0D; }
+html.pv[data-side="right"] #pvPeek.on { left: auto; right: 0; }
+.pvk { display: grid; gap: 8px; padding: 8px; font-size: 13.5px; }
+.pvk-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12.5px; min-height: 26px; }
+.pvk-top .price { font-weight: 700; color: var(--accent); font-size: 14px; }
+.pvk-top .icon-btn { width: 26px; height: 26px; flex: none; }
+.pvk .tt { font-size: 14.5px; box-shadow: none; }
+.pvk .tt-name { font-size: 18px; }
+.pvk .tt-prop, .pvk .tx { overflow-wrap: anywhere; }
+.pvk-t { font: 600 11px var(--f-ui); margin-right: 6px; color: var(--g-lbl); vertical-align: 1px; }
+.pvk-t.p { color: #DB8D8D; } .pvk-t.s { color: #8DAEDB; }
+.pvk-cmp { width: 100%; border-collapse: collapse; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.pvk-cmp th { text-align: left; font-weight: 600; color: var(--muted); padding: 3px 5px; }
+.pvk-cmp td { padding: 3px 5px; border-top: 1px solid var(--line); }
+.pvk-cmp .n { text-align: right; white-space: nowrap; }
+.pvk-cmp tr.off td:first-child { color: var(--muted); }
+.pv-up { color: #6FCF7F; } .pv-dn { color: #E57373; } .pv-eq { color: var(--muted); }
+.pv-eye { background: none; border: 0; padding: 2px 3px; color: var(--muted); cursor: pointer; border-radius: 4px; display: inline-grid; place-items: center; vertical-align: middle; }
+.pv-eye svg { width: 17px; height: 17px; }
+.pv-eye:hover, .pv-eye[aria-pressed="true"] { color: var(--accent); background: rgba(255, 255, 255, .07); }
+.pv-vs { font-size: 12px; white-space: nowrap; }
+/* the item's most valuable line: a filled dot when the player's searches have shown it, a ring while it is a guess */
+.pv-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 7px; vertical-align: 1px; background: var(--accent); box-shadow: 0 0 5px rgba(237, 178, 60, .8); }
+.pv-dot.guess { background: none; box-shadow: inset 0 0 0 1.5px var(--accent); }
+.pv-legend { text-align: center; padding-top: 4px; }
+.pv-stale { opacity: .45; }
 .pv-card { padding: 8px 10px 14px; display: grid; gap: 9px; font-size: 14px; }
 .pv-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 13px; }
 .pv-top b { color: var(--text); font-weight: 600; }
@@ -126,10 +155,10 @@ html.pv body::after { content: ''; position: fixed; inset: 0; border: 1px solid 
 .pv-q { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .pv-q select { padding: 5px 6px; }
 .pv-table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
-.pv-table th { text-align: left; font-weight: 600; color: var(--text); padding: 6px 8px; background: var(--panel-2); white-space: nowrap; }
-.pv-table td { padding: 6px 8px; border-top: 1px solid var(--line); white-space: nowrap; }
+.pv-table th { text-align: left; font-weight: 600; color: var(--text); padding: 6px 5px; background: var(--panel-2); white-space: nowrap; }
+.pv-table td { padding: 5px 5px; border-top: 1px solid var(--line); white-space: nowrap; }
 .pv-table td.price { font-weight: 700; color: var(--accent); }
-.pv-table td.acc { max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.pv-table td.acc { max-width: 96px; overflow: hidden; text-overflow: ellipsis; }
 .pv-table td.r, .pv-table th.r { text-align: right; }
 .pv-note { color: var(--muted); font-size: 12.5px; }
 .pv-err { color: var(--warn); }
@@ -711,6 +740,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
 </style>
 
 <div id="priceView"></div>
+<div id="pvPeek"></div>
 <div class="wrap">
   <header class="top">
     <span class="brand">PoE2 Craft Assistant</span>
@@ -1041,13 +1071,14 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   // The desktop program opens this page a second time as its price check window (?view=price): only the compact card
   // is shown, and nothing of the craft session is read or written there.
   const PRICE_VIEW = location.pathname === '/price' || /[?&]view=price\b/.test(location.search);
-  if (PRICE_VIEW) { document.title = 'PoE2 Price Check'; document.documentElement.classList.add('pv'); }
-  // The program shows the price check without the browser's frame: it cuts the window down to the page, and for that
-  // the page tells how large it is inside its window (in pixels).
+  if (PRICE_VIEW) { document.title = 'PoE2 Price Check'; document.documentElement.classList.add('pv'); document.documentElement.dataset.side = 'left'; }
+  // The program shows the price check without the browser's frame: it cuts the window down to what the page shows, and
+  // for that the page tells how large it is inside its window and where its price check column lies (in pixels).
   function pvSize() {
     if (!PRICE_VIEW) return;
-    const d = window.devicePixelRatio || 1;
-    fetch('/overlay', { method: 'POST', body: 'size ' + Math.round(window.innerWidth * d) + ' ' + Math.round(window.innerHeight * d) }).catch(() => { /* the program is gone */ });
+    const d = window.devicePixelRatio || 1, el = document.getElementById('priceView'), r = el ? el.getBoundingClientRect() : null;
+    const own = r && r.width > 0 ? ' ' + Math.round(r.left * d) + ' ' + Math.round(r.width * d) + ' ' + (document.documentElement.dataset.side || 'left') : '';
+    fetch('/overlay', { method: 'POST', body: 'size ' + Math.round(window.innerWidth * d) + ' ' + Math.round(window.innerHeight * d) + own }).catch(() => { /* the program is gone */ });
   }
   if (PRICE_VIEW) { pvSize(); window.addEventListener('resize', pvSize); }
   // English by design (the game's own names): no "translate this page?" from the browser
@@ -1597,7 +1628,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   // cheapest listings come back as a table with an estimate from them. The player chose this knowingly (6 Oct 2026):
   // the endpoints are not in the game company's documented API.
   const PV = { info: null, item: null, presets: [], active: null, res: null, err: null, busy: false, showAll: false, url: null,
-    mode: 'broad', cur: '', status: 'securable', time: '' };
+    mode: 'broad', cur: '', status: 'securable', time: '',
+    again: false, timer: 0, retry: 0, wait: 0, // a change made while a search runs; the pause before a search; the trade site's wait
+    runs: [], worth: {},                        // the item's searches so far, and what they show a line to add to the price
+    peek: null, pin: null };                    // the listing whose card is shown beside the price check; the one kept open
   const TRADE_CUR = { exalted: 'Exalted Orb', divine: 'Divine Orb', chaos: 'Chaos Orb', regal: 'Regal Orb', vaal: 'Vaal Orb', alch: 'Orb of Alchemy', annul: 'Orb of Annulment',
     transmute: 'Orb of Transmutation', aug: 'Orb of Augmentation', mirror: 'Mirror of Kalandra', chance: 'Orb of Chance', gcp: "Gemcutter's Prism", artificers: "Artificer's Orb" };
   const pvPreset = () => PV.presets.find((x) => x.id === PV.active) || PV.presets[0] || null;
@@ -1615,13 +1649,22 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     S.prices = { divine: r0.divine, chaos: r0.chaos }; // for the unit of the estimate
     pvRender();
     try { const r = await fetch('/bridge', { cache: 'no-store' }); PV.info = r.ok ? await r.json() : null; } catch (e) { PV.info = null; }
+    // the program's sizes for the two columns, and the side the card of a listed item goes on
+    const g = PV.info && PV.info.price, root = document.documentElement;
+    if (g && g.width > 0) root.style.setProperty('--pv-w', g.width + 'px');
+    if (g && g.peek >= 0) root.style.setProperty('--pv-peek', g.peek + 'px');
+    if (g && (g.side === 'left' || g.side === 'right')) root.dataset.side = g.side;
+    pvSize();
     pvRender();
     if (typeof EventSource !== 'undefined') {
       const es = new EventSource('/events?view=price');
       es.onmessage = (e) => {
         let m = null;
         try { m = JSON.parse(e.data); } catch (x) { return; }
-        if (m && typeof m.text === 'string' && m.source !== 'clipboard') { pvSize(); pvItem(m.text); } // another tool's copy: that tool shows its own
+        if (!m) return;
+        if (m.side === 'left' || m.side === 'right') { root.dataset.side = m.side; pvSize(); if (PV.peek != null) pvPeekShow(PV.peek); return; }
+        if (m.hidden) { pvUnpin(); return; } // put away: a card kept open goes with it
+        if (typeof m.text === 'string' && m.source !== 'clipboard') { pvSize(); pvItem(m.text); } // another tool's copy: that tool shows its own
       };
     }
     // the item whose key press opened this window
@@ -1632,7 +1675,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (!r.item || !r.item.base) return;
     let pr = null;
     try { pr = PC.createPresets(S.ix, E, r.item); } catch (e) { pr = null; }
-    Object.assign(PV, { item: r.item, presets: pr ? pr.presets : [], active: pr ? pr.active : null, res: null, err: null, showAll: false });
+    if (PV.retry) { clearTimeout(PV.retry); PV.retry = 0; PV.busy = false; } // a search that was waiting for the trade site: not this item's
+    clearTimeout(PV.timer);
+    pvUnpin();
+    Object.assign(PV, { item: r.item, presets: pr ? pr.presets : [], active: pr ? pr.active : null, res: null, err: null, showAll: false, again: false, wait: 0, runs: [], worth: {} });
     // the item's own lines start switched on (totals stand in for the lines they cover): the first search is for an
     // item like this one, and lines are clicked off to widen it
     for (const x of PV.presets) if (x.id === 'pseudo') for (const st of x.stats) if (!st.hidden && st.id !== 'item.has_empty_modifier') st.disabled = false;
@@ -1659,12 +1705,17 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     }
     return body;
   }
-  async function pvSearch(fresh) {
+  /** A change of the search by the player: searched by itself after a short pause (several changes in a row are one search). */
+  function pvAuto() { clearTimeout(PV.timer); PV.timer = setTimeout(() => pvSearch(), 650); }
+  async function pvSearch(fresh, again) {
     const it = PV.item, p = pvPreset();
-    if (!it || PV.busy) return;
+    if (!it) return;
+    clearTimeout(PV.timer);
+    if (PV.busy) { PV.again = true; return; } // one at a time: the newest settings are searched when this one is back
     if (!p) { PV.err = { message: 'No search could be built for this item.' }; pvRender(); return; }
-    PV.busy = true; PV.err = null;
+    PV.busy = true; PV.err = null; PV.wait = 0; PV.again = false;
     pvRender();
+    const state = pvState(p);
     let out;
     try {
       const body = pvBody();
@@ -1672,12 +1723,182 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       const r = await fetch('/trade?league=' + encodeURIComponent(pvLeague()) + (fresh ? '&fresh=1' : ''), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       out = await r.json();
     } catch (e) { out = { ok: false, message: 'The price check could not be run.' }; }
-    PV.busy = false;
-    if (PV.item !== it) return; // another item came in meanwhile
+    if (PV.item !== it) { // another item came in meanwhile
+      PV.busy = false;
+      if (PV.again) { PV.again = false; pvSearch(); }
+      return;
+    }
+    if (out && !out.ok && out.wait > 0 && !out.login && !again) {
+      // the trade site's pace (its rate limit): once more when the wait it asks for is over, never sooner
+      PV.wait = Math.ceil(out.wait);
+      pvRender();
+      PV.retry = setTimeout(() => { PV.retry = 0; PV.busy = false; pvSearch(fresh, true); }, out.wait * 1000 + 200);
+      return;
+    }
+    PV.busy = false; PV.wait = 0;
     PV.res = out && out.ok ? out : null;
     PV.err = out && out.ok ? null : out || { message: 'No answer.' };
+    pvUnpin();
+    if (PV.res) pvLearn(state, PV.res);
     pvRender();
+    if (PV.again) { PV.again = false; pvSearch(); }
   }
+  const pvKey = (st) => st.ref + '|' + st.tag;
+  function pvText(ex) {
+    const u = unitFor(ex), v = u === 'div' ? ex / S.prices.divine : u === 'chaos' ? ex / S.prices.chaos : ex;
+    return fmt(v) + ' ' + (u === 'div' ? 'Divine' : u === 'chaos' ? 'Chaos' : 'Exalted') + ' Orb' + (fmt(v) === '1' ? '' : 's');
+  }
+  /** What a search was run with: its lines in use, and everything else about it as one text. */
+  function pvState(p) {
+    const lines = p.stats.filter((st) => st.id !== 'item.has_empty_modifier');
+    return { on: new Set(lines.filter((st) => !st.disabled).map(pvKey)),
+      rest: JSON.stringify([p.id, PV.mode, PV.cur, PV.status, PV.time, p.filters, p.stats.map((st) => [pvKey(st), st.id === 'item.has_empty_modifier' ? st.disabled : null, st.roll ? st.roll.min : null, st.roll ? st.roll.max : null])]) };
+  }
+  /**
+   * What a line adds to the price, learnt from the player's own searches: two searches that differ by one line only
+   * give the price with it and without it. No search is run for this.
+   */
+  function pvLearn(state, res) {
+    const est = pvEstimate(res);
+    if (!est) return;
+    const run = { on: state.on, rest: state.rest, ex: est.ex };
+    const same = (r) => r.rest === run.rest && r.on.size === run.on.size && [...r.on].every((k) => run.on.has(k));
+    for (const r of PV.runs) {
+      if (r.rest !== run.rest || same(r)) continue;
+      const diff = [...r.on].filter((k) => !run.on.has(k)).concat([...run.on].filter((k) => !r.on.has(k)));
+      if (diff.length !== 1) continue;
+      const withIt = run.on.has(diff[0]) ? run : r, without = withIt === run ? r : run;
+      PV.worth[diff[0]] = { add: withIt.ex - without.ex, with: withIt.ex, without: without.ex };
+    }
+    PV.runs = PV.runs.filter((r) => !same(r));
+    PV.runs.push(run);
+    if (PV.runs.length > 40) PV.runs.shift();
+  }
+  /** How much of its slot's pool gives this modifier at its tier or better on this item (0..1); null when not known. */
+  function pvShare(it, id) {
+    const kb = S.ix.kb, m = id && kb.mods[id], base = kb.bases[it.base];
+    if (!m || !base) return null;
+    let pool;
+    try { pool = E.poolForItem(S.ix, it); } catch (e) { return null; }
+    const me = pool.get(id);
+    if (!me) return null;
+    const tags = new Set(base.tags || []), lvl = it.ilvl || 100;
+    const weight = (x) => { for (const [t, w] of x.sw || []) if (tags.has(t)) return w; return 0; };
+    let all = 0, own = 0;
+    for (const [pid, pe] of pool) {
+      const pm = kb.mods[pid];
+      if (!pm || pe.side !== me.side || pm.lvl > lvl) continue;
+      const w = weight(pm);
+      all += w;
+      if (pm.fam === m.fam && pe.tier <= me.tier) own += w;
+    }
+    return all > 0 && own > 0 ? own / all : null;
+  }
+  /**
+   * The line marked as the item's most valuable one. Measured once the player's searches show it (the line whose
+   * leaving lowers the listed prices most); until then a guess from the game data: the rarest roll on the item, or on
+   * a unique its best roll. The guess says so.
+   */
+  function pvStar(it, p) {
+    const lines = p.stats.filter((st) => !st.hidden && st.id !== 'item.has_empty_modifier');
+    const how = ' A guess, not a price: click lines off and on, and the searches show what each one adds.';
+    let best = null;
+    for (const st of lines) { const w = PV.worth[pvKey(st)]; if (w && w.add > 0 && (!best || w.add > best.w.add)) best = { st, w }; }
+    if (best) return { key: pvKey(best.st), measured: true, tip: `Worth the most of the lines you tried: items listed without it cost about ${pvText(best.w.add)} less.` };
+    let rare = null;
+    for (const st of lines) {
+      if (st.tag === 'property') continue;
+      let share = null;
+      for (const src of st.sources || []) { const x = src && src.modId ? pvShare(it, src.modId) : null; if (x != null && (share == null || x < share)) share = x; }
+      if (share != null && (!rare || share < rare.share)) rare = { st, share };
+    }
+    if (rare) return { key: pvKey(rare.st), measured: false, tip: `The rarest roll on this item: about 1 in ${Math.max(2, Math.round(1 / rare.share))} rolls of its slot gives it at this tier or better.` + how };
+    let top = null;
+    for (const st of lines) {
+      const b = st.roll && st.roll.bounds;
+      if (!b || !(b.max > b.min) || typeof st.roll.value !== 'number') continue;
+      const q = (st.roll.value - b.min) / (b.max - b.min);
+      if (!top || q > top.q) top = { st, q };
+    }
+    if (top && top.q > 0) return { key: pvKey(top.st), measured: false, tip: `The best roll on this item (${Math.round(Math.min(1, top.q) * 100)}% of its range).` + how };
+    return null;
+  }
+  // ---- listed items: each one against the player's item, and its card beside the price check
+  const PV_EYE = '<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M1.5 10S4.6 4.5 10 4.5 18.5 10 18.5 10 15.4 15.5 10 15.5 1.5 10 1.5 10z" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="10" r="2.6" fill="currentColor"/></svg>';
+  const PV_X = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>';
+  /** A listing against the player's item, line by line of the search (PC.compare); worked out once per answer. */
+  function pvCompare(i) {
+    const l = ((PV.res && PV.res.listings) || [])[i], p = pvPreset();
+    if (!l || !l.item || !p) return null;
+    if (l._it === undefined) { try { l._it = PC.listedItem(l.item); } catch (e) { l._it = null; } }
+    if (!l._it) return null;
+    if (l._cmp === undefined) { try { l._cmp = PC.compare(S.ix, E, p.stats, PV.item, l._it); } catch (e) { l._cmp = null; } }
+    return l._cmp;
+  }
+  const pvNum = (v) => String(Math.round(v * 100) / 100);
+  /** The short mark of a listing's row: how many lines of the search it has higher and lower than the player's item. */
+  function pvVs(i) {
+    const c = pvCompare(i);
+    if (!c || !c.known) return '';
+    const diff = c.rows.filter((r) => (!r.hidden || r.used) && r.delta).map((r) => `${r.delta > 0 ? '+' : '−'}${pvNum(Math.abs(r.delta))} ${r.ref.replace(/[+#%]/g, '').replace(/\s+/g, ' ').trim().replace(/:$/, '')}`);
+    const tip = diff.length ? 'Against your item: ' + diff.join('; ') : 'The same values as your item on the lines of this search';
+    const html = c.up || c.down ? `${c.up ? `<span class="pv-up">▲${c.up}</span>` : ''}${c.up && c.down ? ' ' : ''}${c.down ? `<span class="pv-dn">▼${c.down}</span>` : ''}` : '<span class="pv-eq">=</span>';
+    return `<span title="${esc(tip)}">${html}</span>`;
+  }
+  /** The card of a listed item: the item as the game would show it, then its lines against the player's item. */
+  function pvCard(i) {
+    const l = ((PV.res && PV.res.listings) || [])[i];
+    if (!l || !l.item) return '';
+    const c = pvCompare(i), x = l._it;
+    if (!x) return '';
+    const cur = TRADE_CUR[l.currency];
+    const prop = (t) => { const k = t.indexOf(': '); return `<div class="tt-prop">${k > 0 ? esc(t.slice(0, k + 2)) + '<b>' + esc(t.slice(k + 2)) + '</b>' : esc(t)}</div>`; };
+    const tx = (t, cls, tiers) => t.split('\n').map((line) => `<div class="tx ${cls || ''}">${(tiers || []).map((k) => `<span class="pvk-t ${k[0] === 'P' ? 'p' : 's'}" title="${k[0] === 'P' ? 'Prefix' : 'Suffix'}, tier ${esc(k.slice(1))}">${esc(k)}</span>`).join('')}${esc(line)}</div>`).join('');
+    const parts = [];
+    const add = (html) => { if (html) parts.push(html); };
+    add((x.props[0] || []).map(prop).join(''));
+    add((x.ilvl ? prop('Item Level: ' + x.ilvl) : '') + (x.requires ? prop(x.requires) : '') + (x.sockets.length ? prop('Sockets: ' + x.sockets.length) : ''));
+    add(x.implicits.filter((m) => m.corruption).map((m) => tx(m.text, 'pale')).join('') + x.runes.map((m) => tx(m.text, 'pale')).join(''));
+    add(x.implicits.filter((m) => !m.corruption).map((m) => tx(m.text)).join(''));
+    add(x.mods.map((m) => tx(m.text, m.kind === 'explicit' ? '' : m.kind, m.tiers)).join(''));
+    add(x.skills.map((t) => prop('Grants Skill: ' + t)).join(''));
+    add((x.flags.unidentified ? '<div class="tt-status corrupted">Unidentified</div>' : '') + (x.flags.mirrored ? '<div class="tt-status mirrored">Mirrored</div>' : '')
+      + (x.flags.sanctified ? '<div class="tt-status sanct">Sanctified</div>' : '') + (x.flags.corrupted ? '<div class="tt-status corrupted">Corrupted</div>' : ''));
+    const rows = c ? c.rows.filter((r) => !r.hidden || r.used) : [];
+    const delta = (r) => (r.theirs == null ? '<span class="pv-eq">none</span>' : r.delta > 0 ? `<span class="pv-up">+${pvNum(r.delta)}</span>` : r.delta < 0 ? `<span class="pv-dn">−${pvNum(-r.delta)}</span>` : '<span class="pv-eq">=</span>');
+    return `<div class="pvk">
+      <div class="pvk-top"><span><span class="price">${esc(fmt(+l.amount))}× ${cur ? icon(S.sidByName[cur], cur, 'sm') : esc(l.currency || '')}</span> · ${esc(l.seller || '')} · ${esc(pvAgo(l.indexed))}</span>
+        ${PV.pin === i ? `<button class="icon-btn" type="button" id="pvkClose" title="Close this item" aria-label="Close this item">${PV_X}</button>` : '<span>click the eye to keep it open</span>'}</div>
+      <div class="tt r-${esc(x.rarity)}">
+        <div class="tt-head"><span class="tt-gem l"></span><span class="tt-gem r"></span>${x.name ? `<div class="tt-name">${esc(x.name)}</div>` : ''}<div class="tt-name">${esc(x.rarity === 'Magic' ? x.typeLine : x.base)}</div></div>
+        <div class="tt-body">${parts.join('<div class="tt-sep"></div>')}</div>
+      </div>
+      ${rows.length ? `<table class="pvk-cmp"><thead><tr><th>Against your item</th><th class="n">Yours</th><th class="n">This</th><th class="n">±</th></tr></thead><tbody>${rows.map((r) =>
+        `<tr class="${r.used ? '' : 'off'}"><td>${esc(r.ref)}</td><td class="n">${esc(pvNum(r.mine))}</td><td class="n">${r.theirs == null ? '–' : esc(pvNum(r.theirs))}</td><td class="n">${delta(r)}</td></tr>`).join('')}</tbody></table>` : ''}
+    </div>`;
+  }
+  function pvPost(body) { fetch('/overlay', { method: 'POST', body }).catch(() => { /* the program is gone */ }); }
+  const pvEyes = () => document.querySelectorAll('[data-pveye]').forEach((b) => b.setAttribute('aria-pressed', String(PV.pin === +b.dataset.pveye)));
+  /** Show a listing's card beside the price check, level with its row; the program widens the window's cut by the card. */
+  function pvPeekShow(i) {
+    const box = $('#pvPeek'), html = pvCard(i);
+    if (!box || !html) return;
+    PV.peek = i;
+    box.innerHTML = html;
+    box.classList.add('on');
+    box.style.top = '0px';
+    const eye = document.querySelector(`[data-pveye="${i}"]`), at = eye ? eye.getBoundingClientRect() : { top: 0, height: 0 }, h = box.offsetHeight;
+    box.style.top = Math.round(Math.max(0, Math.min(window.innerHeight - h, at.top + at.height / 2 - h / 2))) + 'px';
+    const r = box.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+    pvPost(`peek ${Math.floor(r.left * d)} ${Math.floor(r.top * d)} ${Math.ceil(r.width * d)} ${Math.ceil(r.height * d)}`);
+  }
+  function pvPeekHide() {
+    const box = $('#pvPeek');
+    PV.peek = null;
+    if (box && box.classList.contains('on')) { box.classList.remove('on'); box.innerHTML = ''; pvPost('peek off'); }
+  }
+  /** Let go of the card that is kept open, and of the one shown. */
+  function pvUnpin() { PV.pin = null; pvEyes(); pvPeekHide(); }
   /** The left mark of a stat line: P2 or S1 (prefix or suffix and its tier), a unique's roll within its range, or what kind of line it is. */
   function pvTier(it, st) {
     if (st.tag === 'pseudo') return { t: 'Σ', c: 'ps', tip: 'A total over the item (pseudo stat)' };
@@ -1716,10 +1937,14 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (F.quality) lines.push(prop('quality', !F.quality.disabled, `Quality: <b>+${esc(F.quality.value)}%</b>`));
     const stats = p ? p.stats.map((st, i) => ({ st, i })).filter(({ st }) => PV.showAll || !st.hidden) : [];
     const hidden = p ? p.stats.filter((st) => st.hidden).length : 0;
+    let star = null;
+    try { star = p ? pvStar(it, p) : null; } catch (e) { star = null; }
     const rows = stats.map(({ st, i }) => {
-      const tl = pvTier(it, st), r = st.roll;
+      const tl = pvTier(it, st), r = st.roll, w = PV.worth[pvKey(st)];
+      const dot = star && star.key === pvKey(st) ? `<span class="pv-dot ${star.measured ? '' : 'guess'}" title="${esc(star.tip)}"></span>` : '';
+      const tip = w ? (w.add > 0 ? `Your searches: items listed without this line cost about ${pvText(w.add)} less` : 'Your searches: leaving this line out did not lower the listed prices') : '';
       return `<div class="pv-line ${st.disabled ? '' : 'on'}"><span class="pv-tier ${tl.c}" title="${esc(tl.tip)}">${esc(tl.t)}</span>
-        <button type="button" class="pv-txt" data-pvs="${i}" aria-pressed="${!st.disabled}">${esc(st.text)}</button>
+        <button type="button" class="pv-txt" data-pvs="${i}" aria-pressed="${!st.disabled}" title="${esc(tip)}">${esc(st.text)}${dot}</button>
         ${r ? `<span class="pv-mm"><input type="number" data-pvmin="${i}" value="${r.min != null ? esc(r.min) : ''}" placeholder="min" aria-label="Minimum"><input type="number" data-pvmax="${i}" value="${r.max != null ? esc(r.max) : ''}" placeholder="max" aria-label="Maximum"></span>` : '<span></span>'}</div>`;
     });
     const flags = [];
@@ -1731,20 +1956,24 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       flags.push(`<div class="pv-line ${cur === 'any' ? '' : 'on'}"><span class="pv-tier"></span><span class="pv-txt red static">Corrupted</span><select data-pvsel="corrupted" aria-label="Corrupted"><option value="any" ${cur === 'any' ? 'selected' : ''}>Any</option><option value="true" ${cur === 'true' ? 'selected' : ''}>Yes</option><option value="false" ${cur === 'false' ? 'selected' : ''}>No</option></select></div>`);
     }
     // the answer: an estimate from the listings, then the listings
-    let answer = '';
-    if (PV.busy) answer = '<div class="pv-note">Searching…</div>';
-    else if (PV.err) answer = `<div class="pv-err">${esc(PV.err.message || 'The search failed.')}</div>${PV.err.login ? '<div class="pv-note">The trade site wants a login for a search with this many lines. Click some lines off, or open the search on the trade site.</div>' : ''}`;
+    // while a search runs, the last answer stays (dimmed) until the new one is there
+    const wait = PV.busy ? `<div class="pv-note">${PV.wait ? `Waiting ${PV.wait} s for the trade site, then searching…` : 'Searching…'}</div>` : '';
+    const peeks = !(PV.info && PV.info.price && PV.info.price.peek === 0); // no room for a card beside the price check: no eyes
+    let answer = wait;
+    if (PV.err && !PV.busy) answer = `<div class="pv-err">${esc(PV.err.message || 'The search failed.')}</div>${PV.err.login ? '<div class="pv-note">The trade site wants a login for a search with this many lines. Click some lines off, or open the search on the trade site.</div>' : ''}`;
     else if (PV.res) {
       const L = PV.res.listings || [];
       const est = pvEstimate(PV.res);
-      answer = (est ? `<div class="pv-est" title="The middle price of the ${est.n} cheapest listings below, in the currencies the estimate can add up (Exalted, Chaos and Divine Orbs)">
+      const marks = L.map((l, i) => pvVs(i));
+      answer = wait + `<div class="${PV.busy ? 'pv-stale' : ''}" style="display:grid;gap:9px">` + (est ? `<div class="pv-est" title="The middle price of the ${est.n} cheapest listings below, in the currencies the estimate can add up (Exalted, Chaos and Divine Orbs)">
           <span class="pv-note">Estimated value</span><span class="pv-val">≈ ${money(est.ex)}</span>
           <span class="pv-note">Range: ${money(est.lo)} to ${money(est.hi)} · Reliability: <span class="rel">${est.rel}</span></span></div>` : '')
         + `<div class="pv-bar"><span class="pv-note">${L.length}/${PV.res.total} · results from pathofexile.com/trade</span><span class="right"><button class="linkish" type="button" id="pvRefresh" title="Search again">↻ Refresh</button></span></div>`
-        + (L.length ? `<table class="pv-table"><thead><tr><th>Price</th><th class="r">iLvl</th><th class="r">Q%</th><th>Account</th><th class="r">Listed</th></tr></thead><tbody>${L.map((l) => {
+        + (L.length ? `<table class="pv-table"><thead><tr><th>Price</th><th class="r">iLvl</th><th class="r">Q%</th><th>Account</th><th class="r">Listed</th><th class="r" title="How many lines of your search the listed item has higher (▲) and lower (▼) than your item">vs yours</th>${peeks ? '<th></th>' : ''}</tr></thead><tbody>${L.map((l, i) => {
             const name = TRADE_CUR[l.currency];
-            return `<tr><td class="price">${esc(fmt(+l.amount))}× ${name ? icon(S.sidByName[name], name, 'sm') : esc(l.currency || '')}</td><td class="r">${l.ilvl != null ? esc(l.ilvl) : ''}</td><td class="r">${l.quality != null ? esc(l.quality) + '%' : '0%'}</td><td class="acc" title="${esc(l.seller || '')}${l.online ? ' (online)' : ''}">${esc(l.seller || '')}</td><td class="r">${esc(pvAgo(l.indexed))}</td></tr>`;
-          }).join('')}</tbody></table>` : '<div class="pv-note">Nothing is listed for this search.</div>');
+            return `<tr><td class="price">${esc(fmt(+l.amount))}× ${name ? icon(S.sidByName[name], name, 'sm') : esc(l.currency || '')}</td><td class="r">${l.ilvl != null ? esc(l.ilvl) : ''}</td><td class="r">${l.quality != null ? esc(l.quality) + '%' : '0%'}</td><td class="acc" title="${esc(l.seller || '')}${l.online ? ' (online)' : ''}">${esc(l.seller || '')}</td><td class="r">${esc(pvAgo(l.indexed))}</td><td class="r pv-vs">${marks[i]}</td>${peeks ? `<td class="r">${l.item ? `<button type="button" class="pv-eye" data-pveye="${i}" aria-pressed="${PV.pin === i}" title="Show this item beside the price check; click to keep it open" aria-label="Show this item">${PV_EYE}</button>` : ''}</td>` : ''}</tr>`;
+          }).join('')}</tbody></table>${marks.some(Boolean) ? '<div class="pv-note">▲ ▼ how many lines of your search a listed item has higher or lower than yours</div>' : ''}` : '<div class="pv-note">Nothing is listed for this search.</div>')
+        + '</div>';
     }
     const sel = (k, opts) => `<select data-pvq="${k}" aria-label="${k}">${opts.map(([v, t]) => `<option value="${v}" ${PV[k] === v ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
     el.innerHTML = `<div class="pv-card">${top}
@@ -1755,10 +1984,11 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
           ${lines.join('')}${lines.length && rows.length ? '<div class="tt-sep"></div>' : ''}${rows.join('')}
           ${hidden ? `<button class="linkish pv-more" type="button" id="pvAll">${PV.showAll ? 'Collapse hidden lines' : 'Show ' + hidden + ' hidden line' + (hidden === 1 ? '' : 's')}</button>` : ''}
           ${flags.length ? '<div class="tt-sep"></div>' + flags.join('') : ''}
+          ${star && stats.some(({ st }) => pvKey(st) === star.key) ? `<div class="pv-note pv-legend"><span class="pv-dot ${star.measured ? '' : 'guess'}" style="margin:0 6px 0 0"></span>${star.measured ? 'adds the most to the price (by your searches)' : 'most valuable line, a guess until lines are clicked off and on'}</div>` : ''}
           <div class="pv-mode"><label><input type="radio" name="pvmode" value="exact" ${PV.mode === 'exact' ? 'checked' : ''}>Exact match</label><label><input type="radio" name="pvmode" value="broad" ${PV.mode !== 'exact' ? 'checked' : ''}>Broad (−${PC.SEARCH_RANGE}%)</label></div>
         </div>
       </div>
-      <div class="pv-bar"><button class="btn small primary" type="button" id="pvSearch" ${PV.busy ? 'disabled' : ''}>Search</button>
+      <div class="pv-bar"><button class="btn small primary" type="button" id="pvSearch" ${PV.busy ? 'disabled' : ''} title="Changes to the lines are searched by themselves; this searches at once">Search</button>
         ${PV.presets.length > 1 ? PV.presets.map((x) => `<button type="button" class="chip" data-pvpreset="${esc(x.id)}" aria-pressed="${p && x.id === p.id}" title="${x.id === 'exact' ? 'The base itself, for crafting' : 'The item by its totals'}">${x.id === 'exact' ? 'Base item' : 'Pseudo'}</button>`).join('') : ''}
         <span class="right">${PV.url ? `<a class="pv-note" href="${esc(PV.url)}" target="_blank" rel="noopener">Trade site ↗</a>` : ''}</span></div>
       <div class="pv-q">${sel('cur', [['', 'Any currency'], ['exalted', 'Exalted Orb'], ['chaos', 'Chaos Orb'], ['divine', 'Divine Orb']])}${sel('status', [['securable', 'Instant buyout'], ['online', 'In person (online)'], ['any', 'Any']])}${sel('time', [['', 'Any time'], ['1day', 'Up to a day ago'], ['3days', 'Up to 3 days ago'], ['1week', 'Up to a week ago'], ['2weeks', 'Up to 2 weeks ago']])}</div>
@@ -1773,13 +2003,21 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     else if (b.id === 'pvRefresh') pvSearch(true);
     else if (b.id === 'pvClose') fetch('/overlay', { method: 'POST', body: 'hide' }).catch(() => { /* gone */ });
     else if (b.id === 'pvAll') { PV.showAll = !PV.showAll; pvRender(); }
-    else if (b.dataset.pvpreset) { PV.active = b.dataset.pvpreset; PV.res = null; PV.err = null; pvRender(); }
-    else if (p && b.dataset.pvs != null) { const st = p.stats[+b.dataset.pvs]; st.disabled = !st.disabled; pvRender(); }
+    else if (b.id === 'pvkClose') pvUnpin();
+    else if (b.dataset.pveye != null) {
+      // a click keeps the card open (until it is closed, or another eye is clicked); the cursor is still on the eye
+      const i = +b.dataset.pveye;
+      PV.pin = PV.pin === i ? null : i;
+      pvEyes();
+      pvPeekShow(i);
+    }
+    else if (b.dataset.pvpreset) { PV.active = b.dataset.pvpreset; PV.res = null; PV.err = null; pvUnpin(); pvRender(); pvAuto(); }
+    else if (p && b.dataset.pvs != null) { const st = p.stats[+b.dataset.pvs]; st.disabled = !st.disabled; pvRender(); pvAuto(); }
     else if (p && b.dataset.pvf) {
       const k = b.dataset.pvf, f = p.filters[k];
       if (!f) return;
       if (k === 'fractured') f.value = f.value === false ? undefined : false; else f.disabled = !f.disabled;
-      pvRender();
+      pvRender(); pvAuto();
     }
   });
   document.addEventListener('change', (e) => {
@@ -1791,14 +2029,31 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (t.name === 'pvmode') { PV.mode = t.value === 'exact' ? 'exact' : 'broad'; pvApplyMode(); pvSearch(); }
     else if (t.dataset.pvq) { PV[t.dataset.pvq] = t.value; pvSearch(); }
     else if (!p) return;
-    else if (t.dataset.pvmin != null) { const st = p.stats[+t.dataset.pvmin]; if (st && st.roll) st.roll.min = numOf(t.value); }
-    else if (t.dataset.pvmax != null) { const st = p.stats[+t.dataset.pvmax]; if (st && st.roll) st.roll.max = numOf(t.value); }
-    else if (t.dataset.pvn === 'itemLevel' && p.filters.itemLevel) p.filters.itemLevel.value = +t.value || 1;
+    else if (t.dataset.pvmin != null) { const st = p.stats[+t.dataset.pvmin]; if (st && st.roll) { st.roll.min = numOf(t.value); if (!st.disabled) pvAuto(); } }
+    else if (t.dataset.pvmax != null) { const st = p.stats[+t.dataset.pvmax]; if (st && st.roll) { st.roll.max = numOf(t.value); if (!st.disabled) pvAuto(); } }
+    else if (t.dataset.pvn === 'itemLevel' && p.filters.itemLevel) { p.filters.itemLevel.value = +t.value || 1; if (!p.filters.itemLevel.disabled) pvAuto(); }
     else if (t.dataset.pvsel === 'corrupted' && p.filters.corrupted) {
       p.filters.corrupted.force = t.value === 'any' ? null : t.value === 'true';
       if (t.value === 'any') { p.filters.corrupted.exact = false; p.filters.corrupted.value = true; }
-      pvRender();
+      pvRender(); pvAuto();
     }
+  });
+  // the eye of a listing: its card while the cursor is on it, kept open by a click
+  document.addEventListener('mouseover', (e) => {
+    if (!PRICE_VIEW) return;
+    const b = e.target.closest && e.target.closest('[data-pveye]');
+    if (b && PV.peek !== +b.dataset.pveye) pvPeekShow(+b.dataset.pveye);
+  });
+  document.addEventListener('mouseout', (e) => {
+    if (!PRICE_VIEW) return;
+    const b = e.target.closest && e.target.closest('[data-pveye]');
+    if (!b || (e.relatedTarget && b.contains(e.relatedTarget))) return;
+    if (PV.pin == null) pvPeekHide(); else if (PV.peek !== PV.pin) pvPeekShow(PV.pin);
+  });
+  // Esc with the keyboard in the price check: the card that is kept open first, then the price check itself
+  document.addEventListener('keydown', (e) => {
+    if (!PRICE_VIEW || e.key !== 'Escape') return;
+    if (PV.pin != null || PV.peek != null) pvUnpin(); else pvPost('hide');
   });
   /** source: 'hotkey' (the program's own key), 'clipboard' (any copy in game, e.g. another tool's price check), 'push'. */
   function bridgeItem(text, source) {
