@@ -4,6 +4,9 @@
  * jewellery, jewels; no uniques), targets drawn from every modifier such a base can have, and start items in every
  * kind of state: white, Magic, Rare with other modifiers, with targets already there, with a fractured modifier (a
  * target or not), with an unwanted Desecrated one, and with catalyst quality in each of the three quality modes.
+ * Every sixth drawn scenario is one of the special requests in turn: a target by value, a resistance target on an item
+ * that has another element's, a modifier of a rune's pool, four suffixes (Serle's Triumph), five modifiers on a jewel,
+ * two crafted-only modifiers (Astrid's Creativity).
  *
  * For each scenario:
  *   1. the network is solved and its promised cost is compared with the simulator (planner.js) playing its rules;
@@ -70,6 +73,100 @@ function junk(t, taken, counts, r) {
   return out;
 }
 
+/**
+ * A special request for a base (which: 0..5), or null when the base has no such case.
+ * mk(id, kind, mods, rarity, targets): the scenario maker of `scenario`.
+ */
+function special(t, which, n, r, mk) {
+  const { ix, kb } = load();
+  const base = t.base;
+  const pickFam = (side, k, skip) => {
+    const out = [], taken = new Set(skip || []), list = t.nat[side];
+    for (let tries = 0; out.length < k && tries < 80 && list.length; tries++) {
+      const f = list[Math.floor(r() * list.length)];
+      if (f.grp.some((x) => taken.has(x)) || out.includes(f)) continue;
+      f.grp.forEach((x) => taken.add(x));
+      out.push(f);
+    }
+    return out;
+  };
+  const tierOf = (f, low) => f.tiers[Math.min(f.tiers.length - 1, low + Math.floor(r() * 2))];
+  if (which === 0) {
+    // a target by value: at least a share of the best tier's range; white, or Rare with the modifier rolled as it comes
+    const all = SIDES.flatMap((sd) => t.nat[sd]);
+    for (let tries = 0; tries < 20; tries++) {
+      const f = all[Math.floor(r() * all.length)], id = f.ids[f.tiers[0]];
+      let range = null;
+      try { range = P.rangeOf(t.ctx, id); } catch (e) { range = null; }
+      if (!range || !(range[1] > range[0])) continue;
+      const v = Math.round(range[0] + (range[1] - range[0]) * (n % 2 ? 0.8 : 0.5));
+      const targets = { [f.side + '-0']: Object.assign(target(f, null), { minTier: null, minValue: v }) };
+      const there = n % 4 >= 2;
+      const mods = there ? [{ id, side: f.side, tier: f.tiers[0] }].concat(junk(t, new Set(f.grp), { prefix: Math.floor(r() * 2), suffix: Math.floor(r() * 2) }, r)) : [];
+      return mk(`value|${f.fam}|${v}|${there ? 'there' : 'white'}|${n}`, `a target by value, ${there ? 'rare with the modifier' : 'white'}`, mods, there ? 'Rare' : 'Normal', targets);
+    }
+    return null;
+  }
+  if (which === 1) {
+    // a resistance target on an item that has another element's resistance (a Flux converts it)
+    const res = t.nat.suffix.filter((f) => /to (Fire|Cold|Lightning) Resistance$/.test(labelOf(f.ids[f.tiers[0]])));
+    if (res.length < 2) return null;
+    const a = res[n % res.length], b = res[(n + 1) % res.length];
+    const tier = tierOf(a, 0);
+    if (a === b || !b.ids[tier]) return null;
+    const mods = [{ id: b.ids[tier], side: 'suffix', tier }].concat(junk(t, new Set(a.grp.concat(b.grp)), { prefix: Math.floor(r() * 2), suffix: Math.floor(r() * 2) }, r));
+    return mk(`element|${a.fam}|T${tier}|${n}`, 'a resistance target, another element on the item', mods, 'Rare', { 'suffix-0': target(a, tier) });
+  }
+  if (which === 2) {
+    // a modifier of a rune's pool (the rune has to be socketed first), alone or with a natural target
+    const pools = E.runePoolsOn(ix, base);
+    if (!pools.length) return null;
+    const p = pools[n % pools.length];
+    const es = [...p.mods.entries()].sort((x, y) => x[1].tier - y[1].tier || (x[0] < y[0] ? -1 : 1));
+    if (!es.length) return null;
+    const [id, pe] = es[Math.floor(r() * Math.min(es.length, 6))];
+    const m = kb.mods[id];
+    const targets = { [pe.side + '-0']: { fam: m.fam, group: 'rune', minTier: pe.tier, required: true, label: labelOf(id) } };
+    if (n % 2) { const [f] = pickFam(pe.side === 'prefix' ? 'suffix' : 'prefix', 1, m.grp || []); if (f) targets[f.side + '-1'] = target(f, tierOf(f, 1)); }
+    return mk(`pool|${p.tag}|${m.fam}|${n}`, "a modifier of a rune's pool, white", [], 'Normal', targets);
+  }
+  if (which === 3) {
+    // one suffix more than the item takes: Serle's Triumph
+    if (t.cls === 'Jewel' || !P.runeFor(t.ctx, /Suffix Modifiers? allowed/i)) return null;
+    const sfx = pickFam('suffix', t.lim.suffix + 1);
+    if (sfx.length < t.lim.suffix + 1) return null;
+    const pre = n % 3 === 0 ? [] : pickFam('prefix', 1, sfx.flatMap((f) => f.grp));
+    const targets = {};
+    sfx.forEach((f, k) => { targets['suffix-' + k] = target(f, tierOf(f, 2)); });
+    pre.forEach((f, k) => { targets['prefix-' + k] = target(f, tierOf(f, 2)); });
+    return mk(`serle|${sfx.length + pre.length}|${n}`, "four suffixes (Serle's Triumph), white", [], 'Normal', targets);
+  }
+  if (which === 4) {
+    // a jewel with three modifiers on one side (a liquid emotion's allowance modifier)
+    if (t.cls !== 'Jewel') return null;
+    const big = SIDES[n % 2], small = SIDES[1 - (n % 2)];
+    const a = pickFam(big, t.lim[big] + 1);
+    if (a.length < t.lim[big] + 1) return null;
+    const b = pickFam(small, n % 3 === 0 ? 2 : 1, a.flatMap((f) => f.grp));
+    const targets = {};
+    a.forEach((f, k) => { targets[big + '-' + k] = target(f, tierOf(f, 1)); });
+    b.forEach((f, k) => { targets[small + '-' + k] = target(f, tierOf(f, 1)); });
+    return mk(`jewel5|${a.length + b.length}|${n}`, 'a jewel with three modifiers on one side, white', [], 'Normal', targets);
+  }
+  // two crafted-only modifiers: the second needs Astrid's Creativity
+  if (!P.runeFor(t.ctx, /additional Crafted Modifier/i)) return null;
+  const ess = t.essences.filter((e) => e.kind === 'rare' && !(kb.essence_outcomes || {})[e.item] && kb.mods[e.mod] && !t.ctx.pool.has(e.mod));
+  const two = [];
+  for (let tries = 0; two.length < 2 && tries < 40 && ess.length; tries++) {
+    const e = ess[Math.floor(r() * ess.length)], m = kb.mods[e.mod];
+    if (!two.some((x) => x.m.fam === m.fam || (x.m.grp || []).some((g) => (m.grp || []).includes(g)))) two.push({ e, m });
+  }
+  if (two.length < 2) return null;
+  const targets = {};
+  two.forEach(({ e, m }, k) => { targets[(m.gen === 'p' ? 'prefix' : 'suffix') + '-' + k] = { fam: m.fam, group: 'essence', minTier: null, required: true, label: labelOf(e.mod) }; });
+  return mk(`crafted2|${two.map((x) => x.m.fam).join('+')}|${n}`, "two crafted-only modifiers (Astrid's Creativity), white", [], 'Normal', targets);
+}
+
 /** The n-th scenario of a base (0, 1, 2, ...): singles first, then desecrated singles, then drawn sets. null when n is a single past the list. */
 function scenario(base, n) {
   const { ix, kb } = load();
@@ -92,6 +189,8 @@ function scenario(base, n) {
     return mk(`desecrated|${f.fam}`, 'one desecrated modifier, rare', junk(t, taken, { prefix: 1 + Math.floor(r() * 2), suffix: 1 + Math.floor(r() * 2) }, r), 'Rare', { [f.side + '-2']: target(f, null, true) });
   }
   n -= desSingles.length;
+  // every sixth: a special request, in turn (a base without that case gets a drawn set instead)
+  if (n % 6 === 5) { const sp = special(t, Math.floor(n / 6) % 6, n, r, mk); if (sp) return sp; }
   // a drawn set of two to six targets (jewels: up to four), tiers within three of the best
   const maxK = Math.min(6, t.lim.prefix + t.lim.suffix);
   const k = 2 + (n % Math.max(1, maxK - 1));
@@ -176,8 +275,9 @@ function runOne(sc, runs, withRivals, deep) {
   const { ix, priceOf } = load();
   const input = { ix, item: sc.item, targets: sc.targets, locks: {}, priceOf, baseCost: 1, weights: weightsFor(sc.base), essences: table(sc.base).essences, quality: sc.qualityMode };
   const t0 = Date.now();
-  const net = NW.build(input);
+  const net = NW.route(input);
   const out = { id: sc.id, cls: sc.cls, kind: sc.kind, ms: Date.now() - t0 };
+  if (net.blocked) return Object.assign(out, { skipped: 'blocked: ' + net.blocked });
   if (net.unsupported) return Object.assign(out, { skipped: net.unsupported });
   if (net.impossible) return Object.assign(out, { skipped: 'impossible: ' + net.impossible[0].why });
   const s = net.start;
@@ -189,7 +289,7 @@ function runOne(sc, runs, withRivals, deep) {
   // a craft of thousands of uses, played 100,000 times, takes hours: such a scenario stops after 40 minutes and says how far it got
   const got = play(net, input, n, sc.seed, Math.max(5000, Math.round(stepsGuess * 60)), deep ? 40 * 60000 : 0);
   const ratio = got.mean / want, z = (got.mean - want) / (got.se || 1);
-  Object.assign(out, { nodes: net.N, runs: got.runs, asked: n, uses: got.steps, network: want, played: got.mean, se: got.se, ratio, z, done: got.done, off: got.off,
+  Object.assign(out, { nodes: net.N, lite: net.lite || 0, runs: got.runs, asked: n, uses: got.steps, network: want, played: got.mean, se: got.se, ratio, z, done: got.done, off: got.off,
     pass: got.done === got.runs && got.off === 0 && (Math.abs(ratio - 1) <= 0.15 || Math.abs(z) <= 3) });
   if (withRivals) {
     const b = rivals(sc, input);
@@ -250,4 +350,4 @@ if (require.main === module) {
   if (json) fs.writeFileSync(json, JSON.stringify({ at: new Date().toISOString(), shard, shards, minutes, results: out }));
   process.exitCode = errors.length ? 1 : 0;
 }
-module.exports = { scenario, table, runOne };
+module.exports = { scenario, table, runOne, special };

@@ -211,6 +211,22 @@
     const canAdd = RUNES && artificer != null && P.validate(ctx, st0, { op: 'artificer' }) === null ? Math.max(0, E.maxSockets(ctx.cls) - P.socketsOf(ctx, st0)) : 0;
     const FS0 = RUNES ? Math.max(0, Math.min(3, P.freeSockets(ctx, st0))) : 0, AD0 = Math.min(2, canAdd);
     const capOf = (S) => ctx.craftedCap + ((S.u & R_ASTRID) ? 1 : 0);
+    // a rune the targets cannot do without needs a socket: a free one, or one an Artificer's Orb can add (it adds
+    // none on jewellery)
+    {
+      const must = [];
+      if (SER && !st0.xSuffix) must.push({ rune: SER.item, goals: goals.filter((g) => g.si === 1) });
+      const crafted = goals.filter((g) => g.kind === 'ess');
+      if (crafted.length > ctx.craftedCap && !st0.xCrafted) {
+        if (!AST) return { impossible: crafted.map((g) => ({ label: g.label, why: `${crafted.length} crafted modifiers, and the item holds ${ctx.craftedCap}` })) };
+        must.push({ rune: AST.item, goals: crafted });
+      }
+      if (POOL && !hasPool) must.push({ rune: POOL.item, goals: pooled });
+      if (must.length > FS0 + AD0) {
+        const m = must[Math.min(must.length - 1, FS0 + AD0)];
+        return { impossible: m.goals.map((g) => ({ label: g.label, why: `needs ${m.rune} socketed, and the item has no free augment socket for it${artificer == null ? " (Artificer's Orb has no price)" : ''}` })) };
+      }
+    }
 
     // ---- pool numbers per side, minimum modifier level, catalyst boost and runes socketed
     const statCache = new Map();
@@ -1047,6 +1063,8 @@
     }
     solve();
     timing.solve = Date.now() - tick;
+    // no rule set ends with the targets (nothing the network knows brings this item, or a white base, to them)
+    if (!done(startS) && !(V[start] < BIG / 1000)) return { impossible: [{ label: goals.map((g) => g.label).join(' + '), why: 'no currency with a price brings this item to all of these targets' }] };
 
     // ---- what the rule set uses: every currency's expected count, and how far the cost spreads
     const actNames = (a) => (a.op === 'reveal' ? (a.echoes ? [OMEN.echoes] : []) : (a.pre ? P.actionNames(a.pre, ctx) : []).concat(P.actionNames(a, ctx)));
