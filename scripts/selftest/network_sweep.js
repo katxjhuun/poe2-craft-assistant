@@ -1,0 +1,251 @@
+/* The broad check of the craft network (app/network.js), made for the cloud workflow (.github/workflows/network.yml).
+ *
+ * Every gear class the tool covers (one base per class and weight page: weapons, armour of every attribute, off-hands,
+ * jewellery, jewels; no uniques), targets drawn from every modifier such a base can have, and start items in every
+ * kind of state: white, Magic, Rare with other modifiers, with targets already there, with a fractured modifier (a
+ * target or not), with an unwanted Desecrated one, and with catalyst quality in each of the three quality modes.
+ *
+ * For each scenario:
+ *   1. the network is solved and its promised cost is compared with the simulator (planner.js) playing its rules;
+ *   2. on a share of them the planner's old routes are simulated too: none should be clearly cheaper than the route
+ *      the network found. Where one is, the network is missing a step the old routes have, and the report names it.
+ *
+ * The number of combinations is without end, so the scenarios come in a fixed order (every single modifier of every
+ * base first, then drawn sets of two to six) and a run takes as many as its time allows:
+ *
+ *   node scripts/selftest/network_sweep.js --shard 0/5 --minutes 17 --json out.json
+ *   node scripts/selftest/network_sweep.js --deep --runs 100000 --minutes 17      (every scenario played 100,000 times)
+ *
+ * Without --deep a craft that takes very many uses is played fewer times, so that many scenarios fit; with it every
+ * scenario is played --runs times, however long that takes, and the run covers fewer of them.
+ */
+'use strict';
+const path = require('path');
+const fs = require('fs');
+const { ROOT, E, P, load, weightsFor, testBases, rng, renderItem } = require('./lib.js');
+const NW = require(path.join(ROOT, 'app', 'network.js'));
+const { play } = require('./network_check.js');
+const { labelOf } = require('./scenarios.js');
+
+const arg = (name, dflt) => { const i = process.argv.indexOf('--' + name); return i >= 0 ? process.argv[i + 1] : dflt; };
+const SIDES = ['prefix', 'suffix'];
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** What a base can have: natural families per side with their tiers, desecrated-only families, and its context. */
+const tables = new Map();
+function table(base) {
+  if (tables.has(base)) return tables.get(base);
+  const { ix, kb, W } = load();
+  const cls = kb.bases[base].cls;
+  const white = E.parseItem(ix, renderItem({ base, cls, rarity: 'Normal', ilvl: 82, mods: [] }, rng(1), 'adv').text).item;
+  const essences = (W.essences || {})[cls] || [];
+  const ctx = P.makeContext(ix, white, { weights: weightsFor(base), essences });
+  const group = (list) => {
+    const by = new Map();
+    for (const e of list) { let f = by.get(e.fam); if (!f) by.set(e.fam, f = { fam: e.fam, side: e.side, ids: {}, grp: e.grp }); if (!f.ids[e.tier] || e.id < f.ids[e.tier]) f.ids[e.tier] = e.id; }
+    return [...by.values()].map((f) => Object.assign(f, { tiers: Object.keys(f.ids).map(Number).sort((a, b) => a - b) })).filter((f) => !/Essence/.test(f.fam));
+  };
+  const t = { base, cls, ctx, essences, nat: {}, des: {} };
+  for (const side of SIDES) { t.nat[side] = group(P.sidePool(ctx, side, 0)); t.des[side] = ctx.bone ? group(P.desPoolFor(ctx, side, 0, null)) : []; }
+  t.lim = E.slotLimits({ rarity: 'Rare', slotDelta: { prefix: 0, suffix: 0 } }, cls);
+  tables.set(base, t);
+  return t;
+}
+const target = (f, tier, des) => ({ fam: f.fam, group: des ? 'desecrated' : f.side, minTier: des ? null : tier, required: true, label: labelOf(f.ids[f.tiers[0]]) });
+
+/** Other modifiers for a start item: random natural ones that share no group with the targets or each other. */
+function junk(t, taken, counts, r) {
+  const { kb } = load();
+  const out = [];
+  for (const side of SIDES) {
+    const pool = [...t.ctx.pool.entries()].filter(([id, pe]) => pe.side === side && kb.mods[id].lvl <= 82 && !/Essence/.test(kb.mods[id].fam));
+    for (let i = 0; i < counts[side]; i++) {
+      const ok = pool.filter(([id]) => !kb.mods[id].grp.some((x) => taken.has(x)));
+      if (!ok.length) break;
+      const [id, pe] = ok[Math.floor(r() * ok.length)];
+      kb.mods[id].grp.forEach((x) => taken.add(x));
+      out.push({ id, side, tier: pe.tier });
+    }
+  }
+  return out;
+}
+
+/** The n-th scenario of a base (0, 1, 2, ...): singles first, then desecrated singles, then drawn sets. null when n is a single past the list. */
+function scenario(base, n) {
+  const { ix, kb } = load();
+  const t = table(base);
+  const singles = SIDES.flatMap((s) => t.nat[s]);
+  const desSingles = SIDES.flatMap((s) => t.des[s]);
+  const r = rng(7919 * (n + 1) + base.length * 31 + base.charCodeAt(0));
+  const mk = (id, kind, mods, rarity, targets, extra) => {
+    const item = E.parseItem(ix, renderItem(Object.assign({ base, cls: t.cls, rarity, ilvl: 82, mods }, extra && extra.quality ? { quality: extra.quality, qualityType: extra.qualityType } : null), r, 'adv').text).item;
+    return { id: `${base}|${id}`, base, cls: t.cls, kind, item, targets, qualityMode: (extra && extra.mode) || 'lock', seed: 1000 + n };
+  };
+  if (n < singles.length) {
+    const f = singles[n];
+    return mk(`one|${f.fam}|T${f.tiers[0]}`, 'one modifier, white', [], 'Normal', { [f.side + '-0']: target(f, f.tiers[0]) });
+  }
+  n -= singles.length;
+  if (n < desSingles.length) {
+    const f = desSingles[n];
+    const taken = new Set(f.grp);
+    return mk(`desecrated|${f.fam}`, 'one desecrated modifier, rare', junk(t, taken, { prefix: 1 + Math.floor(r() * 2), suffix: 1 + Math.floor(r() * 2) }, r), 'Rare', { [f.side + '-2']: target(f, null, true) });
+  }
+  n -= desSingles.length;
+  // a drawn set of two to six targets (jewels: up to four), tiers within three of the best
+  const maxK = Math.min(6, t.lim.prefix + t.lim.suffix);
+  const k = 2 + (n % Math.max(1, maxK - 1));
+  const picked = [], taken = new Set(), per = { prefix: 0, suffix: 0 };
+  let des = null;
+  for (let tries = 0; picked.length < k && tries < 60; tries++) {
+    const side = SIDES[Math.floor(r() * 2)];
+    if (per[side] >= t.lim[side]) continue;
+    const wantDes = !des && t.des[side].length && r() < 0.12;
+    const list = wantDes ? t.des[side] : t.nat[side];
+    if (!list.length) continue;
+    const f = list[Math.floor(r() * list.length)];
+    if (f.grp.some((x) => taken.has(x)) || picked.some((p) => p.f.fam === f.fam)) continue;
+    f.grp.forEach((x) => taken.add(x));
+    per[side]++;
+    const tier = wantDes ? null : f.tiers[Math.min(f.tiers.length - 1, Math.floor(r() * 3))];
+    if (wantDes) des = f;
+    picked.push({ f, tier, des: wantDes });
+  }
+  if (picked.length < 2) return null;
+  const targets = {};
+  const idx = { prefix: 0, suffix: 0 };
+  for (const p of picked) targets[p.f.side + '-' + idx[p.f.side]++] = target(p.f, p.tier, p.des);
+  const room = (side, have) => Math.max(0, t.lim[side] - have);
+  const kind = n % 7;
+  const names = ['white', 'magic', 'rare, other modifiers', 'rare, some targets there', 'rare, a target fractured', 'rare, another modifier fractured', 'rare, an unwanted desecrated modifier'];
+  // catalyst quality on the classes that take catalysts, in each of the three modes in turn
+  const takes = t.cls === 'Jewel' || t.cls === 'Ring' || t.cls === 'Amulet';
+  let extra = null;
+  if (takes && kind >= 2) {
+    const mode = ['lock', 'use', 'raise'][Math.floor(n / 7) % 3];
+    const tags = Object.keys(P.CATALYST_NAME).filter((tag) => picked.some((p) => !p.des && (ix.famMods.get(p.f.fam) || []).some((id) => (kb.mods[id].mt || []).includes(tag))));
+    if (mode !== 'lock' && tags.length) extra = { mode, quality: mode === 'use' ? 20 : (n % 2 ? 0 : 10), qualityType: cap(tags[0]) + ' Modifiers' };
+    else if (mode !== 'lock') extra = { mode };
+  }
+  const tag = `set${picked.length}|${names[kind]}${extra ? '|quality ' + extra.mode : ''}|${n}`;
+  if (kind === 0) return mk(tag, `${picked.length} targets, ${names[kind]}`, [], 'Normal', targets);
+  if (kind === 1) {
+    // one modifier: a target at its tier, or another one
+    const p = picked.find((x) => !x.des);
+    const mods = p && r() < 0.5 ? [{ id: p.f.ids[p.tier], side: p.f.side, tier: p.tier }] : junk(t, new Set(taken), r() < 0.5 ? { prefix: 1, suffix: 0 } : { prefix: 0, suffix: 1 }, r);
+    return mk(tag, `${picked.length} targets, ${names[kind]}`, mods, 'Magic', targets);
+  }
+  const mods = [];
+  const have = { prefix: 0, suffix: 0 };
+  const nat = picked.filter((p) => !p.des);
+  if (kind === 3 || kind === 4) for (const p of nat) if (r() < 0.45 || (kind === 4 && !mods.length)) { mods.push({ id: p.f.ids[p.tier], side: p.f.side, tier: p.tier }); have[p.f.side]++; }
+  if (kind === 4 && mods.length) mods[0].frac = true;
+  const counts = { prefix: Math.floor(r() * (room('prefix', have.prefix) + 1)), suffix: Math.floor(r() * (room('suffix', have.suffix) + 1)) };
+  if (kind === 2 && counts.prefix + counts.suffix === 0) counts.suffix = Math.min(1, room('suffix', 0));
+  const js = junk(t, new Set(taken), counts, r);
+  if (kind === 5 && js.length) js[0].frac = true;
+  if (kind === 6 && js.length && t.ctx.bone) js[0].des = true;
+  return mk(tag, `${picked.length} targets, ${names[kind]}`, mods.concat(js), 'Rare', targets, extra);
+}
+
+// The planner's old routes, to see whether any is cheaper than the network's (their settings as the sweep verified them)
+const RIVALS_RARE = [{}, { exaltTier: 'greater' }, { sideOmens: true }, { chaosTier: 'greater' }, { exaltTier: 'greater', removal: 'annul' }, { fracture: true },
+  { desSlam: true, bone: 'Ancient', echoes: true, sideOmens: true }, { removal: 'whittle', sideOmens: true, exaltTier: 'greater', chaosTier: 'greater' },
+  { removal: 'erasure', sideOmens: true, exaltTier: 'greater', chaosTier: 'greater' }, { greaterExalt: true }];
+const RIVALS_START = [{ magicTier: 'greater' }, {}, { magicTier: 'perfect' }, { pair: true, magicTier: 'greater' }, { magicTier: 'greater', slamOnly: true }, { start: 'alchemy' }, { start: 'alchemy', slamOnly: true }];
+
+function rivals(sc, input) {
+  const { priceOf } = load();
+  const ctx = P.makeContext(input.ix, input.item, { weights: input.weights, essences: input.essences });
+  const st = P.toState(ctx, input.item);
+  const { goals } = P.goalsFromTargets(ctx, input.targets);
+  goals.forEach((g) => { g.eff = g.tier; });
+  let best = null;
+  const list = st.rarity === 'Rare' ? RIVALS_RARE : RIVALS_START.concat(RIVALS_RARE.slice(0, 5));
+  for (const p of list) {
+    let res;
+    try { res = P.simulate(ctx, st, goals, P.expandStrategy(p), { trials: 300, seed: 17, priceOf, baseCost: 1, maxSteps: 600 }); } catch (e) { continue; }
+    if (!(res.p >= 0.2) || (res.missingPrices && res.missingPrices.length)) continue;
+    const cps = res.meanCost / res.p;
+    if (!best || cps < best.cps) best = { cps, p: res.p, params: p, route: res.steps.slice(0, 4).map((x) => `${x.key} x${x.avg.toFixed(1)}`) };
+  }
+  return best;
+}
+
+function runOne(sc, runs, withRivals, deep) {
+  const { ix, priceOf } = load();
+  const input = { ix, item: sc.item, targets: sc.targets, locks: {}, priceOf, baseCost: 1, weights: weightsFor(sc.base), essences: table(sc.base).essences, quality: sc.qualityMode };
+  const t0 = Date.now();
+  const net = NW.build(input);
+  const out = { id: sc.id, cls: sc.cls, kind: sc.kind, ms: Date.now() - t0 };
+  if (net.unsupported) return Object.assign(out, { skipped: net.unsupported });
+  if (net.impossible) return Object.assign(out, { skipped: 'impossible: ' + net.impossible[0].why });
+  const s = net.start;
+  if (net.done(s)) return Object.assign(out, { skipped: 'already done' });
+  const want = net.cost(s);
+  if (!(want < 1e12)) return Object.assign(out, { skipped: 'no route with the priced materials' });
+  const stepsGuess = net.materials(s).reduce((x, m) => x + m.uses, 0);
+  const n = deep ? runs : Math.max(120, Math.min(runs, Math.round(6e5 / Math.max(1, stepsGuess))));
+  const got = play(net, input, n, sc.seed, Math.max(5000, Math.round(stepsGuess * 60)));
+  const ratio = got.mean / want, z = (got.mean - want) / (got.se || 1);
+  Object.assign(out, { nodes: net.N, runs: n, network: want, played: got.mean, se: got.se, ratio, z, done: got.done, off: got.off,
+    pass: got.done === n && got.off === 0 && (Math.abs(ratio - 1) <= 0.15 || Math.abs(z) <= 3) });
+  if (withRivals) {
+    const b = rivals(sc, input);
+    if (b) Object.assign(out, { rival: b.cps, rivalRoute: b.route, rivalParams: b.params, rivalCheaper: b.cps < 0.85 * want });
+  }
+  return out;
+}
+
+if (require.main === module) {
+  const [shard, shards] = String(arg('shard', '0/1')).split('/').map(Number);
+  const minutes = +arg('minutes', 5), runs = +arg('runs', 1200), every = +arg('rivals', 15), deep = process.argv.includes('--deep');
+  const bases = testBases();
+  const deadline = Date.now() + minutes * 60000;
+  const out = [];
+  let i = 0, round = 0, live = bases.length;
+  // round by round over the bases, so every class is covered however short the run
+  outer: while (live > 0 && round < 100000) {
+    live = 0;
+    for (const base of bases) {
+      const mine = i++ % shards === shard;
+      let sc = null;
+      try { sc = scenario(base, round); } catch (e) { if (mine) out.push({ id: `${base}|#${round}`, error: 'scenario: ' + String(e && e.message || e) }); }
+      if (sc) live++;
+      if (!sc || !mine) continue;
+      let res;
+      try { res = runOne(sc, runs, every > 0 && out.length % every === 0, deep); } catch (e) { res = { id: sc.id, cls: sc.cls, kind: sc.kind, error: String(e && e.stack || e).split('\n').slice(0, 2).join(' | ') }; }
+      out.push(res);
+      if (Date.now() > deadline) break outer;
+    }
+    live = bases.length; // drawn sets never end: only the clock stops the run
+    round++;
+  }
+  // ---- summary
+  const checked = out.filter((r) => r.pass != null), bad = checked.filter((r) => !r.pass), errors = out.filter((r) => r.error), skipped = out.filter((r) => r.skipped);
+  const ratios = checked.map((r) => r.ratio).filter(isFinite).sort((a, b) => a - b);
+  const q = (p) => (ratios.length ? ratios[Math.min(ratios.length - 1, Math.floor(p * ratios.length))].toFixed(3) : '—');
+  const byCls = new Map();
+  for (const r of out) { const c = byCls.get(r.cls || '?') || { n: 0, ok: 0, bad: 0, skip: 0, err: 0 }; c.n++; if (r.pass) c.ok++; else if (r.pass === false) c.bad++; else if (r.skipped) c.skip++; else c.err++; byCls.set(r.cls || '?', c); }
+  const skipWhy = new Map();
+  for (const r of skipped) { const k = r.skipped.replace(/: .*/, ''); skipWhy.set(k, (skipWhy.get(k) || 0) + 1); }
+  const riv = out.filter((r) => r.rival != null), cheaper = riv.filter((r) => r.rivalCheaper);
+  const lines = [];
+  lines.push(`## Craft network sweep, shard ${shard + 1} of ${shards}`, '',
+    `${out.length} scenarios in ${minutes} min (rounds: ${round + 1} per base${deep ? `; every scenario played ${runs.toLocaleString('en-US')} times` : ''}): ${checked.length} checked against the simulator, ${checked.length - bad.length} agree, ${bad.length} do not, ${skipped.length} outside the network, ${errors.length} errors.`,
+    `Played cost / promised cost: median ${q(0.5)}, 5% ${q(0.05)}, 95% ${q(0.95)}.`,
+    `Old routes simulated on ${riv.length} scenarios: clearly cheaper than the network's route on ${cheaper.length}.`, '',
+    '| Class | Scenarios | Agree | Do not | Outside | Errors |', '|---|---|---|---|---|---|',
+    ...[...byCls.entries()].sort().map(([c, v]) => `| ${c} | ${v.n} | ${v.ok} | ${v.bad} | ${v.skip} | ${v.err} |`), '',
+    'Outside the network: ' + ([...skipWhy.entries()].map(([k, v]) => `${k} (${v})`).join(', ') || 'none'), '');
+  if (bad.length) lines.push('### Promise and play disagree', '', ...bad.sort((a, b) => Math.abs(b.ratio - 1) - Math.abs(a.ratio - 1)).slice(0, 25).map((r) => `- ${r.id}: promised ${r.network.toFixed(1)}, played ${isFinite(r.played) ? r.played.toFixed(1) : '—'} (x${isFinite(r.ratio) ? r.ratio.toFixed(2) : '—'}), ${r.nodes} nodes${r.off ? ', ' + r.off + ' runs left the network' : ''}${r.done < r.runs ? ', ' + (r.runs - r.done) + ' unfinished' : ''}`), '');
+  if (cheaper.length) lines.push('### An old route is cheaper', '', ...cheaper.sort((a, b) => a.rival / a.network - b.rival / b.network).slice(0, 25).map((r) => `- ${r.id}: network ${r.network.toFixed(1)}, old route ${r.rival.toFixed(1)} (${JSON.stringify(r.rivalParams)}: ${r.rivalRoute.join(', ')})`), '');
+  if (errors.length) lines.push('### Errors', '', ...errors.slice(0, 15).map((r) => `- ${r.id}: ${r.error}`), '');
+  const text = lines.join('\n');
+  console.log(text);
+  if (process.env.GITHUB_STEP_SUMMARY) fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, text + '\n');
+  const json = arg('json', null);
+  if (json) fs.writeFileSync(json, JSON.stringify({ at: new Date().toISOString(), shard, shards, minutes, results: out }));
+  process.exitCode = errors.length ? 1 : 0;
+}
+module.exports = { scenario, table, runOne };

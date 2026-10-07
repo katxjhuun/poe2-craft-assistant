@@ -6,10 +6,10 @@
  * like this, use that"). No crafts are simulated: the costs are solved from the equations, so the answer is there at
  * once and follows the prices and the item as they change.
  *
- * What a node does not know is which modifiers the "other" ones are. Their effect is averaged: each of them takes the
- * pool share an average rolled modifier takes, and blocks a target with the chance that a rolled modifier of that side
- * is of the target's group (a lower tier of it). The simulator in planner.js knows every modifier and is the check
- * (scripts/selftest/network_check.js).
+ * What a node does not know is which modifiers the "other" ones are, with one exception: a modifier that keeps a
+ * target from rolling (a lower tier of it, or another modifier of its group) is a state of that target, "in the way".
+ * The rest are averaged: each takes the pool share an average rolled modifier takes. The simulator in planner.js knows
+ * every modifier and is the check (scripts/selftest/network_check.js, network_sweep.js).
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(require('./engine.js'), require('./planner.js'));
@@ -23,7 +23,8 @@
   const GAMMA = 1 - 1e-13; // keeps the equations solvable should a rule set never finish; the error is far below a cent
   const BIG = 1e15;
   // goal status
-  const ABSENT = 0, NATURAL = 1, CRAFTED = 2, DESECRATED = 3;
+  const ABSENT = 0, NATURAL = 1, CRAFTED = 2, DESECRATED = 3, BLOCKED = 4; // BLOCKED: a modifier of the target's group is in the way
+  const met = (x) => x === NATURAL || x === CRAFTED || x === DESECRATED;
 
   /**
    * input: { ix, item, targets, locks, priceOf(name) -> Exalted Orbs or null, baseCost, weights, essences, catalystMult,
@@ -100,16 +101,16 @@
       const pool = P.sidePool(ctx, SIDES[si], floor);
       let W = 0;
       const famW = new Map();
-      const met = new Float64Array(G), low = new Float64Array(G);
+      const met = new Float64Array(G), low = new Float64Array(G); // (shadows the status test: weights here)
       for (const e of pool) {
         const w = mult > 1 && (ix.kb.mods[e.id].mt || []).includes(CAT.tag) ? e.w * mult : e.w;
         W += w;
         famW.set(e.fam, (famW.get(e.fam) || 0) + w);
         for (let i = 0; i < G; i++) {
           const g = goals[i];
-          if (g.kind !== 'nat' || g.si !== si) continue;
-          if (e.fam === g.fam) { if (!g.tier || e.tier <= g.tier) met[i] += w; else low[i] += w; }
-          else if (g.grp.length && e.grp.some((x) => g.grp.includes(x))) low[i] += w;
+          if (g.si !== si || g.kind === 'ess') continue;
+          if (g.kind === 'nat' && e.fam === g.fam) { if (!g.tier || e.tier <= g.tier) met[i] += w; else low[i] += w; }
+          else if (g.grp.length && e.grp.some((x) => g.grp.includes(x))) low[i] += w; // of the target's group: it keeps the target out
         }
       }
       // what one modifier nobody asked for takes out of the pool on average: families are picked by their weight, and a
@@ -140,7 +141,7 @@
     }
     const T = { transmute: orbTiers('transmute'), augment: orbTiers('augment'), regal: orbTiers('regal'), exalt: orbTiers('exalt'), chaos: orbTiers('chaos') };
     const PR = {
-      annul: price('Orb of Annulment'), fracture: price('Fracturing Orb'),
+      annul: price('Orb of Annulment'), fracture: price('Fracturing Orb'), alchemy: price('Orb of Alchemy'),
       exaltSide: [price(OMEN.exalt.prefix), price(OMEN.exalt.suffix)], erasure: [price(OMEN.erasure.prefix), price(OMEN.erasure.suffix)],
       annulSide: [price(OMEN.annul.prefix), price(OMEN.annul.suffix)], light: price(OMEN.light),
       necro: [price(OMEN.necro.prefix), price(OMEN.necro.suffix)], echoes: price(OMEN.echoes),
@@ -199,7 +200,7 @@
     }
     const limOf = (S, si) => (S.r === 2 ? LIM[si] : S.r === 1 ? 1 : 0);
     const open = (S, si) => Math.max(0, limOf(S, si) - slots(S, si));
-    const done = (S) => { for (let i = 0; i < G; i++) if (!S.g[i]) return false; return true; };
+    const done = (S) => { for (let i = 0; i < G; i++) if (!met(S.g[i])) return false; return true; };
     const craftedUsed = (S) => { let n = S.cx ? 1 : 0; for (let i = 0; i < G; i++) if (S.g[i] === CRAFTED) n++; return n; };
     const desUsed = (S) => { let n = (S.dj ? 1 : 0) + (S.du ? 1 : 0); for (let i = 0; i < G; i++) if (S.g[i] === DESECRATED) n++; return n; };
 
@@ -209,26 +210,28 @@
       let total = 0;
       for (let si = 0; si < 2; si++) {
         if (!(mask & (1 << si))) continue;
-        const s = stats(si, floor, mult), s0 = floor || mult > 1 ? stats(si, 0) : s;
+        const s = stats(si, floor, mult);
         const n = others(S, si);
+        // a target that is there, or has a modifier in its way, is out of the pool with its group (of a group with
+        // several families, half is taken to be left)
         let present = 0;
-        for (let i = 0; i < G; i++) if (S.g[i] && goals[i].si === si && goals[i].kind === 'nat') present += s.met[i] + s.low[i];
+        for (let i = 0; i < G; i++) if (S.g[i] && goals[i].si === si) present += S.g[i] === BLOCKED ? s.met[i] + s.low[i] / 2 : s.met[i] + s.low[i];
         const avail = Math.max(0, s.W - present - n * s.block);
         if (avail <= 0) continue;
         let hit = 0;
         const hits = [];
         for (let i = 0; i < G; i++) {
           const g = goals[i];
-          if (S.g[i] || g.si !== si || g.kind !== 'nat' || !s.met[i]) continue;
-          // an unknown modifier of this side is of the target's group with this chance, and then the target cannot roll
-          const beta = n && s0.W > 0 ? Math.min(1, s0.low[i] / s0.W) : 0;
-          const w = Math.min(avail - hit, s.met[i] * Math.pow(1 - beta, n));
-          if (w > 0) { hits.push([w, i, si]); hit += w; }
+          if (S.g[i] || g.si !== si) continue;
+          const w = Math.min(avail - hit, s.met[i]);
+          if (w > 0) { hits.push([w, i, si, NATURAL]); hit += w; }
+          const b = Math.min(avail - hit, s.low[i]);
+          if (b > 0) { hits.push([b, i, si, BLOCKED]); hit += b; }
         }
-        parts.push(...hits, [avail - hit, -1, si]);
+        parts.push(...hits, [avail - hit, -1, si, 0]);
         total += avail;
       }
-      return total > 0 ? parts.filter((x) => x[0] > 0).map(([w, i, si]) => [w / total, i, si]) : [];
+      return total > 0 ? parts.filter((x) => x[0] > 0).map(([w, i, si, status]) => [w / total, i, si, status]) : [];
     }
     function addRolled(S, i, si, status) {
       const n = cp(S);
@@ -262,10 +265,10 @@
     /** [[chance, goal index or -1]] for a desecrated modifier revealed on side si of S (S without the hidden modifier). */
     function reveal(S, si, floor, lich, echoes) {
       const ex = desList(si, floor, null), ll = lich ? desList(si, floor, lich) : null;
-      const s = stats(si, floor), s0 = floor ? stats(si, 0) : s;
+      const s = stats(si, floor);
       const n = others(S, si);
       let present = 0;
-      for (let i = 0; i < G; i++) if (S.g[i] && goals[i].si === si && goals[i].kind === 'nat') present += s.met[i] + s.low[i];
+      for (let i = 0; i < G; i++) if (S.g[i] && goals[i].si === si) present += S.g[i] === BLOCKED ? s.met[i] + s.low[i] / 2 : s.met[i] + s.low[i];
       const avail = Math.max(1e-9, s.W - present - n * s.block);
       const want = [];
       for (let i = 0; i < G; i++) {
@@ -275,10 +278,7 @@
           const fits = (e) => e.fam === g.fam && (!g.tier || e.tier <= g.tier);
           const c = ex.filter(fits).length, cl = ll ? ll.filter(fits).length : 0;
           if (c || cl) want.push({ i, des: true, c, cl });
-        } else if (g.kind === 'nat' && s.met[i] > 0) {
-          const beta = n && s0.W > 0 ? Math.min(1, s0.low[i] / s0.W) : 0;
-          want.push({ i, des: false, w: Math.min(avail, s.met[i] * Math.pow(1 - beta, n)) });
-        }
+        } else if (g.kind === 'nat' && s.met[i] > 0) want.push({ i, des: false, w: Math.min(avail, s.met[i]) });
       }
       if (!want.length) return [[1, -1]];
       want.sort((a, b) => (b.des - a.des) || ((a.w || 0) - (b.w || 0)));
@@ -330,10 +330,25 @@
         if (out.length === 2 && out[1] === sIdx) return; // changes nothing
         list.push({ a, cost, out });
       };
-      const rolled = (S1, mask, floor, pre) => roll(S1, mask, floor).map(([p, i, si]) => [p * (pre == null ? 1 : pre), addRolled(S1, i, si)]);
+      const rolled = (S1, mask, floor, pre) => roll(S1, mask, floor).map(([p, i, si, status]) => [p * (pre == null ? 1 : pre), addRolled(S1, i, si, status)]);
 
       if (S.r === 0) {
         for (const t of T.transmute) { const S1 = cp(S); S1.r = 1; push({ op: 'transmute', tier: t.tier }, t.price, rolled(S1, 3, t.floor)); }
+        if (PR.alchemy != null) {
+          // Orb of Alchemy: Rare with four modifiers, one after the other
+          const R0 = cp(S); R0.r = 2;
+          let dist = new Map([[keyOf(R0), [1, R0]]]);
+          for (let k = 0; k < 4; k++) {
+            const next = new Map();
+            for (const [p, S1] of dist.values()) {
+              const outs = roll(S1, openMask(S1), 0);
+              if (!outs.length) { const key = keyOf(S1); next.set(key, [(next.get(key) || [0])[0] + p, S1]); continue; }
+              for (const [q, i, si, status] of outs) { const S2 = addRolled(S1, i, si, status), key = keyOf(S2); next.set(key, [(next.get(key) || [0])[0] + p * q, S2]); }
+            }
+            dist = next;
+          }
+          push({ op: 'alchemy' }, PR.alchemy, [...dist.values()]);
+        }
         return;
       }
       if (keyOf(S) !== keyOf(N0)) push({ op: 'newbase' }, baseCost, [[1, RESTART]]);
@@ -362,10 +377,10 @@
       if (CAT && S.q && mask) {
         // the omen uses up all the catalyst quality and favours the catalyst's type of modifier
         const m = multOf(S.q);
-        const spent = (S1, i, si) => { const n = addRolled(S1, i, si); n.q = 0; return n; };
+        const spent = (S1, i, si, status) => { const n = addRolled(S1, i, si, status); n.q = 0; return n; };
         for (const t of T.exalt) {
-          push({ op: 'exalt', tier: t.tier, catalyse: true }, t.price + CAT.omen, roll(S, mask, t.floor, m).map(([p, i, si]) => [p, spent(S, i, si)]));
-          if (mask === 3) for (let si = 0; si < 2; si++) if (PR.exaltSide[si] != null) push({ op: 'exalt', tier: t.tier, side: SIDES[si], catalyse: true }, t.price + CAT.omen + PR.exaltSide[si], roll(S, 1 << si, t.floor, m).map(([p, i, sj]) => [p, spent(S, i, sj)]));
+          push({ op: 'exalt', tier: t.tier, catalyse: true }, t.price + CAT.omen, roll(S, mask, t.floor, m).map(([p, i, si, status]) => [p, spent(S, i, si, status)]));
+          if (mask === 3) for (let si = 0; si < 2; si++) if (PR.exaltSide[si] != null) push({ op: 'exalt', tier: t.tier, side: SIDES[si], catalyse: true }, t.price + CAT.omen + PR.exaltSide[si], roll(S, 1 << si, t.floor, m).map(([p, i, sj, status]) => [p, spent(S, i, sj, status)]));
         }
       }
       if (CAT && CAT.price != null && S.q < 2) {
@@ -457,7 +472,7 @@
       if (PR.fracture != null && S.fg < 0 && !S.fj && slots(S, 0) + slots(S, 1) >= 4) {
         const outs = [];
         let n = 0;
-        for (let i = 0; i < G; i++) if (S.g[i] === NATURAL || S.g[i] === CRAFTED) { const S2 = cp(S); S2.fg = i; outs.push([1, S2]); n++; }
+        for (let i = 0; i < G; i++) if (S.g[i] === NATURAL || S.g[i] === CRAFTED || S.g[i] === BLOCKED) { const S2 = cp(S); S2.fg = i; outs.push([1, S2]); n++; }
         for (let si = 0; si < 2; si++) if (S.j[si]) { const S2 = cp(S); S2.j[si]--; S2.fj = si + 1; outs.push([S.j[si], S2]); n += S.j[si]; }
         if (S.cx) { const S2 = cp(S); S2.fj = S.cx; S2.cx = 0; outs.push([1, S2]); n++; }
         if (n) push({ op: 'fracture' }, PR.fracture, outs.map(([w, S2]) => [w / n, S2]));
@@ -472,7 +487,10 @@
       for (const m of st.mods) {
         const si = m.side === 'prefix' ? 0 : 1;
         const i = goals.findIndex((g, k) => !S.g[k] && g.si === si && P.meets(m, g, g.tier));
+        // not the target, but of its group (a lower tier, a sister modifier): it stands in the target's way
+        const b = i >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => !S.g[k] && g.si === si && g.kind !== 'ess' && (m.fam === g.fam || (g.grp.length && (m.grp || []).some((x) => g.grp.includes(x)))));
         if (i >= 0 && !m.unrevealed) { S.g[i] = m.des ? DESECRATED : m.crafted ? CRAFTED : NATURAL; if (m.frac) S.fg = i; }
+        else if (b >= 0) { S.g[b] = BLOCKED; if (m.frac) S.fg = b; }
         else if (m.frac) S.fj = si + 1;
         else if (m.unrevealed) S.du = si + 1;
         else if (m.des) S.dj = si + 1;
@@ -508,7 +526,7 @@
     const blockKey = (S) => (S.r < 2 ? 'early' : S.g.join('') + '|' + S.fg + '|' + S.fj);
     const bmap = new Map();
     for (let s = 0; s < N; s++) { const k = blockKey(states[s]); if (!bmap.has(k)) bmap.set(k, []); bmap.get(k).push(s); }
-    const metN = (S) => { let n = 0; for (let i = 0; i < G; i++) if (S.g[i]) n++; return n; };
+    const metN = (S) => { let n = 0; for (let i = 0; i < G; i++) if (met(S.g[i])) n++; return n; };
     const blocks = [...bmap.values()].sort((a, b) => (states[b[0]].r - states[a[0]].r) || (metN(states[b[0]]) - metN(states[a[0]])));
     const blockOf = new Int32Array(N), local = new Int32Array(N);
     blocks.forEach((b, bi) => b.forEach((s, li) => { blockOf[s] = bi; local[s] = li; }));
@@ -721,9 +739,14 @@
     };
     function describe(S) {
       const has = [], miss = [];
-      for (let i = 0; i < G; i++) (S.g[i] ? has : miss).push(goals[i].label + (S.fg === i ? ' (fractured)' : S.g[i] === CRAFTED ? ' (crafted)' : S.g[i] === DESECRATED ? ' (desecrated)' : ''));
+      const inWay = [];
+      for (let i = 0; i < G; i++) {
+        if (S.g[i] === BLOCKED) { inWay.push(goals[i].label + (S.fg === i ? ' (fractured)' : '')); miss.push(goals[i].label); }
+        else (S.g[i] ? has : miss).push(goals[i].label + (S.fg === i ? ' (fractured)' : S.g[i] === CRAFTED ? ' (crafted)' : S.g[i] === DESECRATED ? ' (desecrated)' : ''));
+      }
       const junk = [S.j[0] + (S.cx === 1 ? 1 : 0) + (S.dj === 1 ? 1 : 0) + (S.fj === 1 ? 1 : 0), S.j[1] + (S.cx === 2 ? 1 : 0) + (S.dj === 2 ? 1 : 0) + (S.fj === 2 ? 1 : 0)];
-      return { rarity: ['Normal', 'Magic', 'Rare'][S.r], has, miss, otherPrefixes: junk[0], otherSuffixes: junk[1], hidden: S.du ? SIDES[S.du - 1] : null,
+      for (let i = 0; i < G; i++) if (S.g[i] === BLOCKED) junk[goals[i].si]++;
+      return { rarity: ['Normal', 'Magic', 'Rare'][S.r], has, miss, inWay, otherPrefixes: junk[0], otherSuffixes: junk[1], hidden: S.du ? SIDES[S.du - 1] : null,
         fracturedOther: S.fj ? SIDES[S.fj - 1] : null, desecratedOther: S.dj ? SIDES[S.dj - 1] : null };
     }
     return net;

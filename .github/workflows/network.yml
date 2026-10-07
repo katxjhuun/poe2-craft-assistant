@@ -1,0 +1,85 @@
+# Craft network sweep: the broad check of app/network.js, in the cloud instead of on the player's computer.
+# scripts/selftest/network_sweep.js goes through every gear class (no uniques), targets drawn from every modifier a
+# base can have and start items in every kind of state; it compares the network's promised cost with the simulator
+# playing its rules, and on a share of the scenarios simulates the planner's old routes to see whether one is cheaper.
+#
+# Cost: it starts by hand only (never by itself), and every job stops itself: one price job of at most 8 minutes and
+# six check jobs of at most 22 minutes, 140 minutes at most per start. A private repository has 2,000 free minutes a
+# month; the price job (prices.yml) uses about 300 of them.
+name: Craft network sweep
+
+on:
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: 'Minutes of checking per job (each job stops itself; at most 18)'
+        default: '17'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: network-sweep
+  cancel-in-progress: true
+
+jobs:
+  prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      # the hours the price job downloaded, so only the newest ones are fetched here
+      - name: Restore price hours
+        uses: actions/cache/restore@v6
+        with:
+          path: .kb_cache/cx
+          key: cx-sweep
+          restore-keys: cx-
+      - name: Fetch prices
+        run: python scripts/fetch_prices.py --budget 240
+      - uses: actions/upload-artifact@v7
+        with:
+          name: prices
+          path: .kb_cache/out
+          include-hidden-files: true
+          retention-days: 3
+
+  sweep:
+    needs: prices
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: 'broad 1 of 5', args: '--shard 0/5 --runs 1200' }
+          - { name: 'broad 2 of 5', args: '--shard 1/5 --runs 1200' }
+          - { name: 'broad 3 of 5', args: '--shard 2/5 --runs 1200' }
+          - { name: 'broad 4 of 5', args: '--shard 3/5 --runs 1200' }
+          - { name: 'broad 5 of 5', args: '--shard 4/5 --runs 1200' }
+          - { name: '100,000 plays each', args: '--deep --runs 100000 --rivals 0' }
+    name: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v8
+        with:
+          name: prices
+          path: .kb_cache/out
+      - name: Sweep
+        env:
+          MINUTES: ${{ inputs.minutes }}
+        run: |
+          m=$(python3 -c "import os; print(min(18.0, max(1.0, float(os.environ.get('MINUTES') or 17))))")
+          node scripts/selftest/network_sweep.js ${{ matrix.args }} --minutes "$m" --json sweep.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: sweep-${{ strategy.job-index }}
+          path: sweep.json
+          retention-days: 14
