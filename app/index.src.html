@@ -194,6 +194,17 @@ details.panel.optrow > #pricePanel { padding: 4px 0 14px; }
 .rdrv .drv b { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
 .rdrv .drv-l { font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; align-self: center; }
 .rrow .rbar i { position: absolute; top: 5px; height: 2px; background: var(--accent); opacity: .75; min-width: 2px; }
+.steps.mats li { grid-template-columns: minmax(0, 1fr) auto; }
+.steps.mats li::before { content: none; }
+.run-row .budget { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.run-row .budget input { width: 84px; }
+.alts { display: grid; gap: 6px; margin-top: 14px; }
+.alts .alt-row { display: flex; justify-content: space-between; gap: 6px 14px; flex-wrap: wrap; align-items: baseline; }
+.alts .alt-row .st-names { min-width: 0; }
+.rules-list { display: grid; gap: 4px; margin: 8px 0 0; padding: 0; list-style: none; font-size: 13.5px; }
+.rules-list li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; }
+.rules-list .share { color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.rules-list .then { color: var(--accent); }
 .ingame { display: flex; align-items: center; justify-content: space-between; gap: 6px 14px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); }
 .ingame.on { color: var(--up); }
 .ingame-act { display: inline-flex; gap: 14px; }
@@ -828,6 +839,9 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
 <script id="srcPlanner">
 /*__PLANNER__*/
 </script>
+<script id="srcNetwork">
+/*__NETWORK__*/
+</script>
 <script>
 /*__GUIDE__*/
 </script>
@@ -845,6 +859,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   'use strict';
   const E = window.PoE2Engine;
   const P = window.PoE2Planner;
+  const NW = window.PoE2Network;
   const G = window.PoE2Guide;
   const V = window.PoE2Value;
   const PC = window.PoE2PriceCheck;
@@ -908,7 +923,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     history: [], histIdx: -1, shot: null, open: null, observed: store.get('observed', ''), recent: store.get('recent', []),
     ex: { q: '', cat: 'All', sort: 'vol', sel: DIV, qty: 1 }, db: null, unsubLeague: null, pricesState: 'loading',
     overrides: store.get('overrides', {}), nameBySid: {},
-    plans: null, planTab: store.get('planTab', 'balanced'), planState: 'idle', planProgress: 0, unit: store.get('unit', 'auto'), planArmed: false, optOpen: false, detailOpen: false, tierSlack: store.get('tierSlack', 1),
+    plans: null, route: null, routeWhy: null, planTab: 'premium', planState: 'idle', planProgress: 0, unit: store.get('unit', 'auto'), planArmed: false, optOpen: false, detailOpen: false, tierSlack: 1, budgetUnit: store.get('budgetUnit', 'div'), quality: store.get('quality', 'lock'),
     budget: store.get('budget', ''), baseCost: store.get('baseCost', '1'), baseLimit: store.get('baseLimit', '100'), spent: store.get('spent', []),
     lastEval: null, pendingStep: null, opsOpen: false, buyPrice: store.get('buyPrice', ''), preview: store.get('preview', false), ack: {}, catMult: store.get('catMult', null), weightSource: store.get('weightSource', 'poe2db'), priceSource: store.get('priceSource', 'ee2'), myLeagues: [].concat(store.get('myLeagues', []) || []).filter((l) => l && typeof l.name === 'string' && l.name), simRuns: store.get('simRuns', 20000),
     sample: null, explain: {},
@@ -1112,10 +1127,11 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const rec = {
       at: Date.now(), key: String(key.length) + ':' + [...key].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 7),
       text: S.text, base: S.item.base || null, cls: S.item.itemClass || null, targets,
-      locks: Object.keys(S.locks || {}).filter((k) => S.locks[k]), league: S.league || null, tiers: S.tierSlack,
+      locks: Object.keys(S.locks || {}).filter((k) => S.locks[k]), league: S.league || null, budget: budgetEx() || null,
       baseCost: parseFloat(S.baseCost) || 0, baseLimit: baseLimit(), state,
       error: err || null, kb: (S.ix.kb.meta && S.ix.kb.meta.game_data_version) || null,
-      plans: S.plans && state === 'ready' ? Object.fromEntries(PROFILE_KEYS.map((k) => [k, planSummary(S.plans.profiles[k])])) : null,
+      plans: state !== 'ready' ? null : S.route ? { route: { cost: S.route.meanCost, p: S.route.p, nodes: S.route.nodes, next: S.route.next && S.route.next.names } }
+        : S.plans ? Object.fromEntries(PROFILE_KEYS.map((k) => [k, planSummary(S.plans.profiles[k])])) : null,
     };
     S.testLog = (S.testLog || []).filter((r) => r.key !== rec.key).concat([rec]).slice(-TESTLOG_MAX);
     saveTestLog();
@@ -1547,7 +1563,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   function gamePayload(busy) {
     const g = S.inGame;
     if (!g || !S.item) return { show: false };
-    const live = S.plans && S.plans.profiles && S.plans.profiles[S.planTab];
+    const live = curPlan();
     if (live) g.pl = live;
     const pl = g.pl;
     if (!pl) return { show: false };
@@ -1558,6 +1574,17 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (pl.impossible) { out.msg = { t: 'Not possible on this item: ' + pl.impossible.join(' '), kind: 'bad' }; return out; }
     if (pl.noSuccess) { out.msg = { t: pl.spend && pl.spend.hi != null ? `No route reaches the targets for ${moneyText(pl.spend.hi)} or less.` : 'No strategy reached the targets.', kind: 'bad' }; return out; }
     if (!pl.steps || !pl.steps.length) { out.msg = { t: 'Targets already met.', kind: 'ok' }; return out; }
+    if (pl.net) {
+      // the network's route: what to use now, then the materials of the whole craft
+      out.title = 'Craft route';
+      out.sub = `${moneyText(pl.meanCost)}${pl.p != null ? ' \u00B7 ' + pct(pl.p) + ' in budget' : ''}`;
+      const n = pl.next;
+      if (n.done) out.msg = { t: 'All targets are met.', kind: 'ok' };
+      else if (n.fail) out.msg = { t: n.fail, kind: 'bad' };
+      else out.now = { t: n.names.join(' + '), help: stepHelp(n, null) + (n.hit > 0.0005 ? ` ${successFail(n.hit).s} per use.` : ''), warn: IRREVERSIBLE[n.op] ? 'Cannot be undone. ' + IRREVERSIBLE[n.op] : '' };
+      out.rows = pl.steps.filter((st) => st.avg >= 0.05).slice(0, 10).map((st) => ({ t: st.names.join(' + '), u: '\u00D7' + usesText(st.avg), now: false }));
+      return out;
+    }
     if (!busy) out.sub = `${moneyText(planCost(pl))} \u00B7 ${successFail(pl.p).s}`;
     // the step to use now on the item as it is: the route's own rule, so it is known at once after a step result
     let nx = null;
@@ -1616,9 +1643,9 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const same = !!S.item && S.text === text;
     S.pendingStep = null;
     // the item of the running route, changed: the result of the route's next step
-    const pl = S.plans && S.plans.profiles[S.planTab];
+    const pl = curPlan();
     if (!same && S.planArmed && pl && pl.goals && pl.steps && pl.steps.length && S.item && r.item.base === S.item.base && r.item.ilvl === S.item.ilvl) {
-      const nx = P.nextAction(S.ix, S.item, S.locks, pl.goals, pl.params, priceEx);
+      const nx = nextOf(pl);
       if (nx && nx.names && !nx.error) {
         const cost = nx.names.reduce((t, n) => t + (n === 'New base' ? (parseFloat(S.baseCost) || 0) : ((priceByName(n) || {}).ex || 0)), 0);
         S.pendingStep = { action: nx, names: nx.names, cost, goals: pl.goals };
@@ -2001,10 +2028,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   const previewMemo = new Map();
   /** The selected plan's next action on this item and what one use of it can do (simulated), or null. */
   function previewData() {
-    const pl = S.plans && S.plans.profiles[S.planTab];
+    const pl = curPlan();
     if (!S.item || !pl || !pl.goals || !pl.steps || !pl.steps.length) return null;
-    const nx = P.nextAction(S.ix, S.item, S.locks, pl.goals, pl.params, priceEx);
-    if (!nx.names || nx.error) return null;
+    const nx = nextOf(pl);
+    if (!nx.names || nx.error || nx.op === 'reveal' || nx.hide) return null;
     return previewFor(pl, nx);
   }
   /** One simulation of the next action per item, plan and goals; the plan card and the tooltip both read it. */
@@ -2760,7 +2787,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     tradeOpen(a.href);
   });
   function toGoalHtml() {
-    const pl = S.plans && S.plans.profiles[S.planTab];
+    const pl = curPlan();
     if (!pl || !pl.steps) return '<span class="muted" style="font-weight:400;font-size:15px">—</span>';
     if (!pl.steps.length) return '<span class="ok-note">Done</span>';
     return `${money(pl.meanCost)}${equiv(pl.meanCost)} <span class="alt">${esc(pl.label)}</span>`;
@@ -3148,8 +3175,70 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     return `<div class="cur-row">${icon(cheapest[0], cheapest[1][0])}<span class="nm">${esc(op.label)} <span class="muted" style="font-family:var(--f-ui);font-size:13.5px">(${rows.length})</span></span><span class="money">${money(Math.min(...vals))}<span class="muted">–</span>${fmt(Math.max(...vals))}</span></div>
       <div style="text-align:right"><button class="linkish" type="button" data-browse="${esc(op.cat)}">Browse ${esc(op.label.toLowerCase())}</button></div>`;
   }
-  // ============================================================ plans (F2)
-  const PROFILE_KEYS = ['cheap', 'balanced', 'premium'];
+  // ============================================================ the route
+  // One route. It comes from the craft network (app/network.js: item states and currencies solved as equations, no
+  // simulated crafts, so it is there at once). An item or target the network does not cover yet (targets by value, a
+  // rune's modifier pool, the five modifier jewel) is planned by the simulator as before, with every material allowed.
+  const budgetEx = () => toEx(S.budget, S.budgetUnit) || 0;
+  /** The route in use: the network's (S.route) or the simulated one. */
+  function curPlan() { return S.route || (S.plans && S.plans.profiles ? S.plans.profiles[S.planTab] : null); }
+  /** The step to use now, shaped like P.nextAction's answer: {names, op, ...} or {done} or {fail}. */
+  function nextOf(pl) { return pl.net ? pl.next : P.nextAction(S.ix, S.item, S.locks, pl.goals, pl.params, priceEx); }
+  function routeInput() {
+    return { ix: S.ix, item: S.item, targets: S.targets, locks: S.locks, priceOf: priceEx, baseCost: parseFloat(S.baseCost) || 0,
+      weights: itemWeights(), essences: itemEssences(), catalystMult: catMult(), quality: S.quality };
+  }
+  /** Does this item take catalysts (rings, amulets, jewels, and the bases whose implicit says so)? */
+  function takesCatalysts(it) {
+    const base = it && S.ix && S.ix.kb.bases[it.base];
+    return !!it && (['Ring', 'Amulet', 'Jewel'].includes(it.itemClass) || !!(base && (base.imp || []).includes('Catalysts can be applied to this item')));
+  }
+  /** Solve the network for the item as it is. Sets S.route; false when the item or its targets are outside the network. */
+  function tryRoute() {
+    S.route = null; S.routeWhy = null;
+    if (!S.item || !S.ix || S.item.unsupported || !S.item.base) return false;
+    const t0 = performance.now();
+    let net;
+    try { net = NW.build(routeInput()); } catch (e) { console.warn('craft network', e); S.routeWhy = 'error'; return false; }
+    if (net.unsupported) { S.routeWhy = net.unsupported; return false; }
+    if (net.impossible) { S.route = { net: true, label: 'Route', impossible: net.impossible.map((x) => `${x.label}: ${x.why}`), steps: null }; return true; }
+    const s = net.start;
+    // the number of bases the player will use binds the route (large networks skip it: it takes several solves)
+    const charge = !net.done(s) && net.N <= 9000 ? net.fitBases(s, baseLimit()) : 0;
+    const step = net.step(s);
+    const B = budgetEx();
+    const seen = new Set();
+    S.route = {
+      net: true, label: 'Route', goals: net.goals, params: null, nodes: net.N, ms: Math.round(performance.now() - t0),
+      meanCost: net.cost(s), sd: net.sd(s), budget: B, p: B > 0 ? net.within(s, B) : null, bases: net.bases(s), charge,
+      next: net.done(s) ? { done: true } : step ? Object.assign({}, step.a, { names: step.names.length ? step.names : ['Well of Souls'], hit: net.hit(s) }) : { fail: 'no step applies to this item' },
+      steps: net.done(s) ? [] : net.materials(s).map((m) => ({ names: [m.name], avg: m.uses, ok: m.uses, cost: m.price })),
+      // other first steps, one per kind of currency, with what the whole craft then costs
+      options: net.done(s) ? [] : net.options(s).filter((o) => { const k = o.names.join('+') + (o.a.hide ? '|hide' : ''); if (o.best || seen.has(k)) return false; seen.add(k); return true; }).slice(0, 4)
+        .map((o) => ({ names: o.names.length ? o.names : ['Well of Souls'], total: o.total, hide: !!o.a.hide })),
+      entries: net.entries().sort((a, b) => b.worth - a.worth).slice(0, 4).map((e) => ({ kind: e.kind, label: e.goal.label, tier: e.goal.tier, worth: e.worth })),
+      rules: net.rules(s, 14).map((r) => ({ share: r.share, when: r.when, names: r.names.length ? r.names : r.a ? ['Well of Souls'] : [], hide: !!(r.a && r.a.hide), done: r.done })),
+      missingPrices: [],
+    };
+    return true;
+  }
+  /** "Find craft route": the network's answer at once, or the simulator's job for what the network does not cover. */
+  function runRoute() {
+    clearTimeout(planTimer);
+    if (tryRoute()) {
+      planGen++; cancelWorkers(); stopJobTimer();
+      S.plans = null; S.planState = 'ready';
+      gameStepsSync();
+      renderPlan(); renderPrice();
+      if (S.preview) renderItem();
+      if (S.planShow) { S.planShow = false; planEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+      const r = S.route;
+      if (r.steps && r.steps.length) announce(`Route ready: about ${fmtShort(r.meanCost)} Exalted Orbs${r.p != null ? ', ' + pct(r.p) + ' to stay within your budget' : ''}.`);
+      return;
+    }
+    runPlans();
+  }
+  const PROFILE_KEYS = ['premium'];
   const PROFILE_HINT = {
     cheap: 'Early-game materials (up to one Chaos Orb each). The whole craft stays under one Divine Orb. The lowest cost per finished craft.',
     balanced: 'Mid-game materials (up to one Divine Orb each). The craft may cost from 1 to 10 Divine Orbs. Cost weighed by the chance to finish.',
@@ -3159,20 +3248,24 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   /** Plan again when a route was asked for (Find craft route); otherwise drop the old result and wait for the button. */
   function schedulePlans() {
     clearTimeout(planTimer);
-    if (S.planArmed) { planTimer = setTimeout(runPlans, 450); gameStepsSync(true); return; }
+    if (S.planArmed) {
+      // the network answers at once; what it does not cover is simulated again after a pause
+      if (tryRoute()) { planGen++; cancelWorkers(); stopJobTimer(); S.plans = null; S.planState = 'ready'; gameStepsSync(); renderPlan(); renderPrice(); if (S.preview) renderItem(); return; }
+      planTimer = setTimeout(runPlans, 450); gameStepsSync(true); return;
+    }
     planGen++;
     cancelWorkers(); stopJobTimer();
-    const had = S.plans || S.planState !== 'idle';
-    S.plans = null; S.planState = 'idle';
+    const had = S.plans || S.route || S.planState !== 'idle';
+    S.plans = null; S.route = null; S.planState = 'idle';
     S.inGame = null; gameStepsSync();
     renderPlan();
     if (had) { renderPrice(); if (S.preview) renderItem(); }
   }
   function planInput() {
     return {
-      ix: S.ix, item: S.item, targets: S.targets, locks: S.locks, tiers: S.tierSlack === 'big' ? 1 : S.tierSlack, spendLimits: true, bigPocket: S.tierSlack === 'big',
+      ix: S.ix, item: S.item, targets: S.targets, locks: S.locks, tiers: 1, spendLimits: true, bigPocket: true, // every material, the player's own budget only
       priceOf: priceEx,
-      baseCost: parseFloat(S.baseCost) || 0, budget: parseFloat(S.budget) || 0, baseLimit: baseLimit(), weights: itemWeights(), essences: itemEssences(), catalystMult: catMult(), recipes: recipeCandidates(),
+      baseCost: parseFloat(S.baseCost) || 0, budget: budgetEx(), baseLimit: baseLimit(), weights: itemWeights(), essences: itemEssences(), catalystMult: catMult(), recipes: recipeCandidates(),
     };
   }
   /** Library recipes for this item class and league whose goals overlap the targets, as strategy settings (7.4a). */
@@ -3327,6 +3420,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       if (!out) out = await planInPage(gen, input);
       if (!out || gen !== planGen) return;
       out.profiles = P.rankProfiles(out.profiles);
+      for (const k of PROFILE_KEYS) if (out.profiles[k]) out.profiles[k].label = 'Route'; // one route: the profile's name means nothing here
       stopJobTimer();
       S.planTook = Date.now() - (S.planT0 || Date.now());
       rememberMs(S.planTook);
@@ -3465,7 +3559,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       case 'essence': return `Makes the Magic item Rare and adds ${essenceAdds(a)}. Uses the crafted slot.`;
       case 'pessence': return `Removes a random ${a.side || 'modifier'}${a.side ? '' : swapNote([a.mod])} and adds ${essenceAdds(a)}. Uses the crafted slot.`;
       case 'liquid': return `Removes a random modifier${swapNote(liquidMods(a))} and adds ${liquidAdds(a)} as a crafted mod. Uses the crafted slot.`;
-      case 'bone': return `Adds a hidden Desecrated ${a.side || 'prefix or suffix (the side is set now, at random)'}. Reveal it at the Well of Souls and pick 1 of 3: base modifiers of that side and desecrated-only ones${a.lich ? ' (with the lich omen, only that lich\'s)' : ''}${a.echoes ? '; Abyssal Echoes lets you reroll the three once' : ''}. Keep the one the goals ask for.`;
+      case 'catalyst': return `Use ${a.count || 'enough'} of them: the catalyst quality goes to 20%, for the next Omen of Catalysing Exaltation.`;
+      case 'reveal': return 'Reveal the hidden Desecrated modifier at the Well of Souls and take the target when it is offered' + (a.echoes ? '; Abyssal Echoes lets you reroll the three once.' : '.');
+      case 'bone': if (a.hide) return 'Adds a hidden Desecrated modifier and leaves it unrevealed for now: it counts as a modifier, and a Fracturing Orb never picks it.';
+        return `Adds a hidden Desecrated ${a.side || 'prefix or suffix (the side is set now, at random)'}. Reveal it at the Well of Souls and pick 1 of 3: base modifiers of that side and desecrated-only ones${a.lich ? ' (with the lich omen, only that lich\'s)' : ''}${a.echoes ? '; Abyssal Echoes lets you reroll the three once' : ''}. Keep the one the goals ask for.`;
       case 'fracture': return 'Locks one random mod for good. It cannot be undone; the plan uses it only when a finished goal is among 4 mods (or 5 with two goals).';
       case 'divine': return 'Rerolls the values of every mod except fractured ones; the mods themselves stay. Comes last, because later currency does not change existing values.';
       case 'flux': return `Turns every resistance mod of the other elements into the same tier of ${a.to === 'fire' ? 'Fire' : a.to === 'cold' ? 'Cold' : 'Lightning'} Resistance, with its value rolled again. An item that has that resistance already keeps both.`;
@@ -3636,6 +3733,54 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       </details>
     </div>`;
   }
+  /** The network's route: cost and budget, the step to use now, the materials, other ways, and the rules it follows. */
+  function routeHtml(r) {
+    if (r.impossible) return `<div class="plan-card"><b>Not possible on this item</b><ul class="pnotes">${r.impossible.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
+    const nx = r.next;
+    if (!r.steps.length) return '<div class="plan-card"><b class="ok-note">Targets already met.</b></div>';
+    const over = r.budget > 0 && r.meanCost > r.budget;
+    let html = `<div class="report-head">
+      <div><div class="job-status">Route:<b class="done">Found</b></div><div class="sub">${r.nodes.toLocaleString('en-US')} item states solved in ${r.ms >= 1000 ? (r.ms / 1000).toFixed(1) + ' s' : r.ms + ' ms'}, nothing simulated</div></div>
+      <div class="headline"><b title="What the whole craft costs on average, following the route's rules from the item as it is">${money(r.meanCost)}</b>
+        <span class="sub">${r.p != null ? `<b class="${r.p >= 0.5 ? 'up' : r.p < 0.25 ? 'down' : ''}">${pct(r.p)}</b> to stay within ${money(r.budget)}` : 'on average'}</span></div>
+    </div>`;
+    if (over) html += `<div class="plan-card bad-note">On average this craft costs more than your ceiling. The cheapest route is shown anyway; a cheaper start is under Other ways.</div>`;
+    if (S.bridge && S.bridge.steps) html += `<div class="ingame${S.inGame && !S.inGameOff ? ' on' : ''}">${S.inGame
+      ? `<span>${S.inGameOff ? 'Route steps on the game screen are turned off in the tray menu of the desktop program.' : 'The route is on the game screen.'}</span><span class="ingame-act">${S.inGameOff ? '' : '<button class="linkish" type="button" id="inGameMove" title="The steps on the game screen take the mouse: drag them where you want them, then right-click them (or click Move again).">Move</button>'}<button class="linkish" type="button" id="inGameOff">Hide</button></span>`
+      : '<span>The route is not on the game screen.</span><button class="linkish" type="button" id="inGameOn">Show it in game</button>'}</div>`;
+    const chance = nx.hit > 0.0005 ? `<span class="sub num" title="Chance that one use adds a target the item does not have">${successFail(nx.hit).s} per use</span>` : '';
+    const nextHtml = nx.done ? '<div class="ok-note">All targets are met.</div>'
+      : nx.fail ? `<div class="bad-note">${esc(nx.fail)}</div>`
+      : `<div class="row"><div class="st-names" title="${esc(stepHelp(nx, null))}">${namesHtml(nx.names)}</div>${chance}${IRREVERSIBLE[nx.op] && !S.ack[ackKey(nx)]
+          ? '<button class="btn primary" type="button" id="reviewBtn">Before you use it…</button>'
+          : '<button class="btn primary" type="button" id="appliedBtn">I applied this</button>'}</div>
+         ${nx.hide ? '<div class="sub">Do not reveal it yet.</div>' : ''}${IRREVERSIBLE[nx.op] ? `<div class="irrev"><b>Cannot be undone.</b> ${esc(IRREVERSIBLE[nx.op])}</div>` : ''}`;
+    const rows = r.steps.filter((st) => st.avg >= 0.005);
+    const alts = [];
+    for (const o of r.options) alts.push(`<div class="alt-row"><div class="st-names" title="Use this now instead, then follow the route's rules">${namesHtml(o.names)}${o.hide ? '<span class="sub">(leave hidden)</span>' : ''}</div><span>${money(o.total)} <span class="sub">in all</span></span></div>`);
+    for (const e of r.entries) alts.push(`<div class="alt-row"><div class="st-names" title="What starting from such an item saves against rolling it from a white base. Buy it when it is listed for less."><span>Buy ${e.kind === 'magic' ? 'a Magic base with' : 'this base with a fractured'} ${e.tier ? 'T' + e.tier + ' ' : ''}${esc(e.label)}</span></div><span class="sub">worth up to</span><span>${money(e.worth)}</span></div>`);
+    const when = (w) => `${w.rarity}${w.has.length ? ', has ' + w.has.map(esc).join(' + ') : ', no target'}${w.otherPrefixes + w.otherSuffixes ? `, ${w.otherPrefixes} other prefix${w.otherPrefixes === 1 ? '' : 'es'} and ${w.otherSuffixes} suffix${w.otherSuffixes === 1 ? '' : 'es'}` : ''}${w.hidden ? ', hidden ' + w.hidden : ''}${w.desecratedOther ? ', unwanted Desecrated ' + w.desecratedOther : ''}${w.fracturedOther ? ', a fractured modifier that is not a target' : ''}`;
+    return html + `<div class="plan-card" id="planCard">
+      <div class="next"><span class="mk">Next step</span>${nextHtml}</div>
+      <div>
+        <div class="steps-head"><span>Materials for the whole craft</span><span>Uses · Cost</span></div>
+        <ul class="steps mats">${rows.map((st) => `<li><div class="st-names">${namesHtml(st.names)}</div>
+          <div class="st-meta"><span class="num x">×${usesText(st.avg)}</span>${money(st.avg * (st.cost || 0))}</div></li>`).join('')}</ul>
+      </div>
+      ${alts.length ? `<div class="alts"><div class="steps-head"><span>Other ways</span><span></span></div>${alts.join('')}</div>` : ''}
+      <details class="more" id="planMore" ${S.detailOpen ? 'open' : ''}><summary>The rules of this route</summary>
+        <p class="sub" style="margin:0">Where the item can go from here and what the route uses there. After every step, load the item again: the route follows it.</p>
+        <ul class="rules-list">${r.rules.map((x) => `<li><span class="share">${x.share >= 0.995 ? 'now' : pct(x.share)}</span><span>${when(x.when)}: <span class="then">${x.done ? 'done' : esc(x.names.join(' + ')) + (x.hide ? ' (leave hidden)' : '')}</span></span></li>`).join('')}</ul>
+        <div class="metrics" style="margin-top:10px">
+          <div><span class="mk" title="How far single crafts fall from the average">Spread</span><b>± ${money(r.sd)}</b></div>
+          <div><span class="mk" title="White bases the craft takes on average, the one in hand not counted">New bases</span><b>${usesText(r.bases)}</b></div>
+        </div>
+        ${r.charge > 0 ? `<p class="sub" style="margin:8px 0 0">The route keeps to about ${baseLimit()} bases per item (Plan options). With more bases it would be cheaper.</p>` : ''}
+        ${borrowed() ? `<p class="sub" style="margin:8px 0 0">Costs use ${esc(priceLeague(S.league).name)} prices: ${esc(S.league)} has no Currency Exchange data.</p>` : ''}
+        <div class="rules"><span class="badge" title="Roll weights are not in the game files: every chance is an estimate from poe2db's weights.">Chances: estimate from poe2db weights</span><span class="badge" title="The route's cost comes from equations over item states. It is checked against the simulator (scripts/selftest/network_check.js).">Solved, not simulated</span></div>
+      </details>
+    </div>`;
+  }
   /** Up to two self-test findings about techniques this plan uses (evidence from many scenarios, not this item). */
   function selftestTips(pl) {
     const x = S.insights;
@@ -3722,16 +3867,14 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const status = busy ? STAGE_NAMES[jobStage()] + '…' : '';
     const nTargets = Object.values(S.targets).filter((t) => t && t.fam).length;
     // options, one row each
-    const optSum = [`${(+S.simRuns || 20000).toLocaleString('en-US')} runs`, S.budget ? `budget ${S.budget} ex` : 'no budget']
-      .concat(it.rarity !== 'Rare' ? [`white base ${S.baseCost || 0} ex`, `${baseLimit()} bases`] : []).join(', ');
+    const optSum = []
+      .concat([`white base ${S.baseCost || 0} ex`, `at most ${baseLimit()} bases`]).join(', ');
     let optHtml = `<details class="optrow" id="optPlan" ${S.optOpen ? 'open' : ''}><summary>${OPT_ICON}<b>Plan options</b><span class="sum">${esc(optSum)}</span></summary><div class="plan-settings">
-      <label for="planRuns" title="Simulated crafts per route. More give steadier numbers but take longer.">Runs <select id="planRuns" class="tpl-select">${[5000, 20000, 50000].map((n) => `<option value="${n}" ${+S.simRuns === n ? 'selected' : ''}>${n.toLocaleString('en-US')}</option>`).join('')}</select></label>
-      <label for="planBudget">Budget <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBudget" inputmode="decimal" placeholder="none" value="${esc(S.budget)}"></span></label>
       <label for="planBuy" title="Price of a finished item with your targets, seen on the official trade site">Buy instead <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBuy" inputmode="decimal" placeholder="price" value="${esc(S.buyPrice)}"></span></label>
       ${weightsDisagree() ? `<label for="planWsrc" title="poe2db and Craft of Exile agree on ${esc(coeAgreeText())}; on ${weightsDisagree()} tiers of this item class they give different roll weights. Pick whose to use.">Weights <select id="planWsrc"><option value="poe2db" ${S.weightSource !== 'coe' ? 'selected' : ''}>poe2db</option><option value="coe" ${S.weightSource === 'coe' ? 'selected' : ''}>Craft of Exile</option></select></label>` : ''}
       ${hasCatalyst(it) ? `<label for="planCat" title="How much Omen of Catalysing Exaltation raises the weight of ${esc(it.qualityType)} at 20% quality. The game gives no number; set your own estimate.">Catalyst boost <span class="price-in">×<input id="planCat" inputmode="decimal" value="${esc(catMult())}"></span></label>` : ''}
-      ${it.rarity !== 'Rare' ? `<label for="planBase" title="Price of one white base of this type">White base <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBase" inputmode="decimal" value="${esc(S.baseCost)}"></span></label>
-      <label for="planBases" title="White bases you will use for one finished item. Starting over on a fresh base is often far cheaper than fixing a wrong mod, but each try takes a base.">Bases per item <span class="price-in"><input id="planBases" inputmode="numeric" value="${esc(S.baseLimit)}"></span></label>` : ''}
+      <label for="planBase" title="Price of one white base of this type">White base <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBase" inputmode="decimal" value="${esc(S.baseCost)}"></span></label>
+      <label for="planBases" title="White bases you will use for one finished item at most. Starting over on a fresh base is often far cheaper than fixing a wrong mod, but each try takes a base; with few bases the route repairs the item instead.">Bases per item <span class="price-in"><input id="planBases" inputmode="numeric" value="${esc(S.baseLimit)}"></span></label>
     </div></details>`;
     const lim = E.itemLimits(S.ix, it);
     const pc = sideMods(it, 'prefix').length, sc = sideMods(it, 'suffix').length;
@@ -3778,6 +3921,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       html += `<div class="eval ${v.verdict}" style="margin:0"><b>${v.verdict === 'expected' ? 'On plan' : v.verdict === 'acceptable' ? 'No hit yet' : 'Off plan'}</b> · ${esc(v.names.join(' + '))} · ${money(v.cost)}${a && bv ? ` · value ${signed(a.value - bv.value)}` : ''}${v.notes.length ? `<div class="sub">${v.notes.map(esc).join(' ')}</div>` : ''}</div>`;
     }
     if (S.planState === 'error') html += `<div class="plan-card bad-note">The planner stopped: ${esc(S.planError || 'unknown error')}.</div>`;
+    else if (S.route) html += routeHtml(S.route);
     else if (S.plans && S.plans.blocked) html += `<div class="plan-card">${esc(S.plans.blocked)} items cannot be crafted with normal currency.${ruleConfBadge(S.plans.blocked === 'Sanctified' ? 'R_SANCTIFIED_LOCK' : 'R_CORRUPTED_LOCK')}</div>`;
     else if (S.plans && !S.plans.empty) {
       // the report: the selected route's cost on top, one row per route, then its steps
@@ -3786,57 +3930,52 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       const top = Math.max(1, ...PROFILE_KEYS.map((k) => { const pl = S.plans.profiles[k]; return pl && pl.steps && pl.steps.length ? (pl.okCost ? pl.okCost.p90 : planCost(pl)) : 0; }));
       const took = S.planTook > 0 ? ` · ${S.planTook >= 60000 ? Math.round(S.planTook / 6000) / 10 + ' min' : Math.max(1, Math.round(S.planTook / 1000)) + ' s'}` : '';
       html += `<div class="report-head">
-        <div><div class="job-status">Job status:<b class="done">Complete</b></div><div class="sub">${(+S.simRuns || 20000).toLocaleString('en-US')} crafts per route${took} · tiers ${(+S.tierSlack || 1) === 3 ? 'T3–T1' : (+S.tierSlack || 1) === 2 ? 'T2–T1' : 'T1'}${S.tierSlack === 'big' ? ' · Premium with a big pocket' : ''}</div></div>
-        ${sel && sel.steps && sel.steps.length ? `<div class="headline"><b title="Average cost of the simulated crafts that reach every target: the sum of the step rows below">${money(planCost(sel))}</b><span class="sub">${nameOf(S.planTab)} route · ${successFail(sel.p).s} success</span></div>` : ''}
+        <div><div class="job-status">Job status:<b class="done">Complete</b></div><div class="sub">${(+S.simRuns || 20000).toLocaleString('en-US')} simulated crafts${took} · this item is outside the craft network (${esc(S.routeWhy || 'not covered yet')})</div></div>
+        ${sel && sel.steps && sel.steps.length ? `<div class="headline"><b title="Average cost of the simulated crafts that reach every target: the sum of the step rows below">${money(planCost(sel))}</b><span class="sub">${successFail(sel.p).s} success</span></div>` : ''}
       </div>`;
-      html += `<div class="rtable" role="tablist" aria-label="Routes">${PROFILE_KEYS.map((k) => {
-        const pl = S.plans.profiles[k];
-        const has = pl && pl.steps && pl.steps.length;
-        const ok = has && pl.okCost;
-        const bar = ok ? `<i style="left:${(ok.p10 / top * 100).toFixed(1)}%;width:${(Math.max(0, ok.p90 - ok.p10) / top * 100).toFixed(1)}%"></i><u style="left:${(ok.mean / top * 100).toFixed(1)}%"></u>` : '';
-        return `<button type="button" class="rrow" role="tab" id="ptab-${k}" aria-controls="planCard" tabindex="${S.planTab === k ? 0 : -1}" data-ptab="${k}" aria-selected="${S.planTab === k}" title="${esc(PROFILE_HINT[k])}">
-          <span class="rname">${nameOf(k)}<small>${k === 'cheap' ? 'early game' : k === 'balanced' ? 'mid game' : 'end game'}${pl && pl.spend && spendText(pl.spend) ? ' · ' + spendText(pl.spend) : ''}</small></span>
-          <span class="rcost">${has ? money(planCost(pl)) : pl && pl.steps ? 'Done' : pl && pl.impossible ? 'Not possible' : pl && pl.noSuccess && pl.spend && pl.spend.hi != null ? 'Not within the limit' : '—'}</span>
-          <span class="rok ${has ? (pl.p >= 0.5 ? 'up' : pl.p < 0.25 ? 'down' : '') : ''}">${has ? successFail(pl.p).s + ' success' : ''}</span>
-          <span class="rbar" ${ok ? `title="8 of 10 finished crafts cost between ${fmt(ok.p10)} and ${fmt(ok.p90)} Exalted Orbs"` : ''}>${bar}</span>
-          ${driversHtml(pl)}</button>`;
-      }).join('')}</div>`;
       if (S.bridge && S.bridge.steps) html += `<div class="ingame${S.inGame && !S.inGameOff ? ' on' : ''}">${S.inGame
-        ? `<span>${S.inGameOff ? 'Route steps on the game screen are turned off in the tray menu of the desktop program.' : `${nameOf(S.planTab)} route: its steps are on the game screen.`}</span><span class="ingame-act">${S.inGameOff ? '' : '<button class="linkish" type="button" id="inGameMove" title="The steps on the game screen take the mouse: drag them where you want them, then right-click them (or click Move again).">Move</button>'}<button class="linkish" type="button" id="inGameOff">Hide</button></span>`
-        : '<span>Click a route to show its steps on the game screen.</span>'}</div>`;
-      html += `<div id="planCard" role="tabpanel" aria-labelledby="ptab-${S.planTab}">${planCard(sel, true)}</div>`;
+        ? `<span>${S.inGameOff ? 'Route steps on the game screen are turned off in the tray menu of the desktop program.' : 'The route is on the game screen.'}</span><span class="ingame-act">${S.inGameOff ? '' : '<button class="linkish" type="button" id="inGameMove" title="The steps on the game screen take the mouse: drag them where you want them, then right-click them (or click Move again).">Move</button>'}<button class="linkish" type="button" id="inGameOff">Hide</button></span>`
+        : '<span>The route is not on the game screen.</span><button class="linkish" type="button" id="inGameOn">Show it in game</button>'}</div>`;
+      html += `<div id="planCard">${planCard(sel, true)}</div>`;
     }
     html += '</div>';
     // setup: the options, one row each, and the run button
     html += optHtml;
-    const TIER_OPTS = [[1, 'T1', 'Every target at the tier set on its row (T1 unless you changed it).'], [2, 'T2–T1', 'T2 or better is accepted for every target.'], [3, 'T3–T1', 'T3 or better is accepted for every target.']];
-    // Premium has one more: T1 with a big pocket (no spending limit, the highest chance to finish)
-    const big = S.tierSlack === 'big', onPremium = S.planTab === 'premium';
-    const tierNow = big ? (onPremium ? 'big' : 1) : +S.tierSlack || 1;
-    if (onPremium) TIER_OPTS.push(['big', 'Big pocket', 'Premium only: T1 tiers with no spending limit. Shows the craft with the highest chance to finish, whatever it costs.']);
-    html += `<div class="seg-row"><span class="mk">Accepted tiers</span><div class="seg" role="group" aria-label="Accepted tiers">${TIER_OPTS.map(([v, label, tip]) =>
-      `<button type="button" data-tiers="${v}" aria-pressed="${tierNow === v}" title="${tip}">${label}</button>`).join('')}</div></div>`;
-    html += `<div class="run-row"><button class="btn run" type="button" id="runBtn" ${nTargets ? '' : 'disabled'}>${S.plans && !S.plans.empty ? 'Run again' : 'Find craft route'}</button><span class="sub">${nTargets ? `${nTargets} target${nTargets > 1 ? 's' : ''}` : 'Pick target stats first'}</span></div>`;
+    const hasBudget = budgetEx() > 0;
+    // catalyst quality: the player says whether the route may spend it (Omen of Catalysing Exaltation uses it all up)
+    if (takesCatalysts(it)) html += `<div class="seg-row"><span class="mk">Catalyst quality</span><div class="seg" role="group" aria-label="Catalyst quality">${[
+      ['lock', 'Keep it', 'The route never spends the catalyst quality of the item and adds none.'],
+      ['use', 'Use it up', 'The route may spend the quality the item has: Omen of Catalysing Exaltation uses all of it to favour that type of modifier.'],
+      ['raise', 'Add and use', 'The route may also add catalysts (up to 20%) and spend them, as often as it pays.']].map(([v, label, tip]) =>
+      `<button type="button" data-quality="${v}" aria-pressed="${S.quality === v}" title="${tip}">${label}</button>`).join('')}</div></div>`;
+    html += `<div class="run-row"><label class="budget" for="planBudget" title="The most you want to spend on this craft. The route is the cheapest on average; the report says how likely it stays within this ceiling.">Budget ceiling
+      <span class="price-in"><input id="planBudget" inputmode="decimal" placeholder="amount" value="${esc(S.budget)}"></span>
+      <select id="planBudgetUnit" class="tpl-select" aria-label="Budget currency">${[['div', 'Divine'], ['chaos', 'Chaos'], ['ex', 'Exalted']].map(([v, l]) => `<option value="${v}" ${S.budgetUnit === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>`;
+    html += `<div class="run-row"><button class="btn run" type="button" id="runBtn" ${nTargets && hasBudget ? '' : 'disabled'}>${S.route || (S.plans && !S.plans.empty) ? 'Find again' : 'Find craft route'}</button><span class="sub">${!nTargets ? 'Pick target stats first' : !hasBudget ? 'Enter your budget ceiling' : `${nTargets} target${nTargets > 1 ? 's' : ''}`}</span></div>`;
     el.innerHTML = html;
   }
   const planEl = $('#planPanel');
   planEl.addEventListener('click', (e) => {
     const b = e.target.closest('button, [data-browse]'); if (!b) return;
-    if (b.id === 'runBtn') { S.planArmed = true; S.planShow = true; clearTimeout(planTimer); runPlans(); planEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
+    if (b.id === 'runBtn') {
+      // one route: it goes to the game screen with the search (desktop program)
+      S.planArmed = true; S.planShow = true;
+      if (S.bridge && S.bridge.steps && !S.inGame) S.inGame = {};
+      runRoute(); planEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); return;
+    }
     if (b.id === 'stopBtn') { S.planArmed = false; schedulePlans(); return; }
-    if (b.dataset.tiers) { S.tierSlack = b.dataset.tiers === 'big' ? 'big' : +b.dataset.tiers || 1; store.set('tierSlack', S.tierSlack); S.planArmed = false; schedulePlans(); return; }
+    if (b.dataset.quality) { S.quality = b.dataset.quality; store.set('quality', S.quality); schedulePlans(); if (!S.planArmed) renderPlan(); return; }
     if (b.dataset.browse) { S.ex.cat = b.dataset.browse; S.ex.q = ''; openExchange(); return; }
-    // picking a route also puts its steps on the game screen (desktop program)
-    if (b.dataset.ptab) { S.planTab = b.dataset.ptab; store.set('planTab', S.planTab); if (S.bridge && S.bridge.steps && !S.inGame) S.inGame = {}; renderPlan(); renderPrice(); if (S.preview) renderItem(); gameStepsSync(); return; }
+    if (b.id === 'inGameOn') { S.inGame = {}; renderPlan(); gameStepsSync(); return; }
     if (b.id === 'inGameOff') { S.inGame = null; renderPlan(); gameStepsSync(); return; }
     if (b.id === 'inGameMove') { fetch('/steps/move', { method: 'POST' }).catch(() => {}); announce('Drag the steps on the game screen where you want them, then right-click them.'); return; }
     if (b.dataset.bases) { S.baseLimit = b.dataset.bases; store.set('baseLimit', S.baseLimit); schedulePlans(); return; }
     if (b.id === 'explainBtn') { explainPlan(); return; }
     if (b.id === 'libBtn') { openLib(); return; }
     if (b.id === 'appliedBtn' || b.id === 'reviewBtn') {
-      const pl = S.plans && S.plans.profiles[S.planTab];
+      const pl = curPlan();
       if (!pl || !pl.goals) return;
-      const nx = P.nextAction(S.ix, S.item, S.locks, pl.goals, pl.params, priceEx);
+      const nx = nextOf(pl);
       if (!nx.names) return;
       if (b.id === 'reviewBtn') { openConfirm(pl, nx); return; }
       const cost = nx.names.reduce((t, n) => t + (n === 'New base' ? (parseFloat(S.baseCost) || 0) : ((priceByName(n) || {}).ex || 0)), 0);
@@ -3895,7 +4034,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     else if (id === 'planMore') S.detailOpen = e.target.open;
   }, true);
   planEl.addEventListener('change', (e) => {
-    if (e.target.id === 'planBudget') { S.budget = e.target.value.trim(); store.set('budget', S.budget); schedulePlans(); }
+    if (e.target.id === 'planBudget') { S.budget = e.target.value.trim(); store.set('budget', S.budget); schedulePlans(); if (!S.planArmed) renderPlan(); }
+    if (e.target.id === 'planBudgetUnit') { S.budgetUnit = e.target.value; store.set('budgetUnit', S.budgetUnit); schedulePlans(); if (!S.planArmed) renderPlan(); }
     if (e.target.id === 'planBase') { S.baseCost = e.target.value.trim(); store.set('baseCost', S.baseCost); schedulePlans(); }
     if (e.target.id === 'planBases') { S.baseLimit = e.target.value.trim(); store.set('baseLimit', S.baseLimit); schedulePlans(); }
     if (e.target.id === 'planRuns') { S.simRuns = +e.target.value || 20000; store.set('simRuns', S.simRuns); schedulePlans(); return; }

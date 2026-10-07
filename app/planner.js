@@ -1158,7 +1158,10 @@
         break;
       }
       case 'fracture': {
-        const cands = st.mods.filter((m) => !m.frac);
+        // a Desecrated modifier (revealed or not) is never the one that fractures, but it counts for the four the orb
+        // needs: three modifiers and a hidden Desecrated one give 1 in 3 (crafters' rule since 0.3, guides of 0.5.4 and
+        // 0.5.5; see reports/research-crafters-2026-10-07.md, P4)
+        const cands = st.mods.filter((m) => !m.frac && !m.des);
         if (cands.length) cands[Math.floor(rng() * cands.length)].frac = true;
         break;
       }
@@ -3341,7 +3344,7 @@
   return {
     ORB, OMEN, TIERS, boneFor, actionNames, makeContext, toState, validate, apply, rngFrom, sidePool, desPoolFor,
     goalsFromTargets, goalMet, meets, nearMiss, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
-    availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, goalClash, essencesForBase, liquidFor, CATALYST_DEFAULT,
+    availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, goalClash, essencesForBase, liquidFor, CATALYST_DEFAULT, CATALYST_NAME,
     emulate, chanceOf, familyChances, runStrategy, runStrategyAsync, groupsMet, revealOptions, desSides, DES_OPTIONS,
     planProfile, rankProfiles, setTick, clampStrategy, materialOk,
     expandStrategy, recipeParams, relevantKeys, SPACE, SEARCH, improvePlan, searchOf: (plan) => SCREENS.get(plan), legacyItems, suffixRune, runeBlocks,

@@ -10,6 +10,7 @@ const font = fs.readFileSync(path.join(here, 'data', 'Fontin-SmallCaps.otf')).to
 html = html.replace('/*__FONTIN_SC__*/', () => 'data:font/otf;base64,' + font);
 html = html.replace('/*__ENGINE__*/', () => fs.readFileSync(path.join(here, 'engine.js'), 'utf8'));
 html = html.replace('/*__PLANNER__*/', () => fs.readFileSync(path.join(here, 'planner.js'), 'utf8'));
+html = html.replace('/*__NETWORK__*/', () => fs.readFileSync(path.join(here, 'network.js'), 'utf8'));
 html = html.replace('/*__GUIDE__*/', () => fs.readFileSync(path.join(here, 'guide.js'), 'utf8'));
 html = html.replace('/*__VALUE__*/', () => fs.readFileSync(path.join(here, 'value.js'), 'utf8'));
 html = html.replace('/*__PRICECHECK__*/', () => fs.readFileSync(path.join(here, 'pricecheck.js'), 'utf8'));
