@@ -28,14 +28,16 @@ function inputFor(sc) {
 }
 
 /** Play the network's rule set on the item `runs` times (fewer when `limitMs` runs out). Returns { mean, se, done, steps, off, runs }. */
-function play(net, input, runs, seed, maxSteps, limitMs) {
+function play(net, input, runs, seed, maxSteps, limitMs, audit) {
+  // audit: a Map that collects, per node passed, where the simulator's item went: node -> { n, to: Map(next node -> count) }
+  let from = -1;
   const until = limitMs > 0 ? Date.now() + limitMs : 0;
   let played = 0;
   const ctx = net.ctx;
   const r = rng(seed);
   const lim = E.slotLimits({ rarity: 'Rare', slotDelta: ctx.slotDelta }, ctx.cls);
   const count = (st, side) => st.mods.filter((m) => m.side === side).length;
-  const open = (st, side) => Math.max(0, lim[side] - count(st, side));
+  const open = (st, side) => Math.max(0, lim[side] + (side === 'suffix' ? st.xSuffix || 0 : 0) - count(st, side)); // Serle's Triumph: one more suffix
   const goals = net.goals.slice().sort((a, b) => (b.kind === 'des') - (a.kind === 'des'));
   const wanted = (st) => (opts) => {
     for (const g of goals) {
@@ -54,8 +56,11 @@ function play(net, input, runs, seed, maxSteps, limitMs) {
     played++;
     let st = { ...st0, mods: st0.mods.map((m) => ({ ...m })) };
     let cost = 0, k = 0, ok = false;
+    from = -1;
     for (; k < maxSteps; k++) {
       const node = net.nodeOf(st);
+      if (audit && from >= 0) { const rec = audit.get(from) || { n: 0, to: new Map() }; rec.n++; rec.to.set(node, (rec.to.get(node) || 0) + 1); audit.set(from, rec); }
+      from = node;
       if (node < 0) { off++; break; }
       if (net.done(node)) { ok = true; break; }
       const step = net.step(node);
@@ -85,6 +90,7 @@ function play(net, input, runs, seed, maxSteps, limitMs) {
       } else if (a.op === 'catalyst') {
         for (let i = 0; i < a.count; i++) st = P.apply(ctx, st, a, r).state;
       } else {
+        if (a.pre) st = P.apply(ctx, st, a.pre, r).state;
         const pick = wanted(st);
         st = P.apply(ctx, st, a, r, (opts) => pick(opts)).state;
       }
