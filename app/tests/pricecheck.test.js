@@ -112,3 +112,104 @@ test('listed items: the trade site\'s records are read into lines, tiers and tot
   // the lines of a search know the modifiers they come from (what tells how rare a line is)
   assert.deepEqual(p.stats.find((st) => st.ref === '+# total maximum Life').sources.map((s) => s.tier), [5, 6]);
 });
+
+// ---- every other kind of item (app/data/trade_items_0.5.5.json says what a name is; texts in fixtures/other-items.js)
+const TI = require('../data/trade_items_0.5.5.json');
+const OTHER = require('./fixtures/other-items.js');
+const other = (key) => { const it = E.parseItem(ix, OTHER[key]).item; const pr = PC.presetsFor(ix, E, TI, it); const p = pr.presets.find((x) => x.id === pr.active); return { it, pr, p, q: PC.tradeRequest(ix, E, p, it).query }; };
+
+test('the trade item list: every kind is there, and gear is left to the knowledge base', () => {
+  const kinds = {};
+  for (const v of Object.values(TI.items)) kinds[v.k] = (kinds[v.k] || 0) + 1;
+  for (const k of ['gem', 'support', 'meta', 'uncut', 'waystone', 'tablet', 'relic', 'charm', 'flask', 'trial', 'logbook', 'stack']) assert.ok(kinds[k] > 0, k);
+  assert.equal(kinds.waystone, 16);
+  assert.deepEqual(TI.items['Exalted Orb'], { k: 'stack', g: 'Currency', t: 'exalted' });
+  assert.equal(TI.items['Waystone (Tier 15)'].tier, 15);
+  assert.equal(TI.items['Heavy Plate'], undefined); // a base of the knowledge base
+  assert.deepEqual(TI.uniques['Nascent Hope'], ['Thawing Charm']);
+});
+
+test('what stacks: the name its market price goes by, and a plain search by type for its listings', () => {
+  const a = other('currency');
+  assert.deepEqual([a.it.kind, a.it.type, a.it.stack.value, a.it.stack.max], ['stack', 'Exalted Orb', 7, 20]);
+  assert.deepEqual(a.pr.exchange, { name: 'Exalted Orb', tag: 'exalted', group: 'Currency', stack: { value: 7, max: 20 } });
+  assert.deepEqual([a.q.type, a.q.filters], ['Exalted Orb', {}]);
+  assert.equal(other('bigStack').it.stack.value, 1250); // "1,250/5,000"
+  assert.deepEqual([other('rune').pr.exchange.group, other('omen').pr.exchange.tag], ['Rune or core', 'omen-of-homogenising-exaltation']);
+  // an uncut gem is priced by its level
+  const u = other('uncutGem');
+  assert.deepEqual([u.it.kind, u.pr.exchange.name, u.pr.exchange.tag, u.q.type, u.q.filters.misc_filters.filters.gem_level.min], ['uncut', 'Uncut Skill Gem (Level 19)', 'uncut-skill-gem-19', 'Uncut Skill Gem', 19]);
+  // a stack with no exchange tag still has its name to be looked up by
+  assert.deepEqual(other('wombgift').pr.exchange, { name: 'Banded Wombgift', tag: null, group: 'Wombgift', stack: null });
+  assert.deepEqual(PC.missedLines(ix, E, a.it), []); // help text is not a modifier
+});
+
+test('gems: by name, with level from 19, sockets from 3 and quality from 16 as Exiled Exchange 2 has it', () => {
+  const g = other('skillGem');
+  assert.deepEqual([g.it.kind, g.it.type, g.it.gemLevel, g.it.quality, g.it.sockets.length, g.it.flags.corrupted], ['gem', 'Spark', 19, 20, 4, true]);
+  assert.equal(g.q.type, 'Spark');
+  assert.deepEqual(g.q.filters.misc_filters.filters, { gem_level: { min: 19 }, gem_sockets: { min: 4 } }); // corrupted: either
+  assert.equal(g.q.filters.type_filters.filters.quality.min, 20);
+  const low = other('lowGem');
+  assert.deepEqual([low.p.filters.gemLevel.disabled, low.p.filters.gemSockets.disabled], [true, true]);
+  assert.deepEqual(low.q.filters, { misc_filters: { filters: { corrupted: { option: 'false' } } } });
+  assert.deepEqual([other('supportGem').it.kind, other('supportGem').q.type], ['support', 'Immolate']);
+  assert.equal(other('lineageSupport').pr.exchange.tag, 'breachlords-amalgam'); // a lineage support trades like currency
+});
+
+test('waystones, tablets, relics, charms: the category, what each is priced by, and its lines', () => {
+  const w = other('waystone');
+  assert.deepEqual([w.it.kind, w.it.type, w.it.name, w.it.mapTier], ['waystone', 'Waystone (Tier 15)', 'Grim Passage', 15]);
+  assert.equal(w.q.filters.type_filters.filters.category.option, 'map.waystone');
+  assert.deepEqual(w.q.filters.map_filters.filters, { map_tier: { min: 15, max: 15 } });
+  assert.deepEqual(w.p.filters.mapProps.map((x) => [x.id, x.value, x.disabled]), [['map_revives', 1, true], ['map_packsize', 12, true], ['map_rare_monsters', 21, true], ['map_iir', 38, true], ['map_bonus', 105, true]]);
+  assert.deepEqual(w.p.stats.map((s) => [s.text, s.disabled]), [['32% increased Quantity of Waystones found in Map', true], ['18% increased number of Monster Packs', true]]);
+  w.p.filters.mapProps[4].disabled = false;
+  assert.equal(PC.tradeRequest(ix, E, w.p, w.it).query.filters.map_filters.filters.map_bonus.min, 105);
+  assert.equal(other('plainWaystone').q.filters.map_filters.filters.map_tier.min, 4);
+
+  const t = other('tablet');
+  assert.deepEqual([t.it.kind, t.it.type], ['tablet', 'Breach Tablet']); // the base inside a Magic name
+  assert.equal(t.q.filters.type_filters.filters.category.option, 'map.tablet');
+  assert.deepEqual(t.q.stats[0].filters.map((x) => [x.id, x.value.min]), [['pseudo.pseudo_number_of_uses_remaining', 10], ['explicit.stat_1210760818', 15], ['explicit.stat_2390685262', 18]]);
+
+  const r = other('relic');
+  assert.deepEqual([r.it.kind, r.it.type], ['relic', 'Urn Relic']);
+  assert.equal(r.q.filters.type_filters.filters.category.option, 'sanctum.relic');
+  assert.ok(r.q.stats[0].filters.every((x) => /^sanctum\./.test(x.id)), 'relic lines are searched as relic stats');
+  assert.deepEqual(PC.missedLines(ix, E, r.it), []);
+
+  const c = other('charm');
+  assert.deepEqual([c.it.kind, c.it.type, c.q.filters.type_filters.filters.category.option], ['charm', 'Thawing Charm', 'flask.charm']);
+  assert.equal(c.p.stats.length, 2);
+  const u = other('uniqueCharm');
+  assert.deepEqual([u.q.name, u.q.type, u.q.filters.type_filters], ['Nascent Hope', 'Thawing Charm', undefined]);
+});
+
+test('trial keys and logbooks by area level; an item nobody knows is still searched by its name', () => {
+  assert.deepEqual([other('barya').it.kind, other('barya').q.type, other('barya').q.filters.misc_filters.filters.area_level.min], ['trial', 'Djinn Barya', 75]);
+  assert.equal(other('ultimatum').q.filters.misc_filters.filters.area_level.min, 78);
+  assert.deepEqual([other('logbook').it.kind, other('logbook').q.filters.misc_filters.filters.area_level.min], ['logbook', 80]);
+  assert.deepEqual([other('unknown').it.kind, other('unknown').q.type], ['other', 'Brand New Thing']);
+});
+
+test('every stat: a granted skill is a line of the search, and a stat written on two lines is one line', () => {
+  const s = other('staffWithSkill');
+  assert.equal(s.it.kind, 'gear');
+  const skill = s.p.stats.find((x) => x.tag === 'skill');
+  assert.deepEqual([skill.text, skill.id, skill.roll.value], ['Grants Skill: Level 18 Firebolt', ['skill.firebolt'], 18]);
+  skill.disabled = false;
+  assert.ok(PC.tradeRequest(ix, E, s.p, s.it).query.stats[0].filters.some((x) => x.id === 'skill.firebolt'));
+  // 62 of the trade site's stats span two lines of the item text
+  const two = kb.stat_index.filter((x) => /\n/.test(x.r) && x.ids.explicit);
+  assert.ok(two.length > 20);
+  const ref = two.find((x) => (x.r.match(/#/g) || []).length === 1) || two[0];
+  const lines = ref.r.replace(/#/g, '12').split('\n').map((l) => l.trim());
+  const it = parse(['Item Class: Rings', 'Rarity: Rare', 'Test Loop', 'Gold Ring', '--------', 'Item Level: 80', '--------', ...lines]);
+  const found = PC.statsOf(ix, E, it).find((x) => x.ref === ref.r);
+  assert.ok(found, 'the two lines are found as one stat: ' + ref.r);
+  assert.deepEqual(PC.missedLines(ix, E, PC.identify(ix, TI, it)), []);
+  // a line the trade site has no stat for is told apart, not dropped silently
+  const odd = parse(['Item Class: Rings', 'Rarity: Rare', 'Test Loop', 'Gold Ring', '--------', 'Item Level: 80', '--------', '+25 to Intelligence', 'Does something no trade stat describes']);
+  assert.deepEqual(PC.missedLines(ix, E, PC.identify(ix, TI, odd)), ['Does something no trade stat describes']);
+});

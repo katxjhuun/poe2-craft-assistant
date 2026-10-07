@@ -160,6 +160,28 @@ own window (Edge's app mode), kept above the game.
   differ by one line give the price with it and without it; the line whose leaving lowers the listed prices most).
   A ring: until then a guess from the game data, the rarest roll on the item (the share of its slot's pool that gives
   it at this tier or better), on a unique its best roll. The guess says that it is one; no search is run to find it.
+- Every item is price checked, not only gear. What a copied item is comes from the trade item list
+  (`app/data/trade_items_0.5.5.json`, built by `scripts/trade_items.py` from Exiled Exchange 2's item list: 1616
+  names that are not gear bases), and each kind is searched the way Exiled Exchange 2 searches it:
+  - what trades like currency (currency, omens, runes and cores, essences, catalysts, fragments, reliquary keys, uncut
+    gems by their level, lineage support gems): its market price from the Currency Exchange prices the assistant
+    already has, with the worth of the stack in hand. The trade site is not asked; "Search listings" asks it for the
+    listings when the player wants them, and it is asked by itself only when no market price is known;
+  - skill, support and meta gems: by name, with gem level (from 19), support sockets (from 3) and quality (from 16);
+  - waystones: any waystone of the same tier; its properties (drop chance, item rarity, pack size, rare and magic
+    monsters, revives) and its modifiers are lines to switch on;
+  - tablets: any tablet with the same lines at their own values and the uses remaining; relics and charms: any of
+    their kind with the same lines; flasks: the flask's own base type;
+  - trial keys (Djinn Barya, Inscribed Ultimatum) and Expedition Logbooks: by name and area level;
+  - anything the list does not know is still searched by its name.
+  Such items are not loaded into the Craft Assistant (it does not craft them): the item being worked on stays.
+- Every stat of the trade site is a line that can be searched (all 2526 stats of its list are in the knowledge base).
+  A stat written on two lines of the item text is found as one (62 stats), and "Grants Skill: Level # ..." is a
+  line of the search; relic lines are searched as relic stats. A line the trade site has no stat for is shown struck
+  through instead of being left out. Of the 3308 modifier lines the knowledge base knows (modifiers, implicits,
+  runes, unique items), 2802 can be searched (2696 before); for the other 506 the trade list has no stat (internal
+  lines of the game data, trap modifiers not in 0.5.5, skills granted without a level): only one of them has a
+  near-match there.
 - Where the price check is: at the top, in the free space beside the game's side panel the cursor is over (left of the
   inventory; right of the stash for an item there). The side panels are 370/600 of the game's height wide at every
   resolution, which is where the place comes from. The size is fixed (`priceWidth` x `priceHeight`, 455 x 1110 at
@@ -197,7 +219,11 @@ own window (Edge's app mode), kept above the game.
   question for a weapon's physical damage is open (no weapon was looked at). In the stand-in: the card on either
   side, kept open by a click, closed by Esc; the search after a change, the wait and second try, the dot moving to
   a measured line. On the real window: the cut with a card beside the price check (two rectangles, 6 px apart), and
-  that the keyboard goes back to the window that had it when the price check is put away. Not tested: all of this
+  that the keyboard goes back to the window that had it when the price check is put away. The other kinds of items (7 Oct 2026): the searches are built from Exiled Exchange 2's source
+  (create-item-filters.ts, create-stat-filters.ts, pathofexile-trade.ts) and tested on item texts written from the
+  layout of the game's copy text, not copied in game (`app/tests/fixtures/other-items.js`): a text copied in game may
+  differ around the lines the reader looks for, and none of these searches has been run against the trade site
+  (its page shows a bot check to this tool, which was left alone). Not tested: all of this
   from a real key press with the game in front (Esc and a click beside the price check in game, the card over the
   game, the cut staying), the translation prompt being gone (it was never seen by the author), and the clipboard
   watcher with another tool.

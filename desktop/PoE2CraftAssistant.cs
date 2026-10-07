@@ -1130,6 +1130,9 @@ namespace PoE2CraftAssistant
                 return; // not open, or still opening
             }
             if (t != priceReady) Prepare(t);
+            // put away and "in front" all the same (the browser activates its new window a moment after it is hidden):
+            // the keyboard would be with a window nobody sees
+            if (!panelOn && front == t) GiveBack(t);
             if (want != 0) Interlocked.Exchange(ref panelWanted, 0);
             if (want < 0) { HidePanel(); return; }
             if (want > 0 && now <= want)

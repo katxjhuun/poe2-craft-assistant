@@ -122,6 +122,11 @@ html.pv[data-side="right"] #pvPeek.on { left: auto; right: 0; }
 .pv-dot.guess { background: none; box-shadow: inset 0 0 0 1.5px var(--accent); }
 .pv-legend { text-align: center; padding-top: 4px; }
 .pv-stale { opacity: .45; }
+/* items that are not gear: currency and gems have their own name colours in game; a line the trade site cannot search */
+.r-Currency { --tt-color: #AA9E82; --tt-frame: rgba(120, 110, 86, .5); --tt-gem1: #D8CFA8; --tt-gem2: #5A5036; }
+.r-Gem { --tt-color: #1BA29B; --tt-frame: rgba(30, 120, 115, .5); --tt-gem1: #6FE0D8; --tt-gem2: #0E4F4B; }
+.pv-txt.off { color: var(--g-lbl); cursor: default; text-decoration: line-through; text-decoration-color: rgba(117, 117, 117, .6); }
+.pv-market { display: grid; gap: 2px; }
 .pv-card { padding: 8px 10px 14px; display: grid; gap: 9px; font-size: 14px; }
 .pv-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 13px; }
 .pv-top b { color: var(--text); font-weight: 600; }
@@ -1647,11 +1652,44 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     return (m < 60 ? Math.max(1, Math.round(m)) + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd') + ' ago';
   }
   /** Exalted Orbs per unit of the currencies an estimate can add up (the main window keeps the rates in the browser). */
-  function pvRates() { const r = store.get('rates', null) || {}; return { exalted: 1, chaos: r.chaos > 0 ? r.chaos : null, divine: r.divine > 0 ? r.divine : null }; }
+  function pvRates() {
+    const r = store.get('rates', null) || {}, p = S.prices || {};
+    const d = p.divine > 0 ? p.divine : r.divine, c = p.chaos > 0 ? p.chaos : r.chaos;
+    return { exalted: 1, chaos: c > 0 ? c : null, divine: d > 0 ? d : null };
+  }
+  /**
+   * Market prices for what trades like currency (the Currency Exchange's prices the main window uses too: the price
+   * feed, or the copy that came with the page). The trade site is not asked for these items.
+   */
+  async function pvPrices() {
+    PV.feedAt = Date.now();
+    const use = (snap) => {
+      if (!snap || !snap.meta || !snap.leagues) return false;
+      const keep = S.meta, keepSnap = S.snapshot;
+      S.meta = snap.meta; S.snapshot = snap;
+      const doc = snap.leagues[leagueDoc(pvLeague())] || null;
+      if (!doc || !doc.items) { S.meta = keep; S.snapshot = keepSnap; return false; }
+      S.prices = doc;
+      for (const [sid, row] of Object.entries(doc.items)) if (!S.sidByName[row[0]]) S.sidByName[row[0]] = sid;
+      return true;
+    };
+    try { const r = await getData('prices-snapshot.json'); if (r.ok && use(await r.json())) pvRender(); } catch (e) { /* no copy with the page */ }
+    const feed = await loadFeed();
+    if (feed && (!S.meta || !S.prices || !S.prices.items || (feed.meta.updatedAt || '') >= (S.meta.updatedAt || '')) && use(feed)) pvRender();
+  }
+  /** The market price row of the item shown, when it is one that trades like currency and the prices know it. */
+  function pvMarket() {
+    const x = PV.exchange;
+    if (!x || !S.prices || !S.prices.items) return null;
+    const row = priceByName(x.name);
+    return row && row.ex > 0 ? row : null;
+  }
   async function priceViewStart() {
     const r0 = pvRates();
     S.prices = { divine: r0.divine, chaos: r0.chaos }; // for the unit of the estimate
     pvRender();
+    try { const r = await getData('trade_items_0.5.5.json'); S.tradeItems = r.ok ? await r.json() : null; } catch (e) { S.tradeItems = null; }
+    pvPrices();
     try { const r = await fetch('/bridge', { cache: 'no-store' }); PV.info = r.ok ? await r.json() : null; } catch (e) { PV.info = null; }
     // the program's sizes for the two columns, and the side the card of a listed item goes on
     const g = PV.info && PV.info.price, root = document.documentElement;
@@ -1676,17 +1714,25 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   }
   function pvItem(text) {
     const r = E.parseItem(S.ix, text);
-    if (!r.item || !r.item.base) return;
-    let pr = null;
-    try { pr = PC.createPresets(S.ix, E, r.item); } catch (e) { pr = null; }
+    if (!r.item) return;
+    // any item: gear by the knowledge base, everything else by the trade item list
+    let pr = null, missed = [];
+    try { pr = PC.presetsFor(S.ix, E, S.tradeItems, r.item); } catch (e) { pr = null; }
+    if (!pr && !r.item.type && !r.item.base) return;
+    try { missed = PC.missedLines(S.ix, E, r.item); } catch (e) { missed = []; }
     if (PV.retry) { clearTimeout(PV.retry); PV.retry = 0; PV.busy = false; } // a search that was waiting for the trade site: not this item's
     clearTimeout(PV.timer);
     pvUnpin();
-    Object.assign(PV, { item: r.item, presets: pr ? pr.presets : [], active: pr ? pr.active : null, res: null, err: null, showAll: false, again: false, wait: 0, runs: [], worth: {} });
+    Object.assign(PV, { item: r.item, presets: pr ? pr.presets : [], active: pr ? pr.active : null, res: null, err: null, showAll: false, again: false, wait: 0, runs: [], worth: {},
+      exchange: (pr && pr.exchange) || null, missed, url: null });
     // the item's own lines start switched on (totals stand in for the lines they cover): the first search is for an
     // item like this one, and lines are clicked off to widen it
     for (const x of PV.presets) if (x.id === 'pseudo') for (const st of x.stats) if (!st.hidden && st.id !== 'item.has_empty_modifier') st.disabled = false;
     pvApplyMode();
+    if (Date.now() - (PV.feedAt || 0) > 3600000) pvPrices(); // the prices of an hour ago: fetched again
+    // What trades like currency has a market price: that is the answer, and the trade site is asked only when the
+    // price is not known or the player asks for the listings.
+    if (PV.exchange && pvMarket()) { pvRender(); return; }
     pvSearch();
   }
   /** Exact match: every line at the item's own value; broad: the search's usual margin below it. */
@@ -1914,6 +1960,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     return { t: tag || '', c: '', tip: '' };
   }
   function pvEstimate(res) {
+    if (PV.item && PV.item.kind === 'stack') return null;
     const rates = pvRates();
     const vals = (res.listings || []).map((l) => (rates[l.currency] ? +l.amount * rates[l.currency] : null)).filter((v) => v > 0).sort((a, b) => a - b);
     if (!vals.length) return null;
@@ -1934,7 +1981,14 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const num = (k, v) => `<span class="pv-mm"><input type="number" data-pvn="${k}" value="${esc(v)}" aria-label="Value"><span></span></span>`;
     const lines = [];
     if (F.rarity) lines.push(`<div class="pv-line"><span class="pv-tier"></span><span class="pv-txt prop static">Item Rarity: <b>${esc(F.rarity === 'nonunique' ? 'any non-unique' : F.rarity)}</b></span><span></span></div>`);
-    if (F.category) lines.push(prop('category', !F.category.disabled, `Any ${esc(it.itemClass || 'item')} base`));
+    if (F.category) lines.push(prop('category', !F.category.disabled, F.category.label ? `Any ${esc(F.category.label)}` : `Any ${esc(it.itemClass || 'item')} base`));
+    if (F.mapTier) lines.push(prop('mapTier', !F.mapTier.disabled, `Waystone Tier: <b>${esc(F.mapTier.value)}</b>`));
+    if (F.gemLevel) lines.push(prop('gemLevel', !F.gemLevel.disabled, `Gem Level: <b>${esc(F.gemLevel.value)}${F.gemLevel.max ? '–' + esc(F.gemLevel.max) : ''}</b>`, num('gemLevel', F.gemLevel.value)));
+    if (F.gemSockets) lines.push(prop('gemSockets', !F.gemSockets.disabled, `Support Sockets: <b>${esc(F.gemSockets.value)}</b>`, num('gemSockets', F.gemSockets.value)));
+    if (F.areaLevel) lines.push(prop('areaLevel', !F.areaLevel.disabled, `Area Level: <b>${esc(F.areaLevel.value)}</b>`, num('areaLevel', F.areaLevel.value)));
+    if (F.stackSize && F.stackSize.value > 1) lines.push(prop('stackSize', !F.stackSize.disabled, `Stacks of <b>${esc(F.stackSize.value)}</b> or more`));
+    if (F.unidentified) lines.push(prop('unidentified', !F.unidentified.disabled, 'Unidentified'));
+    (F.mapProps || []).forEach((mp, i) => lines.push(`<div class="pv-line ${mp.disabled ? '' : 'on'}"><span class="pv-tier"></span><button type="button" class="pv-txt prop" data-pvmp="${i}" aria-pressed="${!mp.disabled}">${esc(mp.text)}</button><span class="pv-mm"><input type="number" data-pvmpn="${i}" value="${esc(mp.value)}" aria-label="Minimum"><span></span></span></div>`));
     if (F.itemLevel) lines.push(prop('itemLevel', !F.itemLevel.disabled, `Item Level: <b>${esc(F.itemLevel.value)}</b>`, num('itemLevel', F.itemLevel.value)));
     if (F.requiresLevel) lines.push(prop('requiresLevel', !F.requiresLevel.disabled, `Requires Level: <b>${esc(F.requiresLevel.value)}</b> or less`));
     if (F.runeSockets) lines.push(prop('runeSockets', !F.runeSockets.disabled, `Rune Sockets: <b>${esc(F.runeSockets.value)}</b>`));
@@ -1951,6 +2005,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
         <button type="button" class="pv-txt" data-pvs="${i}" aria-pressed="${!st.disabled}" title="${esc(tip)}">${esc(st.text)}${dot}</button>
         ${r ? `<span class="pv-mm"><input type="number" data-pvmin="${i}" value="${r.min != null ? esc(r.min) : ''}" placeholder="min" aria-label="Minimum"><input type="number" data-pvmax="${i}" value="${r.max != null ? esc(r.max) : ''}" placeholder="max" aria-label="Maximum"></span>` : '<span></span>'}</div>`;
     });
+    for (const t of PV.missed || []) rows.push(`<div class="pv-line"><span class="pv-tier" title="The trade site has no filter for this line">–</span><span class="pv-txt static off" title="The trade site has no filter for this line: it cannot be searched">${esc(t)}</span><span></span></div>`);
     const flags = [];
     if (F.sanctified) flags.push(prop('sanctified', !F.sanctified.disabled, 'Sanctified'));
     if (F.fractured) flags.push(prop('fractured', F.fractured.value === false, 'Not fractured'));
@@ -1969,30 +2024,52 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       const L = PV.res.listings || [];
       const est = pvEstimate(PV.res);
       const marks = L.map((l, i) => pvVs(i));
+      const gemKind = /^(gem|support|meta|uncut)$/.test(it.kind || ''), stackKind = it.kind === 'stack';
+      const col2 = gemKind ? 'Lvl' : stackKind ? 'Stack' : 'iLvl';
+      const cell2 = (l) => {
+        if (stackKind) return l.item && l.item.stackSize ? '×' + esc(l.item.stackSize) : '';
+        if (gemKind) { const pr = ((l.item && l.item.properties) || []).find((x) => /^\[?Level\]?$/.test(String(x.name || '').trim())); return pr && pr.values && pr.values[0] ? esc(String(pr.values[0][0]).replace(/\s*\(Max\)/, '')) : ''; }
+        return l.ilvl != null ? esc(l.ilvl) : '';
+      };
       answer = wait + `<div class="${PV.busy ? 'pv-stale' : ''}" style="display:grid;gap:9px">` + (est ? `<div class="pv-est" title="The middle price of the ${est.n} cheapest listings below, in the currencies the estimate can add up (Exalted, Chaos and Divine Orbs)">
           <span class="pv-note">Estimated value</span><span class="pv-val">≈ ${money(est.ex)}</span>
           <span class="pv-note">Range: ${money(est.lo)} to ${money(est.hi)} · Reliability: <span class="rel">${est.rel}</span></span></div>` : '')
         + `<div class="pv-bar"><span class="pv-note">${L.length}/${PV.res.total} · results from pathofexile.com/trade</span><span class="right"><button class="linkish" type="button" id="pvRefresh" title="Search again">↻ Refresh</button></span></div>`
-        + (L.length ? `<table class="pv-table"><thead><tr><th>Price</th><th class="r">iLvl</th><th class="r">Q%</th><th>Account</th><th class="r">Listed</th><th class="r" title="How many lines of your search the listed item has higher (▲) and lower (▼) than your item">vs yours</th>${peeks ? '<th></th>' : ''}</tr></thead><tbody>${L.map((l, i) => {
+        + (L.length ? `<table class="pv-table"><thead><tr><th>Price</th><th class="r">${col2}</th><th class="r">Q%</th><th>Account</th><th class="r">Listed</th><th class="r" title="How many lines of your search the listed item has higher (▲) and lower (▼) than your item">vs yours</th>${peeks ? '<th></th>' : ''}</tr></thead><tbody>${L.map((l, i) => {
             const name = TRADE_CUR[l.currency];
-            return `<tr><td class="price">${esc(fmt(+l.amount))}× ${name ? icon(S.sidByName[name], name, 'sm') : esc(l.currency || '')}</td><td class="r">${l.ilvl != null ? esc(l.ilvl) : ''}</td><td class="r">${l.quality != null ? esc(l.quality) + '%' : '0%'}</td><td class="acc" title="${esc(l.seller || '')}${l.online ? ' (online)' : ''}">${esc(l.seller || '')}</td><td class="r">${esc(pvAgo(l.indexed))}</td><td class="r pv-vs">${marks[i]}</td>${peeks ? `<td class="r">${l.item ? `<button type="button" class="pv-eye" data-pveye="${i}" aria-pressed="${PV.pin === i}" title="Show this item beside the price check; click to keep it open" aria-label="Show this item">${PV_EYE}</button>` : ''}</td>` : ''}</tr>`;
-          }).join('')}</tbody></table>${marks.some(Boolean) ? '<div class="pv-note">▲ ▼ how many lines of your search a listed item has higher or lower than yours</div>' : ''}` : '<div class="pv-note">Nothing is listed for this search.</div>')
+            return `<tr><td class="price">${esc(fmt(+l.amount))}× ${name ? icon(S.sidByName[name], name, 'sm') : esc(l.currency || '')}</td><td class="r">${cell2(l)}</td><td class="r">${stackKind ? '' : l.quality != null ? esc(l.quality) + '%' : '0%'}</td><td class="acc" title="${esc(l.seller || '')}${l.online ? ' (online)' : ''}">${esc(l.seller || '')}</td><td class="r">${esc(pvAgo(l.indexed))}</td><td class="r pv-vs">${marks[i]}</td>${peeks ? `<td class="r">${l.item ? `<button type="button" class="pv-eye" data-pveye="${i}" aria-pressed="${PV.pin === i}" title="Show this item beside the price check; click to keep it open" aria-label="Show this item">${PV_EYE}</button>` : ''}</td>` : ''}</tr>`;
+          }).join('')}</tbody></table>${marks.some(Boolean) ? '<div class="pv-note">▲ ▼ how many lines of your search a listed item has higher or lower than yours</div>' : ''}${stackKind ? '<div class="pv-note">A listing\'s price is for its whole stack.</div>' : ''}` : '<div class="pv-note">Nothing is listed for this search.</div>')
         + '</div>';
     }
     const sel = (k, opts) => `<select data-pvq="${k}" aria-label="${k}">${opts.map(([v, t]) => `<option value="${v}" ${PV[k] === v ? 'selected' : ''}>${t}</option>`).join('')}</select>`;
+    const gear = !it.kind || it.kind === 'gear';
+    const title = gear ? it.base : (PV.exchange && PV.exchange.name) || it.type || (it.nameLines || []).slice(-1)[0] || '?';
+    const upper = it.name && it.name !== title ? it.name : '';
+    const frame = ['Normal', 'Magic', 'Rare', 'Unique'].includes(it.rarity) ? it.rarity : it.rarity === 'Gem' ? 'Gem' : 'Currency';
+    // what trades like currency: its market price (the Currency Exchange's), and the worth of the stack in hand
+    let market = '';
+    if (PV.exchange) {
+      const row = pvMarket(), n = (PV.exchange.stack && PV.exchange.stack.value) || 1;
+      market = row ? `<div class="pv-est pv-market" title="The price this item trades at on the Currency Exchange, from the same prices the Craft Assistant uses${S.prices && S.prices.source ? ' (' + esc(S.prices.source) + ')' : ''}">
+          <span class="pv-note">Market price · ${esc(PV.exchange.group || 'Item')}</span><span class="pv-val">≈ ${money(row.ex)}</span>
+          <span class="pv-note">${row.lo != null && row.hi != null ? `Range: ${money(row.lo)} to ${money(row.hi)}` : 'each'}${row.ch != null ? ' · ' + chg(row.ch) + ' in a day' : ''}</span>
+          ${n > 1 ? `<span class="pv-note">Your stack of ${esc(fmt(n))}: ≈ ${money(row.ex * n)}</span>` : ''}</div>`
+        : `<div class="pv-note">No market price is known for ${esc(PV.exchange.name)}${S.prices && S.prices.items ? '' : ' (the prices are not loaded)'}: the trade site's listings are shown instead.</div>`;
+    }
     el.innerHTML = `<div class="pv-card">${top}
-      <div class="tt r-${esc(it.rarity || 'Normal')}">
-        <div class="tt-head"><span class="tt-gem l"></span><span class="tt-gem r"></span>${it.name ? `<div class="tt-name">${esc(it.name)}</div>` : ''}<div class="tt-name">${esc(it.base)}</div></div>
+      <div class="tt r-${esc(frame)}">
+        <div class="tt-head"><span class="tt-gem l"></span><span class="tt-gem r"></span>${upper ? `<div class="tt-name">${esc(upper)}</div>` : ''}<div class="tt-name">${esc(title)}</div></div>
         <div class="pv-lines">
-          <div class="pv-line head"><span>Tier</span><span></span><span class="pv-mm"><span>min</span><span>max</span></span></div>
+          ${lines.length || rows.length ? '<div class="pv-line head"><span>Tier</span><span></span><span class="pv-mm"><span>min</span><span>max</span></span></div>' : ''}
           ${lines.join('')}${lines.length && rows.length ? '<div class="tt-sep"></div>' : ''}${rows.join('')}
           ${hidden ? `<button class="linkish pv-more" type="button" id="pvAll">${PV.showAll ? 'Collapse hidden lines' : 'Show ' + hidden + ' hidden line' + (hidden === 1 ? '' : 's')}</button>` : ''}
           ${flags.length ? '<div class="tt-sep"></div>' + flags.join('') : ''}
           ${star && stats.some(({ st }) => pvKey(st) === star.key) ? `<div class="pv-note pv-legend"><span class="pv-dot ${star.measured ? '' : 'guess'}" style="margin:0 6px 0 0"></span>${star.measured ? 'adds the most to the price (by your searches)' : 'most valuable line, a guess until lines are clicked off and on'}</div>` : ''}
-          <div class="pv-mode"><label><input type="radio" name="pvmode" value="exact" ${PV.mode === 'exact' ? 'checked' : ''}>Exact match</label><label><input type="radio" name="pvmode" value="broad" ${PV.mode !== 'exact' ? 'checked' : ''}>Broad (−${PC.SEARCH_RANGE}%)</label></div>
+          ${rows.length ? `<div class="pv-mode"><label><input type="radio" name="pvmode" value="exact" ${PV.mode === 'exact' ? 'checked' : ''}>Exact match</label><label><input type="radio" name="pvmode" value="broad" ${PV.mode !== 'exact' ? 'checked' : ''}>Broad (−${PC.SEARCH_RANGE}%)</label></div>` : ''}
         </div>
       </div>
-      <div class="pv-bar"><button class="btn small primary" type="button" id="pvSearch" ${PV.busy ? 'disabled' : ''} title="Changes to the lines are searched by themselves; this searches at once">Search</button>
+      ${market}
+      <div class="pv-bar"><button class="btn small primary" type="button" id="pvSearch" ${PV.busy ? 'disabled' : ''} title="${PV.exchange && pvMarket() ? 'The listings of this item on the trade site (its market price above needs no search)' : 'Changes to the lines are searched by themselves; this searches at once'}">${PV.exchange && pvMarket() && !PV.res ? 'Search listings' : 'Search'}</button>
         ${PV.presets.length > 1 ? PV.presets.map((x) => `<button type="button" class="chip" data-pvpreset="${esc(x.id)}" aria-pressed="${p && x.id === p.id}" title="${x.id === 'exact' ? 'The base itself, for crafting' : 'The item by its totals'}">${x.id === 'exact' ? 'Base item' : 'Pseudo'}</button>`).join('') : ''}
         <span class="right">${PV.url ? `<a class="pv-note" href="${esc(PV.url)}" target="_blank" rel="noopener">Trade site ↗</a>` : ''}</span></div>
       <div class="pv-q">${sel('cur', [['', 'Any currency'], ['exalted', 'Exalted Orb'], ['chaos', 'Chaos Orb'], ['divine', 'Divine Orb']])}${sel('status', [['securable', 'Instant buyout'], ['online', 'In person (online)'], ['any', 'Any']])}${sel('time', [['', 'Any time'], ['1day', 'Up to a day ago'], ['3days', 'Up to 3 days ago'], ['1week', 'Up to a week ago'], ['2weeks', 'Up to 2 weeks ago']])}</div>
@@ -2017,6 +2094,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     }
     else if (b.dataset.pvpreset) { PV.active = b.dataset.pvpreset; PV.res = null; PV.err = null; pvUnpin(); pvRender(); pvAuto(); }
     else if (p && b.dataset.pvs != null) { const st = p.stats[+b.dataset.pvs]; st.disabled = !st.disabled; pvRender(); pvAuto(); }
+    else if (p && b.dataset.pvmp != null) { const mp = (p.filters.mapProps || [])[+b.dataset.pvmp]; if (mp) { mp.disabled = !mp.disabled; pvRender(); pvAuto(); } }
     else if (p && b.dataset.pvf) {
       const k = b.dataset.pvf, f = p.filters[k];
       if (!f) return;
@@ -2035,7 +2113,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     else if (!p) return;
     else if (t.dataset.pvmin != null) { const st = p.stats[+t.dataset.pvmin]; if (st && st.roll) { st.roll.min = numOf(t.value); if (!st.disabled) pvAuto(); } }
     else if (t.dataset.pvmax != null) { const st = p.stats[+t.dataset.pvmax]; if (st && st.roll) { st.roll.max = numOf(t.value); if (!st.disabled) pvAuto(); } }
-    else if (t.dataset.pvn === 'itemLevel' && p.filters.itemLevel) { p.filters.itemLevel.value = +t.value || 1; if (!p.filters.itemLevel.disabled) pvAuto(); }
+    else if (t.dataset.pvn && p.filters[t.dataset.pvn]) { const f = p.filters[t.dataset.pvn]; f.value = +t.value || 1; if (f.max) f.max = undefined; if (!f.disabled) pvAuto(); }
+    else if (t.dataset.pvmpn != null) { const mp = (p.filters.mapProps || [])[+t.dataset.pvmpn]; if (mp) { mp.value = +t.value || 0; if (!mp.disabled) pvAuto(); } }
     else if (t.dataset.pvsel === 'corrupted' && p.filters.corrupted) {
       p.filters.corrupted.force = t.value === 'any' ? null : t.value === 'true';
       if (t.value === 'any') { p.filters.corrupted.exact = false; p.filters.corrupted.value = true; }
@@ -2064,6 +2143,9 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (!S.ix || !text.trim()) return;
     const r = E.parseItem(S.ix, text);
     if (!r.item) { announce('The copied text is not an item.'); return; }
+    // Currency, gems, waystones and the like are price checked (the price check window shows them), not crafted: the
+    // item the assistant is working on stays.
+    if (!r.item.base) { announce(`${(r.item.nameLines || []).slice(-1)[0] || 'This item'}: price check only, the assistant does not craft it.`); return; }
     // A copy made for something else (a price check of another item) must not replace the item of a running route and
     // clear its targets: with a route running, only the same item comes in that way. The program's own key always loads.
     if (source === 'clipboard' && S.planArmed && S.item && (r.item.base !== S.item.base || r.item.ilvl !== S.item.ilvl)) {

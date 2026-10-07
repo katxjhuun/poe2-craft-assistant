@@ -426,6 +426,10 @@
       return { item: null, warnings: [{ level: 'error', msg: 'No "Rarity:" line found. This does not look like PoE2 item text; copy the item in game with Alt+Ctrl+C.' }] };
     }
     const nameLines = head.slice(rarityIdx + 1);
+    // for the price check of items that are not gear (gems, currency, waystones...): the name as it stands, and every
+    // line below the header, section by section
+    item.nameLines = nameLines.map((l) => l.trim());
+    item.lines = sections.slice(1);
     item.base = resolveBase(ix, nameLines);
     if (item.rarity === 'Rare' || item.rarity === 'Unique') item.name = nameLines.length > 1 ? nameLines[0] : null;
     else if (item.rarity === 'Magic') item.name = nameLines[0] || null;

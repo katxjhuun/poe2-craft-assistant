@@ -13,6 +13,11 @@
  * Adapted for this tool: the page cannot fetch the trade site (and GGG's terms forbid automated searches), so the
  * search opens on the official site; Corruption Enchantments are on by default (twice-corrupted items are priced by
  * them); a sanctified item searches sanctified ones; unrevealed Desecrated modifiers count as such.
+ * Items that are not gear (gems, uncut gems, waystones, tablets, relics, charms, flasks, trial keys, logbooks and
+ * everything that stacks) follow the same files of Exiled Exchange 2: createGemFilters, createUncutGemFilters,
+ * createTrialsFilters, the Map, Tablet, Relic, Charm and Flask branches of createFilters, createExactStatFilters, and
+ * the gem_level, gem_sockets, map_tier, area_level, stack_size and identified filters of createTradeRequest. What such
+ * an item is comes from the trade item list (app/data/trade_items_0.5.5.json, scripts/trade_items.py).
  * Runs in the browser (window.PoE2PriceCheck) and in Node (module.exports) for tests.
  */
 (function (root, factory) {
@@ -65,11 +70,18 @@
    * sumStatsByModType does. type: explicit | implicit | enchant (Corruption Enchantments) | rune | fractured |
    * desecrated | crafted; unrevealed Desecrated modifiers are counted apart (veiled).
    */
-  function statsOf(ix, E, item) {
+  function statsOf(ix, E, item, missed) {
     const out = new Map();
     const add = (line, type, rangeLine, meta) => {
       const st = ix.statByNorm.get(E.normalize(line));
-      if (!st || !st.ids) return false;
+      if (!st || !st.ids) { if (missed) missed.push(line); return false; }
+      // a stat the trade site lists under another kind only (an explicit line it knows as a rune's or an enchantment's)
+      // cannot be searched as this line; granted skills and relic stats have their own kind
+      if (!st.ids[type] && !st.ids.explicit) {
+        if (st.ids.skill) type = 'skill';
+        else if (st.ids.sanctum) type = 'sanctum';
+        else { if (missed) missed.push(line); return false; }
+      }
       // signed values ("-10% to Cold Resistance" counts against a resistance total); a "reduced" line shows a positive
       // number for a negative stat, as the trade site stores it
       const nums = E.lineValues(line);
@@ -93,13 +105,30 @@
       return true;
     };
     const kbLine = (id, i) => (id && ix.kb.mods[id] ? (ix.kb.mods[id].txt || '').split('\n')[i] : null);
+    const isStat = (t) => { const st = ix.statByNorm.get(E.normalize(t)); return !!(st && st.ids); };
+    // A stat can span two lines of the item text ("... when you kill an / enemy affected by Abyssal Wasting", 62 of the
+    // trade site's stats): two lines that are one stat together are taken together. fn(text, index of its first line,
+    // lines it covers).
+    const each = (lines, fn) => {
+      for (let i = 0; i < lines.length; i++) {
+        if (i + 1 < lines.length && isStat(lines[i] + '\n' + lines[i + 1]) && !(isStat(lines[i]) && isStat(lines[i + 1]))) { fn(lines[i] + '\n' + lines[i + 1], i, 2); i++; }
+        else fn(lines[i], i, 1);
+      }
+    };
+    // the modifier lines in the order of the item text (a plain copy gives every line as a modifier of its own, so the
+    // two lines of one stat may sit in two of them)
+    const flat = [];
     for (const m of item.mods || []) {
       if (m.unrevealed) continue;
       const type = m.slot === 'prefix' || m.slot === 'suffix'
         ? (m.fractured ? 'fractured' : m.desecrated ? 'desecrated' : m.crafted ? 'crafted' : 'explicit') : 'explicit';
-      const lines = m.text.split('\n');
-      lines.forEach((l, i) => add(l, type, m.uniqueLine ? m.uniqueLine : kbLine(m.modId, i), { slot: m.slot, tier: m.tier, modId: m.modId }));
+      m.text.split('\n').forEach((l, i) => flat.push({ l, type, uni: !!m.uniqueLine, range: m.uniqueLine ? m.uniqueLine : kbLine(m.modId, i), meta: { slot: m.slot, tier: m.tier, modId: m.modId } }));
     }
+    each(flat.map((x) => x.l), (l, i, n) => {
+      const a = flat[i], b = flat[i + 1];
+      if (n === 2 && b.type !== a.type) { add(a.l, a.type, a.range, a.meta); add(b.l, b.type, b.range, b.meta); return; }
+      add(l, a.type, n === 2 && !a.uni && a.range && b.range ? a.range + '\n' + b.range : a.range, a.meta);
+    });
     // implicit ranges from the base's implicit text (kb.bases[base].imp), or the unique's own implicit
     const u = item.rarity === 'Unique' && ix.kb.uniques && ix.kb.uniques[item.name];
     const impLines = [].concat(...((ix.kb.bases[item.base] || {}).imp || []).map((l) => l.split('\n')),
@@ -107,9 +136,32 @@
     const impRange = (t) => impLines.find((l) => E.normalize(l) === E.normalize(t)) || null;
     // Corruption Enchantment ranges from the knowledge base's corruption modifiers (dom 'c')
     const encRange = (t) => { const id = (ix.corruptionMods || []).find((x) => E.normalize(ix.kb.mods[x].txt) === E.normalize(t)); return id ? ix.kb.mods[id].txt : null; };
-    for (const x of item.implicits || []) add(x.text, x.corruption ? 'enchant' : 'implicit', x.corruption ? encRange(x.text) : impRange(x.text), { corruption: !!x.corruption });
+    for (const corruption of [false, true]) {
+      each((item.implicits || []).filter((x) => !!x.corruption === corruption).map((x) => x.text), (l) => add(l, corruption ? 'enchant' : 'implicit', corruption ? encRange(l) : impRange(l), { corruption }));
+    }
     for (const r of item.runes || []) add(r.text, r.kind === 'enchant' ? 'enchant' : 'rune', null, { rune: true });
+    for (const l of propLines(item)) if (/^Grants Skill:/.test(l)) add(l, 'skill', null, { skill: true });
     return [...out.values()];
+  }
+  /**
+   * The modifier lines of an item that cannot be searched: the trade site has no stat for them. On items that are not
+   * gear the text below the header also holds properties and help text: only what reads like a modifier is kept (no
+   * "Name: value" line, no sentence with a full stop), and nothing at all for the kinds that carry no modifiers.
+   */
+  function missedLines(ix, E, item) {
+    if (item.kind && /^(gem|support|meta|uncut|stack|trial|logbook)$/.test(item.kind)) return [];
+    const missed = [];
+    statsOf(ix, E, item, missed);
+    const gear = item.kind === 'gear' || !item.kind;
+    // a block of the text in which no line is a stat is help text ("Place this item on the Relic Altar ...")
+    const among = new Set();
+    if (!gear) {
+      const clean = (l) => (E.cleanLine ? E.cleanLine(l) : String(l)).trim();
+      const isStat = (l) => { const st = ix.statByNorm.get(E.normalize(clean(l))); return !!(st && st.ids); };
+      for (const sec of item.lines || []) if (sec.some(isStat)) for (const l of sec) among.add(clean(l));
+    }
+    const mod = (l) => gear || (among.has(l.trim()) && !/\.$/.test(l.trim()) && !/^[A-Z][A-Za-z' ]+:\s/.test(l) && !/uses? remaining/i.test(l) && !/^Adds .* to a Map$/.test(l.trim()));
+    return [...new Set(missed)].filter(mod);
   }
 
   // ------------------------------------------------------------------ pseudo rules (pseudo/index.ts)
@@ -140,7 +192,7 @@
 
   // ------------------------------------------------------------------ filters of one stat (calculatedStatToFilter)
   function statFilter(calc, item, percent, tag, disabled) {
-    const f = { id: calc.ids[calc.type === 'pseudo' ? 'pseudo' : calc.type] || calc.ids.explicit || null, ids: calc.ids, ref: calc.ref, type: calc.type,
+    const f = { id: calc.ids[calc.type === 'pseudo' ? 'pseudo' : calc.type] || calc.ids.explicit || calc.ids.skill || calc.ids.sanctum || null, ids: calc.ids, ref: calc.ref, type: calc.type,
       text: calc.text, tag: tag || calc.type, disabled: disabled !== false, hidden: null, roll: null, sources: calc.sources || [] };
     if (!f.id && calc.type !== 'veiled') return null;
     if (calc.value == null) return f;
@@ -417,6 +469,19 @@
     if (filters.search.name) q.name = filters.search.name;
     if (filters.category && !filters.category.disabled) setPath(q.filters, 'type_filters.filters.category.option', filters.category.id);
     else if (filters.search.type) q.type = filters.search.type;
+    if (filters.gemLevel && !filters.gemLevel.disabled) {
+      setPath(q.filters, 'misc_filters.filters.gem_level.min', filters.gemLevel.value);
+      if (filters.gemLevel.max) setPath(q.filters, 'misc_filters.filters.gem_level.max', filters.gemLevel.max);
+    }
+    if (filters.gemSockets && !filters.gemSockets.disabled) setPath(q.filters, 'misc_filters.filters.gem_sockets.min', filters.gemSockets.value);
+    if (filters.mapTier && !filters.mapTier.disabled) {
+      setPath(q.filters, 'map_filters.filters.map_tier.min', filters.mapTier.value);
+      setPath(q.filters, 'map_filters.filters.map_tier.max', filters.mapTier.value);
+    }
+    for (const p of filters.mapProps || []) if (!p.disabled) setPath(q.filters, `map_filters.filters.${p.id}.min`, p.value);
+    if (filters.areaLevel && !filters.areaLevel.disabled) setPath(q.filters, 'misc_filters.filters.area_level.min', filters.areaLevel.value);
+    if (filters.stackSize && !filters.stackSize.disabled) setPath(q.filters, 'misc_filters.filters.stack_size.min', filters.stackSize.value);
+    if (filters.unidentified && !filters.unidentified.disabled) setPath(q.filters, 'misc_filters.filters.identified.option', 'false');
     if (filters.search.name && filters.search.type) q.type = filters.search.type;
     if (filters.rarity) setPath(q.filters, 'type_filters.filters.rarity.option', filters.rarity);
     if (filters.itemLevel && !filters.itemLevel.disabled) setPath(q.filters, 'type_filters.filters.ilvl.min', filters.itemLevel.value);
@@ -451,7 +516,7 @@
         setPath(q.filters, `equipment_filters.filters.${PROP_PATH[s.prop]}.max`, r.max);
         continue;
       }
-      const ids = s.ids[s.type === 'corrupted' ? 'enchant' : s.type] || (s.type === 'pseudo' ? s.ids.pseudo : null) || s.ids.explicit || [];
+      const ids = s.ids[s.type === 'corrupted' ? 'enchant' : s.type] || (s.type === 'pseudo' ? s.ids.pseudo : null) || s.ids.explicit || s.ids.skill || s.ids.sanctum || [];
       if (!ids.length) continue;
       if (ids.length === 1) q.stats[0].filters.push({ id: ids[0], value: range(s.roll), disabled: false });
       else q.stats.push({ type: 'count', value: { min: 1 }, disabled: false, filters: ids.map((id) => ({ id, value: range(s.roll), disabled: false })) });
@@ -464,6 +529,155 @@
   }
   function tradeUrl(league, body) {
     return `https://www.pathofexile.com/trade2/search/poe2/${encodeURIComponent(league || 'Standard')}?q=${encodeURIComponent(JSON.stringify(body))}`;
+  }
+
+  // ------------------------------------------------------------------ items that are not gear
+  // kind -> the trade site's category (CATEGORY_TO_TRADE_ID), and the word the page uses for it
+  const KIND_CATEGORY = { gem: 'gem.activegem', support: 'gem.supportgem', meta: 'gem.metagem', waystone: 'map.waystone', tablet: 'map.tablet',
+    relic: 'sanctum.relic', charm: 'flask.charm', flask: 'flask' };
+  const KIND_LABEL = { gem: 'Skill Gem', support: 'Support Gem', meta: 'Meta Gem', uncut: 'Uncut Gem', waystone: 'Waystone', tablet: 'Tablet', relic: 'Relic',
+    charm: 'Charm', flask: 'Flask', trial: 'Trial key', logbook: 'Logbook', stack: 'Stackable item', other: 'Item' };
+  // a waystone's property lines and the trade site's filters for them (map_filters)
+  const MAP_PROPS = [
+    ['map_revives', /^Revives Available:\s*(\d+)/, 'Revives Available: #'], ['map_packsize', /^Monster Pack Size:\s*\+?(\d+)%/, 'Monster Pack Size: +#%'],
+    ['map_magic_monsters', /^Magic Monsters:\s*\+?(\d+)%/, 'Magic Monsters: +#%'], ['map_rare_monsters', /^Rare Monsters:\s*\+?(\d+)%/, 'Rare Monsters: +#%'],
+    ['map_iir', /^Item Rarity:\s*\+?(\d+)%/, 'Item Rarity: +#%'], ['map_bonus', /^Waystone Drop Chance:\s*\+?(\d+)%/, 'Waystone Drop Chance: +#%'],
+    ['map_gold', /^Gold Found:\s*\+?(\d+)%/i, 'Gold Found: +#%'],
+  ];
+  function rawLines(item) { return [].concat(...(item.lines || [])).map((l) => String(l).trim()); }
+  function rawNum(item, re) {
+    for (const l of rawLines(item)) { const m = re.exec(l); if (m) return +String(m[1]).replace(/[^\d]/g, ''); }
+    return null;
+  }
+  /**
+   * What a copied item is. A base the knowledge base holds is gear (kind 'gear': the presets above). Everything else
+   * is looked up in the trade item list T (app/data/trade_items_0.5.5.json) by its name lines; a Magic item's name
+   * wraps its base type ("Thawing Charm of Plenty"). Sets on the item: kind, type (the name the trade site lists it
+   * under), tradeTag and priceName (for what stacks: the name its market price is kept under), group, and what such
+   * an item is priced by: gemLevel, stack, mapTier, areaLevel.
+   */
+  function identify(ix, T, item) {
+    if (!item) return item;
+    const base = item.base && ix.kb.bases[item.base];
+    if (base && !/Flask/.test(base.cls)) { item.kind = 'gear'; return item; }
+    const items = (T && T.items) || {};
+    const names = (item.nameLines || []).filter(Boolean);
+    let type = null;
+    for (let i = names.length - 1; i >= 0 && !type; i--) if (items[names[i]]) type = names[i];
+    if (!type) {
+      const sorted = T ? T._sorted || (T._sorted = Object.keys(items).sort((a, b) => b.length - a.length)) : [];
+      for (const n of names) {
+        const hit = sorted.find((k) => { const at = n.indexOf(k); return at >= 0 && (at === 0 || n[at - 1] === ' ') && (at + k.length === n.length || n[at + k.length] === ' '); });
+        if (hit && (!type || hit.length > type.length)) type = hit;
+      }
+    }
+    const info = type ? items[type] : null;
+    item.kind = info ? info.k : 'other';
+    item.type = type || names[names.length - 1] || null;
+    item.group = (info && info.g) || null;
+    item.tradeTag = (info && info.t) || null;
+    item.priceName = item.type;
+    item.gemLevel = /^(gem|support|meta|uncut)$/.test(item.kind) ? rawNum(item, /^Level:\s*(\d+)/) : null;
+    item.areaLevel = rawNum(item, /^Area Level:\s*(\d+)/);
+    const st = /^Stack Size:\s*([\d.,\u00a0\u202f ]+)\/\s*([\d.,\u00a0\u202f ]+)/;
+    for (const l of rawLines(item)) { const m = st.exec(l); if (m) { item.stack = { value: +m[1].replace(/[^\d]/g, '') || 1, max: +m[2].replace(/[^\d]/g, '') || null }; break; } }
+    if (item.kind === 'waystone') {
+      const inName = /\(Tier (\d+)\)/.exec(item.type || '');
+      item.mapTier = (info && info.tier) || rawNum(item, /^Waystone Tier:\s*(\d+)/) || (inName ? +inName[1] : null);
+    }
+    // an uncut gem is listed (and priced) by its level: "Uncut Skill Gem (Level 19)"
+    if (item.kind === 'uncut' && item.gemLevel && items[`${item.type} (Level ${item.gemLevel})`]) {
+      item.priceName = `${item.type} (Level ${item.gemLevel})`;
+      item.tradeTag = items[item.priceName].t || item.tradeTag;
+    }
+    if (item.rarity === 'Unique' && names.length > 1 && names[0] !== item.type) item.name = names[0];
+    return item;
+  }
+  /** The stat lines of an item that is not gear, each a filter of its own (no totals): the same lines for a listed item. */
+  function plainStats(ix, E, item, percent, on) {
+    const out = [];
+    for (const st of statsOf(ix, E, item)) {
+      if (item.kind === 'relic' && st.ids.sanctum) st.type = 'sanctum';
+      if (item.kind === 'tablet' && st.type === 'implicit') continue; // "Dont show implicit for tablets"
+      const f = statFilter(st, item, percent, st.type === 'enchant' ? 'corrupted' : st.type, !on(st));
+      if (f) out.push(f);
+    }
+    return out;
+  }
+  /**
+   * The search for an item that is not gear (identify() has said what it is). One preset; for what trades like
+   * currency also `exchange` (the name and tag its market price goes by): the page shows that price first.
+   */
+  function otherPresets(ix, E, item) {
+    const kind = item.kind, flags = item.flags || {};
+    const f = { status: 'securable', search: { type: item.type }, category: null };
+    const unique = item.rarity === 'Unique';
+    if (unique && item.name && item.name !== item.type) f.search = { name: item.name, type: item.type };
+    let stats = [];
+    const corrupted = () => { f.corrupted = { value: !!flags.corrupted }; };
+    const rarity = () => { if (['Normal', 'Magic', 'Rare'].includes(item.rarity)) f.rarity = 'nonunique'; };
+    const category = (off) => { if (!unique && KIND_CATEGORY[kind]) f.category = { id: KIND_CATEGORY[kind], disabled: !!off, label: KIND_LABEL[kind] }; };
+    if (flags.unidentified) f.unidentified = { disabled: !unique };
+    if (kind === 'gem' || kind === 'support' || kind === 'meta') {
+      // createGemFilters: the gem by name; sockets from 3, quality from 16, level from 19 count
+      corrupted();
+      const n = (item.sockets || []).length;
+      if (n) f.gemSockets = { value: n, disabled: n < 3 };
+      if (item.quality) f.quality = { value: item.quality, disabled: item.quality < 16 };
+      if (item.gemLevel) f.gemLevel = { value: item.gemLevel, disabled: item.gemLevel < 19 };
+    } else if (kind === 'uncut') {
+      // createUncutGemFilters: a level either side below 18, the level itself from there
+      const range = item.gemLevel && item.gemLevel < 18 && !/Support/.test(item.type || '') ? 1 : 0;
+      if (item.gemLevel) f.gemLevel = { value: item.gemLevel - range, max: range ? item.gemLevel + range : undefined, disabled: false };
+    } else if (kind === 'trial' || kind === 'logbook') {
+      if (item.areaLevel) f.areaLevel = { value: item.areaLevel, disabled: false };
+    } else if (kind === 'stack') {
+      f.stackSize = { value: (item.stack && item.stack.value) || 1, disabled: true };
+    } else if (kind === 'waystone') {
+      // the Map branch: any waystone of this tier; its modifiers are lines the player can switch on
+      category(false); rarity();
+      if (item.mapTier) f.mapTier = { value: item.mapTier, disabled: false };
+      f.mapProps = [];
+      for (const [id, re, text] of MAP_PROPS) { const v = rawNum(item, re); if (v != null) f.mapProps.push({ id, value: v, text: text.replace('#', v), disabled: true }); }
+      stats = plainStats(ix, E, item, 2, () => false);
+    } else if (kind === 'tablet') {
+      // tablets: every line counts, at its own value
+      category(false); rarity(); corrupted();
+      if (item.ilvl) f.itemLevel = { value: item.ilvl, disabled: true };
+      stats = plainStats(ix, E, item, 0, () => true);
+      // (the trade list's own wording of this total ends in "(Tablets)": found by its name, not by the item's line)
+      const uses = rawNum(item, /^(\d+) uses? remaining/i), usesStat = (ix.kb.stat_index || []).find((x) => x.r === '# uses remaining');
+      if (uses != null && usesStat && usesStat.ids && usesStat.ids.pseudo) {
+        stats.unshift({ id: usesStat.ids.pseudo, ids: usesStat.ids, ref: usesStat.r, type: 'pseudo', text: `${uses} uses remaining`, tag: 'pseudo', disabled: false, hidden: null,
+          roll: { value: uses, min: uses, max: undefined, default: { min: uses, max: uses } }, sources: [] });
+      }
+    } else if (kind === 'relic' || kind === 'charm') {
+      category(false); rarity(); corrupted();
+      if (kind === 'charm' && item.quality) f.quality = { value: item.quality, disabled: item.quality < 10 };
+      if (item.ilvl) f.itemLevel = { value: item.ilvl, disabled: true };
+      stats = plainStats(ix, E, item, 2, () => true); // enableAllFilters
+    } else if (kind === 'flask') {
+      // a flask is searched by its own base type (the size of the flask is the item); lines of tier 1 and 2 count
+      rarity(); corrupted();
+      if (item.quality >= 20) f.quality = { value: item.quality, disabled: item.quality <= 20 };
+      if (item.ilvl) f.itemLevel = { value: item.ilvl, disabled: true };
+      stats = plainStats(ix, E, item, 2, (st) => (st.sources || []).some((x) => x.tier != null && x.tier <= 2));
+    } else {
+      rarity();
+      if (['Normal', 'Magic', 'Rare', 'Unique'].includes(item.rarity)) corrupted();
+      if (item.areaLevel) f.areaLevel = { value: item.areaLevel, disabled: true };
+      stats = plainStats(ix, E, item, 2, () => false);
+    }
+    if (unique) for (const st of stats) st.disabled = true; // a unique is found by its name; its lines narrow the search
+    const out = { active: 'item', presets: [{ id: 'item', label: KIND_LABEL[kind] || 'Item', filters: f, stats }] };
+    // what trades like currency: the market price is kept under this name
+    if (item.tradeTag || kind === 'stack') out.exchange = { name: item.priceName || item.type, tag: item.tradeTag || null, group: item.group || KIND_LABEL[kind] || 'Item', stack: item.stack || null };
+    return out;
+  }
+  /** The searches for any copied item: gear by the knowledge base, everything else by the trade item list. */
+  function presetsFor(ix, E, T, item, opts) {
+    identify(ix, T, item);
+    return item.kind === 'gear' ? createPresets(ix, E, item, opts) : otherPresets(ix, E, item);
   }
 
   // ------------------------------------------------------------------ listed items (the trade site's own records)
@@ -532,7 +746,8 @@
     const cls = base ? base.cls : null;
     let other = [];
     // a unique with sockets gets no totals here (see pseudoStats): both sides by the player's item
-    try { other = pseudoStats(ix, E, Object.assign({}, theirs, { sockets: (mine && mine.sockets) || [], rarity: (mine && mine.rarity) || theirs.rarity, name: (mine && mine.name) || theirs.name }), cls); } catch (e) { other = []; }
+    const like = Object.assign({}, theirs, { sockets: (mine && mine.sockets) || [], rarity: (mine && mine.rarity) || theirs.rarity, name: (mine && mine.name) || theirs.name, kind: mine && mine.kind });
+    try { other = mine && mine.kind && mine.kind !== 'gear' ? plainStats(ix, E, like, 0, () => true) : pseudoStats(ix, E, like, cls); } catch (e) { other = []; }
     const by = new Map(other.map((f) => [f.ref + '|' + f.tag, f]));
     const rows = [];
     for (const st of stats || []) {
@@ -553,5 +768,6 @@
     };
   }
 
-  return { createPresets, createFilters, statsOf, pseudoStats, exactStats, tradeRequest, tradeUrl, CATEGORY, percentRoll, percentRollDelta, SEARCH_RANGE, plain, listedItem, compare };
+  return { createPresets, createFilters, statsOf, pseudoStats, exactStats, tradeRequest, tradeUrl, CATEGORY, percentRoll, percentRollDelta, SEARCH_RANGE, plain, listedItem, compare,
+    identify, otherPresets, presetsFor, missedLines, KIND_LABEL, KIND_CATEGORY };
 });

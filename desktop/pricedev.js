@@ -6,7 +6,9 @@
 // /last gives a sample item (the page loads it as if a key press had just copied it), /trade answers every search
 // with the listings of desktop/pricedev.sample.json (the trade site is never asked), /overlay prints what the page tells
 // the program (its size, the card of a listed item). On /price: ?slow=1 makes every other answer say "wait 2 s" the
-// way the program does when searches come too fast, ?side=right puts the card's column right of the price check.
+// way the program does when searches come too fast, ?side=right puts the card's column right of the price check,
+// ?item=<name> picks another sample item: one of app/tests/fixtures/other-items.js (currency, rune, skillGem, uncutGem,
+// waystone, tablet, relic, charm, barya, logbook, ...). The listings stay the body armours of the sample answer.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -14,6 +16,7 @@ const path = require('path');
 const PORT = +process.env.PORT || 47700;
 const root = path.join(__dirname, '..', 'app', 'dist');
 const sample = JSON.parse(fs.readFileSync(path.join(__dirname, 'pricedev.sample.json'), 'utf8'));
+const others = require(path.join(__dirname, '..', 'app', 'tests', 'fixtures', 'other-items.js'));
 const MIME = { '.html': 'text/html; charset=utf-8', '.json': 'application/json; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.otf': 'font/otf' };
 let which = 'rare', slow = false, side = 'left', calls = 0;
@@ -32,7 +35,7 @@ http.createServer(async (req, res) => {
   }
   if (p === '/bridge') return send(res, 200, MIME['.json'], JSON.stringify({ bridge: true, hotkey: 'Alt+E', game: 'Path of Exile 2', price: { width: 455, peek: 380, side } }));
   if (p === '/events') { res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' }); res.write(': connected\n\n'); return; }
-  if (p === '/last') return send(res, 200, MIME['.json'], JSON.stringify({ text: (sample.items[which] || sample.items.rare).join('\n'), source: 'hotkey', at: Date.now() }));
+  if (p === '/last') return send(res, 200, MIME['.json'], JSON.stringify({ text: others[which] || (sample.items[which] || sample.items.rare).join('\n'), source: 'hotkey', at: Date.now() }));
   if (p === '/trade' && req.method === 'POST') {
     const body = await read(req);
     calls++;
