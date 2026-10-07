@@ -6,10 +6,12 @@
  * like this, use that"). No crafts are simulated: the costs are solved from the equations, so the answer is there at
  * once and follows the prices and the item as they change.
  *
- * What a node does not know is which modifiers the "other" ones are, with one exception: a modifier that keeps a
- * target from rolling (a lower tier of it, or another modifier of its group) is a state of that target, "in the way".
- * The rest are averaged: each takes the pool share an average rolled modifier takes. The simulator in planner.js knows
- * every modifier and is the check (scripts/selftest/network_check.js, network_sweep.js).
+ * What a node does not know is which modifiers the "other" ones are. They are averaged: each takes the pool share an
+ * average rolled modifier takes, and is of a target's group (a lower tier of it, a sister modifier) with the chance
+ * that a rolled modifier is, which keeps the target from rolling. Two cases are known exactly instead, as a state of
+ * the target ("in the way"): a modifier of its group that the pasted item has, and any such modifier for a
+ * Desecrated target (a bone is too dear to spend on an item that cannot take the target). The simulator in planner.js
+ * knows every modifier and is the check (scripts/selftest/network_check.js, network_sweep.js).
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) module.exports = factory(require('./engine.js'), require('./planner.js'));
@@ -210,7 +212,7 @@
       let total = 0;
       for (let si = 0; si < 2; si++) {
         if (!(mask & (1 << si))) continue;
-        const s = stats(si, floor, mult);
+        const s = stats(si, floor, mult), s0 = floor || mult > 1 ? stats(si, 0) : s;
         const n = others(S, si);
         // a target that is there, or has a modifier in its way, is out of the pool with its group (of a group with
         // several families, half is taken to be left)
@@ -223,10 +225,16 @@
         for (let i = 0; i < G; i++) {
           const g = goals[i];
           if (S.g[i] || g.si !== si) continue;
-          const w = Math.min(avail - hit, s.met[i]);
+          if (g.kind === 'des') {
+            // a rolled modifier of a Desecrated target's group is known as such
+            const b = Math.min(avail - hit, s.low[i]);
+            if (b > 0) { hits.push([b, i, si, BLOCKED]); hit += b; }
+            continue;
+          }
+          // an unknown modifier of this side is of the target's group with this chance, and then the target cannot roll
+          const beta = n && s0.W > 0 ? Math.min(1, s0.low[i] / s0.W) : 0;
+          const w = Math.min(avail - hit, s.met[i] * Math.pow(1 - beta, n));
           if (w > 0) { hits.push([w, i, si, NATURAL]); hit += w; }
-          const b = Math.min(avail - hit, s.low[i]);
-          if (b > 0) { hits.push([b, i, si, BLOCKED]); hit += b; }
         }
         parts.push(...hits, [avail - hit, -1, si, 0]);
         total += avail;
@@ -265,7 +273,7 @@
     /** [[chance, goal index or -1]] for a desecrated modifier revealed on side si of S (S without the hidden modifier). */
     function reveal(S, si, floor, lich, echoes) {
       const ex = desList(si, floor, null), ll = lich ? desList(si, floor, lich) : null;
-      const s = stats(si, floor);
+      const s = stats(si, floor), s0 = floor ? stats(si, 0) : s;
       const n = others(S, si);
       let present = 0;
       for (let i = 0; i < G; i++) if (S.g[i] && goals[i].si === si) present += S.g[i] === BLOCKED ? s.met[i] + s.low[i] / 2 : s.met[i] + s.low[i];
@@ -278,7 +286,10 @@
           const fits = (e) => e.fam === g.fam && (!g.tier || e.tier <= g.tier);
           const c = ex.filter(fits).length, cl = ll ? ll.filter(fits).length : 0;
           if (c || cl) want.push({ i, des: true, c, cl });
-        } else if (g.kind === 'nat' && s.met[i] > 0) want.push({ i, des: false, w: Math.min(avail, s.met[i]) });
+        } else if (g.kind === 'nat' && s.met[i] > 0) {
+          const beta = n && s0.W > 0 ? Math.min(1, s0.low[i] / s0.W) : 0;
+          want.push({ i, des: false, w: Math.min(avail, s.met[i] * Math.pow(1 - beta, n)) });
+        }
       }
       if (!want.length) return [[1, -1]];
       want.sort((a, b) => (b.des - a.des) || ((a.w || 0) - (b.w || 0)));
@@ -480,7 +491,8 @@
     }
 
     // ---- the item as a node
-    function nodeOf(st) {
+    /** known: also mark a modifier that stands in a natural target's way (the pasted item's own; rolled ones are averaged). */
+    function nodeOf(st, known) {
       const S = cp(N0);
       S.r = st.rarity === 'Rare' ? 2 : st.rarity === 'Magic' ? 1 : 0;
       S.q = CAT && st.catTag === CAT.tag && st.catQ > 0 ? (st.catQ >= 20 ? 2 : 1) : 0;
@@ -488,7 +500,7 @@
         const si = m.side === 'prefix' ? 0 : 1;
         const i = goals.findIndex((g, k) => !S.g[k] && g.si === si && P.meets(m, g, g.tier));
         // not the target, but of its group (a lower tier, a sister modifier): it stands in the target's way
-        const b = i >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => !S.g[k] && g.si === si && g.kind !== 'ess' && (m.fam === g.fam || (g.grp.length && (m.grp || []).some((x) => g.grp.includes(x)))));
+        const b = i >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => !S.g[k] && g.si === si && (g.kind === 'des' || (known && g.kind === 'nat')) && (m.fam === g.fam || (g.grp.length && (m.grp || []).some((x) => g.grp.includes(x)))));
         if (i >= 0 && !m.unrevealed) { S.g[i] = m.des ? DESECRATED : m.crafted ? CRAFTED : NATURAL; if (m.frac) S.fg = i; }
         else if (b >= 0) { S.g[b] = BLOCKED; if (m.frac) S.fg = b; }
         else if (m.frac) S.fj = si + 1;
@@ -499,7 +511,7 @@
       }
       return S;
     }
-    const startS = nodeOf(st0);
+    const startS = nodeOf(st0, true);
     // entry points a player can buy instead of rolling: a Magic base that has one target, a Rare with one target
     // fractured and nothing else. Solved with the rest so their worth can be told.
     const entries = [];
@@ -536,24 +548,36 @@
      * Solve x = d + P x under pol for several d at once. rhs: [{d, bnd, term}]: bnd is the value of a white base
      * (RESTART), term the value of a finished item.
      */
+    // which blocks read a block's values (over every edge, whatever the rule set): they are solved again when it changes
+    const readers = blocks.map(() => new Set());
+    for (let s = 0; s < N; s++) for (const act of acts[s]) { const o = act.out; for (let t = 1; t < o.length; t += 2) if (o[t] !== RESTART && blockOf[o[t]] !== blockOf[s]) readers[blockOf[o[t]]].add(blockOf[s]); }
+    const readerList = readers.map((x) => [...x]);
+    // a block's matrix changes only when its part of the rule set does: its factors are kept until then
+    const luCache = blocks.map(() => null);
+    function luOf(bi) {
+      const b = blocks[bi], m = b.length, c = luCache[bi];
+      if (c) { let same = true; for (let li = 0; li < m; li++) if (c.pol[li] !== pol[b[li]]) { same = false; break; } if (same) return c; }
+      const A = new Float64Array(m * m), mine = new Int32Array(m);
+      for (let li = 0; li < m; li++) {
+        const s = b[li];
+        mine[li] = pol[s];
+        A[li * m + li] = 1;
+        if (pol[s] < 0) continue;
+        const o = acts[s][pol[s]].out;
+        for (let t = 0; t < o.length; t += 2) if (o[t + 1] !== RESTART && blockOf[o[t + 1]] === bi) A[li * m + local[o[t + 1]]] -= GAMMA * o[t];
+      }
+      return (luCache[bi] = { A, perm: luFactor(A, m), pol: mine });
+    }
     function evaluate(rhs) {
       const K = rhs.length;
-      const X = rhs.map((r) => { const a = new Float64Array(N); if (r.term) for (let s = 0; s < N; s++) if (pol[s] === -1) a[s] = r.term; return a; });
-      // the block matrices do not change while the rule set stands: factor them once
-      const lus = blocks.map((b, bi) => {
-        const m = b.length, A = new Float64Array(m * m);
-        for (let li = 0; li < m; li++) {
-          const s = b[li];
-          A[li * m + li] = 1;
-          if (pol[s] < 0) continue;
-          const o = acts[s][pol[s]].out;
-          for (let t = 0; t < o.length; t += 2) if (o[t + 1] !== RESTART && blockOf[o[t + 1]] === bi) A[li * m + local[o[t + 1]]] -= GAMMA * o[t];
-        }
-        return { A, perm: luFactor(A, m) };
-      });
-      for (let sweep = 0; sweep < 400; sweep++) {
-        let delta = 0;
+      const X = rhs.map((r) => { if (r.x0) return Float64Array.from(r.x0); const a = new Float64Array(N); if (r.term) for (let s = 0; s < N; s++) if (pol[s] === -1) a[s] = r.term; return a; });
+      // a block is solved again only while something it reads has changed
+      const dirty = new Uint8Array(blocks.length).fill(1);
+      let left = blocks.length;
+      for (let pass = 0; pass < 600 && left > 0; pass++) {
         for (let bi = 0; bi < blocks.length; bi++) {
+          if (!dirty[bi]) continue;
+          dirty[bi] = 0; left--;
           const b = blocks[bi], m = b.length;
           const R = new Float64Array(m * K);
           for (let li = 0; li < m; li++) {
@@ -567,15 +591,17 @@
               else if (blockOf[s2] !== bi) for (let k = 0; k < K; k++) R[li * K + k] += p * X[k][s2];
             }
           }
-          luSolve(lus[bi].A, lus[bi].perm, R, m, K);
+          const f = luOf(bi);
+          luSolve(f.A, f.perm, R, m, K);
+          let delta = 0;
           for (let li = 0; li < m; li++) for (let k = 0; k < K; k++) {
             const v = R[li * K + k], old = X[k][b[li]];
             const dv = Math.abs(v - old) / (Math.abs(v) + 1e-300);
             if (dv > delta && Math.abs(v - old) > 1e-300) delta = dv;
             X[k][b[li]] = v;
           }
+          if (delta > 1e-11) for (const r of readerList[bi]) if (!dirty[r]) { dirty[r] = 1; left++; }
         }
-        if (delta < 1e-11) break;
       }
       return X;
     }
@@ -603,16 +629,16 @@
       if (a < 0) a = find((e) => e.op === 'newbase');
       pol[s] = a < 0 ? 0 : a;
     }
-    let Fv = new Float64Array(N), rounds = 0, sol = null;
+    let Fv = new Float64Array(N), Av = null, rounds = 0, sol = null;
     /** Improve the rule set until no node has a cheaper edge (it starts from the rule set of the last solve). */
     function solve() {
       for (let it = 0; it < 100; it++, rounds++) {
         const d = new Float64Array(N);
         for (let s = 0; s < N; s++) if (pol[s] >= 0) d[s] = costOf(acts[s][pol[s]]);
-        const [A, F] = evaluate([{ d, bnd: 0, stuck: BIG }, { bnd: 0, term: 1 }]);
+        const [A, F] = evaluate([{ d, bnd: 0, stuck: BIG, x0: Av }, { bnd: 0, term: 1, x0: Av ? Fv : null }]);
         x = F[n0] > 1e-250 ? A[n0] / F[n0] : BIG;
         for (let s = 0; s < N; s++) V[s] = Math.min(BIG, A[s] + (1 - F[s]) * x);
-        Fv = F;
+        Fv = F; Av = A;
         let changed = 0;
         for (let s = 0; s < N; s++) {
           const list = acts[s];
@@ -659,12 +685,26 @@
       return sol;
     }
     const usesOf = (s, name) => { const so = solution(), k = so.names.indexOf(name); return k < 0 ? 0 : so.uses(s, k); };
+    /** New bases from node s on average, without the rest of the solution (the search of the charge asks often). */
+    function basesAt(s) {
+      const d = new Float64Array(N);
+      let any = false;
+      for (let t = 0; t < N; t++) if (pol[t] >= 0 && acts[t][pol[t]].a.op === 'newbase') { d[t] = 1; any = true; }
+      if (!any) return 0;
+      const X = evaluate([{ d, bnd: 0 }])[0];
+      return X[s] + (1 - Fv[s]) * (Fv[n0] > 1e-250 ? X[n0] / Fv[n0] : 0);
+    }
 
     const net = {
       ctx, goals, states, acts, pol, start, n0, N, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
       get rounds() { return rounds; },
       get base() { return solution().money[n0]; },
-      nodeOf: (st) => { const i = index.get(keyOf(nodeOf(st))); return i === undefined ? -1 : i; },
+      nodeOf(st) {
+        // the node with what is known to be in the way, when the network has it (the pasted item and what follows from it)
+        let i = index.get(keyOf(nodeOf(st, true)));
+        if (i === undefined) i = index.get(keyOf(nodeOf(st, false)));
+        return i === undefined ? -1 : i;
+      },
       done: (s) => done(states[s]),
       /** The step to use at node s: {a, names, cost, out}, or null when done or stuck. */
       step(s) { return pol[s] >= 0 ? Object.assign({ names: actNames(acts[s][pol[s]].a) }, acts[s][pol[s]]) : null; },
@@ -700,12 +740,20 @@
        * that is cheapest with it needs no more. Returns the charge (0 when the limit never bound).
        */
       fitBases(s, max) {
-        charge = 0; solve();
-        if (!(max >= 0) || usesOf(s, 'New base') <= max) return 0;
-        let lo = 0, hi = Math.max(1, baseCost);
-        for (let k = 0; k < 40; k++) { charge = hi; solve(); if (usesOf(s, 'New base') <= max) break; lo = hi; hi *= 4; }
-        for (let k = 0; k < 12 && hi - lo > 0.02 * hi; k++) { const mid = Math.sqrt(Math.max(lo, hi * 1e-3) * hi); charge = mid; solve(); if (usesOf(s, 'New base') <= max) hi = mid; else lo = mid; }
-        charge = hi; solve();
+        if (charge) { charge = 0; solve(); }
+        const free = basesAt(s);
+        if (!(max >= 0) || free <= max) return 0;
+        // a first guess from how far over the limit the free route is, then up until it holds
+        let lo = 0, hi = Math.max(1, baseCost) * Math.max(2, free / Math.max(0.5, max)), at = Infinity;
+        for (let k = 0; k < 30; k++) { charge = hi; solve(); at = basesAt(s); if (at <= max) break; lo = hi; hi *= 3; }
+        // back down while the route is far under the limit (a cheaper one may still keep to it)
+        for (let k = 0; k < 6 && at < 0.6 * max; k++) {
+          const mid = Math.sqrt(Math.max(lo, hi * 0.02) * hi);
+          charge = mid; solve();
+          const b = basesAt(s);
+          if (b <= max) { hi = mid; at = b; } else { lo = mid; charge = hi; solve(); if (hi / lo < 1.3) break; }
+        }
+        if (charge !== hi) { charge = hi; solve(); }
         return charge;
       },
       /** Every edge of node s with what the craft costs in all when it is used there and the route's rules after it (cheapest first). */
