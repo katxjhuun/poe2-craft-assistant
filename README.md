@@ -1,6 +1,6 @@
 # PoE2 Craft Assistant
 
-Path of Exile 2 (patch 0.5.5) için bir craft paneli: yapıştırılan item'ı okur, hedef statlara göre Cheap / Balanced / Premium craft yolları çıkarır, her adımdan sonra planı ve fiyatları günceller. claude.ai Artifact olarak çalışır:
+Path of Exile 2 (patch 0.5.5) için bir craft paneli: yapıştırılan item'ı okur, hedef statlara ve bütçe tavanına göre tek bir craft rotası çıkarır (altında diğer yollar), her adımdan sonra rotayı ve fiyatları günceller. 7 Ekim 2026'dan beri rota bir denklem ağından gelir, simülasyon beklenmez; Cheap / Balanced / Premium ve tier aralığı kaldırıldı (aşağıda "Craft ağı"). claude.ai Artifact olarak çalışır:
 https://claude.ai/artifact/7N2pMNG8ZhbqRjqy2mQmhH
 
 Tasarım belgesi `poe2_craft_assistant_MASTER_PROMPT.md`, oyun bilgisi `poe2_bilgi_bankasi_0.5.5.md` ve `poe2_kb_0.5.5.json`.
@@ -43,7 +43,43 @@ python scripts/fetch_icons.py              # yeni fiyatlı eşyaların ikonları
 
 `.kb_cache/` (indirilen oyun verisi, fiyat saatleri, ikonlar) ve `app/dist/` depoya girmez.
 
+## Craft ağı (`app/network.js`)
+
+Oyuncunun 7 Ekim 2026 kararı: asistan yalnız sabit yollar gösteriyordu; yerine tek rota, bütçe tavanı, alternatifler ve
+bekleme süresi olmayan bir "mantıksal ağ" istendi.
+
+- **Düğüm** = item'ın durumu: hangi hedefler var (doğal, crafted, desecrated), hangi hedefin önünde aynı gruptan bir mod
+  duruyor, her tarafta kaç başka mod var, ne fractured, gizli desecrated mod var mı, catalyst quality. **Kenar** = bir
+  currency: sonuçları, olasılıkları (poe2db ağırlıklarından) ve fiyatı.
+- **Rota** = her düğümde ortalamada en ucuz kenar. Simülasyon yok: maliyetler denklemlerden çözülür (her zaman biten bir
+  kural kümesinden başlayan policy iteration; uzun "at, tutmadı, yine at" döngüleri bloklar içinde tam çözülür, yeni
+  beyaz base tek bir bilinmeyendir). Tipik item milisaniyeler, altı hedef birkaç saniye.
+- Verdikleri: beklenen maliyet, yayılımı, bütçe tavanı içinde kalma olasılığı, malzeme listesi, başka ilk adımlar,
+  "şu modlu bir başlangıcı satın almak en çok ne eder", ve kurallar ("item şöyleyse şunu kullan").
+- "Bases per item" sınırı rotayı bağlar: az base ile rota baştan başlamak yerine onarır (annul + chaos, fracture, Omen of
+  Light döngüsü kendiliğinden çıkar).
+- Catalyst quality oyuncunun seçimi: dokunma (varsayılan), olanı Omen of Catalysing Exaltation ile harca, ya da catalyst
+  ekleyip harca.
+- Ağın henüz kapsamadıkları (değere göre hedef, rune'un açtığı mod havuzu, beş modlu jewel) eski simülatörle, tek rota
+  olarak planlanır.
+- Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler; ağın henüz
+  bilmediği adımlar orada: Omen of Whittling, Greater Exaltation, Putrefaction, Astrid's Creativity takmak).
+
+Doğrulama (ağın vaadi, her modu bilen simülatörde oynanan maliyetle karşılaştırılır):
+
+    node --test app/tests/network.test.js
+    node scripts/selftest/network_check.js --limit 24      # yerelde birkaç saniye, tek çekirdek
+    node scripts/selftest/network_sweep.js --shard 0/5 --minutes 17
+    node scripts/selftest/network_sweep.js --deep --runs 100000 --minutes 17
+
+Geniş tarama bulutta çalışır, oyuncunun bilgisayarında değil: `.github/workflows/network.yml` (yalnız elle başlar; beş
+geniş iş ve her senaryoyu 100.000 kez oynayan bir iş; her iş kendini durdurur, başlatma başına en çok 140 dakika; özel
+depoda ayda 2.000 ücretsiz dakika var, fiyat işi bunun ~300'ünü kullanır). Sonuçlar işin özetinde ve `sweep-*` çıktılarında.
+
 ## Tam tarama (`scripts/selftest/sweep.js`)
+
+(Eski planner'ın strateji ayarları için; 7 Ekim 2026'dan beri sayfa yalnız ağın kapsamadığı item'larda bu planner'a düşer.)
+
 
 Self-test senaryolarının her birinde (başlangıç item'i + hedefler) planner'ın bütün strateji ayarlarının çarpımını (yaklaşık 10,6 milyon kombinasyon) kapsar ve sayfanın Cheap / Balanced / Premium seçimlerini denetler.
 

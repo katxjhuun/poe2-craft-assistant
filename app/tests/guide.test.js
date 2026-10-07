@@ -65,7 +65,8 @@ test('recipe library filters by class and league', () => {
 });
 
 test('every recipe currency name exists in PoE2 data', () => {
-  const roster = new Set([...kb.currency_roster.Currency, ...kb.currency_roster.Omen]);
+  // currency and omens, and the runes a recipe sockets (Astrid's Creativity): game data's augments
+  const roster = new Set([...kb.currency_roster.Currency, ...kb.currency_roster.Omen, ...Object.keys(kb.augments)]);
   const bad = [];
   for (const r of lib.recipes) for (const s of r.steps) for (const n of s.names) if (!roster.has(n)) bad.push(`${r.id}: ${n}`);
   assert.deepEqual(bad, []);

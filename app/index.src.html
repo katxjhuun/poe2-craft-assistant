@@ -4127,9 +4127,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       const leagues = r.league_scope.length ? r.league_scope.map((l) => `<span class="badge" style="${l === ruleName() ? 'color:var(--text);border-color:var(--accent)' : ''}">${esc(l)}</span>`).join('') : '<span class="badge">No current league</span>';
       const canUse = r.target.length && r.inLeague && (r.verdict === 'verified' || r.verdict === 'plausible');
       return `<div class="rcard ${r.inLeague && (r.verdict === 'verified' || r.verdict === 'plausible') ? '' : 'off'}">
-        <div class="rhead"><b>${esc(r.title)}</b><span class="head-actions">${r.user ? '<span class="badge" style="color:var(--accent);border-color:var(--accent)">Yours</span>' : ''}${simBadge(r.id)}${vBadge(r.verdict)}</span></div>
+        <div class="rhead"><b>${esc(r.title)}</b><span class="head-actions">${r.trade ? '<span class="badge" style="color:var(--up);border-color:rgba(111,181,138,.5)">Buy, craft, sell</span>' : ''}${r.user ? '<span class="badge" style="color:var(--accent);border-color:var(--accent)">Yours</span>' : ''}${simBadge(r.id)}${vBadge(r.verdict)}</span></div>
         <div class="rmeta">${leagues}<span class="badge">Sources: ${esc(r.source_tier)}</span>${r.min_ilvl > 1 ? `<span class="badge">Item level ${r.min_ilvl}+</span>` : ''}<span class="badge">Crafted slot: ${esc(r.crafted_slot_use)}</span><span class="badge">Desecrated slot: ${esc(r.desecrated_slot_use)}</span></div>
         ${r.target.length ? `<div class="sub">Goals: ${r.target.map((t) => `${esc(t.stat)} (T${t.minTier}+${t.required ? '' : ', nice to have'})`).join('; ')}</div>` : ''}
+        ${r.trade ? `<ul class="rsmall trade"><li><b>Buy:</b> ${esc(r.trade.buy)}</li><li><b>Sell:</b> ${esc(r.trade.sell)}</li>${r.trade.quoted ? `<li><b>Numbers:</b> ${esc(r.trade.quoted)}</li>` : ''}</ul>` : ''}
         ${r.steps.length ? `<ol class="rsteps">${r.steps.map((st) => `<li>${st.names.length ? `<span class="rnames">${st.names.slice(0, 4).map((n) => icon(S.sidByName[n], n, 'sm')).join('')}</span>` : ''}${esc(st.text)}</li>`).join('')}</ol>` : ''}
         ${r.checkpoints.length ? `<ul class="rsmall">${r.checkpoints.map((c) => `<li>Checkpoint: ${esc(c)}</li>`).join('')}</ul>` : ''}
         ${r.risks.length ? `<ul class="rsmall">${r.risks.map((c) => `<li>Risk: ${esc(c)}</li>`).join('')}</ul>` : ''}
