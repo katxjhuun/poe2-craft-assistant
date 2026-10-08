@@ -414,6 +414,8 @@
       flags: { corrupted: false, sanctified: false, mirrored: false, unidentified: false },
       implicits: [], mods: [], runes: [], sockets: [], source: 'ctrl_c',
       slotDelta: { prefix: 0, suffix: 0 },
+      // (the part of slotDelta that socketed runes give: it goes with the item when the base is given up)
+      runeSlots: { prefix: 0, suffix: 0 },
     };
 
     let rarityIdx = -1;
@@ -520,15 +522,15 @@
     // class map, every essence mod counts (older callers)
     const ess = ix.essenceModsByClass ? (item.base ? ix.essenceModsByClass.get(ix.kb.bases[item.base].cls) || null : null) : ix.essenceMods || null;
 
-    const slotLine = (l) => {
+    const slotLine = (l, rune) => {
       const sm = cleanLine(l).match(/^([+-]\d+) (Prefix|Suffix) Modifiers? allowed$/i);
-      if (sm) item.slotDelta[sm[2].toLowerCase()] += +sm[1];
+      if (sm) { item.slotDelta[sm[2].toLowerCase()] += +sm[1]; if (rune) item.runeSlots[sm[2].toLowerCase()] += +sm[1]; }
     };
     const addImplicit = (lines, extra) => {
       for (const l of lines) { item.implicits.push({ text: cleanLine(l), ...extra }); slotLine(l); }
     };
     // Socketed runes can also add a prefix/suffix slot ("+1 Suffix Modifier allowed (rune)").
-    const addRune = (l, kind) => { item.runes.push({ text: cleanLine(l), kind }); slotLine(l); };
+    const addRune = (l, kind) => { item.runes.push({ text: cleanLine(l), kind }); slotLine(l, true); };
     const addGrant = (l) => { (item.props = item.props || []).push([cleanLine(l)]); };
     /** Lines without a mod header: use their copy markers. Returns true when handled. */
     const loose = (l) => {

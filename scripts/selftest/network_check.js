@@ -44,7 +44,9 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
   // that is on the item, so a target that is offered is one the item lacks: also the one a bone has just replaced on
   // a full item). A smaller network (net.lite) takes the Well only for some of the natural targets: its rules do not
   // take the others there, so the play does not either.
-  const fitsGoal = (e, g) => e.side === g.side && P.meets({ fam: e.fam, tier: e.tier, des: true }, g, g.tier);
+  // (a target by value: an option whose tier can have the value, as the network counts it; the value is rolled when
+  // the modifier is taken, and one under the wanted value is lifted afterwards)
+  const fitsGoal = (e, g) => e.side === g.side && (g.minValue != null ? e.fam === g.fam && P.reaches(ctx, e.id, g) : P.meets({ fam: e.fam, tier: e.tier, des: true }, g, g.tier));
   const wanted = () => (opts) => {
     for (const g of goals) {
       if (g.kind === 'nat' && g.noWell) continue;
@@ -64,6 +66,22 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
     const l = opts.slice().sort((x, y) => y.lvl - x.lvl);
     return l.find((e) => !inWay(e)) || l.find((e) => !goals.some((g) => e.fam === g.fam)) || l.find((e) => !goals.some((g) => fitsGoal(e, g))) || l[0] || null;
   };
+  // Omen of Putrefaction, no target among the options: a desecrated-only option that is in no missing target's way,
+  // the one whose groups take the most entries off the Well's list of the side (its next reveals draw from a shorter
+  // list); with none, the highest base modifier that is in no missing target's way (network.js missTaken).
+  const spare = (opts, st, side, floor) => {
+    const live = P.revealPool(ctx, st, side, floor, null).excl;
+    const lack = goals.filter((g) => g.side === side && !st.mods.some((m) => P.meets(m, g, g.tier) || P.nearMiss(m, g)));
+    const way = (e) => lack.some((g) => e.fam === g.fam || (g.grp || []).some((x) => (e.grp || []).includes(x)));
+    const isT = (e) => lack.some((g) => g.kind === 'des' && fitsGoal(e, g));
+    let best = null, most = 0;
+    for (const o of opts) {
+      if (!live.some((e) => e.id === o.id) || way(o)) continue;
+      const n = live.filter((e) => !isT(e) && e.grp.some((x) => o.grp.includes(x))).length;
+      if (n > most) { most = n; best = o; }
+    }
+    return best || dull(opts.filter((o) => !way(o))) || dull(opts);
+  };
   const desMod = (e) => ({ id: e.id, fam: e.fam, side: e.side, lvl: e.lvl, grp: e.grp, tier: e.tier, frac: false, des: true, crafted: false, lock: false });
   const st0 = P.toState(ctx, input.item, input.locks);
   let sum = 0, sq = 0, done = 0, steps = 0, off = 0, refused = 0;
@@ -75,6 +93,14 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
     let cost = 0, k = 0, ok = false, lastA = null;
     from = -1;
     for (; k < maxSteps; k++) {
+      // a locked item (Corrupted or Sanctified) is finished when every target is on it, else it is lost: a new base
+      // (which the step that locked it has paid for)
+      if (st.corrupted || st.sanctified) {
+        if (net.finished && net.finished(st)) { ok = true; break; }
+        st = P.apply(ctx, st, { op: 'newbase' }, r).state;
+        st.corrupted = false; st.sanctified = false; st.destroyed = false;
+        from = -1;
+      }
       const node = net.nodeOf(st);
       // (for the audit: how much of the item the network knew: everything, not what a blocker's tags stop, not the blockers)
       if (audit && net.mapping && node >= 0) { const lv = net.mapping(st); (audit.maps = audit.maps || [0, 0, 0])[lv < 0 ? 2 : lv]++; }
@@ -118,7 +144,9 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
         refuse(a);
         const pick = wanted(st);
         // (with Abyssal Echoes the first three options are declined when no target is among them: `again` is the reroll)
-        st = P.apply(ctx, st, a, r, (opts, again) => pick(opts) || (a.echoes && !again ? null : dull(opts))).state;
+        st = P.apply(ctx, st, a, r, (opts, again, at, side) => pick(opts) || (a.echoes && !again ? null : a.putrefy ? spare(opts, at, side, a.quality === 'Ancient' ? 40 : 0) : dull(opts))).state;
+        // (an Orb of Extraction destroys the item: the craft goes on with a new base, which the step's cost includes)
+        if (a.op === 'extraction') { st = P.apply(ctx, st, { op: 'newbase' }, r).state; st.destroyed = false; }
       }
     }
     if (ok) { done++; sum += cost; sq += cost * cost; }

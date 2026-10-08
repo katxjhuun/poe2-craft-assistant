@@ -350,3 +350,148 @@ test('network: the values of a craft of very many turns are settled (a quiver wi
   for (let t = 0; t < st.out.length; t += 2) v += st.out[t] * net.cost(st.out[t + 1] === -1 ? net.n0 : st.out[t + 1]);
   assert.ok(Math.abs(v - net.cost(s)) <= 1e-6 * net.cost(s), `${v} vs ${net.cost(s)}`);
 });
+
+// ---- the steps that lock an item or give it up, at the prices of the day (scripts/selftest/lib.js)
+const lockWorld = () => {
+  const L = require('../../scripts/selftest/lib.js'), SW = require('../../scripts/selftest/network_sweep.js'), { play } = require('../../scripts/selftest/network_check.js');
+  const D = L.load();
+  const item = (base, rarity, mods, more) => E.parseItem(D.ix, L.renderItem(Object.assign({ base, cls: kb.bases[base].cls, rarity, ilvl: 82, mods: mods || [] }, more), L.rng(5), 'adv').text).item;
+  const ctxOf = (base) => P.makeContext(D.ix, item(base, 'Normal'), { weights: L.weightsFor(base) });
+  const tiers = (base, side, re) => { const ctx = ctxOf(base), es = P.sidePool(ctx, side, 0).filter((e) => re.test(kb.mods[e.id].txt.replace(/\n/g, ' / '))); const f = es[0].fam; return { fam: f, side, label: kb.mods[es[0].id].txt.split('\n')[0], ids: Object.fromEntries(es.filter((e) => e.fam === f).map((e) => [e.tier, e.id])), ctx }; };
+  const input = (it, targets, over, extra) => Object.assign({ ix: D.ix, item: it, targets, locks: {}, priceOf: (n) => (over && Object.prototype.hasOwnProperty.call(over, n) ? over[n] : D.priceOf(n)), baseCost: 1, weights: L.weightsFor(it.base),
+    essences: P.essencesForBase(D.ix, kb.bases[it.base], (D.W.essences || {})[kb.bases[it.base].cls] || []) }, extra);
+  // the network's chance that a locking step finishes the item, and the simulator's count over n uses
+  const chance = (net, inp, op, n, prep) => {
+    const st0 = P.toState(net.ctx, inp.item, inp.locks), e = net.acts[net.nodeOf(st0)].find((x) => op(x.a));
+    if (!e) return null;
+    let p = 0, hit = 0;
+    for (let t = 0; t < e.out.length; t += 2) if (e.out[t + 1] !== -1) p += e.out[t];
+    const r = L.rng(11);
+    for (let k = 0; k < n; k++) { const st = Object.assign({}, st0, { mods: st0.mods.map((m) => Object.assign({}, m)) }); if (prep) prep(st, r); if (net.finished(P.apply(net.ctx, st, e.a, r).state)) hit++; }
+    return { a: e.a, net: p, sim: hit / n, why: P.validate(net.ctx, st0, e.a) };
+  };
+  return { L, SW, D, play, item, ctxOf, tiers, input, chance };
+};
+
+test('network: Omen of Sanctification lifts a value past its tier, and only the highest tier counts for it', () => {
+  const X = lockWorld(), base = 'Biostatic Ring', fire = X.tiers(base, 'suffix', /to Fire Resistance$/), cold = X.tiers(base, 'suffix', /to Cold Resistance$/);
+  const [lo, hi] = P.rangeOf(fire.ctx, fire.ids[1]);
+  const it = X.item(base, 'Rare', [{ id: fire.ids[1], side: 'suffix', tier: 1 }, { id: cold.ids[2], side: 'suffix', tier: 2 }]);
+  const want = (min) => ({ 'suffix-0': { fam: fire.fam, group: 'suffix', minTier: null, minValue: min, required: true, label: fire.label } });
+  const under = (min) => (st, r) => { const m = st.mods.find((x) => x.fam === fire.fam), vs = []; for (let v = lo; v <= hi; v++) if (v < min) vs.push(v); m.v = vs[Math.floor(r() * vs.length)]; };
+  // a value two over the top of T1: T2 could reach it too (its top times 1.22), with a far smaller chance. One status
+  // for both promised each the average: 17.6% where T1 has 31.2%.
+  for (const min of [hi + 2, hi + 6]) {
+    const inp = X.input(it, want(min), { 'Omen of Sanctification': 1 });
+    const net = NW.build(inp);
+    assert.ok(!net.impossible && !net.unsupported, 'a value over the range is a target while the omen has a price');
+    assert.equal(net.goals[0].stretchFrom, hi);
+    const c = X.chance(net, inp, (a) => a.sanctify, 40000, under(min));
+    assert.equal(c.why, null);
+    assert.ok(Math.abs(c.net - c.sim) < 0.012, `value ${min}: network ${c.net}, simulator ${c.sim}`);
+  }
+  // a value inside T1 stays a matter for the Divine Orb: no tier under it counts, and the omen is a step there too
+  const inp = X.input(it, want(hi), { 'Omen of Sanctification': 1 });
+  const net = NW.build(inp);
+  assert.equal(net.goals[0].stretch, undefined);
+  const c = X.chance(net, inp, (a) => a.sanctify, 40000, under(hi));
+  assert.ok(Math.abs(c.net - c.sim) < 0.012, `network ${c.net}, simulator ${c.sim}`);
+  // without a price for the omen the value over the range cannot be had
+  assert.ok(NW.build(X.input(it, want(hi + 2), { 'Omen of Sanctification': null })).impossible);
+  // the whole route from a white ring, played
+  const white = X.input(X.item(base, 'Normal'), want(hi + 2));
+  const route = NW.route(white), got = X.play(route, white, 250, 3, 20000, 60000);
+  assert.ok(route.materials(route.start).some((m) => m.name === 'Omen of Sanctification'));
+  assert.equal(got.refused, 0);
+  assert.equal(got.done, got.runs);
+  assert.ok(Math.abs(got.mean / route.cost(route.start) - 1) < 0.15 || Math.abs(got.mean - route.cost(route.start)) < 3 * got.se, `${got.mean} vs ${route.cost(route.start)}`);
+});
+
+test('network: a Vaal Orb finishes an item with the chance the simulator counts', () => {
+  const X = lockWorld(), base = 'Totemic Greaves';
+  const f = (side, re) => X.tiers(base, side, re);
+  const ms = f('prefix', /increased Movement Speed$/), life = f('prefix', /to maximum Life$/), arm = f('prefix', /increased Armour$/), fire = f('suffix', /to Fire Resistance$/), cold = f('suffix', /to Cold Resistance$/), lit = f('suffix', /to Lightning Resistance$/), chaos = f('suffix', /to Chaos Resistance$/);
+  const targets = {};
+  [[ms, 3], [life, 6], [fire, 6]].forEach(([t, tier], k) => { targets[t.side + '-' + k] = { fam: t.fam, group: t.side, minTier: tier, required: true, label: t.label }; });
+  const m = (t, tier) => ({ id: t.ids[tier], side: t.side, tier });
+  // a full item, the third target missing: a third of the Vaal Orb's quarter swaps a modifier one to three times
+  const inp = X.input(X.item(base, 'Rare', [m(ms, 1), m(life, 2), m(arm, 3), m(cold, 3), m(lit, 4), m(chaos, 2)]), targets, { 'Vaal Orb': 0.01 });
+  const net = NW.build(Object.assign({}, inp, { lite: 0, track: 0, whittle: 'none', maxStates: 200000 })), c = X.chance(net, inp, (a) => a.op === 'vaal', 120000);
+  assert.equal(c.why, null);
+  assert.ok(c.net > 0.005 && Math.abs(c.net - c.sim) < 0.002, `network ${c.net}, simulator ${c.sim}`);
+  // the item is lost with the rest of the chance: a new base, counted in the step
+  assert.ok(Math.abs(c.a.bases - (1 - c.net)) < 1e-9);
+});
+
+test('network: Desecrated targets alone are made with Omen of Putrefaction, as promised', () => {
+  const X = lockWorld(), base = 'Gemini Bow', ctx = X.ctxOf(base);
+  const pick = (side) => P.desPoolFor(ctx, side, 0, null).filter((e) => !ctx.pool.has(e.id))[0];
+  const targets = {};
+  [pick('prefix'), pick('suffix')].forEach((e, k) => { targets[e.side + '-' + k] = { fam: e.fam, group: 'desecrated', minTier: null, required: true, label: kb.mods[e.id].txt.split('\n')[0] }; });
+  const inp = X.input(X.item(base, 'Normal'), targets);
+  const net = NW.route(inp), s = net.start;
+  assert.ok(net.settled);
+  assert.ok(net.materials(s).some((x) => x.name === 'Omen of Putrefaction'), 'six reveals for the price of a bone and an omen');
+  const got = X.play(net, inp, 400, 3, 5000, 60000);
+  assert.equal(got.refused, 0);
+  assert.equal(got.done, got.runs);
+  assert.ok(Math.abs(got.mean / net.cost(s) - 1) < 0.12, `${got.mean} vs ${net.cost(s)}`);
+});
+
+test('network: the runes an item came with are that item\'s: a new base has none, an Orb of Extraction returns Astrid\'s Creativity', () => {
+  const X = lockWorld(), base = 'Massive Mitts', t = X.SW.table(base);
+  const sc = X.SW.scenario(base, t.nat.prefix.length + t.nat.suffix.length + t.des.prefix.length + t.des.suffix.length + 6 * 5 + 5);
+  assert.match(sc.kind, /two crafted-only/);
+  const fire = X.tiers(base, 'suffix', /to Fire Resistance$/);
+  const it = X.item(base, 'Rare', [{ id: fire.ids[5], side: 'suffix', tier: 5 }], { runes: ["Astrid's Creativity"], sockets: 1 });
+  const ctx = P.makeContext(X.D.ix, it, { weights: X.L.weightsFor(base) }), st = P.toState(ctx, it, {});
+  assert.equal(ctx.craftedCap, 1);
+  assert.equal(st.xCrafted, 1);
+  const fresh = P.apply(ctx, st, { op: 'newbase' }, X.L.rng(1)).state;
+  assert.equal(fresh.xCrafted, 0, 'a new base does not have the rune');
+  assert.equal(P.freeSockets(ctx, fresh), 1, 'and its socket is free');
+  assert.equal(P.validate(ctx, fresh, { op: 'rune_rule', item: "Astrid's Creativity" }), null);
+  assert.match(P.validate(ctx, fresh, { op: 'extraction' }), /No augment/);
+  const targets = Object.assign({}, sc.targets, { 'suffix-9': { fam: fire.fam, group: 'suffix', minTier: 1, required: true, label: fire.label } });
+  const more = { essences: t.essences, quality: sc.qualityMode };
+  const inp = X.input(it, targets, null, more), white = X.input(X.item(base, 'Normal'), targets, null, more);
+  const net = NW.route(inp), w = NW.route(white);
+  // from the pasted item the craft is cheaper than from a white base by less than the rune (it was by all of it, and
+  // more, when every new base had the rune for nothing)
+  assert.ok(net.cost(net.start) < w.cost(w.start));
+  assert.ok(net.materials(net.start).some((x) => x.name === 'Orb of Extraction'), 'the rune is taken back when the item is given up');
+  const got = X.play(net, inp, 200, 3, 5000, 60000);
+  assert.equal(got.refused, 0);
+  assert.equal(got.done, got.runs);
+  assert.ok(Math.abs(got.mean / net.cost(net.start) - 1) < 0.1, `${got.mean} vs ${net.cost(net.start)}`);
+});
+
+test('network: Void Flux turns a resistance into Chaos Resistance', () => {
+  const X = lockWorld(), base = 'Biostatic Ring', fire = X.tiers(base, 'suffix', /to Fire Resistance$/), chaos = X.tiers(base, 'suffix', /to Chaos Resistance$/);
+  const targets = { 'suffix-0': { fam: chaos.fam, group: 'suffix', minTier: 2, required: true, label: chaos.label } };
+  const inp = X.input(X.item(base, 'Rare', [{ id: fire.ids[1], side: 'suffix', tier: 1 }]), targets);
+  const net = NW.route(inp), st = net.step(net.start);
+  assert.deepEqual(st.names, ['Void Flux']);
+  assert.ok(Math.abs(net.cost(net.start) - X.D.priceOf('Void Flux')) < 1e-9);
+});
+
+test('network: a large network keeps to the base limit from a small one\'s price of giving up', () => {
+  // the small network (no blockers followed) is searched for the charge on bases; the large one is built at the price
+  // of giving up that came out (input.giveUp), not solved free and searched again
+  const input = inputFor(boots(WHITE), [MS, LIFE, FIRE]);
+  const small = NW.build(Object.assign({}, input, { track: 0, whittle: 'none' }));
+  const free = small.bases(small.start), max = Math.max(2, Math.floor(free / 4));
+  assert.ok(small.fitBases(small.start, max) > 0, 'the limit binds');
+  const z = small.giveUp;
+  assert.ok(z > 0);
+  const held = NW.build(Object.assign({}, input, { track: 8, whittle: 'none', giveUp: z, maxBases: max }));
+  assert.ok(held.fitted && held.settled);
+  assert.ok(held.bases(held.start) <= max * 1.02, `bases ${held.bases(held.start)} of ${max}`);
+  assert.ok(held.charge > 0);
+  // the same network searched in full lands on a route that costs about as much
+  const full = NW.build(Object.assign({}, input, { track: 8, whittle: 'none' }));
+  const c0 = full.cost(full.start);
+  full.fitBases(full.start, max);
+  assert.ok(full.cost(full.start) >= c0 * (1 - 1e-9), 'fewer bases never cost less');
+  assert.ok(Math.abs(held.cost(held.start) / full.cost(full.start) - 1) < 0.05, `${held.cost(held.start)} vs ${full.cost(full.start)}`);
+});

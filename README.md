@@ -100,11 +100,41 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
 - **Kuralların reddettiği adım yok.** Oynatma her adımı simülatörün kurallarına sorar (`P.validate`); reddedilen adım
   taramada uyuşmazlıktır. Böyle bulunanlar: lich omen'leri yalnız silah ve takıda, kendi tarafı dolu essence başka
   tarafa nişanlanamaz, Astrid's Creativity ile bile üçüncü crafted mod olmaz.
-- Bilinen sınır: düğüm, kimsenin istemediği tek bir crafted modu sayar. Astrid's Creativity ile ikincisini bırakacak
-  adımlar (araç essence'i ile alaşımı art arda kullanmak gibi) rotaya girmez; bu yüzden bazı rotalar olabilecek en
-  ucuzundan pahalıdır (bir yayda 565 yerine 667 ex).
-- Henüz modellenmeyenler: Putrefaction, Vaal / Sanctify ile bitirme kumarı, Hinekora's Lock, Flux ve Aldur'un Magic
-  aşaması. Rune of Aldur, takıldıktan sonra gelen modu dönüştürmez (oyuncu 8 Ekim 2026'da doğruladı: iddia k61).
+- **İki crafted mod.** Düğüm, kimsenin istemediği iki crafted modu ayrı ayrı tutar (hangi essence'in modu olduğuyla
+  birlikte): Astrid's Creativity takılı item'da araç essence'i ile alaşım art arda kullanılabilir. Daha önce "bilinen
+  sınır" diye yazılan 565 ex'lik yay rotası kural dışıydı (300 craft'ta 22 adım reddedildi: üçüncü crafted mod); iki
+  yuvayla ağın bulduğu en ucuz kurallı rota 667 ex'tir (oynatma 624 ± 47, reddedilen adım yok).
+- **Item'ı kilitleyen ya da bırakan adımlar.** Bunlar ya item'ı bitirir ya da kaybettirir; kaybın yeni base'i adımın
+  maliyetinde ve sayımındadır (`a.bases`), taban sınırının ücreti de üzerindedir.
+  - *Vaal Orb:* dört sonuçtan biri bir ile üç modu rastgele değiştirir; hedefi eksik item'ı bitirme şansı tam
+    hesaplanır (dolu bir botta %1,43; simülatörde %1,44).
+  - *Omen of Sanctification + Divine Orb:* her değer %78-122 ile çarpılır. Değere göre hedefte kullanılır; hiçbir
+    tier'ın aralığının yetmediği bir değer (T1'in tavanının %22 üstüne kadar) yalnız bununla hedef olabilir ve o
+    zaman yalnız en yüksek tier sayılır (iki tier tek durumda ortalama şansı vaat ediyordu: %17,6'ya karşı %31,2).
+    Sayfa, eldeki item'ın kendi değeriyle şansı gösterir.
+  - *Omen of Putrefaction + kemik:* fractured olmayan her mod gider, altı gizli Desecrated mod gelir, item Corrupted
+    olur. Yalnız Desecrated hedefli isteklerde en ucuz rota çoğunlukla budur (iki hedefli yayda 50 ex; oynatma 50,4).
+    Iskada hangi seçeneğin alınacağı kuraldır (hedefin yolunda olmayan, Well listesinden en çok girdiyi götüren
+    yalnız-Desecrated mod) ve liste girdi girdi izlenir; aynı taraftaki birden çok Desecrated hedef tek çekilişte
+    birlikte sayılır (dokuzda iki, 1 - (8/9)^2 değil).
+  - *Orb of Extraction:* Astrid's Creativity'yi geri verir; item bu yolla bırakılır (rune 1.753 ex, orb 307 ex).
+  - *Void Flux:* Fire, Cold ve Lightning Resistance'ı aynı kademenin Chaos Resistance'ına çevirir. *Altered
+    Collarbone:* takıda bir kemik seçeneği (oyun verisine göre Preserved gibi açılır).
+- **Rune'lar item'ındır.** Yapıştırılan item'daki Astrid's Creativity ve Serle's Triumph o item'ın durumudur; yeni
+  base'te yoktur, soketleri boştur. (Önceden her yeni base'te bedavaya varmış gibi sayılıyor, böyle bir item'dan
+  başlayan craft rune fiyatı kadar ucuz vaat ediliyordu.)
+- **Taban sınırı.** Dört ve daha çok hedefte küçük ağ (engeller izlenmeden) sınıra oturtulur; büyük ağ onun bulduğu
+  "vazgeçme fiyatı"ndan (base + ücret + beyaz base'in değeri) başlar, küçük adımlarla düzeltilir ve bir kez kesin
+  çözülür (`heldFit`). Büyük ağı önce serbest çözüp sonra aramak bir buçuk dakika sürüyordu.
+- **Ağın dışında bilerek bırakılanlar.** Oyunda artık olmayan ya da kaldırılmış item'lar (Coronation ve Alchemy'nin
+  taraf omen'leri, Greater Annulment, Homogenising omen'leri, Omen of Corruption: oyuncunun 8 Ekim 2026 kararı).
+  Craft edilen item'ın prefix ve suffix'lerine dokunmayan currency'ler: Orb of Chance, Mirror of Kalandra,
+  Architect's, Sacrifice ve Cultivation orb'ları, Verisium, kalite currency'leri, Omen of the Blessed (yalnız
+  implicit). Flask ve charm craft'ı, anoint ve Verisium Anvil kapsam dışıdır.
+- **Hinekora's Lock** (517.000 ex): beyaz base'in değeri bu fiyatın altında kalan hiçbir craft'ta en ucuz yol
+  olamaz (kilidin kazandırabileceği en çok şey item'ı baştan yapmanın maliyetidir), bu yüzden sayfadaki hemen her
+  istekte rota onsuz da en ucuzudur. Daha pahalı craft'lar için kilitli adım ağa ayrıca eklenir.
+- Rune of Aldur, takıldıktan sonra gelen modu dönüştürmez (oyuncu 8 Ekim 2026'da doğruladı: iddia k61).
 - Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler).
 
 Doğrulama (ağın vaadi, her modu bilen simülatörde oynanan maliyetle karşılaştırılır):

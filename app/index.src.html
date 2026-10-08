@@ -1120,7 +1120,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       locks: Object.keys(S.locks || {}).filter((k) => S.locks[k]), league: S.league || null, budget: budgetEx() || null,
       baseCost: parseFloat(S.baseCost) || 0, baseLimit: baseLimit(), state,
       error: err || null, kb: (S.ix.kb.meta && S.ix.kb.meta.game_data_version) || null,
-      plans: state !== 'ready' || !S.route ? null : { route: { cost: S.route.meanCost, p: S.route.p, nodes: S.route.nodes, next: S.route.next && S.route.next.names, blocked: S.route.blocked, impossible: S.route.impossible } },
+      plans: state !== 'ready' || !S.route ? null : { route: { cost: S.route.meanCost, p: S.route.p, nodes: S.route.nodes, next: S.route.next && S.route.next.names, blocked: S.route.blocked, finished: S.route.finished, impossible: S.route.impossible } },
     };
     S.testLog = (S.testLog || []).filter((r) => r.key !== rec.key).concat([rec]).slice(-TESTLOG_MAX);
     saveTestLog();
@@ -1282,7 +1282,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   let lastPriceStamp = null;
   function pricesChanged() {
     const stamp = S.prices ? S.prices.league + '|' + S.prices.hourTo + '|' + (S.prices.source || '') : null;
-    if (stamp !== lastPriceStamp) { lastPriceStamp = stamp; schedulePlans(); }
+    // (the targets too: whether a value over every tier can be had depends on Omen of Sanctification having a price)
+    if (stamp !== lastPriceStamp) { lastPriceStamp = stamp; schedulePlans(); if (S.item && !S.open) renderStats(); }
   }
   function leagueSlug(name) {
     const l = S.meta && S.meta.leagues.find((x) => x.name === name);
@@ -1559,7 +1560,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const out = { show: true, title: `${pl.label || 'Craft'} route`, sub: busy ? 'updating\u2026' : '', rows: [], now: null, msg: null, foot: '' };
     const v = S.lastEval;
     out.foot = v ? `Last step: ${v.verdict === 'expected' ? 'on plan' : v.verdict === 'acceptable' ? 'no hit yet' : 'off plan'}` : `${S.bridge.hotkey} on the item after each step`;
-    if (pl.blocked) { out.msg = { t: `${pl.blocked} items cannot be crafted.`, kind: 'bad' }; return out; }
+    if (pl.blocked) { out.msg = pl.finished === true ? { t: 'All targets are met.', kind: 'ok' } : { t: `${pl.blocked} items cannot be crafted.${pl.finished === false ? ' Go on with a new base.' : ''}`, kind: 'bad' }; return out; }
     if (pl.unsupported) return { show: false };
     if (pl.impossible) { out.msg = { t: 'Not possible on this item: ' + pl.impossible.join(' '), kind: 'bad' }; return out; }
     if (!pl.steps || !pl.steps.length) { out.msg = { t: 'Targets already met.', kind: 'ok' }; return out; }
@@ -1569,7 +1570,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const n = pl.next;
     if (n.done) out.msg = { t: 'All targets are met.', kind: 'ok' };
     else if (n.fail) out.msg = { t: n.fail, kind: 'bad' };
-    else out.now = { t: n.names.join(' + '), help: stepHelp(n, null) + (n.hit > 0.0005 ? ` ${successFail(n.hit).s} per use.` : ''), warn: IRREVERSIBLE[n.op] ? 'Cannot be undone. ' + IRREVERSIBLE[n.op] : '' };
+    else out.now = { t: n.names.join(' + '), help: stepHelp(n, null) + (ends(n) == null && n.hit > 0.0005 ? ` ${successFail(n.hit).s} per use.` : ''), warn: irrev(n) ? 'Cannot be undone. ' + irrev(n) : '' };
     out.rows = pl.steps.filter((st) => st.avg >= 0.05).slice(0, 10).map((st) => ({ t: st.names.join(' + '), u: '\u00D7' + usesText(st.avg), now: false }));
     return out;
   }
@@ -2903,7 +2904,12 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       // highest first number any allowed tier can roll (for the value box)
       const reach = Math.max(0, ...tiers.filter((x) => x.ok && x.txt).map((x) => { const r = E.templateRanges(x.txt.split('\n')[0])[0]; return r ? Math.max(Math.abs(r[0]), Math.abs(r[1])) : 0; }));
       let bad = fam && !fam.ok ? `<span class="bad-note">${esc(fam.reason || 'Not possible on this item')}</span>` : '';
-      if (!bad && byValue && t.minValue > reach && reach > 0) bad = `<span class="bad-note">No tier rolls ${esc(fmtVal(t.minValue))} here (max ${esc(fmtVal(reach))})</span>`;
+      // (a value over every tier's range: Omen of Sanctification multiplies the values by up to 122%, which the route
+      // uses for it while the omen and the Divine Orb have a price)
+      const lift = Math.floor(reach * 1.22), sanct = priceByName('Omen of Sanctification') && priceByName('Divine Orb');
+      if (!bad && byValue && t.minValue > reach && reach > 0) bad = sanct && t.minValue <= lift
+        ? `<span class="sub">Over every tier (max ${esc(fmtVal(reach))}): only Omen of Sanctification reaches it, and it locks the item</span>`
+        : `<span class="bad-note">No tier rolls ${esc(fmtVal(t.minValue))} here (max ${esc(fmtVal(reach))}${sanct ? ', ' + esc(fmtVal(lift)) + ' with Omen of Sanctification' : ''})</span>`;
       const canValue = fam && !['essence', 'alloy', 'liquid'].includes(fam.group) && reach > 0;
       opts = `<div class="srow-opts">
         <select data-tier="${key}" aria-label="Minimum tier or value">${tiers.map((x) => `<option value="${x.tier || ''}" ${!byValue && x.tier === t.minTier ? 'selected' : ''} ${x.ok ? '' : 'disabled'}>${x.via ? esc(x.via) : x.tier ? 'T' + x.tier + ' or better' : 'Any tier'} · ${esc(x.txt.replace(/\n/g, ' / '))} · lvl ${x.lvl}</option>`).join('')}${canValue ? `<option value="v" ${byValue ? 'selected' : ''}>At least a value…</option>` : ''}</select>
@@ -3118,7 +3124,18 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
 
   // ============================================================ plan panel
   /** Plan steps that cannot be undone (7.5) and what they do. */
-  const IRREVERSIBLE = { fracture: 'Fracturing Orb locks one random modifier for good.' };
+  const IRREVERSIBLE = {
+    fracture: 'Fracturing Orb locks one random modifier for good.',
+    vaal: 'A Vaal Orb Corrupts the item whatever else it does: nothing can be used on it afterwards.',
+    extraction: 'Orb of Extraction destroys the item. Only the augments that are not socket-bound come back.',
+  };
+  /** Why a route step cannot be undone ('' when it can). */
+  function irrev(a) {
+    if (!a) return '';
+    if (a.op === 'bone' && a.putrefy) return 'Omen of Putrefaction replaces every modifier that is not fractured and Corrupts the item: nothing can be used on it afterwards.';
+    if (a.op === 'divine' && a.sanctify) return 'Omen of Sanctification changes every value and Sanctifies the item: nothing can be used on it afterwards.';
+    return IRREVERSIBLE[a.op] || '';
+  }
   function irrevBadge(op) {
     const why = op.cur.filter((n) => P.IRREVERSIBLE_NAMES[n]).map((n) => `${n}: ${P.IRREVERSIBLE_NAMES[n]}`);
     return why.length ? ` <span class="badge irrev-b" title="${esc(why.join(' '))}">Cannot be undone</span>` : '';
@@ -3344,6 +3361,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   }
   // (the route counts the Desecrated modifier of a miss as one that blocks nothing)
   const NO_TARGET_PICK = ' If none of the three is a goal, take one that is not of a missing goal\u2019s kind (a lower tier or a hybrid of it would keep the goal out).';
+  /** The chance that a step which locks the item finishes it (the step in hand: for this item's own values), or null. */
+  const ends = (a) => (a.ends != null ? a.ends : a.bases != null && a.op !== 'extraction' ? 1 - a.bases : null);
   function stepHelp(a, params) {
     switch (a.op) {
       case 'newbase': return 'A mod missed the goals and fixing it would cost more: start again on a fresh white base.';
@@ -3365,11 +3384,17 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       case 'liquid': return `Removes a random modifier${swapNote(liquidMods(a))} and adds ${liquidAdds(a)} as a crafted mod. Uses the crafted slot.`;
       case 'catalyst': return `Use ${a.count || 'enough'} of them: the catalyst quality goes to 20%, for the next Omen of Catalysing Exaltation.`;
       case 'reveal': return 'Reveal the hidden Desecrated modifier at the Well of Souls and take the target when it is offered' + (a.echoes ? '; Abyssal Echoes lets you reroll the three once.' : '.') + NO_TARGET_PICK;
-      case 'bone': if (a.hide) return 'Adds a hidden Desecrated modifier and leaves it unrevealed for now: it counts as a modifier, and a Fracturing Orb never picks it.';
+      case 'bone':
+        if (a.putrefy) return `With Omen of Putrefaction the bone replaces every modifier that is not fractured: the item gets up to six hidden Desecrated modifiers, three prefixes and three suffixes, and is Corrupted. Reveal them one by one at the Well of Souls and take a goal whenever one is offered${a.echoes ? '; Abyssal Echoes lets you reroll the first three once' : ''}. When none of the three is a goal, take a desecrated-only modifier that is not of a missing goal\u2019s kind (of two, the one whose kind more of the others share): the next reveal of that side then draws from a shorter list.${ends(a) != null ? ` Every goal is on the item afterwards in ${p1(ends(a))} of uses; otherwise the item is lost and the craft starts again on a new base.` : ''}`;
+        if (a.hide) return 'Adds a hidden Desecrated modifier and leaves it unrevealed for now: it counts as a modifier, and a Fracturing Orb never picks it.';
         if (a.mark) return `First Essence of the Abyss${a.pre && a.pre.side ? ', aimed at the ' + a.pre.side + 'es by the omen' : ''}: it replaces one modifier with "Bears the Mark of the Abyssal Lord". Then the bone: its Desecrated modifier takes the Mark's place, so nothing else is removed. Reveal it at the Well of Souls and pick 1 of 3${a.lich ? ' (with the lich omen, only the modifiers of that lich)' : ''}${a.echoes ? '; Abyssal Echoes lets you reroll the three once' : ''}. Keep the one the goals ask for.${NO_TARGET_PICK}`;
         return `Adds a hidden Desecrated ${a.side || 'prefix or suffix (the side is set now, at random)'}. Reveal it at the Well of Souls and pick 1 of 3: base modifiers of that side and desecrated-only ones${a.lich ? ' (with the lich omen, only that lich\'s)' : ''}${a.echoes ? '; Abyssal Echoes lets you reroll the three once' : ''}. Keep the one the goals ask for.${NO_TARGET_PICK}`;
       case 'fracture': return 'Locks one random mod for good (never a hidden Desecrated one). It cannot be undone; the route uses it where locking a target pays for the misses.';
-      case 'divine': return 'Rerolls the values of every mod except fractured ones; the mods themselves stay.';
+      case 'divine':
+        if (a.sanctify) return `With Omen of Sanctification the Divine Orb multiplies every value by a random 78% to 122% (a fractured modifier keeps its value) and Sanctifies the item: it cannot be changed again.${ends(a) != null ? ` The values the goals ask for are there afterwards in ${p1(ends(a))} of uses; otherwise the item is lost and the craft starts again on a new base.` : ''}`;
+        return 'Rerolls the values of every mod except fractured ones; the mods themselves stay.';
+      case 'vaal': return `A last throw for an item the route would give up: one use in four swaps one to three modifiers for random ones.${ends(a) != null ? ` That finishes the item in ${p1(ends(a))} of uses.` : ''} The item is Corrupted either way: when it is not finished, start again on a new base (the route counts it).`;
+      case 'extraction': return `Destroys the item and returns the augments that are not socket-bound (Astrid's Creativity), for the next base. The route gives an item up this way when the rune is worth more than the orb.`;
       case 'aldur': return `${a.pre ? "First an Artificer's Orb for the socket. " : ''}Socket it: the item's modifiers of another element become the same ones of this rune's element. Socket-bound: it cannot be taken out or replaced.`;
       case 'flux': return `Turns every resistance mod of the other elements into the same tier of ${a.to === 'fire' ? 'Fire' : a.to === 'cold' ? 'Cold' : 'Lightning'} Resistance, with its value rolled again. An item that has that resistance already keeps both.`;
       case 'artificer': return 'Adds an augment socket, for the rune of a later step.';
@@ -3394,6 +3419,9 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   function routeHtml(r) {
     if (r.blocked) {
       const why = { Mirrored: 'Mirrored items cannot be modified.', Corrupted: 'Corrupted items cannot be crafted with normal currency.', Sanctified: 'Sanctified items cannot be crafted further.', Unique: 'Unique items have fixed modifiers: crafting currency does not work on them.' };
+      // (after a step of the route that locks the item: every target is on it, or the craft goes on with a new base)
+      if (r.finished === true) return `<div class="plan-card"><b class="ok-note">Targets met.</b> <span class="sub">The item is ${esc(r.blocked)}: it is finished.</span></div>`;
+      if (r.finished === false && (r.blocked === 'Corrupted' || r.blocked === 'Sanctified')) return `<div class="plan-card">${esc(why[r.blocked])} <span class="sub">It does not have every target: for the route this item is lost. Load a new base of this kind to go on.</span>${r.blocked === 'Sanctified' ? ruleConfBadge('R_SANCTIFIED_LOCK') : ruleConfBadge('R_CORRUPTED_LOCK')}</div>`;
       return `<div class="plan-card">${esc(why[r.blocked] || r.blocked + ' items cannot be crafted.')}${r.blocked === 'Sanctified' ? ruleConfBadge('R_SANCTIFIED_LOCK') : r.blocked === 'Corrupted' ? ruleConfBadge('R_CORRUPTED_LOCK') : ''}</div>`;
     }
     if (r.unsupported) return `<div class="plan-card sub">${esc(r.unsupported === 'no targets' ? 'Pick target stats first.' : r.unsupported === 'unknown base' ? 'This base is not in the game data.' : 'No route: ' + r.unsupported + '.')}</div>`;
@@ -3410,14 +3438,17 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (S.bridge && S.bridge.steps) html += `<div class="ingame${S.inGame && !S.inGameOff ? ' on' : ''}">${S.inGame
       ? `<span>${S.inGameOff ? 'Route steps on the game screen are turned off in the tray menu of the desktop program.' : 'The route is on the game screen.'}</span><span class="ingame-act">${S.inGameOff ? '' : '<button class="linkish" type="button" id="inGameMove" title="The steps on the game screen take the mouse: drag them where you want them, then right-click them (or click Move again).">Move</button>'}<button class="linkish" type="button" id="inGameOff">Hide</button></span>`
       : '<span>The route is not on the game screen.</span><button class="linkish" type="button" id="inGameOn">Show it in game</button>'}</div>`;
-    const chance = nx.hit > 0.0005 ? `<span class="sub num" title="Chance that one use adds a target the item does not have">${successFail(nx.hit).s} per use</span>` : '';
+    const fin = nx.done || nx.fail ? null : ends(nx);
+    const chance = fin != null ? `<span class="sub num" title="Chance that this use finishes the item; otherwise the item is lost">${successFail(fin).s} per use</span>`
+      : nx.hit > 0.0005 ? `<span class="sub num" title="Chance that one use adds a target the item does not have">${successFail(nx.hit).s} per use</span>` : '';
     const nextHtml = nx.done ? '<div class="ok-note">All targets are met.</div>'
       : nx.fail ? `<div class="bad-note">${esc(nx.fail)}</div>`
-      : `<div class="row"><div class="st-names" title="${esc(stepHelp(nx, null))}">${namesHtml(nx.names)}</div>${chance}${IRREVERSIBLE[nx.op] && !S.ack[ackKey(nx)]
+      : `<div class="row"><div class="st-names" title="${esc(stepHelp(nx, null))}">${namesHtml(nx.names)}</div>${chance}${irrev(nx) && !S.ack[ackKey(nx)]
           ? '<button class="btn primary" type="button" id="reviewBtn">Before you use it…</button>'
           : '<button class="btn primary" type="button" id="appliedBtn">I applied this</button>'}</div>
-         ${nx.hide ? '<div class="sub">Do not reveal it yet.</div>' : ''}${IRREVERSIBLE[nx.op] ? `<div class="irrev"><b>Cannot be undone.</b> ${esc(IRREVERSIBLE[nx.op])}</div>` : ''}`;
-    const rows = r.steps.filter((st) => st.avg >= 0.005);
+         ${nx.hide ? '<div class="sub">Do not reveal it yet.</div>' : ''}${irrev(nx) ? `<div class="irrev"><b>Cannot be undone.</b> ${esc(irrev(nx))}</div>` : ''}`;
+    // (a count under zero: what the route gets back on balance, a rune that an Orb of Extraction returns)
+    const rows = r.steps.filter((st) => Math.abs(st.avg) >= 0.005);
     const alts = [];
     for (const o of r.options) alts.push(`<div class="alt-row"><div class="st-names" title="Use this now instead, then follow the route's rules">${namesHtml(o.names)}${o.hide ? '<span class="sub">(leave hidden)</span>' : ''}</div><span>${money(o.total)} <span class="sub">in all</span></span></div>`);
     for (const e of r.entries) alts.push(`<div class="alt-row"><div class="st-names" title="What starting from such an item saves against rolling it from a white base. Buy it when it is listed for less."><span>Buy ${e.kind === 'magic' ? 'a Magic base with' : 'this base with a fractured'} ${e.tier ? 'T' + e.tier + ' ' : ''}${esc(e.label)}</span></div><span class="sub">worth up to</span><span>${money(e.worth)}</span></div>`);
@@ -3438,7 +3469,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       <div>
         <div class="steps-head"><span>Materials for the whole craft</span><span>Uses · Cost</span></div>
         <ul class="steps mats">${rows.map((st) => `<li><div class="st-names">${namesHtml(st.names)}</div>
-          <div class="st-meta"><span class="num x">×${usesText(st.avg)}</span>${money(st.avg * (st.cost || 0))}</div></li>`).join('')}</ul>
+          <div class="st-meta"><span class="num x">${st.avg < 0 ? 'comes back ×' + usesText(-st.avg) : '×' + usesText(st.avg)}</span>${st.avg < 0 ? '\u2212' + money(-st.avg * (st.cost || 0)) : money(st.avg * (st.cost || 0))}</div></li>`).join('')}</ul>
       </div>
       ${alts.length ? `<div class="alts"><div class="steps-head"><span>Other ways</span><span></span></div>${alts.join('')}</div>` : ''}
       <details class="more" id="planMore" ${S.detailOpen ? 'open' : ''}><summary>The rules of this route</summary>
@@ -3581,8 +3612,9 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const isGoal = (m) => pl.goals.some((g) => g.fam === m.fam && !!m.desecrated === !!g.des
       && (g.minValue != null ? Math.abs((m.values || [])[0] || 0) >= g.minValue : !g.eff || (m.tier && m.tier <= g.eff)));
     const goals = mods.filter(isGoal);
-    const price = priceByName(nx.names[nx.names.length - 1]);
-    const cost = price ? ` It costs about ${money(price.ex)} now.` : '';
+    // (an omen and its orb are one use: both prices)
+    const total = nx.names.reduce((t, n) => { const p = priceByName(n); return t + (p ? p.ex : 0); }, 0);
+    const cost = total > 0 ? ` It costs about ${money(total)} now.` : '';
     if (nx.op === 'fracture') {
       const pv = previewFor(pl, nx).pv;
       const keys = new Set(goals.map(modKeyPv));
@@ -3592,7 +3624,12 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
         <p><b>If it misses</b> (${p1(1 - pGoal)}): a modifier you do not need is locked and keeps its slot for good. The plan's success chance already counts this.</p>
         <p class="sub">Use it in game only if you accept that, then come back and paste the result.</p>`;
     }
-    return `<p style="margin-top:0">${esc(IRREVERSIBLE[nx.op] || '')}${cost}</p>`;
+    // (a step that locks the item: what it is for, and what happens to the item when it misses)
+    const fin = ends(nx);
+    const both = fin != null ? `<p><b>If it works</b> (${p1(fin)}): the item is finished.</p>
+        <p><b>If it does not</b> (${p1(1 - fin)}): the item is lost for this craft, and the route goes on with a new base. Its cost counts that base.</p>` : '';
+    return `<p style="margin-top:0">${esc(irrev(nx))}${cost}</p><p>${esc(stepHelp(nx, null))}</p>${both}
+        <p class="sub">Use it in game only if you accept that, then come back and paste the result.</p>`;
   }
   planEl.addEventListener('toggle', (e) => {
     const id = e.target.id;

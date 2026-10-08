@@ -22,6 +22,7 @@
   const SIDES = ['prefix', 'suffix'];
   const TIERS = P.TIERS, ORB = P.ORB, OMEN = P.OMEN;
   const MAX_STATES = 150000;
+  const SANCT_LO = 0.78, SANCT_HI = 1.22; // Omen of Sanctification: every value times a random 78% to 122%
   const GAMMA = 1 - 1e-13; // keeps the equations solvable should a rule set never finish; the error is far below a cent
   const BIG = 1e15;
   // What a target is on the item. A target that is there came naturally, as the crafted modifier or as the Desecrated
@@ -53,9 +54,18 @@
     if (!item || !item.base || !kb.bases[item.base]) return { unsupported: 'unknown base' };
     const f = item.flags || {};
     if (f.mirrored) return { blocked: 'Mirrored' };
-    if (f.corrupted) return { blocked: 'Corrupted' };
-    if (f.sanctified) return { blocked: 'Sanctified' };
     if (item.rarity === 'Unique') return { blocked: 'Unique' };
+    if (f.corrupted || f.sanctified) {
+      // (finished: every target is on the item, as after a step of the route that locks it; false: it is lost)
+      const out = { blocked: f.corrupted ? 'Corrupted' : 'Sanctified' };
+      try {
+        const c = P.makeContext(ix, item, { weights: input.weights || null, essences: input.essences || [] }), s = P.toState(c, item, input.locks);
+        let gs = P.goalsFromTargets(c, input.targets).goals;
+        if (gs.some((g) => g.required)) gs = gs.filter((g) => g.required);
+        if (gs.length) out.finished = gs.every((g) => s.mods.some((m) => P.meets(m, g, g.tier)));
+      } catch (e) { /* an item the planner cannot read: blocked, no more is said */ }
+      return out;
+    }
     const ctx = P.makeContext(ix, item, { weights: input.weights || null, essences: input.essences || [], catalystMult: input.catalystMult });
     const st0 = P.toState(ctx, item, input.locks);
     if (st0.rarity !== 'Normal' && st0.rarity !== 'Magic' && st0.rarity !== 'Rare') return { blocked: String(st0.rarity) };
@@ -66,7 +76,23 @@
     if (!raw.length) return { unsupported: 'no targets' };
 
     // a target this base and item level cannot have (the planner's own check) ends it here
-    raw.forEach((g) => { g.eff = g.tier; });
+    // (Omen of Sanctification multiplies every value by 78% to 122%: a value up to 22% over a tier's range can be
+    // had that way. Only for a value that no tier's own range reaches do such tiers count for the target: there a
+    // modifier under the value is one that nothing but the omen lifts. Where a tier does reach the value, a modifier
+    // under it stays what it was, one that a Divine Orb lifts: the two kinds in one status would have the Divine Orb
+    // used for ever on a tier it cannot lift.)
+    const sanctOK = !!input.priceOf && input.priceOf('Omen of Sanctification') != null && input.priceOf('Divine Orb') != null && !ctx.legacy.has('Omen of Sanctification');
+    // Of those tiers only the one with the highest range counts (g.stretchFrom): the omen's chance differs from tier
+    // to tier, and a status that held two of them would promise each the average of both.
+    raw.forEach((g) => { g.eff = g.tier; delete g.stretch; delete g.stretchFrom; });
+    if (sanctOK) for (const g of raw) {
+      if (g.minValue == null || !P.goalFeasible(ctx, st0, g)) continue;
+      let top = -Infinity;
+      const see = (id) => { const r = P.rangeOf(ctx, id); if (r && r[1] > top) top = r[1]; };
+      for (const e of (g.des ? P.desPoolFor(ctx, g.side, 0, null) : g.rune ? P.runeSide(ctx, g.rune, g.side, 0) : P.sidePool(ctx, g.side, 0))) if (e.fam === g.fam) see(e.id);
+      for (const y of g.ess || []) see(y.mod);
+      if (top * SANCT_HI >= g.minValue) { g.stretch = SANCT_HI; g.stretchFrom = top; }
+    }
     const cannot = raw.map((g) => ({ label: g.label, why: P.goalFeasible(ctx, st0, g) })).filter((x) => x.why);
     if (cannot.length) return { impossible: cannot };
 
@@ -96,11 +122,11 @@
     function reach(id, g) {
       if (g.minValue == null) return 1;
       const r = P.rangeOf(ctx, id);
-      if (!r || r[1] < g.minValue) return -1;
+      if (!r || r[1] * (g.stretch || 1) < g.minValue || (g.stretchFrom != null && r[1] < g.stretchFrom)) return -1;
       const lo = r[0], hi = r[1];
-      if (hi <= lo) return 1;
-      if (Number.isInteger(lo) && Number.isInteger(hi)) return Math.min(1, (hi - Math.max(lo, Math.ceil(g.minValue)) + 1) / (hi - lo + 1));
-      return Math.min(1, (hi - Math.max(lo, g.minValue)) / (hi - lo));
+      if (hi <= lo) return hi >= g.minValue ? 1 : 0;
+      if (Number.isInteger(lo) && Number.isInteger(hi)) return Math.max(0, Math.min(1, (hi - Math.max(lo, Math.ceil(g.minValue)) + 1) / (hi - lo + 1)));
+      return Math.max(0, Math.min(1, (hi - Math.max(lo, g.minValue)) / (hi - lo)));
     }
     const fits = (g, e) => (g.minValue != null ? reach(e.id, g) >= 0 : !g.tier || e.tier <= g.tier);
 
@@ -150,6 +176,21 @@
           if (tp && (!g.tier || tp.tier <= g.tier)) src.add(id);
         }
         if (src.size) conv[i] = { via: 'flux', to, item: name, price: pr, src };
+      } else if (g.fam === 'ChaosResistance') {
+        // Void Flux: every Fire, Cold and Lightning Resistance becomes the Chaos Resistance tier of the highest level
+        // that is not above its own (planner.js chaosResFor); the sources are those that land on a tier the target takes
+        const pr = price('Void Flux');
+        if (pr == null) continue;
+        const tiers = [...ctx.pool.entries()].filter(([id, pe]) => kb.mods[id].fam === 'ChaosResistance' && pe.side === g.side).map(([id, pe]) => ({ lvl: kb.mods[id].lvl, tier: pe.tier })).sort((a, b) => a.lvl - b.lvl);
+        if (!tiers.length) continue;
+        const src = new Set();
+        for (const [id, pe] of ctx.pool) {
+          const r = P.resElement(id), m = kb.mods[id];
+          if (!r || pe.side !== g.side || goalFams.has(m.fam) || m.lvl > ctx.ilvl) continue;
+          const fit = tiers.filter((t) => t.lvl <= m.lvl && t.lvl <= ctx.ilvl), got = fit.length ? fit[fit.length - 1] : tiers[0];
+          if (!g.tier || got.tier <= g.tier) src.add(id);
+        }
+        if (src.size) conv[i] = { via: 'flux', to: 'chaos', item: 'Void Flux', price: pr, src };
       }
     }
     // Runes of Aldur: one rune an item, so the one that serves the most targets
@@ -183,8 +224,9 @@
     }
 
     // ---- runes that change what the item can hold or roll, and the sockets for them
-    const AST = (() => { const n = P.runeFor(ctx, /additional Crafted Modifier/i); return n && ctx.craftedCap < 2 && price(n) != null && (goals.filter((g) => g.magicEss || g.rareEss).length >= 2 || (!(input.lite | 0) && ctx.bone && priceOf('Essence of the Abyss') != null)) ? { item: n, price: price(n) } : null; })();
-    const SER = (() => { const n = P.runeFor(ctx, /Suffix Modifiers? allowed/i); return n && price(n) != null && goals.filter((g) => g.si === 1).length > LIM[1] ? { item: n, price: price(n) } : null; })();
+    // (a rune the pasted item came with is there without a price; socketing it into a new base needs one)
+    const AST = (() => { const n = P.runeFor(ctx, /additional Crafted Modifier/i); return n && ctx.craftedCap < 2 && (price(n) != null || st0.xCrafted) && (goals.filter((g) => g.magicEss || g.rareEss).length >= 2 || (!(input.lite | 0) && ctx.bone && priceOf('Essence of the Abyss') != null)) ? { item: n, price: price(n) } : null; })();
+    const SER = (() => { const n = P.runeFor(ctx, /Suffix Modifiers? allowed/i); return n && (price(n) != null || st0.xSuffix) && goals.filter((g) => g.si === 1).length > LIM[1] ? { item: n, price: price(n) } : null; })();
     const pooled = goals.filter((g) => g.rune);
     if (new Set(pooled.map((g) => g.rune)).size > 1) return { impossible: pooled.map((g) => ({ label: g.label, why: 'needs its own rune, and an item takes one such rune' })) };
     const POOL = pooled.length ? { tag: pooled[0].rune, item: pooled[0].runeItem, price: price(pooled[0].runeItem) } : null;
@@ -220,6 +262,8 @@
     const artificer = price("Artificer's Orb");
     const canAdd = RUNES && artificer != null && P.validate(ctx, st0, { op: 'artificer' }) === null ? Math.max(0, E.maxSockets(ctx.cls) - P.socketsOf(ctx, st0)) : 0;
     const FS0 = RUNES ? Math.max(0, Math.min(3, P.freeSockets(ctx, st0))) : 0, AD0 = Math.min(2, canAdd);
+    // (a new base: the sockets of the pasted item, without the runes it came with)
+    const FSN = RUNES ? Math.max(0, Math.min(3, P.freeSockets(ctx, { fresh: true, sockets: 0, socketed: 0 }))) : 0;
     const capOf = (S) => ctx.craftedCap + ((S.u & R_ASTRID) ? 1 : 0);
     // a rune the targets cannot do without needs a socket: a free one, or one an Artificer's Orb can add (it adds
     // none on jewellery)
@@ -232,8 +276,8 @@
         must.push({ rune: AST.item, goals: crafted });
       }
       if (POOL && !hasPool) must.push({ rune: POOL.item, goals: pooled });
-      if (must.length > FS0 + AD0) {
-        const m = must[Math.min(must.length - 1, FS0 + AD0)];
+      if (must.length > Math.max(FS0, FSN) + AD0) {
+        const m = must[Math.min(must.length - 1, Math.max(FS0, FSN) + AD0)];
         return { impossible: m.goals.map((g) => ({ label: g.label, why: `needs ${m.rune} socketed, and the item has no free augment socket for it${artificer == null ? " (Artificer's Orb has no price)" : ''}` })) };
       }
     }
@@ -533,6 +577,8 @@
       necro: [price(OMEN.necro.prefix), price(OMEN.necro.suffix)], echoes: price(OMEN.echoes),
       crystal: [price(OMEN.crystal.prefix), price(OMEN.crystal.suffix)], whittling: price(OMEN.whittling), greaterExalt: price(OMEN.greaterExalt),
     };
+    const EXTRACT = price('Orb of Extraction');
+    PR.vaal = price('Vaal Orb'); PR.putrefy = ctx.bone ? price(OMEN.putrefy) : null; PR.sanct = sanctOK ? price('Omen of Sanctification') : null;
     // ---- Omen of Whittling: the Chaos Orb removes the modifier of the lowest level.
     // Whether that is a modifier nobody asked for or a target is decided by levels that stay what they are for as long
     // as the modifiers are on the item. So the lowest level among the modifiers nobody asked for (and those in a
@@ -572,7 +618,21 @@
     const clsAt = (S, si) => (si === 0 ? (S.fl / 3) | 0 : S.fl % 3);
     const setCls = (n, si, c) => { n.fl = si === 0 ? c * 3 + (n.fl % 3) : ((n.fl / 3) | 0) * 3 + c; };
     /** (a side without such a modifier: one node whatever its class was) */
-    const canon = (n) => { if (!n.cx) n.ct = 0; if (n.fl) { if (n.fl >= 3 && nSide(n, 0) === 0) n.fl %= 3; if (n.fl % 3 && nSide(n, 1) === 0) n.fl -= n.fl % 3; } return n; };
+    // Crafted modifiers nobody asked for: up to two (the second with Astrid's Creativity), each with its side (cx, cy)
+    // and whose it is (ct, cu: 1 the aimed tool essence's of that side, 2 the unaimed one's, 0 not known). An essence
+    // adds no second modifier of its group, so a tool whose own modifier is still there adds nothing. (One such
+    // modifier was counted once, and a second taken for a plain one: that left room for a third crafted modifier,
+    // which the rules refuse; then steps that leave a second were not offered, which cost a bow's route a sixth.)
+    const ownOn = (S, si, kind) => (S.cx === si + 1 && S.ct === kind) || (S.cy === si + 1 && S.cu === kind);
+    const addCrafted = (n, si, kind) => { if (!n.cx) { n.cx = si + 1; n.ct = kind; } else if (!n.cy) { n.cy = si + 1; n.cu = kind; } else n.j[si]++; };
+    const canon = (n) => {
+      if (!n.cx && n.cy) { n.cx = n.cy; n.ct = n.cu; n.cy = 0; }
+      if (!n.cx) n.ct = 0;
+      if (!n.cy) n.cu = 0;
+      else if (n.cx * 3 + n.ct < n.cy * 3 + n.cu) { const a = n.cx, b = n.ct; n.cx = n.cy; n.ct = n.cu; n.cy = a; n.cu = b; } // (one order for the two)
+      if (n.fl) { if (n.fl >= 3 && nSide(n, 0) === 0) n.fl %= 3; if (n.fl % 3 && nSide(n, 1) === 0) n.fl -= n.fl % 3; }
+      return n;
+    };
     const clsMemo = new Map();
     /** The class of a new modifier nobody asked for, rolled on side si at a minimum modifier level: the chance of each. */
     function clsDist(si, floor) {
@@ -619,7 +679,9 @@
     const bones = [];
     if (ctx.bone) {
       const exists = (q) => !!(kb.item_descriptions || {})[`${q} ${ctx.bone}`];
-      const plain = [['Gnawed', ctx.ilvl <= 64], ['Preserved', true]].filter(([q, ok]) => ok && exists(q)).map(([q]) => ({ quality: q, floor: 0, price: price(`${q} ${ctx.bone}`) }))
+      // (an Altered Collarbone reveals like a Preserved one as far as the game data tells: its "otherworldly" modifiers
+      // are not in the data, so it is a bone of its own price and nothing more)
+      const plain = [['Gnawed', ctx.ilvl <= 64], ['Preserved', true], ['Altered', ctx.bone === 'Collarbone']].filter(([q, ok]) => ok && exists(q)).map(([q]) => ({ quality: q, floor: 0, price: price(`${q} ${q === 'Altered' ? 'Collarbone' : ctx.bone}`) }))
         .filter((b) => b.price != null).sort((a, b) => a.price - b.price)[0];
       if (plain) bones.push(plain);
       if (exists('Ancient') && ctx.ilvl >= 40 && price(`Ancient ${ctx.bone}`) != null) bones.push({ quality: 'Ancient', floor: 40, price: price(`Ancient ${ctx.bone}`) });
@@ -653,17 +715,17 @@
     const states = [], index = new Map(), acts = [];
     // a node's key as one number: the targets' statuses in base 9, then the small fields (it stays under 2^53)
     const FLK = NCLS > 1 ? 9 : 1; // (the two classes of the lowest levels, see LCUT)
-    const KEY_REST = 3 * 4 * 4 * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2 * FLK * 3;
+    const KEY_REST = 3 * 4 * 4 * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2 * FLK * 3 * 3 * 3;
+    const KEY_NUM = Math.pow(10, G) * KEY_REST < 9e15; // (the two parts fit one number exactly)
     const keyOf = (S) => {
       let a = 0;
       for (let i = 0; i < G; i++) a = a * 10 + S.g[i];
       let k = S.r;
       k = k * 4 + S.j[0]; k = k * 4 + S.j[1]; k = k * 10 + (S.fg + 1); k = k * 3 + S.fj; k = k * 3 + S.cx; k = k * 3 + S.dj; k = k * 3 + S.du;
-      k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw; k = k * 2 + S.kx; k = k * 2 + S.kf; k = k * FLK + S.fl; k = k * 3 + S.ct;
-      // (one number up to seven targets, six with the classes; beyond, the two parts no longer fit a number exactly)
-      return G <= (FLK > 1 ? 6 : 7) ? a * KEY_REST + k : a + ':' + k;
+      k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw; k = k * 2 + S.kx; k = k * 2 + S.kf; k = k * FLK + S.fl; k = k * 3 + S.ct; k = k * 3 + S.cy; k = k * 3 + S.cu;
+      return KEY_NUM ? a * KEY_REST + k : a + ':' + k;
     };
-    const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad, aw: S.aw, kx: S.kx, kf: S.kf, fl: S.fl, ct: S.ct });
+    const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad, aw: S.aw, kx: S.kx, kf: S.kf, fl: S.fl, ct: S.ct, cy: S.cy, cu: S.cu });
     function idOf(S) {
       canon(S);
       const k = keyOf(S);
@@ -671,7 +733,7 @@
       if (i === undefined) { i = states.length; index.set(k, i); states.push(S); }
       return i;
     }
-    const others = (S, si) => S.j[si] + (S.fj === si + 1 ? 1 : 0) + (S.cx === si + 1 ? 1 : 0) + (S.dj === si + 1 ? 1 : 0);
+    const others = (S, si) => S.j[si] + (S.fj === si + 1 ? 1 : 0) + (S.cx === si + 1 ? 1 : 0) + (S.cy === si + 1 ? 1 : 0) + (S.dj === si + 1 ? 1 : 0);
     // the allowance modifier: aw 1 "+1 Prefix Modifier allowed" (it is a suffix), aw 2 "+1 Suffix Modifier allowed" (a prefix)
     const awSide = (S) => (S.aw === 1 ? 1 : 0);
     function slots(S, si) {
@@ -682,7 +744,7 @@
     const limOf = (S, si) => (S.r === 2 ? LIM[si] + (si === 1 && (S.u & R_SERLE) ? 1 : 0) + (S.aw === si + 1 ? 1 : 0) : S.r === 1 ? 1 : 0);
     const open = (S, si) => Math.max(0, limOf(S, si) - slots(S, si));
     const done = (S) => { for (let i = 0; i < G; i++) if (!met(S.g[i])) return false; return true; };
-    const craftedUsed = (S) => { let n = (S.cx ? 1 : 0) + (S.aw ? 1 : 0); for (let i = 0; i < G; i++) if (kindOf(S.g[i]) === CRAFTED) n++; return n; };
+    const craftedUsed = (S) => { let n = (S.cx ? 1 : 0) + (S.cy ? 1 : 0) + (S.aw ? 1 : 0); for (let i = 0; i < G; i++) if (kindOf(S.g[i]) === CRAFTED) n++; return n; };
     const desUsed = (S) => { let n = (S.dj ? 1 : 0) + (S.du ? 1 : 0); for (let i = 0; i < G; i++) if (kindOf(S.g[i]) === DESECRATED) n++; return n; };
     /** A target the item does not have yet (nothing of it, or only its twin of another element). */
     const wanted = (x) => x === ABSENT || x === TWIN;
@@ -707,13 +769,15 @@
     // (S.ct says whose the crafted one is: 1 the aimed tool's of its side, 2 the unaimed one's, 0 not known)
     const CXM = (si, ct) => (ct === 1 && TOOL[si] ? kb.mods[TOOL[si].mod] : ct === 2 && FILL[si] ? kb.mods[FILL[si].mod] : null);
     const DJL = [0, 1].map((si) => (ctx.bone ? P.desPoolFor(ctx, SIDES[si], 0, null) : []));
-    const DJD = [0, 1].map((si) => {
-      if (!DJL[si].length) return false;
-      // one desecrated-only option of three (80%), two (15%) or three: is the highest of the three one of them?
+    // PDV: the chance that the option taken on a miss is a desecrated-only one: one desecrated-only option of three
+    // (80%), two (15%) or three, and the highest of the three is taken
+    const PDV = [0, 1].map((si) => {
+      if (!DJL[si].length) return 0;
       const pb = 1 - atLeast(si, 0, DJL[si].reduce((x, e) => Math.max(x, e.lvl), 0) + 1);
-      return 0.8 * pb * pb + 0.15 * pb + 0.05 >= 0.5;
+      return 0.8 * pb * pb + 0.15 * pb + 0.05;
     });
-    const unknown = (S, si) => S.j[si] + (S.fj === si + 1 && !(S.kf && FRAC.si === si) ? 1 : 0) + (S.cx === si + 1 && !CXM(si, S.ct) ? 1 : 0) + (S.dj === si + 1 && !DJD[si] ? 1 : 0);
+    const DJD = PDV.map((p) => p >= 0.5);
+    const unknown = (S, si) => S.j[si] + (S.fj === si + 1 && !(S.kf && FRAC.si === si) ? 1 : 0) + (S.cx === si + 1 && !CXM(si, S.ct) ? 1 : 0) + (S.cy === si + 1 && !CXM(si, S.cu) ? 1 : 0) + (S.dj === si + 1 && !DJD[si] ? 1 : 0);
     /** What the crafted (kind 0) or the Desecrated (kind 1) modifier nobody asked for takes from the anonymous weight of side si in pool s. */
     function knownTake(s, si, kind, ct) {
       const key = 'k' + kind + (ct || '');
@@ -731,6 +795,7 @@
       let g = 1;
       if (!(J0 > 0)) return g;
       if (S.cx === si + 1 && CXM(si, S.ct)) g *= Math.max(0, 1 - knownTake(s, si, 0, S.ct) / J0);
+      if (S.cy === si + 1 && CXM(si, S.cu)) g *= Math.max(0, 1 - knownTake(s, si, 0, S.cu) / J0);
       if (S.dj === si + 1 && DJD[si]) g *= Math.max(0, 1 - knownTake(s, si, 1) / J0);
       return g;
     }
@@ -858,6 +923,7 @@
       for (let i = 0; i < G; i++) if (there(S.g[i]) && S.fg !== i && pred(goals[i].si, kindOf(S.g[i]) === DESECRATED)) out.push({ w: 1, k: 'g', i, si: goals[i].si });
       for (let si = 0; si < 2; si++) if (S.j[si] && pred(si, false)) out.push(...plain(S, si));
       if (S.cx && pred(S.cx - 1, false)) out.push({ w: 1, k: 'cx', si: S.cx - 1 });
+      if (S.cy && pred(S.cy - 1, false)) out.push({ w: 1, k: 'cy', si: S.cy - 1 });
       if (S.dj && pred(S.dj - 1, true)) out.push({ w: 1, k: 'dj', si: S.dj - 1 });
       if (S.du && pred(S.du - 1, true)) out.push({ w: 1, k: 'du', si: S.du - 1 });
       if (S.aw && pred(awSide(S), false)) out.push({ w: 1, k: 'aw', si: awSide(S) });
@@ -993,12 +1059,15 @@
      * target's own group (expected), kinShare: their share among the others}. Every other entry is there with its
      * own chance (none of the n is of its group); `pick` averages hits / (hits + how many others are there).
      */
-    function listFor(list, isHit, si, n, grp) {
+    function listFor(list, isHit, si, n, grp, gone) {
       const stay = [];
       let hits = 0, kin = 0, all = 0;
+      // (gone: desecrated-only modifiers that are on the item already, which ones is not known: each other entry is
+      // off the list with the same chance)
+      const others = list.reduce((x, e) => x + (isHit(e) ? 0 : 1), 0), keep = gone > 0 && others > 0 ? Math.max(0, 1 - gone / others) : 1;
       for (const e of list) {
         if (isHit(e)) { hits++; continue; }
-        const p = n > 0 ? Math.pow(1 - offBy(e, si, grp), n) : 1;
+        const p = (n > 0 ? Math.pow(1 - offBy(e, si, grp), n) : 1) * keep;
         stay.push(p); all += p;
         if (e.grp.some((x) => grp.includes(x))) kin += p; // of the target's own group: once it is an option, the target cannot be one
       }
@@ -1076,9 +1145,12 @@
       return off;
     }
     function reveal(S, si, floor, lich, echoes) {
-      const ex = desFor(S, si, floor, null), ll = lich ? desFor(S, si, floor, lich) : null;
+      // (S.px: the entries that the desecrated-only modifiers of an Omen of Putrefaction's earlier reveals took off
+      // the list, by id: the list is known exactly then)
+      const ex0 = desFor(S, si, floor, null), ex = S.px ? ex0.filter((e) => !S.px.has(e.id)) : ex0, ll = lich ? desFor(S, si, floor, lich) : null;
       // modifiers nobody knows on this side (the pasted item's own are known while S.kx: the lists are cut already)
-      const unk = S.kx ? 0 : unknown(S, si);
+      // (S.pd: of those, the desecrated-only ones of an Omen of Putrefaction: they take list entries, not base modifiers)
+      const unk = S.kx ? 0 : Math.max(0, unknown(S, si) - (S.pd || 0));
       const s = stats(si, floor, 1, S.u & R_ALDUR, tagMask(S), presentMask(S, si)); // (the Well of Souls does not offer a rune's pool: open test t33)
       const tm = tagMask(S);
       const want = [];
@@ -1088,7 +1160,8 @@
         if (g.kind === 'des') {
           const hit = (e) => e.fam === g.fam && fits(g, e);
           const c = ex.filter(hit).length, cl = ll ? ll.filter(hit).length : 0;
-          if (c || cl) want.push({ i, des: true, c, cl, share: pv[i], all: listFor(ex, hit, si, unk, g.grp), lich: ll ? listFor(ll, hit, si, unk, g.grp) : null });
+          const gone = S.px ? 0 : S.pd || 0;
+          if (c || cl) want.push({ i, des: true, c, cl, hit, grp: g.grp, share: pv[i], all: listFor(ex, hit, si, unk, g.grp, gone), lich: ll ? listFor(ll, hit, si, unk, g.grp, gone) : null });
         } else if (g.kind === 'nat' && !g.noWell && s.ok[i] + s.nearW[i] > 0) {
           const beta = unblocked(S, i, floor, !!(s.big && s.big.has.has(i)));
           // (what is left of the modifiers nobody knows next to the ones on the item, as a share: see mix)
@@ -1100,6 +1173,22 @@
       if (!want.length) return [[1, -1, 0]];
       // which target to take when the Well offers more than one: wellRank (the same order on every item)
       want.sort((a, b) => wellRank[a.i] - wellRank[b.i]);
+      // Desecrated targets come first, and their options are drawn from one list: that the first is offered and that
+      // the second is are no independent things (one draw of nine is either with a chance of two ninths, not of
+      // 1 - (8/9)^2). So the chance is taken for the first k of them together (uni[k]: counted as one target with
+      // all their entries), and the k-th has what that adds to the first k - 1.
+      const uni = [];
+      {
+        const ds = want.filter((w) => w.des), gone = S.px ? 0 : S.pd || 0;
+        for (let m = 1; m <= ds.length; m++) {
+          if (m === 1) { uni.push(ds[0]); continue; }
+          const part = ds.slice(0, m), hitU = (e) => part.some((w) => w.hit(e)), grpU = [...new Set(part.flatMap((w) => w.grp))];
+          const all = listFor(ex, hitU, si, unk, grpU, gone), lich = ll ? listFor(ll, hitU, si, unk, grpU, gone) : null;
+          // (an option of one target's group ends that target's chance, not the others': a share of them)
+          all.kin /= m; if (lich) lich.kinShare /= m;
+          uni.push({ c: part.reduce((x, w) => x + w.c, 0), all, lich });
+        }
+      }
       const pick = new Float64Array(G);
       let missAll = 0;
       const chances = ex.length ? P.DES_OPTIONS : [1];
@@ -1110,22 +1199,27 @@
         const lichFirst = ll && ll.length ? 1 : 0;
         const exDraws = Math.min(Math.max(0, nEx - lichFirst), Math.max(0, ex.length - lichFirst));
         const normDraws = 3 - lichFirst - exDraws;
-        let rem = 1;
+        let rem = 1, nd = 0, before = 0;
         for (const wnt of want) {
           let off;
           if (wnt.des) {
             // The lich's option is drawn first and is one of the desecrated-only ones: it is gone for the draws after
             // it. No two options share a group: an option of the target's own group ends the target's chance.
-            const first = ll && ll.length ? 1 : 0;
-            let alive = 1;
-            off = 0;
-            if (first) { off = wnt.lich.pick; alive = (1 - wnt.lich.pick) * (1 - wnt.lich.kinShare); }
+            const u = uni[nd++], first = ll && ll.length ? 1 : 0;
+            let alive = 1, any = 0;
+            if (first) { any = u.lich.pick; alive = (1 - u.lich.pick) * (1 - u.lich.kinShare); }
             for (let t = 0; t < exDraws && alive > 0; t++) {
-              const size = Math.max(wnt.c, 1, wnt.all.size - first - t);
-              const p = Math.min(1, wnt.c / size), k = Math.min(1 - p, wnt.all.kin / size);
-              off += alive * p;
+              const size = Math.max(u.c, 1, u.all.size - first - t);
+              const p = Math.min(1, u.c / size), k = Math.min(1 - p, u.all.kin / size);
+              any += alive * p;
               alive *= 1 - p - k;
             }
+            // (one of the first nd is offered with chance `any`: this one is taken when none of those before it is)
+            off = Math.max(0, any - before);
+            pick[wnt.i] += chances[k] * off;
+            before = Math.max(before, any);
+            rem = 1 - before;
+            continue;
           } else {
             // (the desecrated-only options are drawn before the base ones: one of the target's own group ends its
             // chance, another one takes the base modifiers of its groups along)
@@ -1154,8 +1248,153 @@
     const revealed = (S1, si, i, status) => { const S2 = addRolled(S1, i, si, status); if (i < 0) { S2.j[si]--; S2.dj = si + 1; } return S2; };
 
     // ---- edges
-    const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FS0, ad: AD0, aw: 0, kx: 0, kf: 0, fl: 0, ct: 0 };
+    const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FSN, ad: AD0, aw: 0, kx: 0, kf: 0, fl: 0, ct: 0, cy: 0, cu: 0 };
     const RESTART = -1; // edge target: a fresh white base (its value is solved as one number, see solve)
+    // (a finished item that is locked: one node for all of them)
+    const FINISHED = (() => { const n = cp(N0); n.r = 2; for (let i = 0; i < G; i++) n.g[i] = goals[i].kind === 'des' ? DESECRATED : NATURAL; return n; })();
+    /** "A random modifier goes and a random one comes" (no minimum modifier level): [[chance, node]]. */
+    function swapped(S) {
+      const us = units(S, () => true).filter((u) => openMask(removeUnit(S, u)) !== 0), tw = us.reduce((x, u) => x + u.w, 0), out = [];
+      for (const u of us) { const S1 = removeUnit(S, u); for (const [p, i, si, status] of roll(S1, openMask(S1), 0)) out.push([p * u.w / tw, addRolled(S1, i, si, status)]); }
+      return out;
+    }
+    const afterMemo = new Map();
+    const missing = (S) => { let n = 0; for (let i = 0; i < G; i++) if (!met(S.g[i])) n++; return n; };
+    /** Chance that the item is finished after exactly n such swaps (it is not asked in between). */
+    function after(S, n) {
+      if (!n) return done(S) ? 1 : 0;
+      // (a swap adds one modifier: more targets missing than swaps left cannot be made up. One too few can: the
+      // swap may remove a modifier in a target's way and add the target)
+      if (missing(S) > n) return 0;
+      const k = keyOf(S) + '|' + n;
+      let v = afterMemo.get(k);
+      if (v === undefined) { v = 0; for (const [p, S1] of swapped(S)) if (p > 0) v += p * after(S1, n - 1); afterMemo.set(k, v); }
+      return v;
+    }
+    const sanctMemo = new Map();
+    /** Chance that target i's value is at or over the wanted one after Sanctification; low: it is under it now. */
+    function sanctChance(i, low) {
+      const k = i * 2 + (low ? 1 : 0);
+      if (sanctMemo.has(k)) return sanctMemo.get(k);
+      const g = goals[i], span = SANCT_HI - SANCT_LO;
+      const list = g.kind === 'des' ? P.desPoolFor(ctx, g.side, 0, null).filter((e) => e.fam === g.fam)
+        : g.kind === 'ess' ? [g.rareEss, g.magicEss].filter(Boolean).map((r) => ({ id: r.mod, w: 1 }))
+          : P.sidePool(ctx, g.side, 0).concat(g.rune && POOL ? P.runeSide(ctx, POOL.tag, g.side, 0) : []).filter((e) => e.fam === g.fam);
+      let num = 0, den = 0;
+      for (const e of list) {
+        if (reach(e.id, g) < 0) continue;
+        const r = P.rangeOf(ctx, e.id);
+        if (!r) continue;
+        const whole = Number.isInteger(r[0]) && Number.isInteger(r[1]), n = whole ? r[1] - r[0] + 1 : 200;
+        for (let q = 0; q < n; q++) {
+          const v = whole ? r[0] + q : r[0] + (r[1] - r[0]) * (q + 0.5) / n;
+          if ((v < g.minValue) !== !!low) continue;
+          // (whole values are rounded to the nearest: planner.js)
+          const need = (whole ? g.minValue - 0.5 : g.minValue) / v;
+          num += e.w / n * Math.max(0, Math.min(1, (SANCT_HI - need) / span));
+          den += e.w / n;
+        }
+      }
+      const out = den > 0 ? num / den : 0;
+      sanctMemo.set(k, out);
+      return out;
+    }
+    /**
+     * Omen of Putrefaction: the chance that every target is on the item afterwards. A fractured modifier stays; every
+     * other slot is filled at the Well, the prefixes first, one reveal after the other (Abyssal Echoes: the first
+     * reveal's options can be drawn again). A target only an essence or a rune's pool gives cannot come that way.
+     */
+    const putMemo = new Map();
+    function putrefied(S, floor, echoes) {
+      const mk = S.fg + '|' + (S.fg >= 0 ? S.g[S.fg] : 0) + '|' + S.fj + '|' + S.u + '|' + S.kf + '|' + floor + '|' + (echoes ? 1 : 0);
+      if (!putMemo.has(mk)) putMemo.set(mk, putrefied0(S, floor, echoes));
+      return putMemo.get(mk);
+    }
+    /**
+     * No target among the three options of a Putrefaction's reveal on side si: what is taken, by the rule the player
+     * is given. A desecrated-only option that is in no missing target's way, and of two the one whose groups take the
+     * most entries off the Well's list (the side's next reveals draw from what is left); with none, a base modifier.
+     * One desecrated-only option of three in four reveals of five, else two (three, one reveal in twenty, counted as
+     * two). -> [[chance, the ids that leave the list, or null for a base modifier]].
+     */
+    function missTaken(S, si, list) {
+      const n = list.length;
+      if (!n) return [[1, null, null]];
+      const lack = [];
+      for (let i = 0; i < G; i++) if (goals[i].si === si && wanted(S.g[i])) lack.push(goals[i]);
+      const share = (a, b) => a.grp.some((x) => b.grp.includes(x));
+      const hit = list.map((e) => lack.some((g) => g.kind === 'des' && e.fam === g.fam && fits(g, e)));
+      const way = list.map((e, k) => !hit[k] && lack.some((g) => e.fam === g.fam || e.grp.some((x) => (g.grp || []).includes(x))));
+      const takes = list.map((e, k) => (hit[k] || way[k] ? 0 : list.reduce((c, f, q) => c + (!hit[q] && share(e, f) ? 1 : 0), 0)));
+      let W = 0;
+      for (const e of list) W += e.w;
+      const one = new Float64Array(n + 1), two = new Float64Array(n + 1); // (index n: a base modifier)
+      let m1 = 0, m2 = 0;
+      for (let a = 0; a < n; a++) {
+        if (hit[a]) continue;
+        const pa = list[a].w / W;
+        one[way[a] ? n : a] += pa; m1 += pa;
+        let W2 = 0;
+        for (let b = 0; b < n; b++) if (b !== a && !share(list[a], list[b])) W2 += list[b].w;
+        if (!(W2 > 0)) { two[way[a] ? n : a] += pa; m2 += pa; continue; }
+        for (let b = 0; b < n; b++) {
+          if (b === a || hit[b] || share(list[a], list[b])) continue;
+          const p = pa * list[b].w / W2;
+          two[takes[b] > takes[a] ? b : takes[a] > 0 ? a : n] += p; m2 += p;
+        }
+      }
+      const out = [];
+      for (let k = 0; k <= n; k++) {
+        const p = (m1 > 0 ? 0.8 * one[k] / m1 : 0) + (m2 > 0 ? 0.2 * two[k] / m2 : 0);
+        if (p > 0) out.push([p, k === n ? null : list.filter((f) => share(list[k], f)).map((f) => f.id), k === n ? null : list[k].grp]);
+      }
+      const tot = out.reduce((x, o) => x + o[0], 0);
+      return tot > 0 ? out.map(([p, ids, grp]) => [p / tot, ids, grp]) : [[1, null, null]];
+    }
+    function putrefied0(S, floor, echoes) {
+      const base = cp(N0);
+      base.r = 2; base.u = S.u; base.fs = S.fs; base.ad = S.ad; base.kf = S.kf; base.fj = S.fj;
+      if (S.fg >= 0) { base.fg = S.fg; base.g[S.fg] = S.g[S.fg]; }
+      for (let i = 0; i < G; i++) if (base.g[i] === ABSENT && (goals[i].kind === 'ess' || goals[i].rune || goals[i].noWell)) return 0;
+      let dist = new Map([[keyOf(base), [1, base]]]), first = true;
+      for (let si = 0; si < 2; si++) {
+        for (let guard = 0; guard < 6; guard++) {
+          const next = new Map();
+          let any = false;
+          const put = (p, S2) => { if (!(p > 0)) return; const k = keyOf(S2) + '|' + (S2.pd || 0) + '|' + (S2.px ? [...S2.px].sort().join(',') : ''), old = next.get(k); if (old) old[0] += p; else next.set(k, [p, S2]); };
+          for (const [p, Sa] of dist.values()) {
+            if (open(Sa, si) < 1) { put(p, Sa); continue; }
+            any = true;
+            let taken = null;
+            for (const [q, i, status] of reveal(Sa, si, floor, null, echoes && first)) {
+              if (i >= 0) { const S2 = addRolled(Sa, i, si, status); S2.pd = Sa.pd || 0; S2.px = Sa.px; put(p * q, S2); continue; }
+              // no target among the three: a desecrated-only modifier that takes entries off the Well's list of this
+              // side, or a base modifier (missTaken)
+              if (!taken) { const l0 = desFor(Sa, si, floor, null); taken = missTaken(Sa, si, Sa.px ? l0.filter((e) => !Sa.px.has(e.id)) : l0); }
+              for (const [pm, ids, grp] of taken) {
+                const S2 = cp(Sa);
+                S2.j[si]++;
+                if (ids) {
+                  S2.pd = (Sa.pd || 0) + 1; S2.px = new Set(Sa.px || []);
+                  for (const id of ids) S2.px.add(id);
+                  // (no group twice on an item, whatever the side: the other side's list loses its entries of these groups)
+                  if (si === 0) for (const f of desList(1, floor, null)) if (f.grp.some((x) => grp.includes(x))) S2.px.add(f.id);
+                } else { S2.pd = Sa.pd || 0; S2.px = Sa.px || new Set(); }
+                put(p * q * pm, S2);
+              }
+            }
+          }
+          dist = next;
+          if (!any) break;
+          first = false;
+        }
+        // (the other side: none of its modifiers is on the item yet; what the first side took off its list stays off)
+        for (const e of dist.values()) e[1].pd = 0;
+      }
+      let p = 0;
+      for (const [q, Sa] of dist.values()) if (done(Sa)) p += q;
+      return p;
+    }
     /** A socket for a rune: the node with one socket less and what it costs first (an Artificer's Orb), or null. */
     function socket(S) {
       if (S.fs > 0) { const n = cp(S); n.fs--; return { S: n, cost: 0, pre: null }; }
@@ -1213,6 +1452,39 @@
         return;
       }
       if (keyOf(S) !== keyOf(N0)) push({ op: 'newbase' }, baseCost, [[1, RESTART]]);
+      // ---- steps that lock the item (Corrupted or Sanctified): it is finished then, or lost and a new base is due.
+      // `lost`: the step with the chance p of finishing; the base of the other case is in its cost and its counts.
+      const lost = (a, cost, p) => { if (p > 1e-12) push(Object.assign(a, { bases: 1 - p, also: [['New base', 1 - p]] }), cost + (1 - p) * baseCost, p < 1 ? [[p, FINISHED], [1 - p, RESTART]] : [[1, FINISHED]]); };
+      if (S.r === 2) {
+        // Vaal Orb: one of four things, each as likely: nothing, a corruption enchantment, a socket (a jewel: a
+        // modifier added past the limit or one removed), or one to three times "a random modifier goes and a random
+        // one comes" (planner.js vaalOutcome). The last can finish an item that is short of targets.
+        if (PR.vaal != null) {
+          let p = (after(S, 1) + after(S, 2) + after(S, 3)) / 3;
+          if (jewel) { let add = 0; for (let si = 0; si < 2; si++) for (const [q, i, sj, status] of roll(S, 1 << si, 0)) if (i >= 0 && done(addRolled(S, i, sj, status))) add += 0.5 * q; p += 0.5 * add; }
+          lost({ op: 'vaal' }, PR.vaal, p / 4);
+        }
+        // Omen of Sanctification with a Divine Orb: every value is multiplied by a random 78% to 122% and the item is
+        // Sanctified. For targets by value, when every target is on the item: each must end at or over its value.
+        if (PR.sanct != null && PR.divine != null && !S.du) {
+          let p = 1, any = false;
+          for (let i = 0; i < G && p > 0; i++) {
+            const x = S.g[i];
+            if (!(met(x) || near(x))) { p = 0; break; }
+            if (goals[i].minValue == null) continue;
+            if (S.fg === i) { if (near(x)) p = 0; continue; } // (a fractured modifier's value is not altered)
+            any = true;
+            p *= sanctChance(i, near(x));
+          }
+          if (any) lost({ op: 'divine', sanctify: true }, PR.divine + PR.sanct, p);
+        }
+        // Omen of Putrefaction with a bone: every modifier that is not fractured goes, every slot gets a Desecrated
+        // modifier chosen at the Well of Souls (one of three each), and the item is Corrupted.
+        if (PR.putrefy != null) for (const b of bones) for (const echoes of [false, true]) {
+          if (echoes && PR.echoes == null) continue;
+          lost(Object.assign({ op: 'bone', quality: b.quality, putrefy: true }, echoes ? { echoes: true } : null), b.price + PR.putrefy + (echoes ? PR.echoes : 0), putrefied(S, b.floor, echoes));
+        }
+      }
       // a value under the wanted one: a Divine Orb rolls every value again (not a fractured modifier's)
       if (PR.divine != null) {
         const vs = [];
@@ -1235,14 +1507,13 @@
         if (craftedUsed(S) < capOf(S)) for (let i = 0; i < G; i++) {
           const g = goals[i], r = g.magicEss;
           if (!wanted(S.g[i]) || !r) continue;
-          if (r.pHit < 1 && S.cx) continue; // (a miss would be a second crafted modifier nobody asked for: see S.cx)
           const S1 = cp(S); S1.r = 2;
           if (open(S1, g.si) > 0 || S.g[i] === TWIN) {
             const outs = [], free = clear(S1, i);
             if (free < 1) outs.push([1 - free, S1]);
             if (r.pOK > 0) outs.push([free * r.pHit * r.pOK, addRolled(S1, i, g.si, CRAFTED)]);
             if (r.pOK < 1) outs.push([free * r.pHit * (1 - r.pOK), addRolled(S1, i, g.si, CRAFTED + NEAR)]);
-            if (r.pHit < 1) { const S2 = cp(S1); if (!S2.cx) S2.cx = g.si + 1; else junkAt(S2, g.si, kb.mods[r.mod].lvl); outs.push([free * (1 - r.pHit), S2]); }
+            if (r.pHit < 1) { const S2 = cp(S1); addCrafted(S2, g.si, 0); outs.push([free * (1 - r.pHit), S2]); }
             push({ op: 'essence', item: r.item, mod: r.mod }, r.price, outs);
           }
         }
@@ -1317,7 +1588,6 @@
       if (craftedUsed(S) < capOf(S)) for (let i = 0; i < G; i++) {
         const g = goals[i], r = g.rareEss;
         if (!wanted(S.g[i]) || !r || r.liquid) continue;
-        if (r.pHit < 1 && S.cx) continue; // (a miss would be a second crafted modifier nobody asked for: see S.cx)
         // Crystallisation omens aim Perfect and Corrupted Essences only: not alloys (game text; the player, 8 Oct 2026), not liquid emotions
         const aim = r.alloy ? [-1] : [-1, 0, 1];
         for (const v of aim) {
@@ -1332,7 +1602,7 @@
             p *= free;
             if (r.pOK > 0) outs.push([p * r.pHit * r.pOK, addRolled(S1, i, g.si, CRAFTED)]);
             if (r.pOK < 1) outs.push([p * r.pHit * (1 - r.pOK), addRolled(S1, i, g.si, CRAFTED + NEAR)]);
-            if (r.pHit < 1) { const S2 = cp(S1); if (!S2.cx) S2.cx = g.si + 1; else junkAt(S2, g.si, kb.mods[r.mod].lvl); outs.push([p * (1 - r.pHit), S2]); }
+            if (r.pHit < 1) { const S2 = cp(S1); addCrafted(S2, g.si, 0); outs.push([p * (1 - r.pHit), S2]); }
           };
           if (tw) for (const u of us) give(removeUnit(S, u), u.w / tw); else if (v < 0) give(S, 1);
           push(Object.assign({ op: 'pessence', item: r.item, mod: r.mod }, v >= 0 ? { side: SIDES[v] } : null), r.price + (v >= 0 ? PR.crystal[v] : 0), outs);
@@ -1343,10 +1613,6 @@
       if (S.dj && craftedUsed(S) < capOf(S)) for (const T of TOOL) {
         const v = S.dj - 1;
         if (!T || PR.crystal[v] == null) continue;
-        // (S.cx is the one crafted modifier nobody asked for that a node counts: a second one, which Astrid's Creativity
-        // would allow, would be taken for a plain modifier and leave room for a third crafted one that the rules
-        // refuse. The tool is used where its modifier becomes that one or takes its place.)
-        if (S.cx && !(S.cx === T.si + 1 && S.ct === 1)) continue;
         // (an essence whose own side is full removes from that side: aimed elsewhere it cannot be used, planner.js validate)
         if (T.si !== v && open(S, T.si) < 1) continue;
         const us = units(S, (si) => si === v), tw = us.reduce((x, u) => x + u.w, 0);
@@ -1355,7 +1621,7 @@
         for (const u of us) for (const [q, S1] of without(S, u, false)) {
           // (the tool's own modifier from an earlier use is still there, with Astrid's Creativity: an essence does not
           // add a second modifier of its group, so nothing comes)
-          if (!S1.cx && open(S1, T.si) > 0) { S1.cx = T.si + 1; S1.ct = 1; }
+          if (!ownOn(S1, T.si, 1) && open(S1, T.si) > 0) addCrafted(S1, T.si, 1);
           outs.push([q * u.w / tw, S1]);
         }
         push({ op: 'pessence', item: T.item, mod: T.mod, side: SIDES[v], tool: true }, T.price + PR.crystal[v], outs);
@@ -1365,11 +1631,11 @@
       if (S.dj && craftedUsed(S) < capOf(S) && FILL[S.dj - 1] && open(S, S.dj - 1) === 0) {
         const T = FILL[S.dj - 1], v = S.dj - 1;
         const mine = TOOL[v] && TOOL[v].item === T.item ? 1 : 2; // (S.ct: whose modifier the crafted one then is)
-        const us = units(S, (si) => si === v), tw = S.cx && !(S.cx === v + 1 && S.ct === mine) ? 0 : us.reduce((x, u) => x + u.w, 0);
+        const us = units(S, (si) => si === v), tw = us.reduce((x, u) => x + u.w, 0);
         if (tw) {
           const outs = [];
           for (const u of us) for (const [q, S1] of without(S, u, false)) {
-            if (!S1.cx && open(S1, v) > 0) { S1.cx = v + 1; S1.ct = mine; }
+            if (!ownOn(S1, v, mine) && open(S1, v) > 0) addCrafted(S1, v, mine);
             outs.push([q * u.w / tw, S1]);
           }
           push({ op: 'pessence', item: T.item, mod: T.mod, tool: true }, T.price, outs);
@@ -1414,7 +1680,6 @@
       // a liquid emotion: a modifier goes, and its crafted modifier comes on the side that opened (one of two for some)
       if (craftedUsed(S) < capOf(S)) for (const em of EMO) {
         if (!em.outs.some((o) => (o.goal >= 0 && wanted(S.g[o.goal])) || (o.cap >= 0 && over[o.cap] && !S.aw))) continue;
-        if (S.cx && em.outs.some((o) => o.goal < 0 && o.cap < 0)) continue; // (see S.cx: no second crafted modifier nobody asked for)
         const sides = [...new Set(em.outs.map((o) => o.si))];
         const from = sides.some((si) => open(S, si) > 0) ? -1 : sides.length === 1 ? sides[0] : -1; // R_SWAP_REMOVAL
         const fitAt = (S1) => em.outs.filter((o) => open(S1, o.si) > 0 && (o.goal < 0 || wanted(S1.g[o.goal])));
@@ -1433,7 +1698,7 @@
               continue;
             }
             const S2 = cp(S1);
-            if (o.cap >= 0) S2.aw = o.cap + 1; else if (!S2.cx) S2.cx = o.si + 1; else junkAt(S2, o.si, kb.mods[o.mod] ? kb.mods[o.mod].lvl : 1);
+            if (o.cap >= 0) S2.aw = o.cap + 1; else addCrafted(S2, o.si, 0);
             outs.push([p, S2]);
           }
         }
@@ -1463,6 +1728,13 @@
           for (const i of is) S1.g[i] = NATURAL;
           push(Object.assign({ op: 'aldur', item: ALD.rune }, sk.pre ? { pre: sk.pre } : null), ALD.price + sk.cost, [[1, S1]]);
         }
+      }
+      // Orb of Extraction: the item is destroyed and its augments come back, all but the socket-bound ones (Serle's
+      // Triumph, the Runes of Aldur and the runes that open a pool stay in the socket for good: their game text).
+      // Astrid's Creativity is the one the network sockets that comes back: giving the item up this way costs the orb
+      // and returns the rune for the next base.
+      if (EXTRACT != null && AST && AST.price != null && (S.u & R_ASTRID)) {
+        push({ op: 'extraction', bases: 1, also: [['New base', 1], [AST.item, -1]] }, EXTRACT + baseCost - AST.price, [[1, RESTART]]);
       }
       // runes that open a slot or a pool
       for (const [R, bit] of [[AST, R_ASTRID], [SER, R_SERLE], [POOL, R_POOL]]) {
@@ -1526,6 +1798,7 @@
         for (let i = 0; i < G; i++) if (there(S.g[i]) && kindOf(S.g[i]) !== DESECRATED) { const S2 = cp(S); S2.fg = i; outs.push([1, S2]); n++; }
         for (let si = 0; si < 2; si++) if (S.j[si]) { const S2 = cp(S); S2.j[si]--; S2.fj = si + 1; outs.push([S.j[si], S2]); n += S.j[si]; }
         if (S.cx) { const S2 = cp(S); S2.fj = S.cx; S2.cx = 0; outs.push([1, S2]); n++; }
+        if (S.cy) { const S2 = cp(S); S2.fj = S.cy; S2.cy = 0; outs.push([1, S2]); n++; }
         if (n) push({ op: 'fracture' }, PR.fracture, outs.map(([w, S2]) => [w / n, S2]));
       }
     }
@@ -1547,7 +1820,11 @@
         S.fs = Math.max(0, Math.min(3, P.freeSockets(ctx, st)));
         S.ad = Math.max(0, Math.min(2, canAdd - (st.sockets || 0)));
       }
-      for (const m of st.mods) {
+      // (a modifier that meets a target first: after a Flux an item can hold two of one family, and the lower one must
+      // not be read as "in the way" of a target that is on the item)
+      const meetsOne = (m) => !m.unrevealed && goals.some((g) => g.side === m.side && P.meets(m, g, g.tier));
+      const inOrder = st.mods.filter(meetsOne).concat(st.mods.filter((m) => !meetsOne(m)));
+      for (const m of inOrder) {
         const si = m.side === 'prefix' ? 0 : 1;
         const free = (k) => wanted(S.g[k]) && goals[k].si === si;
         const kind = m.des ? DESECRATED : m.crafted ? CRAFTED : NATURAL;
@@ -1565,7 +1842,7 @@
         else if (m.frac) S.fj = si + 1;
         else if (m.unrevealed) S.du = si + 1;
         else if (m.des) S.dj = si + 1;
-        else if (m.crafted && !S.cx) { S.cx = si + 1; S.ct = TOOL[si] && m.id === TOOL[si].mod ? 1 : FILL[si] && m.id === FILL[si].mod ? 2 : 0; }
+        else if (m.crafted && (!S.cx || !S.cy)) addCrafted(S, si, TOOL[si] && m.id === TOOL[si].mod ? 1 : FILL[si] && m.id === FILL[si].mod ? 2 : 0);
         else { S.j[si]++; lowest[si] = Math.min(lowest[si], m.lvl || 1); }
       }
       if (NCLS > 1) for (let si = 0; si < 2; si++) if (nSide(S, si) > 0) setCls(S, si, clsOf(lowest[si] === Infinity ? 1 : lowest[si]));
@@ -1848,7 +2125,9 @@
     // what a new base costs in the equations: its price, plus a charge that keeps the craft within the number of bases
     // the player will use (see fitBases). The charge is not money: costs are reported without it.
     let charge = 0;
-    const costOf = (act) => (act.a.op === 'newbase' ? act.cost + charge : act.cost);
+    // (a.bases: the new bases a step takes besides a plain "New base": one for an Orb of Extraction, the chance of
+    // losing the item for a step that locks it; the charge on bases is on those too)
+    const costOf = (act) => (act.a.op === 'newbase' ? act.cost + charge : act.a.bases ? act.cost + charge * act.a.bases : act.cost);
     const qOf = (s, act) => { let c = costOf(act); const o = act.out; for (let t = 0; t < o.length; t += 2) c += o[t] * (o[t + 1] === RESTART ? x : V[o[t + 1]]); return c; };
     // the first rule set: one that always ends
     const essOnly = new Set(goals.filter((g) => g.kind === 'ess').flatMap((g) => [g.rareEss, g.magicEss].filter(Boolean).map((r) => r.mod)));
@@ -1867,12 +2146,12 @@
         if (a < 0) a = find((e) => e.op === 'flux' || e.op === 'aldur');
         if (a < 0) a = find((e) => e.op === 'rune_rule');
         if (a < 0 && rollable) a = find((e) => e.op === 'exalt' && !e.side && !e.greater && !e.catalyse);
-        if (a < 0) a = find((e) => e.op === 'divine');
+        if (a < 0) a = find((e) => e.op === 'divine' && !e.sanctify);
         // (an essence for a target that only an essence gives; for the other targets a swap by essence would go round
         // for ever where a new base is the way out: a start whose white base is worth 1e15 leaves the first rounds
         // nothing to compare)
         if (a < 0) a = find((e) => e.op === 'pessence' && !e.side && !e.tool && essOnly.has(e.mod));
-        if (a < 0) a = find((e) => e.op === 'bone' && !e.hide);
+        if (a < 0) a = find((e) => e.op === 'bone' && !e.hide && !e.putrefy);
       }
       if (a < 0) a = find((e) => e.op === 'newbase');
       if (a < 0 && S.r === 2) a = find((e) => e.op === 'pessence' && !e.side);
@@ -1880,7 +2159,12 @@
     }
     let Fv = new Float64Array(N), Av = null, rounds = 0, sol = null;
     // the search for the base charge holds a white base's value still while it probes (see fitBases)
-    let holdX = false, timedOut = false;
+    let holdX = false, timedOut = false, fitted = false;
+    /**
+     * New bases from node s on average. An item ends finished or given up for a new base, so the item in hand is given
+     * up with chance 1 - F(s), and every white base after it with chance 1 - F(N0): (1 - F(s)) / F(N0) bases in all.
+     */
+    const basesAt = (s) => (Fv[n0] > 1e-250 ? (1 - Fv[s]) / Fv[n0] : Infinity);
     /** Improve the rule set until no node has a cheaper edge (it starts from the rule set of the last solve). */
     function solve(exact) {
       // exact === false: a probe of the search for the base charge. It only has to tell on which side of the limit the
@@ -1913,6 +2197,48 @@
       }
       sol = null;
     }
+    /**
+     * The base limit of a large network, from the price of giving up (z) that a smaller network of the request needed.
+     * The rule set depends on the charge and on a white base's value only through their sum with the base's price, so
+     * it can be solved for that sum before either is known. A large network solved free first and then searched took a
+     * minute and a half: its rule set went from thousands of bases to a few and back. Here it is solved at z from the
+     * start, z is moved in small steps while the craft from node s is over the limit or far under it (a cheaper route
+     * may still keep to it), and the values are made exact once, with the charge that puts giving up at that price.
+     */
+    function heldFit(s, z, max) {
+      const log = (timing.fit = []), STEP = 1.15;
+      holdX = true;
+      let on = 0;
+      const probe = (zz) => { const t0 = Date.now(); on = zz; x = Math.max(0, zz - baseCost); solve(false); const b = basesAt(s); log.push(['probe', Date.now() - t0, b]); return b; };
+      // (a probe that lands over the limit is taken back: the rule set and its values as they were, at no cost)
+      const keep = () => ({ pol: Int32Array.from(pol), A: Av, F: Fv, V: Float64Array.from(V), x, on });
+      const back = (k) => { pol.set(k.pol); Av = k.A; Fv = k.F; V.set(k.V); x = k.x; on = k.on; sol = null; };
+      let hi = z, lo = 0, over = Infinity, at = probe(z);
+      if (at > max) for (let k = 0; k < 24 && at > max && !timedOut; k++) { lo = hi; over = at; hi *= STEP; at = probe(hi); }
+      // well under the limit: a cheaper route may still keep to it
+      else for (let k = 0; k < 5 && at < 0.85 * max && !timedOut; k++) {
+        const was = keep(), b = probe(hi / STEP);
+        if (b > max) { lo = hi / STEP; over = b; back(was); break; }
+        hi /= STEP; at = b;
+      }
+      // between a price that keeps to the limit and one that does not, unless the route jumps there (from tens of
+      // bases to a thousand: another kind of route, with nothing in between to find)
+      for (let k = 0; k < 2 && lo > 0 && over <= 4 * max && at < 0.85 * max && hi / lo > 1.03 && !timedOut; k++) {
+        const was = keep(), mid = Math.sqrt(lo * hi), b = probe(mid);
+        if (b <= max) { hi = mid; at = b; } else { lo = mid; over = b; back(was); }
+      }
+      if (on !== hi) probe(hi);
+      // (every item given up has paid the base's price: what is left of A is the cost without bases)
+      const F0 = Fv[n0], A0 = Av[n0] - (1 - F0) * baseCost;
+      charge = Math.max(0, F0 * hi - baseCost - A0);
+      holdX = false;
+      let t0 = Date.now();
+      solve();
+      log.push(['exact', Date.now() - t0, basesAt(s)]);
+      // the exact values can sit a little over the rough ones: one step up when they break the limit
+      for (let k = 0; k < 4 && charge > 0 && basesAt(s) > max * 1.02 && !timedOut; k++) { t0 = Date.now(); charge *= 1.25; solve(); log.push(['up', Date.now() - t0, basesAt(s)]); }
+      fitted = basesAt(s) <= max * 1.02;
+    }
     /** The nodes a route reaches under the rule set: from the item, from a white base, from the starts a player can buy. */
     function reached() {
       const seen = new Uint8Array(N), q = [];
@@ -1944,7 +2270,9 @@
       }
       return worst;
     }
-    solve();
+    // input.giveUp, input.maxBases: the price of giving an item up (see fitBases) at which a smaller network of the same
+    // request kept to maxBases new bases. This one starts there.
+    if (input.giveUp > 0 && input.maxBases > 0 && !done(startS)) heldFit(start, +input.giveUp, +input.maxBases); else solve();
     timing.solve = Date.now() - tick;
     if (timedOut) return { unsupported: 'out of time', states: N };
     // no rule set ends with the targets (nothing the network knows brings this item, or a white base, to them)
@@ -1956,7 +2284,9 @@
     function solution() {
       if (sol) return sol;
       const nameSet = new Map();
-      for (let s = 0; s < N; s++) if (pol[s] >= 0) for (const n of actNames(acts[s][pol[s]].a)) if (!nameSet.has(n)) nameSet.set(n, nameSet.size);
+      // (a.also: what a step uses or returns besides its own currency, [[name, count]]: an Orb of Extraction takes a
+      // new base and returns a rune)
+      for (let s = 0; s < N; s++) if (pol[s] >= 0) { const a = acts[s][pol[s]].a; for (const n of actNames(a).concat((a.also || []).map((x) => x[0]))) if (!nameSet.has(n)) nameSet.set(n, nameSet.size); }
       const names = [...nameSet.keys()];
       // money only: the cost and its second moment (M = c^2 + 2 c E[V'] + E[M']) leave the charge on bases out
       const cost = new Float64Array(N);
@@ -1971,7 +2301,7 @@
         if (!c) {
           c = new Float64Array(names.length);
           const nu = visitsFrom(s0);
-          for (let t = 0; t < N; t++) { if (!(nu[t] > 0) || pol[t] < 0) continue; const a = acts[t][pol[t]].a; for (const n of actNames(a)) c[nameSet.get(n)] += nu[t] * (a.count || 1); }
+          for (let t = 0; t < N; t++) { if (!(nu[t] > 0) || pol[t] < 0) continue; const a = acts[t][pol[t]].a; for (const n of actNames(a)) c[nameSet.get(n)] += nu[t] * (a.count || 1); for (const [n, k] of a.also || []) c[nameSet.get(n)] += nu[t] * k; }
           counts.set(s0, c);
         }
         return c;
@@ -1993,12 +2323,6 @@
       return sol;
     }
     const usesOf = (s, name) => { const so = solution(), k = so.names.indexOf(name); return k < 0 ? 0 : so.uses(s, k); };
-    /**
-     * New bases from node s on average. An item ends finished or given up for a new base, so the item in hand is given
-     * up with chance 1 - F(s), and every white base after it with chance 1 - F(N0): (1 - F(s)) / F(N0) bases in all.
-     */
-    const basesAt = (s) => (Fv[n0] > 1e-250 ? (1 - Fv[s]) / Fv[n0] : Infinity);
-
     const net = {
       ctx, goals, states, acts, pol, start, n0, N, timing, lite, track: followed.filter(Boolean).length, classes: NCLS, whittle: WBEST ? 'best' : WNONE ? 'none' : 'levels', wellRank, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
       get rounds() { return rounds; },
@@ -2012,6 +2336,8 @@
         if (i === undefined) i = index.get(keyOf(nodeOf(st, false)));
         return i === undefined ? -1 : i;
       },
+      /** Is every target on this item (whatever else is on it, and whether the network has a node for it)? */
+      finished: (st) => done(nodeOf(st, true)),
       /** For the checks: 0 the node was found with everything known, 1 without what a blocker's tags stop, 2 without blockers, -1 not at all. */
       mapping(st) { return index.has(keyOf(nodeOf(st, true))) ? 0 : index.has(keyOf(nodeOf(st, 2))) ? 1 : index.has(keyOf(nodeOf(st, false))) ? 2 : -1; },
       done: (s) => done(states[s]),
@@ -2040,7 +2366,7 @@
       materials(s) {
         const so = solution();
         return so.names.map((name, k) => { const uses = so.uses(s, k), pr = price(name) || 0; return { name, uses, price: pr, cost: uses * pr }; })
-          .filter((m) => m.uses > 1e-6).sort((a, b) => b.cost - a.cost);
+          .filter((m) => Math.abs(m.uses) > 1e-6).sort((a, b) => b.cost - a.cost);
       },
       /** White bases the craft from node s takes on average (the one in hand not counted). */
       bases: (s) => usesOf(s, 'New base'),
@@ -2048,8 +2374,8 @@
        * Keep the craft from node s within `max` new bases on average: a charge per base is raised until the rule set
        * that is cheapest with it needs no more. Returns the charge (0 when the limit never bound).
        */
-      fitBases(s, max, hint) {
-        if (charge) { charge = 0; solve(); }
+      fitBases(s, max) {
+        if (charge) { const t0 = Date.now(); charge = 0; solve(); (timing.fit0 = Date.now() - t0); }
         const free = basesAt(s);
         if (!(max >= 0) || free <= max || !(x < BIG)) return 0;
         // For the rule set a charge on bases and a white base's own value come to one number: what giving the item up
@@ -2058,13 +2384,13 @@
         const z0 = baseCost + x;
         holdX = true;
         let on = 0;
-        const probe = (z) => { charge = z - z0; on = z; solve(false); return basesAt(s); };
-        // (hint: the charge a smaller network of the same request needed: the search starts there and is short)
-        let lo = z0, hi = hint > 0 ? z0 + hint * 1.03 : z0 * Math.min(3, Math.max(1.3, Math.sqrt(free / Math.max(0.5, max)))), at = Infinity;
-        for (let k = 0; k < 40; k++) { at = probe(hi); if (at <= max) break; lo = hi; hi = hint > 0 ? z0 + (hi - z0) * 1.3 : hi * 1.6; }
+        const log = (timing.fit = []);
+        const probe = (z) => { const t0 = Date.now(); charge = z - z0; on = z; solve(false); log.push(['probe', Date.now() - t0, basesAt(s)]); return basesAt(s); };
+        let lo = z0, hi = z0 * Math.min(3, Math.max(1.3, Math.sqrt(free / Math.max(0.5, max)))), at = Infinity;
+        for (let k = 0; k < 40; k++) { at = probe(hi); if (at <= max) break; lo = hi; hi *= 1.6; }
         // back down while the route is far under the limit (a cheaper one may still keep to it); a very large
-        // network gets fewer of these steps
-        for (let k = 0, steps = hint > 0 ? 1 : N > 25000 ? 3 : 8; k < steps && at < (hint > 0 ? 0.5 : 0.75) * max && hi / lo > 1.02; k++) {
+        // network gets fewer of these steps (the large ones of a request start from a smaller one's answer: heldFit)
+        for (let k = 0, steps = N > 60000 ? 3 : 8; k < steps && at < 0.75 * max && hi / lo > 1.02; k++) {
           const mid = Math.sqrt(lo * hi), b = probe(mid);
           if (b <= max) { hi = mid; at = b; } else lo = mid;
         }
@@ -2073,11 +2399,19 @@
         const F0 = Fv[n0], A0 = Av[n0] - (1 - F0) * (baseCost + charge);
         charge = Math.max(0, F0 * hi - baseCost - A0);
         holdX = false;
+        let t0 = Date.now();
         solve();
+        log.push(['exact', Date.now() - t0, basesAt(s)]);
         // the exact values can sit a little over the rough ones: one step up when they break the limit
-        for (let k = 0; k < 4 && basesAt(s) > max * 1.02; k++) { charge *= 1.25; solve(); }
+        for (let k = 0; k < 4 && basesAt(s) > max * 1.02; k++) { t0 = Date.now(); charge *= 1.25; solve(); log.push(['up', Date.now() - t0, basesAt(s)]); }
         return charge;
       },
+      /** The charge on a new base that the values are solved with (0: none). */
+      get charge() { return charge; },
+      /** What giving an item up costs in the equations: the base's price, the charge, a white base's value. */
+      get giveUp() { return baseCost + charge + x; },
+      /** Built from a smaller network's price of giving up (input.giveUp), and within the base limit with it. */
+      get fitted() { return fitted; },
       /** Every edge of node s with what the craft costs in all when it is used there and the route's rules after it (cheapest first). */
       /** Does the route, from the pasted item on, use an edge this network only has at its best (input.whittle 'best')? */
       usesIdeal() {
@@ -2131,7 +2465,7 @@
     };
     function describe(S) {
       const has = [], miss = [], inWay = [], low = [], twin = [], across = [];
-      const junk = [S.j[0] + (S.cx === 1 ? 1 : 0) + (S.dj === 1 ? 1 : 0) + (S.fj === 1 ? 1 : 0), S.j[1] + (S.cx === 2 ? 1 : 0) + (S.dj === 2 ? 1 : 0) + (S.fj === 2 ? 1 : 0)];
+      const junk = [0, 1].map((si) => S.j[si] + (S.cx === si + 1 ? 1 : 0) + (S.cy === si + 1 ? 1 : 0) + (S.dj === si + 1 ? 1 : 0) + (S.fj === si + 1 ? 1 : 0));
       for (let i = 0; i < G; i++) {
         const x = S.g[i], g = goals[i];
         const how = (S.fg === i ? ' (fractured)' : '') + (kindOf(x) === CRAFTED ? ' (crafted)' : kindOf(x) === DESECRATED ? ' (desecrated)' : '');
@@ -2242,21 +2576,23 @@
   /** The same, with the charge on white bases fitted to a limit of bases per finished item: {net, charge}. */
   function routeFit(input, baseLimit) {
     const nT = Object.values(input.targets || {}).filter((t) => t && t.fam).length, many = nT >= 7;
-    const fit = (net, hint) => (baseLimit > 0 && !net.done(net.start) ? net.fitBases(net.start, +baseLimit, hint) : 0);
+    const fit = (net) => (baseLimit > 0 && !net.done(net.start) ? net.fitBases(net.start, +baseLimit) : 0);
     const bad = (net) => net.unsupported || net.impossible || net.blocked;
     // [lite, targets followed at most, states at most]. Up to five targets fit with all of them followed; with six the
     // two with the largest groups are (a try that does not fit is time lost, so none is made that is known not to).
     const tries = many ? [[1, 0, 150000], [2, 0, 1000000]] : (nT <= 5 ? [[0, 8, 160000]] : []).concat(nT > FOLLOW6 ? [[0, FOLLOW6, 160000]] : [], [[0, 0, 150000], [1, 0, 400000], [2, 0, 1000000]]);
     /** The largest network that fits, with the omen as `whittle` says. */
-    const full = (whittle) => {
+    const full = (whittle, hint) => {
       let n = null;
       for (const [lite, track, maxStates] of tries) {
-        n = build(Object.assign({}, input, { lite, track, maxStates, whittle }));
+        n = build(Object.assign({}, input, { lite, track, maxStates, whittle, giveUp: hint, maxBases: baseLimit }));
         if (n.unsupported !== 'too many item states') break;
       }
       return n;
     };
-    const done = (net, hint) => (bad(net) ? { net, charge: 0 } : { net, charge: fit(net, hint) });
+    // (hint: the price of giving up at which a smaller network of the request kept to the base limit, 0: none. A
+    // network built from it is fitted already; one that could not keep to the limit that way is searched in full.)
+    const done = (net) => (bad(net) ? { net, charge: 0 } : { net, charge: net.fitted ? net.charge : fit(net) });
     /**
      * The route leans on Omen of Whittling: the network with the levels followed, in as many classes and with as many
      * targets' blockers followed as fit (each class and each followed target has its known share of the size; from:
@@ -2278,8 +2614,8 @@
       const order = plans.length > 1 ? [plans[0], plans.slice().sort((a, b) => a.size - b.size)[0]] : plans;
       for (let k = 0; k < order.length; k++) {
         if (k && order[k] === order[0]) break;
-        const n2 = build(Object.assign({}, input, { lite: 0, track: order[k].track, maxStates: 100000, whittle: 'levels', classes: order[k].classes }));
-        if (n2.unsupported !== 'too many item states') return done(n2, hint);
+        const n2 = build(Object.assign({}, input, { lite: 0, track: order[k].track, maxStates: 100000, whittle: 'levels', classes: order[k].classes, giveUp: hint, maxBases: baseLimit }));
+        if (n2.unsupported !== 'too many item states') return done(n2);
       }
       return null;
     };
@@ -2291,18 +2627,18 @@
       // the levels are followed in as large a network as fits; if not, the large network is solved without the omen.
       const pre = build(Object.assign({}, input, { lite: 0, track: 0, maxStates: 150000, whittle: 'best' }));
       if (!bad(pre)) {
-        let hint = 0;
-        const uses = pre.usesIdeal() || (baseLimit > 0 && !pre.done(pre.start) && ((hint = fit(pre)), pre.usesIdeal()));
+        let hint = 0, uses = pre.usesIdeal();
+        if (baseLimit > 0 && !pre.done(pre.start)) { hint = fit(pre) > 0 ? pre.giveUp : 0; uses = uses || pre.usesIdeal(); }
         const got = uses ? withLevels(pre, hint) : null;
-        return got || done(full('none'), hint);
+        return got || done(full('none', hint));
       }
     }
     const net = full('best');
     if (bad(net)) return { net, charge: 0 };
     // (a route that uses the omen is solved again: fitting the base limit to this network first would be time lost)
     let hint = 0;
-    if (!net.usesIdeal()) { hint = fit(net); if (!net.usesIdeal()) return { net, charge: hint }; }
-    return withLevels(net, hint) || done(full('none'), hint);
+    if (!net.usesIdeal()) { const c = fit(net); if (!net.usesIdeal()) return { net, charge: c }; hint = c > 0 ? net.giveUp : 0; }
+    return withLevels(net, hint) || done(full('none', hint));
   }
 
   /**
@@ -2315,18 +2651,34 @@
     opts = opts || {};
     const t0 = Date.now();
     const { net, charge } = routeFit(input, opts.baseLimit > 0 ? +opts.baseLimit : 0);
-    if (net.blocked) return { net: true, label: 'Route', blocked: net.blocked };
+    if (net.blocked) return { net: true, label: 'Route', blocked: net.blocked, finished: net.finished };
     if (net.unsupported) return { net: true, label: 'Route', unsupported: net.unsupported };
     if (net.impossible) return { net: true, label: 'Route', impossible: net.impossible.map((x) => `${x.label}: ${x.why}`), steps: null };
     const s = net.start, done = net.done(s);
     const step = net.step(s), B = opts.budget > 0 ? +opts.budget : 0;
+    // Omen of Sanctification as the step to use now: the chance for the values this very item has (the route's own
+    // number is for a value anywhere under the wanted one: a node does not know the value)
+    let sanctNow = null;
+    if (step && step.a.sanctify) {
+      const st = P.toState(net.ctx, input.item, input.locks);
+      sanctNow = 1;
+      for (const g of net.goals) {
+        if (g.minValue == null) continue;
+        const m = st.mods.find((x) => x.fam === g.fam && (!g.des || x.des) && x.v != null);
+        if (!m) { sanctNow = null; break; }
+        if (m.frac) { if (m.v < g.minValue) sanctNow = 0; continue; }
+        const need = (Number.isInteger(m.v) ? g.minValue - 0.5 : g.minValue) / m.v;
+        sanctNow *= Math.max(0, Math.min(1, (SANCT_HI - need) / (SANCT_HI - SANCT_LO)));
+      }
+    }
     const well = (names) => (names.length ? names : ['Well of Souls']);
     const plain = (g) => { const o = {}; for (const k of Object.keys(g)) { const v = g[k]; if (v == null || typeof v !== 'object' || (Array.isArray(v) && v.every((e) => e == null || typeof e !== 'object'))) o[k] = v; } return o; };
     const seen = new Set();
     return {
-      net: true, label: 'Route', goals: net.goals.map(plain), params: null, nodes: net.N, lite: net.lite, track: net.track, ms: Date.now() - t0,
+      net: true, label: 'Route', goals: net.goals.map(plain), params: null, nodes: net.N, lite: net.lite, track: net.track, ms: Date.now() - t0, timing: net.timing,
       meanCost: net.cost(s), sd: net.sd(s), budget: B, p: B > 0 ? net.within(s, B) : null, bases: net.bases(s), charge,
-      next: done ? { done: true } : step ? Object.assign({}, step.a, { names: well(step.names), hit: net.hit(s) }) : { fail: 'No currency brings this item to the targets.' },
+      next: done ? { done: true } : step ? Object.assign({}, step.a, { names: well(step.names), hit: net.hit(s) }, sanctNow != null ? { ends: sanctNow } : step.a.bases != null && step.a.op !== 'extraction' ? { ends: 1 - step.a.bases } : null)
+        : { fail: 'No currency brings this item to the targets.' },
       // the materials of the whole craft
       steps: done ? [] : net.materials(s).map((m) => ({ names: [m.name], avg: m.uses, ok: m.uses, cost: m.price })),
       // other first steps, one per kind of currency, with what the whole craft then costs

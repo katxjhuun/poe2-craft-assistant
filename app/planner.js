@@ -106,7 +106,7 @@
       case 'extraction': return ['Orb of Extraction'];
       case 'newbase': return ['New base'];
       case 'fracture': return ['Fracturing Orb'];
-      case 'divine': return ['Divine Orb'];
+      case 'divine': return [...(a.sanctify ? ['Omen of Sanctification'] : []), 'Divine Orb'];
       case 'essence': return [a.item || 'Essence'];
       case 'pessence': return [...(a.side ? [OMEN.crystal[a.side]] : []), a.item || 'Perfect Essence'];
       case 'alloy': return ['Runic Alloy'];
@@ -242,13 +242,16 @@
     const desPool = E.desecratedPoolFor(ix, item.base);
     const ctx = {
       ix, kb, item, base, cls: base.cls, ilvl, pool, desPool, weights: opts.weights || null,
-      floors: floorsFrom(kb), bone: boneFor(base.cls), slotDelta: item.slotDelta || { prefix: 0, suffix: 0 },
+      // (slotDelta: what the base itself adds to the slots. What a socketed rune adds, Serle's Triumph's suffix, is
+      // the item's: toState puts it in st.xSuffix, and a new base starts without it.)
+      floors: floorsFrom(kb), bone: boneFor(base.cls),
+      slotDelta: { prefix: ((item.slotDelta || {}).prefix || 0) - ((item.runeSlots || {}).prefix || 0), suffix: ((item.slotDelta || {}).suffix || 0) - ((item.runeSlots || {}).suffix || 0) },
       _side: new Map(), _des: new Map(), imputed: new Set(), legacy: legacyItems(kb),
       essences: essencesForBase(ix, base, (opts.essences || []).filter((r) => !r.liquid)).concat(liquidFor(kb, item.base)),
       catalystMult: opts.catalystMult > 0 ? +opts.catalystMult : CATALYST_DEFAULT,
       capMods: ix._capMods || (ix._capMods = new Map(Object.entries(kb.mods).filter(([, m]) => m.cap).map(([id, m]) => [id, m.cap]))),
       baseTags: new Set(base.tags || []),
-      craftedCap: 1 + E.runeRules(item).extraCrafted, // Astrid's Creativity socketed: one more crafted modifier
+      craftedCap: 1, // (Astrid's Creativity socketed: one more, on that item only: st.xCrafted)
       opts,
     };
     return ctx;
@@ -471,6 +474,10 @@
       quality: item.quality || 0, catTag, catQ: catTag ? item.quality || 0 : 0,
       corruptEnchant: (item.implicits || []).some((m) => m.corruption), foresight: false,
       tags: E.runeRules(item).pools, // modifier pools the socketed runes open ("Can roll Marksman modifiers")
+      // what the runes the item came with allow: one more crafted modifier (Astrid's Creativity), one more suffix
+      // (Serle's Triumph). They are this item's: a new base has neither (apply 'newbase'), and the sockets they sit in
+      // are free there (st.fresh, freeSockets).
+      xCrafted: E.runeRules(item).extraCrafted, xSuffix: Math.max(0, (item.runeSlots || {}).suffix || 0),
     };
   }
 
@@ -649,7 +656,8 @@
         if (!rune || !rune.by_class[cls]) return `${a.item || 'This rune'} does not go on ${cls} items.`;
         const opens = (rune.by_class[cls].txt || []).map((t) => /Can roll (\w+) modifiers/i.exec(t)).find(Boolean);
         if (opens && (st.tags || []).some((t) => t !== opens[1].toLowerCase())) return 'One rune that opens a modifier pool per item: another one is socketed already.';
-        const has = (st.runes || []).includes(a.item) || (ctx.item.runes || []).some((r) => (rune.by_class[cls].txt || []).includes(r.text));
+        // (the runes the pasted item came with are not in a new base: st.fresh)
+        const has = (st.runes || []).includes(a.item) || (!st.fresh && (ctx.item.runes || []).some((r) => (rune.by_class[cls].txt || []).includes(r.text)));
         if (has && rune.limit === '1') return `${a.item} is already socketed (one per item).`;
         return freeSockets(ctx, st) < 1 ? NO_SOCKET : null;
       }
@@ -671,7 +679,7 @@
       }
       case 'extraction':
         if (!(WEAPON.includes(cls) || ARMOUR.includes(cls) || JEWELLERY.includes(cls) || cls === 'Quiver')) return 'Orb of Extraction works on equipment.';
-        return (ctx.item.runes || []).length || (st.runes || []).length ? null : 'No augment is socketed in the item.';
+        return (!st.fresh && (ctx.item.runes || []).length) || (st.runes || []).length ? null : 'No augment is socketed in the item.';
       case 'catalyst':
         if (a.refined ? cls !== 'Jewel' : !(cls === 'Ring' || cls === 'Amulet' || catalystBase(ctx.base))) return a.refined ? 'Refined catalysts work on jewels.' : 'Catalysts work on rings and amulets (Refined ones on jewels).';
         return a.tag && st.catTag === a.tag && st.catQ >= 20 ? 'The catalyst quality is already 20%.' : null;
@@ -754,8 +762,9 @@
    * the ones an Artificer's Orb added, less the runes it came with and the ones socketed since.
    */
   function freeSockets(ctx, st) {
+    // (a new base is taken to have as many sockets as the pasted item, all of them empty)
     const came = (ctx.item.runes || []).length;
-    return Math.max((ctx.item.sockets || []).length, came) + (st.sockets || 0) - came - (st.socketed || 0);
+    return Math.max((ctx.item.sockets || []).length, came) + (st.sockets || 0) - (st.fresh ? 0 : came) - (st.socketed || 0);
   }
   const NO_SOCKET = "No free augment socket: an Artificer's Orb adds one where the item class takes it.";
   const maxSockets = E.maxSockets;
@@ -982,8 +991,11 @@
       while (open(ctx, st, side) > 0) {
         let opts = revealOptions(ctx, st, side, floor, null, rng);
         if (!opts.length) break;
-        let choice = pick ? pick(opts, false) : null;
-        if (first && a.echoes && !choice) { opts = revealOptions(ctx, st, side, floor, null, rng); choice = pick ? pick(opts, true) : null; }
+        // (pick's second argument: these options are final. Only the first reveal's can be drawn again. The item as
+        // it stands and the side are passed too: what is best taken when no target is offered depends on them.)
+        const final = !(first && a.echoes);
+        let choice = pick ? pick(opts, final, st, side) : null;
+        if (!final && !choice) { opts = revealOptions(ctx, st, side, floor, null, rng); choice = pick ? pick(opts, true, st, side) : null; }
         first = false;
         if (!choice) choice = opts.slice().sort((x, y) => y.lvl - x.lvl)[0];
         addRolled(ctx, st, choice, { des: true }, rng);
@@ -1070,6 +1082,7 @@
       case 'newbase':
         // a fresh white base: nothing socketed, no catalyst quality, not runeforged
         st.rarity = 'Normal'; st.mods = []; st.runes = []; st.tags = []; st.socketed = 0; st.sockets = 0; st.xCrafted = 0; st.xSuffix = 0; st.aldur = null;
+        st.fresh = true; // (the runes the pasted item came with are not in this one)
         st.catQ = 0; st.catTag = null; st.quality = 0; st.verisium = false;
         break;
       case 'transmute':
@@ -1186,6 +1199,14 @@
         break;
       }
       case 'divine':
+        if (a.sanctify) {
+          // Omen of Sanctification: every value is multiplied by a random 78% to 122% (each modifier its own draw; the
+          // game publishes no weights, so evenly), whole values rounded to the nearest; the item is Sanctified. A
+          // Fractured Modifier cannot be altered (R_FRACTURED_LOCK).
+          for (const m of st.mods) { if (m.frac || m.v == null) continue; const f = 0.78 + 0.44 * rng(); m.v = Number.isInteger(m.v) ? Math.round(m.v * f) : Math.round(m.v * f * 100) / 100; }
+          st.sanctified = true;
+          break;
+        }
         // Game text: randomises the numeric values of modifiers; a Fractured Modifier cannot be removed or altered.
         for (const m of st.mods) { const r = m.id && !m.frac && rangeOf(ctx, m.id); if (r) { m.v = rollValue(r, rng); m.hi = r[1]; } }
         break;
@@ -1378,7 +1399,10 @@
   }
   /** Right mod, value too low, but its tier can roll the value: a Divine Orb can fix it (not a fractured one). */
   function nearMiss(m, g) {
-    return g.minValue != null && !m.frac && m.fam === g.fam && (!g.des || m.des) && m.v != null && m.v < g.minValue && m.hi != null && m.hi >= g.minValue;
+    // (g.stretch: with Omen of Sanctification a value up to 22% over the tier's range can be had, for a value that no
+    // tier's own range reaches; g.stretchFrom: only by the tier whose range ends there, the highest)
+    return g.minValue != null && !m.frac && m.fam === g.fam && (!g.des || m.des) && m.v != null && m.v < g.minValue && m.hi != null && m.hi * (g.stretch || 1) >= g.minValue
+      && (g.stretchFrom == null || m.hi >= g.stretchFrom);
   }
   function goalMet(st, g) { return st.mods.some((m) => meets(m, g, g.eff)); }
   function useful(m, goals) { return m.lock || goals.some((g) => meets(m, g, g.eff) || nearMiss(m, g)); }
@@ -1386,7 +1410,7 @@
   function reaches(ctx, id, g) {
     if (g.minValue == null) return true;
     const r = rangeOf(ctx, id);
-    return !!r && r[1] >= g.minValue;
+    return !!r && r[1] * (g.stretch || 1) >= g.minValue && (g.stretchFrom == null || r[1] >= g.stretchFrom);
   }
 
   /** Is the goal reachable at all on this base, item level and effective tier? */
@@ -3363,9 +3387,9 @@
 
   return {
     ORB, OMEN, TIERS, boneFor, actionNames, makeContext, toState, validate, apply, rngFrom, sidePool, desPoolFor,
-    goalsFromTargets, goalMet, meets, nearMiss, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
+    goalsFromTargets, goalMet, meets, nearMiss, reaches, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
     availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, goalClash, essencesForBase, liquidFor, CATALYST_DEFAULT, CATALYST_NAME, ALDUR_ELEMENT, aldurTwin, runeFor, runeSide, freeSockets, socketsOf,
-    emulate, chanceOf, familyChances, runStrategy, runStrategyAsync, groupsMet, revealOptions, desSides, DES_OPTIONS, lichOmenWorks,
+    emulate, chanceOf, familyChances, runStrategy, runStrategyAsync, groupsMet, revealOptions, revealPool, desSides, DES_OPTIONS, lichOmenWorks,
     planProfile, rankProfiles, setTick, clampStrategy, materialOk,
     expandStrategy, recipeParams, relevantKeys, SPACE, SEARCH, improvePlan, searchOf: (plan) => SCREENS.get(plan), legacyItems, suffixRune, runeBlocks,
   };
