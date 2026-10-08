@@ -18,6 +18,7 @@
  *
  *   node scripts/selftest/network_sweep.js --shard 0/5 --minutes 17 --json out.json
  *   node scripts/selftest/network_sweep.js --deep --runs 100000 --minutes 17      (every scenario played 100,000 times)
+ *   node scripts/selftest/network_sweep.js --drawn --minutes 17      (skips the single modifiers: drawn sets and special requests)
  *
  * Without --deep a craft that takes very many uses is played fewer times, so that many scenarios fit; with it every
  * scenario is played --runs times, however long that takes, and the run covers fewer of them.
@@ -301,6 +302,9 @@ function runOne(sc, runs, withRivals, deep) {
 if (require.main === module) {
   const [shard, shards] = String(arg('shard', '0/1')).split('/').map(Number);
   const minutes = +arg('minutes', 5), runs = +arg('runs', 1200), every = +arg('rivals', 15), deep = process.argv.includes('--deep');
+  // --drawn: start after the single modifiers (they are the first scenarios of every base and were checked on their own)
+  const drawn = process.argv.includes('--drawn');
+  const firstDrawn = (base) => { const t = table(base); return t.nat.prefix.length + t.nat.suffix.length + t.des.prefix.length + t.des.suffix.length; };
   const bases = testBases();
   const deadline = Date.now() + minutes * 60000;
   const out = [];
@@ -311,7 +315,7 @@ if (require.main === module) {
     for (const base of bases) {
       const mine = i++ % shards === shard;
       let sc = null;
-      try { sc = scenario(base, round); } catch (e) { if (mine) out.push({ id: `${base}|#${round}`, error: 'scenario: ' + String(e && e.message || e) }); }
+      try { sc = scenario(base, round + (drawn ? firstDrawn(base) : 0)); } catch (e) { if (mine) out.push({ id: `${base}|#${round}`, error: 'scenario: ' + String(e && e.message || e) }); }
       if (sc) live++;
       if (!sc || !mine) continue;
       let res;

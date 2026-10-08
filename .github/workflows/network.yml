@@ -26,6 +26,11 @@ on:
       jobs:
         description: 'deep only: runners (four processes each; leave a few of the 20 free for the price job)'
         default: '16'
+      scenarios:
+        description: 'all (single modifiers first) or drawn (skip them: drawn sets and the special requests)'
+        type: choice
+        options: [all, drawn]
+        default: all
 
 permissions:
   contents: read
@@ -48,18 +53,20 @@ jobs:
           MODE: ${{ inputs.mode }}
           MINUTES: ${{ inputs.minutes }}
           JOBS: ${{ inputs.jobs }}
+          SCENARIOS: ${{ inputs.scenarios }}
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json, os
           mode = os.environ.get('MODE') or 'broad'
+          extra = ' --drawn' if (os.environ.get('SCENARIOS') or 'all') == 'drawn' else ''
           if mode == 'deep':
               jobs = min(19, max(1, int(float(os.environ.get('JOBS') or 16))))
               minutes = min(330.0, max(1.0, float(os.environ.get('MINUTES') or 330)))
               procs, total = 4, jobs * 4
-              matrix = [{'name': f'deep {j + 1} of {jobs}', 'procs': procs, 'first': j * procs, 'total': total, 'args': '--deep --runs 100000 --rivals 10'} for j in range(jobs)]
+              matrix = [{'name': f'deep {j + 1} of {jobs}', 'procs': procs, 'first': j * procs, 'total': total, 'args': '--deep --runs 100000 --rivals 10' + extra} for j in range(jobs)]
           else:
               minutes = min(18.0, max(1.0, float(os.environ.get('MINUTES') or 17)))
-              matrix = [{'name': f'broad {j + 1} of 5', 'procs': 1, 'first': j, 'total': 5, 'args': '--runs 1200'} for j in range(5)]
+              matrix = [{'name': f'broad {j + 1} of 5', 'procs': 1, 'first': j, 'total': 5, 'args': '--runs 1200' + extra} for j in range(5)]
           print('matrix=' + json.dumps({'include': matrix}))
           print('minutes=%g' % minutes)
           print('timeout=%d' % int(minutes + 20))
