@@ -23,3 +23,6 @@ Thumbs.db
 
 # The desktop program (desktopuild.cmd writes it)
 desktop/out/
+
+# crafter video transcripts the player collected (other people's content: not for the repository)
+transcripts/

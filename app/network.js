@@ -183,7 +183,7 @@
     }
 
     // ---- runes that change what the item can hold or roll, and the sockets for them
-    const AST = (() => { const n = P.runeFor(ctx, /additional Crafted Modifier/i); return n && ctx.craftedCap < 2 && price(n) != null && goals.filter((g) => g.magicEss || g.rareEss).length >= 2 ? { item: n, price: price(n) } : null; })();
+    const AST = (() => { const n = P.runeFor(ctx, /additional Crafted Modifier/i); return n && ctx.craftedCap < 2 && price(n) != null && (goals.filter((g) => g.magicEss || g.rareEss).length >= 2 || (!(input.lite | 0) && ctx.bone && priceOf('Essence of the Abyss') != null)) ? { item: n, price: price(n) } : null; })();
     const SER = (() => { const n = P.runeFor(ctx, /Suffix Modifiers? allowed/i); return n && price(n) != null && goals.filter((g) => g.si === 1).length > LIM[1] ? { item: n, price: price(n) } : null; })();
     const pooled = goals.filter((g) => g.rune);
     if (new Set(pooled.map((g) => g.rune)).size > 1) return { impossible: pooled.map((g) => ({ label: g.label, why: 'needs its own rune, and an item takes one such rune' })) };
@@ -239,7 +239,23 @@
     }
 
     // ---- pool numbers per side, minimum modifier level, catalyst boost and runes socketed
-    const statCache = new Map();
+    const statCache = new Map(), statFloors = [], statMults = [];
+    // Which natural targets have their blockers followed as states (see TRACK below). input.track: how many of them at
+    // most (absent or true: all, 0 or false: none). Each one makes the network about 1.4 times larger, so where not all
+    // fit, those whose group is the largest part of their side's pool come first: there an average over "is one of that
+    // group on the item" is furthest off.
+    const TMAX = (input.lite | 0) || input.track === false ? 0 : input.track == null || input.track === true ? G : Math.max(0, input.track | 0);
+    const followed = (() => {
+      const share = goals.map((g) => {
+        if (g.kind !== 'nat') return -1;
+        let W = 0, grp = 0;
+        for (const e of P.sidePool(ctx, g.side, 0)) { W += e.w; if (e.fam === g.fam || (g.grp.length && e.grp.some((x) => g.grp.includes(x)))) grp += e.w; }
+        return W > 0 ? grp / W : 0;
+      });
+      const first = goals.map((g, i) => i).filter((i) => share[i] >= 0).sort((a, b) => share[b] - share[a] || a - b).slice(0, TMAX);
+      return goals.map((g, i) => first.includes(i));
+    })();
+    const TRACKED = followed.some(Boolean);
     let CAT = null;
     // ---- tags a modifier gives the item (game data adds_tags): modifiers whose spawn rule answers 0 to such a tag
     // cannot roll while it is there (a Fire spell damage prefix keeps the Cold one off a wand). Known for the targets
@@ -302,7 +318,11 @@
       mult = mult > 1 ? mult : 1;
       bits = (bits || 0) & (R_POOL | R_ALDUR);
       tm = tm || 0; pm = pm || 0;
-      const key = si + '|' + floor + '|' + mult + '|' + bits + '|' + tm + '|' + pm;
+      let fi = statFloors.indexOf(floor), mi = statMults.indexOf(mult);
+      if (fi < 0) fi = statFloors.push(floor) - 1;
+      if (mi < 0) mi = statMults.push(mult) - 1;
+      // (tm: at most 12 bits, pm: one bit per target)
+      const key = ((((fi * 16 + mi) * 2 + si) * 16 + bits) * 4096 + tm) * 1024 + pm;
       let s = statCache.get(key);
       if (s) return s;
       let pool = P.sidePool(ctx, SIDES[si], floor);
@@ -354,8 +374,12 @@
       const mine = new Set(goals.filter((g) => g.kind === 'nat' && g.si === si).map((g) => g.fam));
       const theirs = new Set(goals.filter((g) => g.kind === 'nat' && g.si !== si).map((g) => g.fam));
       const keysOf = (e) => (e.grp && e.grp.length ? e.grp : []).concat(['fam:' + e.fam]);
+      // (with every blocker followed, what is of a target's group or stops it with its tags is not anonymous either)
+      const sideNat = [];
+      for (let i = 0; i < G; i++) if (goals[i].kind === 'nat' && goals[i].si === si) sideNat.push(i);
+      const claimed = (e) => mine.has(e.fam) || (TRACKED && sideNat.some((i) => followed[i] && ((goals[i].grp.length && e.grp.some((x) => goals[i].grp.includes(x))) || (!e.rune && stops(e.id, i)))));
       const own = [];
-      for (let q = 0; q < pool.length; q++) if (!mine.has(pool[q].fam)) own.push(q);
+      for (let q = 0; q < pool.length; q++) if (!claimed(pool[q])) own.push(q);
       const byGrp = new Map();
       for (const q of own) for (const k of keysOf(pool[q])) { let l = byGrp.get(k); if (!l) byGrp.set(k, l = []); l.push(q); }
       const gw = new Float64Array(pool.length), tw = new Float64Array(pool.length);
@@ -414,7 +438,7 @@
           const inB = (e) => (e.grp || []).includes(best[0]);
           let mineW = 0;
           const has = new Set();
-          for (let q = 0; q < pool.length; q++) if (mine.has(pool[q].fam) && inB(pool[q])) mineW += ws[q];
+          for (let q = 0; q < pool.length; q++) if (claimed(pool[q]) && inB(pool[q])) mineW += ws[q];
           for (let i = 0; i < G; i++) if (goals[i].si === si && goals[i].kind === 'nat' && goals[i].grp.includes(best[0])) has.add(i);
           big = { key: best[0], w: best[1], mineW, has };
           const rest = own.filter((q) => !inB(pool[q])), JR = J - best[1];
@@ -429,40 +453,55 @@
           }
         }
       }
-      s = { W, ok, low, nearW, twin, cross, J, left, across, fracTake, big, leftR };
+      const anon = new Uint8Array(pool.length);
+      for (const q of own) anon[q] = 1;
+      s = { W, ok, low, nearW, twin, cross, J, left, across, fracTake, big, leftR, pool, ws, anon, takes: new Map() };
       statCache.set(key, s);
       return s;
     }
     // how often a Divine Orb leaves a value target at or over its value; the level a target's modifier has (for Omen
     // of Whittling); the levels of the other modifiers of a side
-    const pv = new Float64Array(G).fill(1), goalLvl = new Float64Array(G);
+    const pv = new Float64Array(G).fill(1), goalLvl = new Float64Array(G), goalLv = [];
     for (let i = 0; i < G; i++) {
       const g = goals[i];
       const list = g.kind === 'des' ? P.desPoolFor(ctx, g.side, 0, null).filter((e) => e.fam === g.fam)
         : g.kind === 'ess' ? [g.rareEss, g.magicEss].filter(Boolean).map((r) => ({ id: r.mod, w: 1, lvl: kb.mods[r.mod].lvl, tier: null }))
           : P.sidePool(ctx, g.side, 0).concat(g.rune && POOL ? P.runeSide(ctx, POOL.tag, g.side, 0) : []).filter((e) => e.fam === g.fam);
       let w = 0, wOk = 0, wl = 0;
-      for (const e of list) { if (!fits(g, e)) continue; const p = g.minValue != null ? Math.max(0, reach(e.id, g)) : 1; w += e.w; wOk += e.w * p; wl += e.w * e.lvl; }
+      const byLvl = new Map();
+      for (const e of list) { if (!fits(g, e)) continue; const p = g.minValue != null ? Math.max(0, reach(e.id, g)) : 1; w += e.w; wOk += e.w * p; wl += e.w * e.lvl; byLvl.set(e.lvl, (byLvl.get(e.lvl) || 0) + e.w); }
       pv[i] = w > 0 ? wOk / w : 1;
       goalLvl[i] = w > 0 ? wl / w : 1;
+      // goalLv: the levels the target's modifier can have on the item, [[level, share]] (its fitting tiers by weight)
+      goalLv.push(w > 0 ? [...byLvl.entries()].sort((a, b) => a[0] - b[0]).map(([lvl, x]) => [lvl, x / w]) : [[1, 1]]);
     }
-    const lvls = [0, 1].map((si) => {
-      const mine = new Set(goals.filter((g) => g.si === si).map((g) => g.fam));
-      const list = P.sidePool(ctx, SIDES[si], 0).filter((e) => !mine.has(e.fam)).map((e) => [e.lvl, e.w]).sort((a, b) => a[0] - b[0]);
-      return { list, total: list.reduce((x, e) => x + e[1], 0) };
-    });
-    /** Chance that an unknown modifier of side si has a level under `lvl`. */
-    function under(si, lvl) {
-      const L = lvls[si];
-      if (!L.total) return 0;
-      let w = 0;
-      for (const e of L.list) { if (e[0] >= lvl) break; w += e[1]; }
-      return w / L.total;
+    const lvMemo = new Map();
+    /** The levels of the modifiers nobody asked for on side si, as an orb with that minimum modifier level rolls them: {list: [[level, weight]], total}. */
+    function levelsOf(si, floor) {
+      const k = si * 1000 + floor;
+      let L = lvMemo.get(k);
+      if (!L) {
+        const mine = new Set(goals.filter((g) => g.si === si).map((g) => g.fam)), by = new Map();
+        let total = 0;
+        for (const e of P.sidePool(ctx, SIDES[si], floor)) { if (mine.has(e.fam)) continue; by.set(e.lvl, (by.get(e.lvl) || 0) + e.w); total += e.w; }
+        L = { list: [...by.entries()].sort((a, b) => a[0] - b[0]), total };
+        lvMemo.set(k, L);
+      }
+      return L;
     }
+    /** Share of them with a level of x or more, and with exactly x. */
+    function atLeast(si, floor, x) { const L = levelsOf(si, floor); if (!L.total) return 1; let w = 0; for (const e of L.list) if (e[0] >= x) w += e[1]; return w / L.total; }
+    function exactly(si, floor, x) { const L = levelsOf(si, floor); if (!L.total) return 0; for (const e of L.list) if (e[0] === x) return e[1] / L.total; return 0; }
 
     // A smaller network for a request with very many targets (see route): no Fracturing Orb, and an essence or the
     // Well of Souls as the source of a natural target only for the two hardest of them (lite 1) or for none (lite 2).
     const lite = input.lite | 0;
+    // TRACK: every modifier that keeps a natural target out is followed as a state of that target (one of its group on
+    // its side: BLOCKED; one of the other side that stops it with its tags: XBLOCKED), also when it rolls during the
+    // craft. Without it only the pasted item's own blockers are, and a rolled one is a chance that is drawn anew at
+    // every roll, though on the item it stays: where one group is half of the pool (local defences) that is 10% off.
+    // More states: the full network only.
+    const TRACK = TRACKED;
     if (lite) {
       const nat = [];
       for (let i = 0; i < G; i++) if (goals[i].kind === 'nat' && !goals[i].kept) { const st = stats(goals[i].si, 0, 1, R_POOL | R_ALDUR); nat.push([i, (st.ok[i] + st.nearW[i]) / (st.W || 1)]); }
@@ -495,6 +534,83 @@
       necro: [price(OMEN.necro.prefix), price(OMEN.necro.suffix)], echoes: price(OMEN.echoes),
       crystal: [price(OMEN.crystal.prefix), price(OMEN.crystal.suffix)], whittling: price(OMEN.whittling), greaterExalt: price(OMEN.greaterExalt),
     };
+    // ---- Omen of Whittling: the Chaos Orb removes the modifier of the lowest level.
+    // Whether that is a modifier nobody asked for or a target is decided by levels that stay what they are for as long
+    // as the modifiers are on the item. So the lowest level among the modifiers nobody asked for (and those in a
+    // target's way) is a class of the node, one for the prefixes and one for the suffixes (S.fl = 3 x the prefixes'
+    // class + the suffixes'): 0 under LCUT[0], the lowest level any target's modifier can have (the omen then takes
+    // one of them for certain); then up to LCUT[1], a level near the targets' highest; then from there on. A modifier
+    // that rolls arrives with the class of its level, which depends on the orb's minimum modifier level. Per side,
+    // because steps that clear one side are common: what is left on the other side keeps its class. (Their levels once were drawn anew from the whole pool at every use, and a target's level was the mean
+    // of its tiers: six T1 targets on a helmet were promised at two thirds of what they cost, because a modifier from
+    // a Perfect orb is rarely under them.) The full network only.
+    // The classes make the network about three times as large, and most routes never use the omen. So route() first
+    // solves a network that has the omen at its best (input.whittle 'best': the player picks what it removes, one edge
+    // per modifier, marked `ideal`) and no classes. No real omen is better than that, so a route that does not use it
+    // there is the route with the real omen too, at the same cost. Only when it is used is the network built again with
+    // the levels followed (input.classes: 3, 2 or 1 classes, as many as fit).
+    const WBEST = !lite && input.whittle === 'best';
+    const WHIT = !lite && !WBEST && PR.whittling != null && (input.classes == null || input.classes > 1);
+    const LCUT = (() => {
+      if (!WHIT) return [];
+      const all = [...new Set(goalLv.flatMap((l) => l.map((x) => x[0])))].sort((a, b) => a - b);
+      if (!all.length) return [];
+      const top = all[all.length - 1], t2 = all.find((x) => x > all[0] && x >= top - 8);
+      const cuts = [];
+      if (all[0] > 1) cuts.push(all[0]);
+      if (t2 != null) cuts.push(t2);
+      return input.classes === 2 ? cuts.slice(0, 1) : cuts;
+    })();
+    const NCLS = LCUT.length + 1;
+    const clsOf = (lvl) => { let c = 0; while (c < LCUT.length && lvl >= LCUT[c]) c++; return c; };
+    /** How many modifiers of a side the class is about: the plain other ones and those in a target's way. */
+    const nSide = (S, si) => { let n = S.j[si]; for (let i = 0; i < G; i++) if (S.g[i] === BLOCKED && goals[i].si === si) n++; return n; };
+    const clsAt = (S, si) => (si === 0 ? (S.fl / 3) | 0 : S.fl % 3);
+    const setCls = (n, si, c) => { n.fl = si === 0 ? c * 3 + (n.fl % 3) : ((n.fl / 3) | 0) * 3 + c; };
+    /** (a side without such a modifier: one node whatever its class was) */
+    const canon = (n) => { if (n.fl) { if (n.fl >= 3 && nSide(n, 0) === 0) n.fl %= 3; if (n.fl % 3 && nSide(n, 1) === 0) n.fl -= n.fl % 3; } return n; };
+    const clsMemo = new Map();
+    /** The class of a new modifier nobody asked for, rolled on side si at a minimum modifier level: the chance of each. */
+    function clsDist(si, floor) {
+      const k = si * 1000 + floor;
+      let d = clsMemo.get(k);
+      if (!d) {
+        d = new Float64Array(NCLS);
+        for (let c = 0; c < NCLS; c++) d[c] = (c === 0 ? 1 : atLeast(si, floor, LCUT[c - 1])) - (c === NCLS - 1 ? 0 : atLeast(si, floor, LCUT[c]));
+        clsMemo.set(k, d);
+      }
+      return d;
+    }
+    /** One more modifier nobody asked for whose level is known (an essence's own): the class follows. */
+    const junkAt = (n, si, lvl) => { const had = nSide(n, si) > 0; n.j[si]++; if (NCLS > 1) { const c = clsOf(lvl || 1); setCls(n, si, had ? Math.min(clsAt(n, si), c) : c); } };
+    // ---- essences as tools (what crafters do instead of Omen of Light, 0.5.5):
+    // TOOL[si]: the cheapest Perfect or special essence whose crafted modifier is of side si and of no target's group.
+    // Aimed with an Omen of Crystallisation it takes the unwanted Desecrated modifier away, and its own modifier sits
+    // there until a bone replaces it. ABYSS: Essence of the Abyss leaves the Mark of the Abyssal Lord, which the next
+    // desecration replaces (no other modifier goes, also on a full item).
+    // FILL[si]: the same without an omen, alloys too: where the side of its modifier is full, an essence or alloy
+    // removes a modifier of that side (R_SWAP_REMOVAL), so on a side that holds one fractured modifier and the unwanted
+    // Desecrated one it is sure to take the Desecrated one (amulets and rings with two prefixes or two suffixes).
+    const TOOL = [null, null], FILL = [null, null];
+    let ABYSS = null;
+    // the lich omens work on weapons and jewellery only (game text; planner.js validate)
+    const LICH_OK = P.lichOmenWorks(ctx);
+    if (!lite) {
+      const goalGroups = new Set(goals.flatMap((g) => g.grp || []));
+      for (const r of ctx.essences) {
+        if (r.kind !== 'rare' || r.liquid) continue;
+        const m = kb.mods[r.mod], pr = price(r.item);
+        if (!m || pr == null) continue;
+        // (its Mark is a prefix or a suffix, even chances among the sides with room: kb.essence_outcomes)
+        if (r.item === 'Essence of the Abyss') { if (!ABYSS) ABYSS = { item: r.item, mods: [null, null], price: pr }; ABYSS.mods[m.gen === 'p' ? 0 : 1] = r.mod; continue; }
+        if (kb.essence_outcomes && kb.essence_outcomes[r.item]) continue; // (one of several modifiers: not a tool)
+        if (goals.some((g) => g.fam === m.fam) || (m.grp || []).some((x) => goalGroups.has(x))) continue;
+        const si = m.gen === 'p' ? 0 : 1;
+        const t = { item: r.item, mod: r.mod, price: pr, si };
+        if (!r.alloy && (!TOOL[si] || pr < TOOL[si].price)) TOOL[si] = t;
+        if (!FILL[si] || pr < FILL[si].price) FILL[si] = t;
+      }
+    }
     // bones: the cheapest one without a floor that the item level allows, and the Ancient one (floor 40) when priced
     const bones = [];
     if (ctx.bone) {
@@ -532,18 +648,20 @@
     // ---- nodes
     const states = [], index = new Map(), acts = [];
     // a node's key as one number: the targets' statuses in base 9, then the small fields (it stays under 2^53)
-    const KEY_REST = 3 * 4 * 4 * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2;
+    const FLK = NCLS > 1 ? 9 : 1; // (the two classes of the lowest levels, see LCUT)
+    const KEY_REST = 3 * 4 * 4 * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2 * FLK;
     const keyOf = (S) => {
       let a = 0;
       for (let i = 0; i < G; i++) a = a * 10 + S.g[i];
       let k = S.r;
       k = k * 4 + S.j[0]; k = k * 4 + S.j[1]; k = k * 10 + (S.fg + 1); k = k * 3 + S.fj; k = k * 3 + S.cx; k = k * 3 + S.dj; k = k * 3 + S.du;
-      k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw; k = k * 2 + S.kx; k = k * 2 + S.kf;
-      // (one number up to seven targets; with eight the two parts no longer fit a number exactly)
-      return G <= 7 ? a * KEY_REST + k : a + ':' + k;
+      k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw; k = k * 2 + S.kx; k = k * 2 + S.kf; k = k * FLK + S.fl;
+      // (one number up to seven targets, six with the classes; beyond, the two parts no longer fit a number exactly)
+      return G <= (FLK > 1 ? 6 : 7) ? a * KEY_REST + k : a + ':' + k;
     };
-    const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad, aw: S.aw, kx: S.kx, kf: S.kf });
+    const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad, aw: S.aw, kx: S.kx, kf: S.kf, fl: S.fl });
     function idOf(S) {
+      canon(S);
       const k = keyOf(S);
       let i = index.get(k);
       if (i === undefined) { i = states.length; index.set(k, i); states.push(S); }
@@ -567,7 +685,14 @@
 
     /**
     /** The targets of side si that are on the item, or kept out by a modifier of their own group (a bit each). */
-    const presentMask = (S, si) => { let m = 0; for (let i = 0; i < G; i++) if (goals[i].si === si && there(S.g[i]) && S.g[i] !== TWIN) m |= 1 << i; return m; };
+    // (a twin of the target's own group, as the element damage prefixes of a wand, staff or focus are, keeps that group
+    // out of the pool like the target would; a twin of another group, as a resistance is, does not)
+    const twinGrp = goals.map((g, i) => {
+      if (!conv[i] || !g.grp.length) return false;
+      const src = P.sidePool(ctx, g.side, 0).filter((e) => conv[i].src.has(e.id));
+      return src.length > 0 && src.every((e) => e.grp.some((x) => g.grp.includes(x)));
+    });
+    const presentMask = (S, si) => { let m = 0; for (let i = 0; i < G; i++) if (goals[i].si === si && there(S.g[i]) && (S.g[i] !== TWIN || twinGrp[i])) m |= 1 << i; return m; };
     /** The modifiers nobody asked for and nobody knows, on side si (the pasted item's fractured one is known). */
     const unknown = (S, si) => others(S, si) - (S.kf && FRAC.si === si ? 1 : 0);
     /** What the cases of a side's pool share: the tags of the other side, the pasted item's fractured modifier, the dominant group. */
@@ -604,10 +729,11 @@
       // that tier. Measured on ten cheap scenarios against the level 0 pool: mean error 2.5% against 3.1%.)
       const g = goals[i], tm = tagMask(S);
       let p = 1;
-      // (ownIsCase: the target is of the dominant group; whether a modifier of that group is on the item is a case)
-      const n = ownIsCase ? 0 : unknown(S, g.si);
+      // (a followed target: its blockers on its own side are states. ownIsCase: the target is of the dominant group;
+      // whether a modifier of that group is on the item is a case)
+      const n = ownIsCase || followed[i] ? 0 : unknown(S, g.si);
       if (n) { const s0 = stats(g.si, floor || 0, 1, S.u, tm, presentMask(S, g.si)); if (s0.W > 0) p *= Math.pow(1 - Math.min(1, s0.low[i] / s0.W), n); }
-      const m = unknown(S, 1 - g.si);
+      const m = TRACK ? 0 : unknown(S, 1 - g.si); // (with blockers followed, one of the other side is a state too)
       if (m) { const sx = stats(1 - g.si, floor || 0, 1, S.u, tm, presentMask(S, 1 - g.si)); if (sx.W > 0 && sx.cross[i] > 0) p *= Math.pow(1 - Math.min(1, sx.cross[i] / sx.W), m); }
       // another target's twin of another element on the item may stop this one with its tags
       for (let k = 0; k < G; k++) if (S.g[k] === TWIN && twinStops[k]) p *= 1 - twinStops[k][i];
@@ -633,10 +759,14 @@
           const beta = unblocked(S, i, floor, inBig);
           if (s.ok[i] > 0) ws.push([s.ok[i] * beta, i, NATURAL, inBig]);
           if (s.nearW[i] > 0) ws.push([s.nearW[i] * beta, i, NATURAL + NEAR, inBig]);
+          if (followed[i] && s.low[i] > 0) ws.push([s.low[i], i, BLOCKED, false]);
           // (what keeps the target out keeps its twin of another element out as well: they are of one group)
           if (S.g[i] === ABSENT && s.twin[i] > 0) ws.push([s.twin[i] * beta, i, TWIN, false]);
         }
-        sides.push({ si, cs, ws });
+        // a modifier of this side that stops a wanted target of the other side: [share of the anonymous ones, target]
+        const xs = [];
+        if (TRACK && s.J > 0) for (let k = 0; k < G; k++) if (goals[k].si !== si && goals[k].kind === 'nat' && S.g[k] === ABSENT && s.cross[k] > 0) xs.push([Math.min(1, s.cross[k] / s.J), k]);
+        sides.push({ si, cs, ws, xs });
       }
       if (!sides.length) return [];
       const acc = new Map();
@@ -652,18 +782,28 @@
             const w = Math.min(c.pool - hit, w0);
             if (w > 0) { add(pc * w / total, i, sd.si, status); hit += w; }
           }
-          add(pc * (c.pool - hit) / total, -1, sd.si, 0);
+          // the rest is a modifier nobody asked for; some of those stop a target of the other side (-2 - k: target k)
+          let rest = c.pool - hit, left = 1;
+          for (const [share, k] of sd.xs) { const f = Math.min(left, share); if (f > 0) { add(pc * rest * f / total, -2 - k, sd.si, 0); left -= f; } }
+          add(pc * rest * left / total, -1, sd.si, 0);
         }
       }
       return [...acc.values()].map(([p, i, si, status]) => [p / sum, i, si, status]);
     }
-    function addRolled(S, i, si, status) {
+    /** cls: the class of the new modifier's level, when it is one nobody asked for or one in a target's way (see LCUT). */
+    function addRolled(S, i, si, status, cls) {
       const n = cp(S);
-      if (i < 0) n.j[si]++;
-      else {
-        if (n.g[i] === TWIN && status !== TWIN) n.j[goals[i].si]++; // the twin stays on the item as another modifier
-        n.g[i] = status || NATURAL;
-      }
+      let junk = -1; // the side that gets one more modifier its class is about
+      if (i >= 0) {
+        // the twin stays on the item as another modifier (of the target's own tier, so of about its level)
+        if (n.g[i] === TWIN && status !== TWIN) junkAt(n, goals[i].si, goalLvl[i]);
+        if (status === BLOCKED) junk = goals[i].si;
+      } else junk = si;
+      const had = junk >= 0 && nSide(n, junk) > 0;
+      if (i < -1) { n.j[si]++; if (n.g[-2 - i] === ABSENT) n.g[-2 - i] = XBLOCKED; } // (it stops target -2 - i of the other side)
+      else if (i < 0) n.j[si]++;
+      else n.g[i] = status || NATURAL;
+      if (junk >= 0 && NCLS > 1 && cls != null) setCls(n, junk, had ? Math.min(clsAt(n, junk), cls) : cls);
       return n;
     }
     /** The modifiers a removal can take: [{w, k, i, si}] (w: how many of them). pred(side, desecrated). */
@@ -692,7 +832,30 @@
       else if (u.k === 'j') n.j[u.si]--;
       else if (u.k === 'jx') { n.j[u.si]--; for (let i = 0; i < G; i++) if (n.g[i] === XBLOCKED && goals[i].si !== u.si && !fracBlocks.has(i)) n.g[i] = ABSENT; }
       else n[u.k] = 0;
-      return n;
+      return canon(n);
+    }
+    /**
+     * Unit u of node S, one of the modifiers its side's class is about, is removed and others of that side are left:
+     * the chance that the lowest of those is of the next class (the removed one was the only one of its class).
+     * lowest: the removed one was the lowest of them (Omen of Whittling); else it was any of them.
+     */
+    function rise(S, u, lowest) {
+      if (NCLS < 2 || !(u.k === 'j' || u.k === 'jx' || (u.k === 'g' && S.g[u.i] === BLOCKED))) return 0;
+      const c = clsAt(S, u.si), n = nSide(S, u.si);
+      if (c >= NCLS - 1 || n < 2) return 0;
+      const sA = c === 0 ? 1 : atLeast(u.si, 0, LCUT[c - 1]), sB = atLeast(u.si, 0, LCUT[c]);
+      const p = sA > 0 ? Math.max(0, Math.min(1, 1 - sB / sA)) : 0; // one of them is of this class, given that it is of this class or over
+      if (!(p > 0) || p >= 1) return 0;
+      const one = n * p * Math.pow(1 - p, n - 1) / (1 - Math.pow(1 - p, n)); // exactly one of them is of this class
+      return Math.max(0, Math.min(1, lowest ? one : one / n));
+    }
+    /** Node S without unit u, by chance: [[chance, node]] (the class of the side may rise, see rise). */
+    function without(S, u, lowest) {
+      const S1 = removeUnit(S, u), up = rise(S, u, lowest);
+      if (!(up > 0)) return [[1, S1]];
+      const S2 = cp(S1);
+      setCls(S2, u.si, clsAt(S, u.si) + 1);
+      return [[1 - up, S1], [up, S2]];
     }
     const openMask = (S) => (open(S, 0) > 0 ? 1 : 0) | (open(S, 1) > 0 ? 2 : 0);
     /**
@@ -701,38 +864,91 @@
      */
     function clear(S, i) {
       const g = goals[i];
-      if (g.kind !== 'nat') return 1;
+      if (g.kind !== 'nat' || followed[i]) return 1;
       const s0 = stats(g.si, 0, 1, S.u, tagMask(S), presentMask(S, g.si)), n = others(S, g.si);
       return n && s0.W > 0 ? Math.pow(1 - Math.min(1, s0.low[i] / s0.W), n) : 1;
     }
     /**
-     * Omen of Whittling: the Chaos Orb removes the modifier of the lowest level. [[chance, unit]]: the targets' levels
-     * are known, the others' are drawn from the pool. null with a hidden modifier (its level is not known).
+     * Omen of Whittling: the Chaos Orb removes the modifier of the lowest level; of several at that level, one at
+     * random. [[chance, unit]]. A target's level is one of its fitting tiers' (every way they can be is counted). The
+     * modifiers nobody asked for: the lowest of them is of the node's class (S.fl), within it their levels are the
+     * pool's. null with a hidden modifier (its level is not known).
      */
+    const whitMemo = new Map();
+    function levelsOn(i, x) {
+      const g = goals[i];
+      // (made by an essence: that essence's modifier)
+      if (kindOf(x) === CRAFTED && (g.rareEss || g.magicEss)) { const l = [g.rareEss, g.magicEss].filter(Boolean).map((r) => kb.mods[r.mod].lvl); return l.map((lvl) => [lvl, 1 / l.length]); }
+      return goalLv[i];
+    }
     function whittled(S) {
       if (S.du) return null;
-      const known = [], unk = [];
+      const known = [], anon = [], oth = [];
+      let sig = S.fl + '|' + S.fg + '|';
       for (let i = 0; i < G; i++) {
         const x = S.g[i];
+        sig += x;
         if (!there(x) || S.fg === i) continue;
-        if (x === BLOCKED) unk.push({ k: 'g', i, si: goals[i].si, w: 1 }); else known.push({ k: 'g', i, si: goals[i].si, w: 1, lvl: goalLvl[i] });
+        if (x === BLOCKED) anon.push({ k: 'g', i, si: goals[i].si, w: 1 }); else known.push({ k: 'g', i, si: goals[i].si, w: 1, lv: levelsOn(i, x) });
       }
-      for (let si = 0; si < 2; si++) if (S.j[si]) unk.push(...plain(S, si));
-      if (S.cx) unk.push({ k: 'cx', si: S.cx - 1, w: 1 });
-      if (S.dj) unk.push({ k: 'dj', si: S.dj - 1, w: 1 });
-      if (S.aw) unk.push({ k: 'aw', si: awSide(S), w: 1 });
-      if (!known.length && !unk.length) return null;
-      const lmin = known.length ? Math.min(...known.map((u) => u.lvl)) : Infinity;
-      const below = (si) => (lmin === Infinity ? 1 : under(si, lmin));
-      let none = 1;
-      for (const u of unk) none *= Math.pow(1 - below(u.si), u.w);
-      const out = [];
-      if (known.length && none > 0) { const low = known.filter((u) => u.lvl <= lmin + 1e-9); for (const u of low) out.push([none / low.length, u]); }
-      if (unk.length && none < 1) {
-        const ws = unk.map((u) => u.w * below(u.si)), tw = ws.reduce((x, y) => x + y, 0);
-        unk.forEach((u, k) => { if (ws[k] > 0) out.push([(1 - none) * ws[k] / tw, u]); });
+      for (let si = 0; si < 2; si++) if (S.j[si]) anon.push(...plain(S, si));
+      if (S.cx) oth.push({ k: 'cx', si: S.cx - 1, w: 1 });
+      if (S.dj) oth.push({ k: 'dj', si: S.dj - 1, w: 1 });
+      if (S.aw) oth.push({ k: 'aw', si: awSide(S), w: 1 });
+      if (!known.length && !anon.length && !oth.length) return null;
+      sig += '|' + S.j[0] + S.j[1] + (xOn(S, 0) ? 1 : 0) + (xOn(S, 1) ? 1 : 0) + S.cx + S.dj + S.aw;
+      if (whitMemo.has(sig)) return whitMemo.get(sig);
+      const units = anon.concat(oth), acc = new Map();
+      const add = (u, p) => { if (p > 0) acc.set(u, (acc.get(u) || 0) + p); };
+      // a side's class: the lowest of its `anon` has a level from lo on and under hi
+      const sides = [0, 1].map((si) => {
+        const n = anon.reduce((x, u) => x + (u.si === si ? u.w : 0), 0), c = clsAt(S, si);
+        const lo = NCLS > 1 && n && c > 0 ? LCUT[c - 1] : -Infinity, hi = NCLS > 1 && n && c < NCLS - 1 ? LCUT[c] : Infinity;
+        const A = (x) => Math.pow(atLeast(si, 0, x), n);
+        return { n, lo, hi, A, Alo: lo === -Infinity ? 1 : A(lo), Ahi: hi === Infinity ? 0 : A(hi) };
+      });
+      /** Chance that none of a side's `anon` has a level under L. */
+      const sideNone = (sd, L) => {
+        if (!sd.n || L <= sd.lo) return 1;
+        if (L >= sd.hi) return 0;
+        const den = sd.Alo - sd.Ahi;
+        return den > 1e-12 ? Math.max(0, Math.min(1, (sd.A(L) - sd.Ahi) / den)) : sd.A(L);
+      };
+      // every way the targets' levels can be: [chance, level of each]
+      let combos = [[1, []]];
+      if (known.reduce((x, t) => x * t.lv.length, 1) > 400) combos = [[1, known.map((t) => t.lv.reduce((x, e) => x + e[0] * e[1], 0))]];
+      else for (const t of known) { const next = []; for (const [p, ls] of combos) for (const [lvl, q] of t.lv) next.push([p * q, ls.concat(lvl)]); combos = next; }
+      for (const [pi, ls] of combos) {
+        if (!known.length) { const tw = units.reduce((x, u) => x + u.w, 0); for (const u of units) add(u, pi * u.w / tw); continue; }
+        const L = Math.min(...ls), tied = known.filter((t, k) => ls[k] === L);
+        const qS = [sideNone(sides[0], L), sideNone(sides[1], L)];
+        let qO = 1;
+        for (const u of oth) qO *= atLeast(u.si, 0, L);
+        const q0 = qS[0] * qS[1] * qO;
+        if (q0 < 1) {
+          // a modifier nobody asked for lies under every target: the omen takes the lowest of those
+          const mO = 1 - qO, tot = (1 - qS[0]) + (1 - qS[1]) + mO;
+          for (let si = 0; si < 2; si++) if (qS[si] < 1) { const mine = anon.filter((u) => u.si === si), tw = mine.reduce((x, u) => x + u.w, 0); for (const u of mine) add(u, pi * (1 - q0) * ((1 - qS[si]) / tot) * u.w / tw); }
+          if (mO > 0) { const ws = oth.map((u) => 1 - atLeast(u.si, 0, L)), tw = ws.reduce((x, y) => x + y, 0); oth.forEach((u, k) => add(u, pi * (1 - q0) * (mO / tot) * ws[k] / tw)); }
+        }
+        if (q0 > 0) {
+          // none does: the lowest target, or a modifier that happens to have exactly its level (one of them at random)
+          const mods = [];
+          for (const u of units) { const al = atLeast(u.si, 0, L), tau = al > 0 ? Math.min(1, exactly(u.si, 0, L) / al) : 0; for (let k = 0; k < u.w; k++) mods.push([u, tau]); }
+          let dist = [1];
+          for (const [, tau] of mods) { const d2 = new Array(dist.length + 1).fill(0); for (let k = 0; k < dist.length; k++) { d2[k] += dist[k] * (1 - tau); d2[k + 1] += dist[k] * tau; } dist = d2; }
+          let each = 0;
+          for (let m = 0; m < dist.length; m++) each += dist[m] / (tied.length + m);
+          for (const t of tied) add(t, pi * q0 * each);
+          const rest = 1 - tied.length * each, tw = mods.reduce((x, e) => x + e[1], 0);
+          if (rest > 1e-12 && tw > 0) for (const [u, tau] of mods) add(u, pi * q0 * rest * tau / tw);
+        }
       }
-      return out.length ? out : null;
+      let tot = 0;
+      for (const p of acc.values()) tot += p;
+      const out = tot > 0 ? [...acc.entries()].filter(([, p]) => p > 1e-10).map(([u, p]) => [p / tot, u]) : null;
+      whitMemo.set(sig, out && out.length ? out : null);
+      return whitMemo.get(sig);
     }
 
     // ---- the Well of Souls: what the three options offer, and which one the player takes
@@ -796,18 +1012,35 @@
     // The target to take first when the Well of Souls offers several: a Desecrated one, then the base modifier that is
     // rarest in the pool (the one hardest to get any other way).
     const wellRank = goals.map((g, i) => { if (g.kind === 'des') return -1; if (g.kind !== 'nat') return Infinity; const s = stats(g.si, 0, 1, 0, 0, 0); return s.ok[i] + s.nearW[i]; });
-    const takeMemo = new Map();
-    /** What one desecrated-only option takes out of the side's base modifiers on average (those of its groups: "+# to Strength and Dexterity" takes both attributes). */
-    function exTake(list, si, floor) {
-      if (!list.length) return 0;
-      const k = si + '|' + floor + '|' + list.map((e) => e.id).join(',');
-      if (!takeMemo.has(k)) {
-        const pool = P.sidePool(ctx, SIDES[si], floor);
-        let sum = 0;
-        for (const e of list) for (const o of pool) if (o.grp.some((x) => e.grp.includes(x))) sum += o.w;
-        takeMemo.set(k, sum / list.length);
+    /**
+     * The desecrated-only options next to a base modifier target of groups `grp`. They are drawn before the base
+     * options and no two options share a group, so each of them is one of two things for the target: of its own group
+     * (a wand's "#% increased Elemental Damage" is of the group of its Cold Damage), which ends the target's chance, or
+     * of other groups, whose base modifiers it takes out of the pool ("+# to Strength and Dexterity" takes both
+     * attributes). -> {kin: the chance of the first for one such option, take: the weight another one takes, of the
+     * base modifiers that are in the pool s: those nobody knows are there with the share `surv`}.
+     */
+    function exNext(list, si, s, n, grp, surv) {
+      if (!list.length) return { kin: 0, take: 0 };
+      const key = list.length + '|' + (list[0].lich || '') + '|' + n + '|' + grp.join(',') + '|' + surv.toFixed(4);
+      let r = s.takes.get(key);
+      if (r) return r;
+      let all = 0, kin = 0, take = 0;
+      for (const e of list) {
+        const p = n > 0 ? Math.pow(1 - offBy(e, si, grp), n) : 1; // (it is on the list: none of the n is of its group)
+        all += p;
+        if (e.grp.some((x) => grp.includes(x))) { kin += p; continue; }
+        let w = 0;
+        for (let q = 0; q < s.pool.length; q++) {
+          const o = s.pool[q];
+          if (o.grp.some((x) => grp.includes(x)) || !o.grp.some((x) => e.grp.includes(x))) continue;
+          w += s.ws[q] * (s.anon[q] ? surv : 1);
+        }
+        take += p * w;
       }
-      return takeMemo.get(k);
+      r = all > 0 ? { kin: kin / all, take: all - kin > 0 ? take / (all - kin) : 0 } : { kin: 0, take: 0 };
+      s.takes.set(key, r);
+      return r;
     }
     /**
      * Chance that a base modifier target is among `draws` base options of the Well. The options are drawn one after the
@@ -858,11 +1091,13 @@
           if (c || cl) want.push({ i, des: true, c, cl, share: pv[i], all: listFor(ex, hit, si, unk, g.grp), lich: ll ? listFor(ll, hit, si, unk, g.grp) : null });
         } else if (g.kind === 'nat' && !g.noWell && s.ok[i] + s.nearW[i] > 0) {
           const beta = unblocked(S, i, floor, !!(s.big && s.big.has.has(i)));
-          want.push({ i, des: false, w: (s.ok[i] + s.nearW[i]) * beta, low: s.low[i] * beta, share: s.ok[i] / (s.ok[i] + s.nearW[i]) });
+          // (what is left of the modifiers nobody knows next to the ones on the item, as a share: see mix)
+          const x = mix(S, si, s, floor, tm), surv = s.J > 0 ? Math.min(1, s.left[x.n] * x.f * x.share / s.J) : 0;
+          want.push({ i, des: false, w: (s.ok[i] + s.nearW[i]) * beta, low: s.low[i] * beta, share: s.ok[i] / (s.ok[i] + s.nearW[i]),
+            ex: exNext(ex, si, s, unk, g.grp, surv), exl: ll && ll.length ? exNext(ll, si, s, unk, g.grp, surv) : null });
         }
       }
       if (!want.length) return [[1, -1, 0]];
-      const taken = exTake(ex, si, floor);
       // which target to take when the Well offers more than one: wellRank (the same order on every item)
       want.sort((a, b) => wellRank[a.i] - wellRank[b.i]);
       const pick = new Float64Array(G);
@@ -892,8 +1127,12 @@
               alive *= 1 - p - k;
             }
           } else {
-            // (the desecrated-only options are drawn before the base ones and take the base modifiers of their groups along)
-            off = wellNat(S, si, s, floor, tm, wnt, normDraws, (lichFirst + exDraws) * taken);
+            // (the desecrated-only options are drawn before the base ones: one of the target's own group ends its
+            // chance, another one takes the base modifiers of its groups along)
+            let alive = 1, gone = 0;
+            if (lichFirst && wnt.exl) { alive *= 1 - wnt.exl.kin; gone += wnt.exl.take; }
+            for (let t = 0; t < exDraws; t++) { alive *= 1 - wnt.ex.kin; gone += wnt.ex.take; }
+            off = alive > 0 ? alive * wellNat(S, si, s, floor, tm, wnt, normDraws, gone) : 0;
           }
           pick[wnt.i] += chances[k] * rem * off;
           rem *= 1 - off;
@@ -915,7 +1154,7 @@
     const revealed = (S1, si, i, status) => { const S2 = addRolled(S1, i, si, status); if (i < 0) { S2.j[si]--; S2.dj = si + 1; } return S2; };
 
     // ---- edges
-    const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FS0, ad: AD0, aw: 0, kx: 0, kf: 0 };
+    const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FS0, ad: AD0, aw: 0, kx: 0, kf: 0, fl: 0 };
     const RESTART = -1; // edge target: a fresh white base (its value is solved as one number, see solve)
     /** A socket for a rune: the node with one socket less and what it costs first (an Artificer's Orb), or null. */
     function socket(S) {
@@ -939,7 +1178,17 @@
         if (out.length === 2 && out[1] === sIdx) return; // changes nothing
         list.push({ a, cost, out });
       };
-      const rolled = (S1, mask, floor, pre, mult) => roll(S1, mask, floor, mult).map(([p, i, si, status]) => [p * (pre == null ? 1 : pre), addRolled(S1, i, si, status)]);
+      /** A rolled modifier's node: one nobody asked for, or one in a target's way, arrives with the class of its level (a node per class under the item's). */
+      const arrive = (S1, p, i, si, status, floor, out) => {
+        if (NCLS > 1 && (i < 0 || status === BLOCKED)) {
+          const sj = i >= 0 ? goals[i].si : si;
+          const d = clsDist(sj, floor), top = nSide(S1, sj) > 0 ? clsAt(S1, sj) : NCLS - 1;
+          let rest = 0;
+          for (let c = 0; c < NCLS; c++) { if (c >= top) rest += d[c]; else if (d[c] > 0) out.push([p * d[c], addRolled(S1, i, si, status, c)]); }
+          if (rest > 0) out.push([p * rest, addRolled(S1, i, si, status, top)]);
+        } else out.push([p, addRolled(S1, i, si, status)]);
+      };
+      const rolled = (S1, mask, floor, pre, mult) => { const out = []; for (const [p, i, si, status] of roll(S1, mask, floor, mult)) arrive(S1, p * (pre == null ? 1 : pre), i, si, status, floor, out); return out; };
       /** Several random modifiers one after the other (Orb of Alchemy, Omen of Greater Exaltation): [[chance, state]]. */
       const rolledN = (S1, count, maskOf, floor) => {
         let dist = new Map([[keyOf(S1), [1, S1]]]);
@@ -949,7 +1198,9 @@
           for (const [p, Sa] of dist.values()) {
             const outs = roll(Sa, maskOf(Sa), floor);
             if (!outs.length) { put(p, Sa); continue; }
-            for (const [q, i, si, status] of outs) put(p * q, addRolled(Sa, i, si, status));
+            const got = [];
+            for (const [q, i, si, status] of outs) arrive(Sa, p * q, i, si, status, floor, got);
+            for (const [q, S2] of got) put(q, S2);
           }
           dist = next;
         }
@@ -990,13 +1241,13 @@
             if (free < 1) outs.push([1 - free, S1]);
             if (r.pOK > 0) outs.push([free * r.pHit * r.pOK, addRolled(S1, i, g.si, CRAFTED)]);
             if (r.pOK < 1) outs.push([free * r.pHit * (1 - r.pOK), addRolled(S1, i, g.si, CRAFTED + NEAR)]);
-            if (r.pHit < 1) { const S2 = cp(S1); if (!S2.cx) S2.cx = g.si + 1; else S2.j[g.si]++; outs.push([free * (1 - r.pHit), S2]); }
+            if (r.pHit < 1) { const S2 = cp(S1); if (!S2.cx) S2.cx = g.si + 1; else junkAt(S2, g.si, kb.mods[r.mod].lvl); outs.push([free * (1 - r.pHit), S2]); }
             push({ op: 'essence', item: r.item, mod: r.mod }, r.price, outs);
           }
         }
         if (PR.annul != null) {
           const us = units(S, () => true), tw = us.reduce((x, u) => x + u.w, 0);
-          if (tw) push({ op: 'annul' }, PR.annul, us.map((u) => [u.w / tw, removeUnit(S, u)]));
+          if (tw) push({ op: 'annul' }, PR.annul, us.flatMap((u) => without(S, u, false).map(([q, S1]) => [q * u.w / tw, S1])));
         }
         return;
       }
@@ -1014,10 +1265,10 @@
       if (CAT && S.q && mask) {
         // the omen uses up all the catalyst quality and favours the catalyst's type of modifier
         const m = multOf(S.q);
-        const spent = (S1, i, si, status) => { const n = addRolled(S1, i, si, status); n.q = 0; return n; };
+        const spent = (msk, floor) => { const out = rolled(S, msk, floor, null, m); for (const o of out) o[1].q = 0; return out; };
         for (const t of T.exalt) {
-          push({ op: 'exalt', tier: t.tier, catalyse: true }, t.price + CAT.omen, roll(S, mask, t.floor, m).map(([p, i, si, status]) => [p, spent(S, i, si, status)]));
-          if (mask === 3) for (let si = 0; si < 2; si++) if (PR.exaltSide[si] != null) push({ op: 'exalt', tier: t.tier, side: SIDES[si], catalyse: true }, t.price + CAT.omen + PR.exaltSide[si], roll(S, 1 << si, t.floor, m).map(([p, i, sj, status]) => [p, spent(S, i, sj, status)]));
+          push({ op: 'exalt', tier: t.tier, catalyse: true }, t.price + CAT.omen, spent(mask, t.floor));
+          if (mask === 3) for (let si = 0; si < 2; si++) if (PR.exaltSide[si] != null) push({ op: 'exalt', tier: t.tier, side: SIDES[si], catalyse: true }, t.price + CAT.omen + PR.exaltSide[si], spent(1 << si, t.floor));
         }
       }
       if (CAT && CAT.price != null && S.q < 2) {
@@ -1032,14 +1283,20 @@
           const us = units(S, (si) => v < 0 || si === v).filter((u) => openMask(removeUnit(S, u)) !== 0), tw = us.reduce((x, u) => x + u.w, 0);
           if (!tw) continue;
           const outs = [];
-          for (const u of us) { const S1 = removeUnit(S, u); outs.push(...rolled(S1, openMask(S1), t.floor, u.w / tw)); }
+          for (const u of us) for (const [q, S1] of without(S, u, false)) outs.push(...rolled(S1, openMask(S1), t.floor, q * u.w / tw));
           push(v < 0 ? { op: 'chaos', tier: t.tier } : { op: 'chaos', tier: t.tier, side: SIDES[v] }, t.price + (v < 0 ? 0 : PR.erasure[v]), outs);
         }
-        if (PR.whittling != null) {
+        if (PR.whittling != null && WBEST) {
+          // the omen at its best: whichever modifier the player would have it remove (see WBEST)
+          if (!S.du) for (const u of units(S, () => true)) {
+            const S1 = removeUnit(S, u), m1 = openMask(S1);
+            if (m1) push({ op: 'chaos', tier: t.tier, whittle: true, ideal: true }, t.price + PR.whittling, rolled(S1, m1, t.floor));
+          }
+        } else if (PR.whittling != null) {
           const ws = whittled(S);
           if (ws) {
             const outs = [];
-            for (const [p, u] of ws) { const S1 = removeUnit(S, u); outs.push(...rolled(S1, openMask(S1), t.floor, p)); }
+            for (const [p, u] of ws) for (const [q, S1] of without(S, u, true)) outs.push(...rolled(S1, openMask(S1), t.floor, p * q));
             push({ op: 'chaos', tier: t.tier, whittle: true }, t.price + PR.whittling, outs);
           }
         }
@@ -1048,7 +1305,7 @@
         for (let v = -1; v < 2; v++) {
           if (v >= 0 && PR.annulSide[v] == null) continue;
           const us = units(S, (si) => v < 0 || si === v), tw = us.reduce((x, u) => x + u.w, 0);
-          if (tw) push(v < 0 ? { op: 'annul' } : { op: 'annul', side: SIDES[v] }, PR.annul + (v < 0 ? 0 : PR.annulSide[v]), us.map((u) => [u.w / tw, removeUnit(S, u)]));
+          if (tw) push(v < 0 ? { op: 'annul' } : { op: 'annul', side: SIDES[v] }, PR.annul + (v < 0 ? 0 : PR.annulSide[v]), us.flatMap((u) => without(S, u, false).map(([q, S1]) => [q * u.w / tw, S1])));
         }
         if (PR.light != null) {
           const us = units(S, (si, des) => des), tw = us.reduce((x, u) => x + u.w, 0);
@@ -1073,10 +1330,76 @@
             p *= free;
             if (r.pOK > 0) outs.push([p * r.pHit * r.pOK, addRolled(S1, i, g.si, CRAFTED)]);
             if (r.pOK < 1) outs.push([p * r.pHit * (1 - r.pOK), addRolled(S1, i, g.si, CRAFTED + NEAR)]);
-            if (r.pHit < 1) { const S2 = cp(S1); if (!S2.cx) S2.cx = g.si + 1; else S2.j[g.si]++; outs.push([p * (1 - r.pHit), S2]); }
+            if (r.pHit < 1) { const S2 = cp(S1); if (!S2.cx) S2.cx = g.si + 1; else junkAt(S2, g.si, kb.mods[r.mod].lvl); outs.push([p * (1 - r.pHit), S2]); }
           };
           if (tw) for (const u of us) give(removeUnit(S, u), u.w / tw); else if (v < 0) give(S, 1);
           push(Object.assign({ op: 'pessence', item: r.item, mod: r.mod }, v >= 0 ? { side: SIDES[v] } : null), r.price + (v >= 0 ? PR.crystal[v] : 0), outs);
+        }
+      }
+      // an essence as a tool against the unwanted Desecrated modifier: aimed at its side with an Omen of
+      // Crystallisation it removes one modifier of that side, and its own crafted modifier comes where it has room
+      if (S.dj && craftedUsed(S) < capOf(S)) for (const T of TOOL) {
+        const v = S.dj - 1;
+        if (!T || PR.crystal[v] == null) continue;
+        // (an essence whose own side is full removes from that side: aimed elsewhere it cannot be used, planner.js validate)
+        if (T.si !== v && open(S, T.si) < 1) continue;
+        const us = units(S, (si) => si === v), tw = us.reduce((x, u) => x + u.w, 0);
+        if (!tw) continue;
+        const outs = [];
+        for (const u of us) for (const [q, S1] of without(S, u, false)) {
+          if (open(S1, T.si) > 0) { if (!S1.cx) S1.cx = T.si + 1; else junkAt(S1, T.si, kb.mods[T.mod].lvl); }
+          outs.push([q * u.w / tw, S1]);
+        }
+        push({ op: 'pessence', item: T.item, mod: T.mod, side: SIDES[v], tool: true }, T.price + PR.crystal[v], outs);
+      }
+      // the same without an omen where the unwanted Desecrated modifier's side is full: the essence or alloy of that
+      // side removes a modifier of that side
+      if (S.dj && craftedUsed(S) < capOf(S) && FILL[S.dj - 1] && open(S, S.dj - 1) === 0) {
+        const T = FILL[S.dj - 1], v = S.dj - 1;
+        const us = units(S, (si) => si === v), tw = us.reduce((x, u) => x + u.w, 0);
+        if (tw) {
+          const outs = [];
+          for (const u of us) for (const [q, S1] of without(S, u, false)) {
+            if (open(S1, v) > 0) { if (!S1.cx) S1.cx = v + 1; else junkAt(S1, v, kb.mods[T.mod].lvl); }
+            outs.push([q * u.w / tw, S1]);
+          }
+          push({ op: 'pessence', item: T.item, mod: T.mod, tool: true }, T.price, outs);
+        }
+      }
+      // Essence of the Abyss, then a bone on its Mark: one modifier of the aimed side goes, the Mark comes where there
+      // is room (either side, even chances), and the desecration replaces the Mark
+      if (ABYSS && bones.length && !desUsed(S) && craftedUsed(S) < capOf(S)) for (let v = 0; v < 2; v++) {
+        if (PR.crystal[v] == null) continue;
+        const us = units(S, (si) => si === v), tw = us.reduce((x, u) => x + u.w, 0);
+        if (!tw) continue;
+        // the step names the Mark of the aimed side (that side opens for certain); without one for this class, the
+        // other side's, which needs room there (planner.js validate)
+        const named = ABYSS.mods[v] ? v : open(S, 1 - v) > 0 ? 1 - v : -1;
+        if (named < 0) continue;
+        const land = [];
+        for (const u of us) {
+          const S1 = removeUnit(S, u), sides = [0, 1].filter((si) => ABYSS.mods[si] && open(S1, si) > 0);
+          for (const si of sides) land.push([u.w / tw / sides.length, si, S1]);
+        }
+        if (!land.length) continue;
+        const pre = { op: 'pessence', item: ABYSS.item, mod: ABYSS.mods[named], side: SIDES[v] };
+        for (const b of bones) {
+          const liches = [null];
+          if (LICH_OK) for (let i = 0; i < G; i++) { const g = goals[i]; if (wanted(S.g[i]) && g.kind === 'des' && g.lich && price(OMEN.lich[g.lich]) != null && !liches.includes(g.lich)) liches.push(g.lich); }
+          for (const lich of liches) for (const echoes of [false, true]) {
+            if (echoes && PR.echoes == null) continue;
+            // (the Mark's side is not the player's choice: a lich omen only where that lich has something to offer on
+            // every side the Mark can come, else the Well would have nothing to reveal there)
+            if (lich && !land.every(([, si, S1]) => desFor(S1, si, b.floor, lich).length > 0)) continue;
+            const outs = [];
+            let useful = false;
+            for (const [p, si, S1] of land) for (const [q, i, status] of reveal(S1, si, b.floor, lich, echoes)) {
+              if (i >= 0) useful = true;
+              outs.push([p * q, revealed(S1, si, i, status)]);
+            }
+            if (useful) push(Object.assign({ op: 'bone', quality: b.quality, mark: true, pre }, lich ? { lich } : null, echoes ? { echoes: true } : null),
+              ABYSS.price + PR.crystal[v] + b.price + (lich ? price(OMEN.lich[lich]) : 0) + (echoes ? PR.echoes : 0), outs);
+          }
         }
       }
       // a liquid emotion: a modifier goes, and its crafted modifier comes on the side that opened (one of two for some)
@@ -1100,7 +1423,7 @@
               continue;
             }
             const S2 = cp(S1);
-            if (o.cap >= 0) S2.aw = o.cap + 1; else if (!S2.cx) S2.cx = o.si + 1; else S2.j[o.si]++;
+            if (o.cap >= 0) S2.aw = o.cap + 1; else if (!S2.cx) S2.cx = o.si + 1; else junkAt(S2, o.si, kb.mods[o.mod] ? kb.mods[o.mod].lvl : 1);
             outs.push([p, S2]);
           }
         }
@@ -1152,7 +1475,7 @@
           } else {
             // only from a side the removal opens (one over its limit stays full)
             const us = units(S, (si) => (v < 0 || si === v) && slots(S, si) <= limOf(S, si)), tw = us.reduce((x, u) => x + u.w, 0);
-            for (const u of us) land.push([u.w / tw, u.si, removeUnit(S, u)]);
+            for (const u of us) for (const [q, S1] of without(S, u, false)) land.push([q * u.w / tw, u.si, S1]);
           }
           if (!land.length) continue;
           const base = b.price + (v >= 0 ? PR.necro[v] : 0);
@@ -1161,14 +1484,18 @@
           // (a hair dearer than revealing at once, so it is chosen only where the hidden modifier earns something)
           if (b === bones[0] && PR.fracture != null && S.fg < 0 && !S.fj) push(act({ hide: true }), base + 1e-6, land.map(([p, si, S1]) => { const S2 = cp(S1); S2.du = si + 1; return [p, S2]; }));
           const liches = [null];
-          for (let i = 0; i < G; i++) { const g = goals[i]; if (wanted(S.g[i]) && g.kind === 'des' && g.lich && price(OMEN.lich[g.lich]) != null && !liches.includes(g.lich)) liches.push(g.lich); }
+          if (LICH_OK) for (let i = 0; i < G; i++) { const g = goals[i]; if (wanted(S.g[i]) && g.kind === 'des' && g.lich && price(OMEN.lich[g.lich]) != null && !liches.includes(g.lich)) liches.push(g.lich); }
           for (const lich of liches) for (const echoes of [false, true]) {
             if (echoes && PR.echoes == null) continue;
             const outs = [];
             let useful = false;
-            for (const [p, si, S1] of land) for (const [q, i, status] of reveal(S1, si, b.floor, lich, echoes)) {
+            // (with a lich omen the modifier lands only on a side where that lich has something to offer: planner.js desSides)
+            const at = lich ? land.filter(([, si, S1]) => desFor(S1, si, b.floor, lich).length > 0) : land;
+            const tot = at.reduce((x, e) => x + e[0], 0);
+            if (!(tot > 0)) continue;
+            for (const [p, si, S1] of at) for (const [q, i, status] of reveal(S1, si, b.floor, lich, echoes)) {
               if (i >= 0) useful = true;
-              outs.push([p * q, revealed(S1, si, i, status)]);
+              outs.push([p / tot * q, revealed(S1, si, i, status)]);
             }
             if (useful) push(act(Object.assign({}, lich ? { lich } : null, echoes ? { echoes: true } : null)), base + (lich ? price(OMEN.lich[lich]) : 0) + (echoes ? PR.echoes : 0), outs);
           }
@@ -1194,9 +1521,15 @@
     }
 
     // ---- the item as a node
-    /** known: also mark a modifier that stands in a natural target's way (the pasted item's own; rolled ones are averaged). */
+    /**
+     * known: also mark a modifier that stands in a natural target's way (the pasted item's own; rolled ones are averaged
+     * unless they are followed). known 2: the same, but a modifier that is in one target's way is not looked at for
+     * what its tags stop on the other side (the states a followed roll leads to).
+     */
     function nodeOf(st, known) {
       const S = cp(N0);
+      const role = new Map(); // modifier -> 1 a target or its twin, 2 in a target's way
+      const lowest = [Infinity, Infinity]; // per side, the lowest level among the modifiers nobody asked for and those in a target's way
       S.r = st.rarity === 'Rare' ? 2 : st.rarity === 'Magic' ? 1 : 0;
       S.q = CAT && st.catTag === CAT.tag && st.catQ > 0 ? (st.catQ >= 20 ? 2 : 1) : 0;
       if (RUNES) {
@@ -1213,7 +1546,7 @@
         const t = i >= 0 || v >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => S.g[k] === ABSENT && goals[k].si === si && conv[k] && conv[k].src.has(m.id) && !(conv[k].via === 'aldur' && st.aldur));
         // not the target, but of its group (a lower tier, a sister modifier) or with tags that stop it: it stands in the target's way
         const b = i >= 0 || v >= 0 || t >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => S.g[k] === ABSENT && goals[k].si === si && (g.kind !== 'nat' || known) && (m.fam === g.fam || (g.grp.length && (m.grp || []).some((x) => g.grp.includes(x))) || (m.id && kb.mods[m.id] && stops(m.id, k))));
-        const set = (k, x) => { if (S.g[k] === TWIN) S.j[si]++; S.g[k] = x; if (m.frac) S.fg = k; };
+        const set = (k, x) => { if (S.g[k] === TWIN) { S.j[si]++; lowest[si] = Math.min(lowest[si], goalLvl[k]); } S.g[k] = x; if (m.frac) S.fg = k; role.set(m, x === BLOCKED ? 2 : 1); if (x === BLOCKED) lowest[si] = Math.min(lowest[si], m.lvl || 1); };
         if (i >= 0) set(i, kind);
         else if (v >= 0) set(v, kind + NEAR);
         else if (t >= 0) set(t, TWIN);
@@ -1223,13 +1556,17 @@
         else if (m.unrevealed) S.du = si + 1;
         else if (m.des) S.dj = si + 1;
         else if (m.crafted && !S.cx) S.cx = si + 1;
-        else S.j[si]++;
+        else { S.j[si]++; lowest[si] = Math.min(lowest[si], m.lvl || 1); }
       }
+      if (NCLS > 1) for (let si = 0; si < 2; si++) if (nSide(S, si) > 0) setCls(S, si, clsOf(lowest[si] === Infinity ? 1 : lowest[si]));
       if (known && ownMatters && ownIds.every((id) => st.mods.some((m) => m.id === id))) S.kx = 1;
       if (known && FRAC && S.fj === FRAC.si + 1 && st.mods.some((m) => m.frac && m.id === FRAC.id)) S.kf = 1;
-      // a modifier whose tags stop a target of the other side (known for the pasted item; rolled ones are averaged)
+      // a modifier whose tags stop a target of the other side (known for the pasted item; rolled ones are averaged or
+      // followed). Not a target that is on the item: what its tags stop is out of the pools while it is there
+      // (tagMask), and what a twin stops is counted with the twin (twinStops).
       if (known) for (const m of st.mods) {
         if (!m.id || !kb.mods[m.id] || !kb.mods[m.id].at || m.unrevealed) continue;
+        if (role.get(m) === 1 || (known === 2 && role.get(m) === 2)) continue;
         const si = m.side === 'prefix' ? 0 : 1;
         for (let k = 0; k < G; k++) if (S.g[k] === ABSENT && goals[k].si !== si && stops(m.id, k)) S.g[k] = XBLOCKED;
       }
@@ -1251,8 +1588,11 @@
     let tick = Date.now();
     const start = idOf(startS), n0 = idOf(cp(N0));
     for (const e of entries) e.id = idOf(e.S);
+    // input.deadline (a time in ms, for the sweeps: a process must end on time): past it there is no answer
+    const late = () => input.deadline > 0 && Date.now() > input.deadline;
     for (let q = 0; q < states.length; q++) {
       if (states.length > (input.maxStates || MAX_STATES)) return { unsupported: 'too many item states', states: states.length };
+      if ((q & 1023) === 0 && late()) return { unsupported: 'out of time', states: states.length };
       expand(q);
     }
     const N = states.length;
@@ -1389,7 +1729,7 @@
     }
     let Fv = new Float64Array(N), Av = null, rounds = 0, sol = null;
     // the search for the base charge holds a white base's value still while it probes (see fitBases)
-    let holdX = false;
+    let holdX = false, timedOut = false;
     /** Improve the rule set until no node has a cheaper edge (it starts from the rule set of the last solve). */
     function solve(exact) {
       // exact === false: a probe of the search for the base charge. It only has to tell on which side of the limit the
@@ -1398,6 +1738,7 @@
       // improved again; the exact values come once it has settled, and it must stand unchanged against those.
       let rough = true, last = N;
       for (let it = 0; it < 400; it++, rounds++) {
+        if (late()) { timedOut = true; break; }
         const d = new Float64Array(N);
         for (let s = 0; s < N; s++) if (pol[s] >= 0) d[s] = costOf(acts[s][pol[s]]);
         const passes = !rough ? 600 : last > N / 20 ? 3 : last > N / 300 ? 8 : 24;
@@ -1423,6 +1764,7 @@
     }
     solve();
     timing.solve = Date.now() - tick;
+    if (timedOut) return { unsupported: 'out of time', states: N };
     // no rule set ends with the targets (nothing the network knows brings this item, or a white base, to them)
     if (!done(startS) && !(V[start] < BIG / 1000)) return { impossible: [{ label: goals.map((g) => g.label).join(' + '), why: 'no currency with a price brings this item to all of these targets' }] };
 
@@ -1465,15 +1807,18 @@
     const basesAt = (s) => (Fv[n0] > 1e-250 ? (1 - Fv[s]) / Fv[n0] : Infinity);
 
     const net = {
-      ctx, goals, states, acts, pol, start, n0, N, timing, lite, wellRank, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
+      ctx, goals, states, acts, pol, start, n0, N, timing, lite, track: followed.filter(Boolean).length, classes: NCLS, whittle: WBEST ? 'best' : 'levels', wellRank, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
       get rounds() { return rounds; },
       get base() { return solution().money[n0]; },
       nodeOf(st) {
         // the node with what is known to be in the way, when the network has it (the pasted item and what follows from it)
         let i = index.get(keyOf(nodeOf(st, true)));
+        if (i === undefined) i = index.get(keyOf(nodeOf(st, 2)));
         if (i === undefined) i = index.get(keyOf(nodeOf(st, false)));
         return i === undefined ? -1 : i;
       },
+      /** For the checks: 0 the node was found with everything known, 1 without what a blocker's tags stop, 2 without blockers, -1 not at all. */
+      mapping(st) { return index.has(keyOf(nodeOf(st, true))) ? 0 : index.has(keyOf(nodeOf(st, 2))) ? 1 : index.has(keyOf(nodeOf(st, false))) ? 2 : -1; },
       done: (s) => done(states[s]),
       /** The step to use at node s: {a, names, cost, out}, or null when done or stuck. */
       step(s) { return pol[s] >= 0 ? Object.assign({ names: actNames(acts[s][pol[s]].a) }, acts[s][pol[s]]) : null; },
@@ -1538,10 +1883,25 @@
         return charge;
       },
       /** Every edge of node s with what the craft costs in all when it is used there and the route's rules after it (cheapest first). */
+      /** Does the route, from the pasted item on, use an edge this network only has at its best (input.whittle 'best')? */
+      usesIdeal() {
+        if (!WBEST) return false;
+        const seen = new Uint8Array(N), q = [start];
+        seen[start] = 1;
+        while (q.length) {
+          const k = q.pop();
+          if (pol[k] < 0) continue;
+          const e = acts[k][pol[k]];
+          if (e.a.ideal) return true;
+          for (let t = 0; t < e.out.length; t += 2) { const to = e.out[t + 1] === RESTART ? n0 : e.out[t + 1]; if (!seen[to]) { seen[to] = 1; q.push(to); } }
+        }
+        return false;
+      },
       options(s) {
         const so = solution();
         const total = (act) => { let c = act.cost; const o = act.out; for (let t = 0; t < o.length; t += 2) c += o[t] * (o[t + 1] === RESTART ? so.moneyBase : so.money[o[t + 1]]); return c; };
-        return acts[s].map((act, i) => ({ a: act.a, names: actNames(act.a), cost: act.cost, total: total(act), best: i === pol[s] })).sort((a, b) => (b.best - a.best) || (a.total - b.total));
+        // (not the omen at its best: that is no step a player can take)
+        return acts[s].map((act, i) => ({ a: act.a, names: actNames(act.a), cost: act.cost, total: total(act), best: i === pol[s] })).filter((o) => !o.a.ideal).sort((a, b) => (b.best - a.best) || (a.total - b.total));
       },
       /** What buying a starting point is worth: the price up to which it beats rolling it from a white base. */
       entries() {
@@ -1595,7 +1955,9 @@
       if (S.u & R_ALDUR) runes.push(ALD.rune);
       if (S.aw) junk[awSide(S)]++;
       return { rarity: ['Normal', 'Magic', 'Rare'][S.r], has, miss, inWay, across, low, twin, runes, allowance: S.aw ? SIDES[S.aw - 1] : null, otherPrefixes: junk[0], otherSuffixes: junk[1], hidden: S.du ? SIDES[S.du - 1] : null,
-        fracturedOther: S.fj ? SIDES[S.fj - 1] : null, desecratedOther: S.dj ? SIDES[S.dj - 1] : null };
+        fracturedOther: S.fj ? SIDES[S.fj - 1] : null, desecratedOther: S.dj ? SIDES[S.dj - 1] : null,
+        // the lowest level among the modifiers nobody asked for (Omen of Whittling takes the lowest of all): from, under
+        lowestOther: NCLS > 1 ? [0, 1].map((si) => { const c = clsAt(S, si); return nSide(S, si) > 0 ? { side: SIDES[si], from: c > 0 ? LCUT[c - 1] : null, under: c < NCLS - 1 ? LCUT[c] : null } : null; }).filter(Boolean) : [] };
     }
     return net;
   }
@@ -1667,18 +2029,44 @@
   }
 
   /**
-   * The network for a request, always: the full one, and for requests with so many targets that it would not fit, a
-   * smaller one (net.lite 1 or 2: see build). The route of a smaller network is a route of the full one, perhaps not
-   * its cheapest.
+   * The network for a request, always: the full one with the blockers of every natural target followed (net.track: how
+   * many are), with those of fewer targets where that does not fit, and for requests with so many targets that the
+   * full one would not fit at all, a smaller one (net.lite 1 or 2: see build). The route of a smaller network is a
+   * route of the full one, perhaps not its cheapest.
    */
-  function route(input) {
-    const many = Object.values(input.targets || {}).filter((t) => t && t.fam).length >= 7;
+  const FOLLOW6 = 2;
+  function route(input) { return routeFit(input, 0).net; }
+  /** The same, with the charge on white bases fitted to a limit of bases per finished item: {net, charge}. */
+  function routeFit(input, baseLimit) {
+    const nT = Object.values(input.targets || {}).filter((t) => t && t.fam).length, many = nT >= 7;
+    const fit = (net) => (baseLimit > 0 && !net.done(net.start) ? net.fitBases(net.start, +baseLimit) : 0);
+    // [lite, targets followed at most, states at most]. Up to five targets fit with all of them followed; with six the
+    // two with the largest groups are (a try that does not fit is time lost, so none is made that is known not to).
+    const tries = many ? [[1, 0, 150000], [2, 0, 1000000]] : (nT <= 5 ? [[0, 8, 160000]] : []).concat(nT > FOLLOW6 ? [[0, FOLLOW6, 160000]] : [], [[0, 0, 150000], [1, 0, 400000], [2, 0, 1000000]]);
+    // first with Omen of Whittling at its best (see WBEST in build): most routes do not use it, and then this is the answer
     let net = null;
-    for (const [lite, maxStates] of many ? [[1, 150000], [2, 1000000]] : [[0, 60000], [1, 150000], [2, 1000000]]) {
-      net = build(Object.assign({}, input, { lite, maxStates }));
-      if (net.unsupported !== 'too many item states') return net;
+    for (const [lite, track, maxStates] of tries) {
+      net = build(Object.assign({}, input, { lite, track, maxStates, whittle: 'best' }));
+      if (net.unsupported !== 'too many item states') break;
     }
-    return net;
+    if (net.unsupported || net.impossible || net.blocked) return { net, charge: 0 };
+    let charge = fit(net);
+    if (!net.usesIdeal()) return { net, charge };
+    // the route leans on the omen: the network again with the levels followed, in as many classes and with as many
+    // targets' blockers followed as fit (each class and each followed target has its known share of the size)
+    const base = net.N / Math.pow(1.4, net.track), seen = new Set();
+    for (const classes of [3, 2, 1]) for (const track of [net.track, Math.min(net.track, 2), 0]) {
+      const k = classes + '|' + track;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      // (three classes a side make the network about six times as large, two about two and a half times)
+      if (classes > 1 && base * Math.pow(1.4, track) * (classes === 3 ? 6 : 2.6) > 120000) continue;
+      const n2 = build(Object.assign({}, input, { lite: 0, track, maxStates: classes > 1 ? 150000 : 1000000, whittle: 'levels', classes }));
+      if (n2.unsupported === 'too many item states') continue;
+      if (n2.unsupported || n2.impossible || n2.blocked) return { net: n2, charge: 0 };
+      return { net: n2, charge: fit(n2) };
+    }
+    return { net, charge };
   }
 
   /**
@@ -1690,18 +2078,17 @@
   function answer(input, opts) {
     opts = opts || {};
     const t0 = Date.now();
-    const net = route(input);
+    const { net, charge } = routeFit(input, opts.baseLimit > 0 ? +opts.baseLimit : 0);
     if (net.blocked) return { net: true, label: 'Route', blocked: net.blocked };
     if (net.unsupported) return { net: true, label: 'Route', unsupported: net.unsupported };
     if (net.impossible) return { net: true, label: 'Route', impossible: net.impossible.map((x) => `${x.label}: ${x.why}`), steps: null };
     const s = net.start, done = net.done(s);
-    const charge = !done && opts.baseLimit > 0 ? net.fitBases(s, +opts.baseLimit) : 0;
     const step = net.step(s), B = opts.budget > 0 ? +opts.budget : 0;
     const well = (names) => (names.length ? names : ['Well of Souls']);
     const plain = (g) => { const o = {}; for (const k of Object.keys(g)) { const v = g[k]; if (v == null || typeof v !== 'object' || (Array.isArray(v) && v.every((e) => e == null || typeof e !== 'object'))) o[k] = v; } return o; };
     const seen = new Set();
     return {
-      net: true, label: 'Route', goals: net.goals.map(plain), params: null, nodes: net.N, lite: net.lite, ms: Date.now() - t0,
+      net: true, label: 'Route', goals: net.goals.map(plain), params: null, nodes: net.N, lite: net.lite, track: net.track, ms: Date.now() - t0,
       meanCost: net.cost(s), sd: net.sd(s), budget: B, p: B > 0 ? net.within(s, B) : null, bases: net.bases(s), charge,
       next: done ? { done: true } : step ? Object.assign({}, step.a, { names: well(step.names), hit: net.hit(s) }) : { fail: 'No currency brings this item to the targets.' },
       // the materials of the whole craft

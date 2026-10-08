@@ -47,4 +47,18 @@ if (fs.existsSync(path.join(cache, 'icons'))) {
   const ids = fs.readdirSync(path.join(cache, 'icons')).filter((f) => f.endsWith('.png')).map((f) => f.slice(0, -4)).sort();
   fs.writeFileSync(path.join(toolData, 'icon_ids.json'), JSON.stringify(ids));
 }
+// A page whose script does not parse shows "Loading knowledge base…" for ever, and no test runs the page's own script:
+// every inline script is parsed here, and a build with a syntax error fails.
+{
+  const vm = require('vm');
+  const re = /<script\b([^>]*)>([\s\S]*?)<\/script>/g;
+  let m, n = 0, bad = 0;
+  while ((m = re.exec(html))) {
+    n++;
+    if (/type="(application\/json|text\/plain)"/.test(m[1])) continue;
+    try { new vm.Script(m[2], { filename: 'inline script ' + n }); }
+    catch (e) { bad++; console.error('inline script ' + n + ': ' + e.message); console.error(String(e.stack).split('\n').slice(0, 4).join('\n').slice(0, 600)); }
+  }
+  if (bad) { console.error('the page was built with ' + bad + ' script(s) that do not parse'); process.exit(1); }
+}
 console.log('built', (html.length / 1024).toFixed(0) + ' KB page');

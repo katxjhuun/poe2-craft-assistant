@@ -279,7 +279,9 @@ function runOne(sc, runs, withRivals, deep, limitMs) {
   const { ix, priceOf } = load();
   const input = { ix, item: sc.item, targets: sc.targets, locks: {}, priceOf, baseCost: 1, weights: weightsFor(sc.base), essences: table(sc.base).essences, quality: sc.qualityMode };
   const t0 = Date.now();
-  const net = NW.route(input);
+  // (a network that is not solved within ten minutes is given up: "out of time" in the report. In the second deep run
+  // 9 of 64 processes did not end before their job's limit, and a process that is cut prints no report at all.)
+  const net = NW.route(Object.assign({ deadline: t0 + 10 * 60000 }, input));
   const out = { id: sc.id, cls: sc.cls, kind: sc.kind, ms: Date.now() - t0 };
   if (net.blocked) return Object.assign(out, { skipped: 'blocked: ' + net.blocked });
   if (net.unsupported) return Object.assign(out, { skipped: net.unsupported });
@@ -295,7 +297,9 @@ function runOne(sc, runs, withRivals, deep, limitMs) {
   const got = play(net, input, n, sc.seed, Math.max(5000, Math.round(stepsGuess * 60)), deep ? Math.min(40 * 60000, limitMs > 0 ? limitMs : 40 * 60000) : 0);
   const ratio = got.mean / want, z = (got.mean - want) / (got.se || 1);
   Object.assign(out, { nodes: net.N, lite: net.lite || 0, runs: got.runs, asked: n, uses: got.steps, network: want, played: got.mean, se: got.se, ratio, z, done: got.done, off: got.off,
-    pass: got.done === got.runs && got.off === 0 && (Math.abs(ratio - 1) <= 0.15 || Math.abs(z) <= 3) });
+    // refused: steps of the route that the simulator's rules do not allow (the network and the rules disagree)
+    refused: got.refused || 0, track: net.track, classes: net.classes, whittle: net.whittle,
+    pass: got.done === got.runs && got.off === 0 && !got.refused && (Math.abs(ratio - 1) <= 0.15 || Math.abs(z) <= 3) });
   if (withRivals) {
     const b = rivals(sc, input);
     if (b) Object.assign(out, { rival: b.cps, rivalRoute: b.route, rivalParams: b.params, rivalCheaper: b.cps < 0.85 * want });
@@ -348,7 +352,7 @@ if (require.main === module) {
     '| Class | Scenarios | Agree | Do not | Outside | Errors |', '|---|---|---|---|---|---|',
     ...[...byCls.entries()].sort().map(([c, v]) => `| ${c} | ${v.n} | ${v.ok} | ${v.bad} | ${v.skip} | ${v.err} |`), '',
     'Outside the network: ' + ([...skipWhy.entries()].map(([k, v]) => `${k} (${v})`).join(', ') || 'none'), '');
-  if (bad.length) lines.push('### Promise and play disagree', '', ...bad.sort((a, b) => Math.abs(b.ratio - 1) - Math.abs(a.ratio - 1)).slice(0, 25).map((r) => `- ${r.id}: promised ${r.network.toFixed(1)}, played ${isFinite(r.played) ? r.played.toFixed(1) : '—'} (x${isFinite(r.ratio) ? r.ratio.toFixed(2) : '—'}), ${r.nodes} nodes${r.off ? ', ' + r.off + ' runs left the network' : ''}${r.done < r.runs ? ', ' + (r.runs - r.done) + ' unfinished' : ''}`), '');
+  if (bad.length) lines.push('### Promise and play disagree', '', ...bad.sort((a, b) => Math.abs(b.ratio - 1) - Math.abs(a.ratio - 1)).slice(0, 25).map((r) => `- ${r.id}: promised ${r.network.toFixed(1)}, played ${isFinite(r.played) ? r.played.toFixed(1) : '—'} (x${isFinite(r.ratio) ? r.ratio.toFixed(2) : '—'}), ${r.nodes} nodes${r.off ? ', ' + r.off + ' runs left the network' : ''}${r.refused ? ', ' + r.refused + ' steps the rules refuse' : ''}${r.done < r.runs ? ', ' + (r.runs - r.done) + ' unfinished' : ''}`), '');
   if (cheaper.length) lines.push('### An old route is cheaper', '', ...cheaper.sort((a, b) => a.rival / a.network - b.rival / b.network).slice(0, 25).map((r) => `- ${r.id}: network ${r.network.toFixed(1)}, old route ${r.rival.toFixed(1)} (${JSON.stringify(r.rivalParams)}: ${r.rivalRoute.join(', ')})`), '');
   if (errors.length) lines.push('### Errors', '', ...errors.slice(0, 15).map((r) => `- ${r.id}: ${r.error}`), '');
   const text = lines.join('\n');

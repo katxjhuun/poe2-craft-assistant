@@ -500,6 +500,15 @@
     if (omenSide) return omenSide;
     return sides.some((s) => open(ctx, st, s) > 0) ? null : sides.length === 1 ? sides[0] : null;
   }
+  // Essence of the Abyss adds the crafted modifier "Bears the Mark of the Abyssal Lord" (game stat
+  // essence_abyss_guaranteed_pick). The next desecration replaces the Mark: no other modifier is removed, also on a full
+  // item, and the Desecrated modifier is of the Mark's side. The essence cannot be used on an item that has a Desecrated
+  // modifier. (Crafters' steps in 0.5.5: claims k59, k60 in app/data/recipes_0.5.5.json.)
+  /** The lich omens (Sovereign, Liege, Blackblooded) name weapon and jewellery desecration in their game text. */
+  const lichOmenWorks = (ctx) => WEAPON.includes(ctx.cls) || JEWELLERY.includes(ctx.cls);
+  const ABYSS_ESSENCE = 'Essence of the Abyss', MARK_FAM = 'AbyssTargetMod';
+  // (a fractured Mark is a fractured modifier like any other: nothing removes it, so a bone does not replace it)
+  const markOf = (st) => st.mods.find((m) => m.fam === MARK_FAM && !m.frac) || null;
   function count(st, side) { let n = 0; for (const m of st.mods) if (m.side === side) n++; return n; }
   // Never below 0: a side can sit over its limit (a removed "+1 Suffix Modifier allowed" leaves 3 suffixes on a jewel),
   // and sums of both sides must not let that hide a free slot on the other side.
@@ -585,8 +594,10 @@
         if (!boneExists(ctx, a.quality)) return `There is no ${a.quality} ${ctx.bone} in the game${ctx.bone === 'Cranium' ? ' (jewels take the Preserved Cranium only)' : ''}.`;
         if (a.putrefy) return null; // Omen of Putrefaction replaces every modifier; the one-Desecrated rule does not apply (claim k11)
         if (hasDes) return 'Only one Desecrated modifier per item (0.5+). Remove it first with Omen of Light + Orb of Annulment.';
+        // the Mark of the Abyssal Lord is what the desecration replaces: no room and no removal is needed
+        if (markOf(st)) { const mk = markOf(st); return revealPool(ctx, { ...st, mods: st.mods.filter((m) => m !== mk) }, mk.side, a.quality === 'Ancient' ? 40 : 0, a.lich || null).any ? null : 'The Well of Souls would have no modifier to offer in the place of the Mark.'; }
         if (a.quality === 'Gnawed' && ctx.ilvl > 64) return 'Gnawed bones only work on item level 64 or lower.';
-        if (a.lich && !(WEAPON.includes(ctx.cls) || JEWELLERY.includes(ctx.cls))) return `${OMEN.lich[a.lich]} only works on weapon or jewellery desecration.`;
+        if (a.lich && !lichOmenWorks(ctx)) return `${OMEN.lich[a.lich]} only works on weapon or jewellery desecration.`;
         // Game text: if modifiers are full, a random modifier is also removed.
         const full = open(ctx, st, 'prefix') + open(ctx, st, 'suffix') === 0;
         if (full && !st.mods.some((m) => removable(m) && (!a.side || m.side === a.side))) return 'The item is full and no modifier there can be removed.';
@@ -603,6 +614,7 @@
         return st.mods.some((m) => m.id) ? null : 'Divine Orb needs a modifier with values.';
       case 'essence': case 'alloy': case 'pessence': {
         if (hasCrafted) return 'Only one crafted modifier per item (0.5+); this item already has one.';
+        if (a.item === ABYSS_ESSENCE && hasDes) return 'Essence of the Abyss cannot be used on an item that has a Desecrated modifier.';
         if (a.op === 'essence' && R !== 'Magic') return 'Lesser, normal and Greater essences need a Magic item.';
         if (a.op === 'pessence' && R !== 'Rare') return 'Perfect and special essences need a Rare item.';
         const m = a.mod && ctx.kb.mods[a.mod];
@@ -1120,7 +1132,13 @@
         const floor = a.quality === 'Ancient' ? 40 : 0;
         const fit = desSides(ctx, st, a);
         let side = null;
-        if (open(ctx, st, 'prefix') + open(ctx, st, 'suffix') === 0) {
+        const mark = markOf(st);
+        if (mark) {
+          // the desecration takes the place of the Mark of the Abyssal Lord
+          st.mods.splice(st.mods.indexOf(mark), 1);
+          removed.push(mark);
+          side = mark.side;
+        } else if (open(ctx, st, 'prefix') + open(ctx, st, 'suffix') === 0) {
           // The game text does not say which side loses the mod: take it from a side that can hold a desecrated mod.
           const r = removeRandom(st, (m) => removable(m) && fit.includes(m.side), rng);
           if (r) { removed.push(r); side = r.side; }
@@ -3347,7 +3365,7 @@
     ORB, OMEN, TIERS, boneFor, actionNames, makeContext, toState, validate, apply, rngFrom, sidePool, desPoolFor,
     goalsFromTargets, goalMet, meets, nearMiss, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
     availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, goalClash, essencesForBase, liquidFor, CATALYST_DEFAULT, CATALYST_NAME, ALDUR_ELEMENT, aldurTwin, runeFor, runeSide, freeSockets, socketsOf,
-    emulate, chanceOf, familyChances, runStrategy, runStrategyAsync, groupsMet, revealOptions, desSides, DES_OPTIONS,
+    emulate, chanceOf, familyChances, runStrategy, runStrategyAsync, groupsMet, revealOptions, desSides, DES_OPTIONS, lichOmenWorks,
     planProfile, rankProfiles, setTick, clampStrategy, materialOk,
     expandStrategy, recipeParams, relevantKeys, SPACE, SEARCH, improvePlan, searchOf: (plan) => SCREENS.get(plan), legacyItems, suffixRune, runeBlocks,
   };

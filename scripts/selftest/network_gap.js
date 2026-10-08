@@ -9,12 +9,14 @@
  *
  * <k>: the k-th special request of the sweep for that base (0 value, 1 another element, 2 rune pool, 3 four suffixes,
  * 4 five modifiers on a jewel, 5 two crafted-only modifiers); n<K>: its K-th drawn scenario (network_sweep.js);
- * id:<scenario id>: the scenario a sweep report names (as it was drawn before the special requests).
+ * id:<scenario id>: the scenario a sweep report names (as it was drawn before the special requests);
+ * fams:<family>[@tier],...: a white base and these natural modifiers (family names as the sweep reports print them).
  * A single process and a few hundred crafts: fine next to the game. Many crafts belong in the cloud workflow.
  */
 'use strict';
 const path = require('path');
-const { ROOT, load, weightsFor } = require('./lib.js');
+const { ROOT, E, load, weightsFor, rng, renderItem } = require('./lib.js');
+const { labelOf } = require('./scenarios.js');
 const NW = require(path.join(ROOT, 'app', 'network.js'));
 const SW = require('./network_sweep.js');
 const { play } = require('./network_check.js');
@@ -24,7 +26,15 @@ const t = SW.table(base);
 const singles = t.nat.prefix.length + t.nat.suffix.length + t.des.prefix.length + t.des.suffix.length;
 let sc = null;
 if (/^id:/.test(kStr)) { for (let n = 0; n < 600 && !sc; n++) { let x = null; try { x = SW.scenario(base, n, true); } catch (e) { x = null; } if (x && x.id === kStr.slice(3)) sc = x; } }
-else sc = SW.scenario(base, /^n/.test(kStr) ? singles + +kStr.slice(1) : singles + 6 * (+kStr) + 5);
+else if (/^fams:/.test(kStr)) {
+  const targets = {};
+  kStr.slice(5).split(',').forEach((x, k) => {
+    const [fam, tier] = x.split('@'), f = t.nat.prefix.concat(t.nat.suffix).find((y) => y.fam === fam);
+    if (!f) { console.log(`no natural family ${fam} on ${base}`); console.log('prefixes:', t.nat.prefix.map((y) => y.fam).join(' ')); console.log('suffixes:', t.nat.suffix.map((y) => y.fam).join(' ')); process.exit(1); }
+    targets[f.side + '-' + k] = { fam, group: f.side, minTier: tier ? +tier : f.tiers[0], required: true, label: labelOf(f.ids[f.tiers[0]]) };
+  });
+  sc = { id: base + '|' + kStr, kind: 'named families, white', seed: 7, targets, item: E.parseItem(ix, renderItem({ base, cls: t.cls, rarity: 'Normal', ilvl: 82, mods: [] }, rng(7), 'adv').text).item };
+} else sc = SW.scenario(base, /^n/.test(kStr) ? singles + +kStr.slice(1) : singles + 6 * (+kStr) + 5);
 if (!sc) { console.log('no such scenario'); process.exit(1); }
 const input = { ix, item: sc.item, targets: sc.targets, locks: {}, priceOf, baseCost: 1, weights: weightsFor(base), essences: t.essences, quality: sc.qualityMode };
 const net = NW.route(input);
@@ -39,7 +49,7 @@ console.log(`${net.N} nodes | promised ${want.toFixed(1)} | played ${isFinite(go
 const d = (k) => {
   if (k < 0) return 'OFF NETWORK';
   const w = net.describe(k);
-  return `${w.rarity} has[${w.has.join('; ')}]${w.low.length ? ' low[' + w.low.join(';') + ']' : ''}${w.twin.length ? ' twin[' + w.twin.join(';') + ']' : ''}${w.inWay.length ? ' inWay[' + w.inWay.join(';') + ']' : ''}${w.runes.length ? ' runes[' + w.runes.join(';') + ']' : ''} others ${w.otherPrefixes}/${w.otherSuffixes}${w.hidden ? ' hidden ' + w.hidden : ''}${w.desecratedOther ? ' desOther ' + w.desecratedOther : ''}${w.fracturedOther ? ' fracOther' : ''}${w.allowance ? ' allowance' : ''}${net.done(k) ? ' DONE' : ''}`;
+  return `${w.rarity} has[${w.has.join('; ')}]${w.low.length ? ' low[' + w.low.join(';') + ']' : ''}${w.twin.length ? ' twin[' + w.twin.join(';') + ']' : ''}${w.inWay.length ? ' inWay[' + w.inWay.join(';') + ']' : ''}${(w.across || []).length ? ' across[' + w.across.join(';') + ']' : ''}${w.runes.length ? ' runes[' + w.runes.join(';') + ']' : ''}${(w.lowestOther || []).map((x) => ' low ' + x.side[0] + '[' + (x.from == null ? '' : x.from) + '..' + (x.under == null ? '' : x.under) + ')').join('')} others ${w.otherPrefixes}/${w.otherSuffixes}${w.hidden ? ' hidden ' + w.hidden : ''}${w.desecratedOther ? ' desOther ' + w.desecratedOther : ''}${w.fracturedOther ? ' fracOther' : ''}${w.allowance ? ' allowance' : ''}${net.done(k) ? ' DONE' : ''}`;
 };
 const V = (k) => (k < 0 ? NaN : net.cost(k));
 const rows = [];
@@ -63,6 +73,13 @@ for (const [node, rec] of audit) {
   rows.push({ node, n: rec.n, share, step, parts });
 }
 console.log(`gap played - promised: ${(got.mean - want).toFixed(1)}; explained by the nodes below: ${total.toFixed(1)}`);
+if (audit.refused && audit.refused.length) {
+  console.log(`steps the simulator's rules refuse: ${audit.refused.length}`);
+  const seenR = new Set();
+  for (const x of audit.refused) { const k = JSON.stringify(x.a) + x.why; if (seenR.has(k) || seenR.size >= 5) continue; seenR.add(k); console.log(`   ${JSON.stringify(x.a)}: ${x.why}
+      on ${x.item}`); }
+}
+if (audit.maps && (audit.maps[1] || audit.maps[2])) console.log(`items the network placed without what a blocker's tags stop: ${audit.maps[1]}, without their blockers: ${audit.maps[2]}, of ${audit.maps[0] + audit.maps[1] + audit.maps[2]}`);
 // crafts that left the network: the node, the step and the item the network has no node for
 if (audit.offs && audit.offs.length) {
   console.log(`

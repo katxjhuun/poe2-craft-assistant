@@ -202,3 +202,127 @@ test('network: scenarios the deep cloud run found wrong stay right', () => {
   check('Permafrost Staff|one|ChaosDamageWeaponPrefix|T1', 500, 0.08);
 });
 
+
+// ---- what the second deep cloud run and the crafters' videos led to (8 Oct 2026)
+test('network: a modifier that rolls into the way of a target is a state; a target on the item is not "another modifier"', () => {
+  // boots: a lower tier of Movement Speed that rolls keeps the target out for as long as it is there; the network
+  // follows it (it once drew that chance anew at every roll)
+  const net = NW.route(inputFor(boots(WHITE), [MS, FIRE]));
+  assert.equal(net.track, 2, 'both natural targets are followed');
+  const st = net.step(net.start);
+  const kids = [];
+  for (let q = 0; q < st.out.length; q += 2) if (st.out[q + 1] >= 0) kids.push(net.describe(st.out[q + 1]));
+  assert.ok(kids.some((d) => d.inWay.length === 1), 'a first modifier of the group of a target is "in the way"');
+  // a wand: the Freeze Buildup suffix that was asked for stops the Chaos Damage prefix with its tags. That is the
+  // doing of the target itself (the pools are cut while it is there), not a modifier of the other side to remove
+  const base = 'Dueling Wand';
+  const freeze = poolOf(base, 'suffix').filter((e) => /increased Freeze Buildup$/.test(labelOf(e.id))).sort((a, b) => a.tier - b.tier)[0];
+  assert.ok((kb.mods[freeze.id].at || []).includes('no_chaos_spell_mods'));
+  const wand = item('Wands', ['Rarity: Rare', 'Test', base, '--------', 'Item Level: 82', '--------', '{ Suffix Modifier "x" (Tier: 1) }', kb.mods[freeze.id].txt.split('\n')[0].replace(/\(?(\d+)[^ ]*/, '$1')]);
+  assert.equal(wand.mods.length, 1, 'the suffix was read');
+  const w = NW.route(inputFor(wand, [['suffix', /increased Freeze Buildup$/, 1], ['prefix', /increased Chaos Damage$/, 3]]));
+  if (!w.impossible) {
+    const d = w.describe(w.start);
+    assert.equal(d.has.length, 1);
+    assert.equal(d.across.length, 0, 'the target on the item is not counted as a modifier in the way');
+  }
+});
+
+test('network: the Well of Souls beside a desecrated-only modifier of the group of the target', () => {
+  // a wand's desecrated-only "#% increased Elemental Damage" is of the group of its Cold Damage prefix: when the Well
+  // draws it (the desecrated-only options come first), Cold Damage cannot be an option any more. The network's chance
+  // for the bone is checked against the simulator's draws on the same item (it once said 2.2% where the game gives 1.6%).
+  const base = 'Dueling Wand';
+  const lvl = poolOf(base, 'suffix').filter((e) => /Level of all Cold Spell Skills$/.test(labelOf(e.id)) && e.tier === 2)[0];
+  const mana = poolOf(base, 'prefix').filter((e) => /^\+# to maximum Mana$/.test(labelOf(e.id))).sort((a, b) => b.tier - a.tier)[0];
+  const line = (e) => kb.mods[e.id].txt.split('\n')[0].replace(/\(?(\d+)[^ ]*/, '$1');
+  const wand = item('Wands', ['Rarity: Rare', 'Test', base, '--------', 'Item Level: 82', '--------',
+    '{ Suffix Modifier "x" (Tier: 2) }', line(lvl), '{ Prefix Modifier "y" (Tier: ' + mana.tier + ') }', line(mana)]);
+  assert.equal(wand.mods.length, 2, 'both modifiers were read');
+  const input = inputFor(wand, [['suffix', /Level of all Cold Spell Skills$/, 2], ['prefix', /increased Cold Damage$/, 2]]);
+  const net = NW.route(input);
+  assert.ok(!net.impossible && !net.unsupported);
+  const cold = net.goals.findIndex((g) => /Cold Damage/.test(g.label));
+  // the bone on the prefix side, revealed at once, without an omen of the Well
+  const bone = net.acts[net.start].find((x) => x.a.op === 'bone' && x.a.quality === 'Preserved' && x.a.side === 'prefix' && !x.a.echoes && !x.a.lich && !x.a.hide && !x.a.mark);
+  assert.ok(bone, 'the network has the bone as an edge');
+  let model = 0;
+  for (let q = 0; q < bone.out.length; q += 2) if (bone.out[q + 1] >= 0 && net.states[bone.out[q + 1]].g[cold] === 3) model += bone.out[q];
+  const st = P.toState(net.ctx, wand), r = P.rngFrom(5);
+  let hit = 0;
+  const N = 60000;
+  for (let k = 0; k < N; k++) if (P.revealOptions(net.ctx, st, 'prefix', 0, null, r).some((o) => o.fam === net.goals[cold].fam && o.tier <= 2)) hit++;
+  const sim = hit / N, se = Math.sqrt(sim * (1 - sim) / N);
+  assert.ok(sim > 0.002, 'the Well offers it at all: ' + sim);
+  assert.ok(Math.abs(model - sim) <= 4 * se + 0.15 * sim, `network ${(model * 100).toFixed(2)}%, simulator ${(sim * 100).toFixed(2)}%`);
+});
+
+test('network: an essence as a tool against the unwanted Desecrated modifier (no Omen of Light)', () => {
+  // A bow with its three prefixes wants a Desecrated suffix. When the Well of Souls misses, a Perfect essence aimed at
+  // the suffixes with an Omen of Crystallisation replaces the miss (claim k60), which costs a tenth of Omen of Light
+  // and an Orb of Annulment. Its promise is played.
+  const { E: E2, load, weightsFor, rng, renderItem } = require('../../scripts/selftest/lib.js');
+  const SW = require('../../scripts/selftest/network_sweep.js');
+  const { play } = require('../../scripts/selftest/network_check.js');
+  const { labelOf: lab } = require('../../scripts/selftest/scenarios.js');
+  const L = load();
+  const base = 'Fanatic Bow', t = SW.table(base);
+  const pre = [], taken = new Set();
+  for (const f of t.nat.prefix) { if (pre.length === 3) break; if (f.grp.some((x) => taken.has(x))) continue; f.grp.forEach((x) => taken.add(x)); pre.push(f); }
+  const des = t.des.suffix[0];
+  const tierOf = (f) => f.tiers[Math.min(1, f.tiers.length - 1)];
+  const it = E2.parseItem(L.ix, renderItem({ base, cls: t.cls, rarity: 'Rare', ilvl: 82, mods: pre.map((f) => ({ id: f.ids[tierOf(f)], side: f.side, tier: tierOf(f) })) }, rng(77), 'adv').text).item;
+  const targets = {};
+  pre.forEach((f, k) => { targets['prefix-' + k] = { fam: f.fam, group: 'prefix', minTier: tierOf(f), required: true, label: lab(f.ids[f.tiers[0]]) }; });
+  targets['suffix-9'] = { fam: des.fam, group: 'desecrated', minTier: null, required: true, label: lab(des.ids[des.tiers[0]]) };
+  const input = { ix: L.ix, item: it, targets, locks: {}, priceOf: L.priceOf, baseCost: 1, weights: weightsFor(base), essences: t.essences };
+  if (L.priceOf('Omen of Dextral Crystallisation') == null || L.priceOf('Omen of Light') == null) return; // (the prices of the day lack them: nothing to compare)
+  const net = NW.route(input);
+  assert.ok(!net.impossible && !net.unsupported);
+  const names = net.materials(net.start).map((m) => m.name);
+  assert.ok(names.some((n) => /Crystallisation/.test(n)) && names.some((n) => /Essence/.test(n)), 'the tool is in the route: ' + names.join(', '));
+  assert.ok(!names.includes('Omen of Light'), 'no Omen of Light');
+  const tool = net.rules(net.start, 8).find((x) => (x.names || []).some((n) => /Essence/.test(n)));
+  assert.ok(tool && tool.when.desecratedOther, 'it is used on the unwanted Desecrated modifier');
+  const got = play(net, input, 100, 5, 20000);
+  assert.equal(got.off, 0, 'no craft leaves the network');
+  assert.equal(got.done, got.runs);
+  const want = net.cost(net.start);
+  assert.ok(Math.abs(got.mean - want) <= 4 * got.se + 0.08 * want, `played ${got.mean.toFixed(1)} ± ${got.se.toFixed(1)}, promised ${want.toFixed(1)}`);
+});
+
+test('planner: Essence of the Abyss leaves a Mark that the next desecration replaces (claim k59)', () => {
+  const helmBase = Object.entries(kb.bases).find(([, b]) => b.cls === 'Helmet' && b.tags.includes('str_armour') && b.tl)[0];
+  const helm = E.parseItem(ix, `Item Class: Helmets\nRarity: Normal\n${helmBase}\n--------\nItem Level: 82`).item;
+  const ctx = P.makeContext(ix, helm, { essences: P.essencesForBase(ix, kb.bases[helm.base], W.essences.Helmet) });
+  const recs = ctx.essences.filter((r) => r.item === 'Essence of the Abyss');
+  assert.equal(recs.length, 2, 'the Mark as a prefix and as a suffix');
+  const taken = new Set();
+  const pool = [...ctx.pool.entries()].filter(([id]) => { if (kb.mods[id].grp.some((g) => taken.has(g)) || kb.mods[id].lvl > 82) return false; kb.mods[id].grp.forEach((g) => taken.add(g)); return true; });
+  const mk = ([id, pe]) => ({ id, fam: kb.mods[id].fam, side: pe.side, lvl: kb.mods[id].lvl, grp: kb.mods[id].grp, tier: pe.tier, frac: false, des: false, crafted: false, lock: false });
+  const st = Object.assign(P.toState(ctx, helm), { rarity: 'Rare' });
+  st.mods = pool.filter(([, pe]) => pe.side === 'suffix').slice(0, 3).concat(pool.filter(([, pe]) => pe.side === 'prefix').slice(0, 3)).map(mk);
+  const rng = P.rngFrom(3);
+  for (const rec of recs) {
+    const side = kb.mods[rec.mod].gen === 'p' ? 'prefix' : 'suffix';
+    const a = { op: 'pessence', item: rec.item, mod: rec.mod };
+    assert.equal(P.validate(ctx, st, a), null);
+    const r1 = P.apply(ctx, st, a, rng);
+    const mark = r1.state.mods.find((m) => m.fam === 'AbyssTargetMod');
+    assert.ok(mark && mark.side === side && mark.crafted, 'the Mark is a crafted modifier of its side');
+    assert.equal(r1.removed[0].side, side, 'on a full item it takes a slot of its own side');
+    // the bone: only the Mark leaves, also on this full item, and the Desecrated modifier is of the side of the Mark
+    const bone = { op: 'bone', quality: 'Preserved' };
+    assert.equal(P.validate(ctx, r1.state, bone), null);
+    const r2 = P.apply(ctx, r1.state, bone, rng);
+    assert.deepEqual(r2.removed.map((m) => m.fam), ['AbyssTargetMod']);
+    const des = r2.state.mods.filter((m) => m.des);
+    assert.equal(des.length, 1);
+    assert.equal(des[0].side, side);
+    assert.equal(r2.state.mods.length, 6);
+    for (const m of r1.state.mods) if (m !== mark) assert.ok(r2.state.mods.some((x) => x.id === m.id), 'every other modifier stays');
+    // beside a Desecrated modifier the essence is refused
+    const withDes = Object.assign({}, st, { mods: st.mods.slice(1).map((m, k) => (k === 0 ? Object.assign({}, m, { des: true }) : m)) });
+    assert.match(P.validate(ctx, withDes, a), /cannot be used on an item that has a Desecrated modifier/);
+  }
+});

@@ -62,7 +62,7 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
   };
   const desMod = (e) => ({ id: e.id, fam: e.fam, side: e.side, lvl: e.lvl, grp: e.grp, tier: e.tier, frac: false, des: true, crafted: false, lock: false });
   const st0 = P.toState(ctx, input.item, input.locks);
-  let sum = 0, sq = 0, done = 0, steps = 0, off = 0;
+  let sum = 0, sq = 0, done = 0, steps = 0, off = 0, refused = 0;
   for (let n = 0; n < runs; n++) {
     if (until && (n & 255) === 0 && n >= 2000 && Date.now() > until) break;
     if (n === 40 && done === 0) break; // not one of forty crafts ends: the rules and the simulator disagree, more plays say nothing
@@ -72,6 +72,8 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
     from = -1;
     for (; k < maxSteps; k++) {
       const node = net.nodeOf(st);
+      // (for the audit: how much of the item the network knew: everything, not what a blocker's tags stop, not the blockers)
+      if (audit && net.mapping && node >= 0) { const lv = net.mapping(st); (audit.maps = audit.maps || [0, 0, 0])[lv < 0 ? 2 : lv]++; }
       if (audit && from >= 0) { const rec = audit.get(from) || { n: 0, to: new Map() }; rec.n++; rec.to.set(node, (rec.to.get(node) || 0) + 1); audit.set(from, rec); }
       // (an item the network has no node for: kept with the step that led to it, for the audit)
       if (node < 0 && audit && from >= 0) (audit.offs = audit.offs || []).push({ from, a: lastA, state: net.stateOf ? JSON.stringify(net.stateOf(st, false)) : '', item: st.rarity + ' ' + st.mods.map((m) => `${m.side[0]}:${m.unrevealed ? '(hidden)' : m.fam}${m.tier ? ' T' + m.tier : ''}${m.frac ? '(F)' : ''}${m.des ? '(D)' : ''}${m.crafted ? '(C)' : ''}`).join(', ') });
@@ -106,7 +108,10 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
       } else if (a.op === 'catalyst') {
         for (let i = 0; i < a.count; i++) st = P.apply(ctx, st, a, r).state;
       } else {
-        if (a.pre) st = P.apply(ctx, st, a.pre, r).state;
+        // (a step the simulator's rules refuse is a disagreement between the network and the rules: counted, and kept for the audit)
+        const refuse = (x) => { const why = P.validate(ctx, st, x); if (why) { refused++; if (audit) (audit.refused = audit.refused || []).push({ from: node, a: x, why, item: st.rarity + ' ' + st.mods.map((m) => `${m.side[0]}:${m.unrevealed ? '(hidden)' : m.fam}${m.frac ? '(F)' : ''}${m.des ? '(D)' : ''}${m.crafted ? '(C)' : ''}`).join(', ') }); } };
+        if (a.pre) { refuse(a.pre); st = P.apply(ctx, st, a.pre, r).state; }
+        refuse(a);
         const pick = wanted(st);
         // (with Abyssal Echoes the first three options are declined when no target is among them: `again` is the reroll)
         st = P.apply(ctx, st, a, r, (opts, again) => pick(opts) || (a.echoes && !again ? null : dull(opts))).state;
@@ -117,7 +122,7 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
   }
   const mean = done ? sum / done : NaN;
   const sd = done > 1 ? Math.sqrt(Math.max(0, sq / done - mean * mean)) : 0;
-  return { mean, se: done ? sd / Math.sqrt(done) : NaN, sd, done, steps: steps / Math.max(1, played), off, runs: played };
+  return { mean, se: done ? sd / Math.sqrt(done) : NaN, sd, done, steps: steps / Math.max(1, played), off, refused, runs: played };
 }
 
 function check(sc, runs, seed, tol) {

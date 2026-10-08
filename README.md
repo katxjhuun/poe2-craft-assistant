@@ -53,7 +53,14 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   currency: sonuçları, olasılıkları (poe2db ağırlıklarından) ve fiyatı.
 - **Rota** = her düğümde ortalamada en ucuz kenar. Simülasyon yok: maliyetler denklemlerden çözülür (her zaman biten bir
   kural kümesinden başlayan policy iteration; uzun "at, tutmadı, yine at" döngüleri bloklar içinde tam çözülür, yeni
-  beyaz base tek bir bilinmeyendir). Tipik item milisaniyeler, altı hedef birkaç saniye.
+  beyaz base tek bir bilinmeyendir). Beyaz base'te iki hedef yaklaşık 1 saniye (6.700 düğüm), üç hedef 3 saniye,
+  dört hedef 9 saniye, beş altı hedef yarım dakika ile bir dakika arası (ağ o zaman 100.000 düğüme varır).
+- **Engeller izlenir** (oyuncunun 8 Ekim 2026 kararı: "daha büyük bir ağ gerekiyorsa büyüt"). Bir hedefin grubundan
+  gelen mod (düşük tier, kardeş mod) ya da onu etiketleriyle durduran karşı taraf modu, craft sırasında gelse bile o
+  hedefin durumudur: item'da kaldıkça hedef gelemez ve rota onu kaldırmayı seçebilir. Önceden bu şans her atışta
+  yeniden çekiliyordu; yerel savunmaların havuzun yarısı olduğu base'lerde (Grand Regalia, Grand Visage, Grand
+  Cuisses) vaat %10 ile 7 kat arasında şaşıyordu. Beş hedefe kadar bütün doğal hedefler izlenir, altı hedefte grubu
+  en büyük iki hedef (`net.track`).
 - Verdikleri: beklenen maliyet, yayılımı, bütçe tavanı içinde kalma olasılığı, malzeme listesi, başka ilk adımlar,
   "şu modlu bir başlangıcı satın almak en çok ne eder", ve kurallar ("item şöyleyse şunu kullan").
 - "Bases per item" sınırı rotayı bağlar: az base ile rota baştan başlamak yerine onarır (annul + chaos, fracture, Omen of
@@ -66,17 +73,23 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   of Alchemy, essence'lar (Magic ve Perfect, çok sonuçlular dahil), alloy'lar, liquid emotion'lar ve jewel'ın "+1
   modifier allowed" modu (beş modlu jewel), kemikler (lich omen'leri, Abyssal Echoes, modu gizli bırakma), Fracturing
   Orb, Omen of Whittling, Greater Exaltation, catalyst'ler, değere göre hedef ve Divine Orb, Flux, Rune of Aldur,
-  Astrid's Creativity, Serle's Triumph, rune havuzları (gerekirse Artificer's Orb ile yuva).
+  Astrid's Creativity, Serle's Triumph, rune havuzları (gerekirse Artificer's Orb ile yuva), ve crafter videolarından
+  gelen iki araç: istenmeyen Desecrated modu Omen of Light olmadan kaldıran ucuz Perfect essence (Omen of
+  Crystallisation ile o tarafa nişanlanır; taraf doluysa omen de gerekmez: iddia k60) ve Essence of the Abyss (bıraktığı
+  "Bears the Mark of the Abyssal Lord" modunun yerini bir sonraki kemik alır: iddia k59). Yalnız Desecrated suffix'i
+  eksik bir yayda rota yaklaşık 2.690 ex'ten 380 ex'e indi.
 - Cevap bir rota değilse nedenini söyler: `blocked` (Mirrored, Corrupted, Sanctified, Unique), `impossible` (item seviyesi
   yetmiyor, rune için yuva yok, hiçbir kural kümesi hedeflerle bitmiyor).
 - **Havuz modeli.** Kimsenin istemediği modlar ortalanır, ama havuzdaki her kayıt tek tek izlenir: bir mod kendi
   grubundakileri ve etiketlerinin (oyun verisi `adds_tags`) durdurduklarını havuzdan çıkarır, karşı tarafta da ("+ to
   Level of all Fire Spell Skills" suffix'i wand'da Chaos Damage prefix'ini tutar). Yapıştırılan item'ın kendi
   engelleri bilinen durumlardır. Çekilmiş havuzlarla karşılaştırma: etiketsiz sınıflarda %0,6, wand ve staff'ta %2,4
-  içinde.
-- Henüz modellenmeyenler: Putrefaction, Vaal / Sanctify ile bitirme kumarı, Essence of the Abyss, Hinekora's Lock, Flux
-  ve Aldur'un Magic aşaması. Açık oyun-içi soru: Rune of Aldur takılıyken sonradan gelen başka element modu da
-  dönüşüyor mu (ağ ve simülatör "hayır" sayıyor).
+  içinde. Item'daki bir hedefin kendi etiketleri havuzu keser (başka bir modun engeli sayılmaz); hedefin kendi
+  grubundan bir ikizi (wand, staff ve focus'ta element hasarı prefix'leri) o grubu hedef gibi tutar. Well of Souls'ta
+  yalnızca-Desecrated bir seçenek hedefle aynı gruptansa (wand'da "#% increased Elemental Damage" ile Cold Damage) o
+  çekilişte hedef artık gelemez.
+- Henüz modellenmeyenler: Putrefaction, Vaal / Sanctify ile bitirme kumarı, Hinekora's Lock, Flux ve Aldur'un Magic
+  aşaması. Rune of Aldur, takıldıktan sonra gelen modu dönüştürmez (oyuncu 8 Ekim 2026'da doğruladı: iddia k61).
 - Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler).
 
 Doğrulama (ağın vaadi, her modu bilen simülatörde oynanan maliyetle karşılaştırılır):
@@ -86,6 +99,8 @@ Doğrulama (ağın vaadi, her modu bilen simülatörde oynanan maliyetle karşı
     node scripts/selftest/network_sweep.js --shard 0/5 --minutes 17
     node scripts/selftest/network_sweep.js --deep --runs 100000 --minutes 17
     node scripts/selftest/network_gap.js "Dueling Wand" n6 150      # fark hangi adımdan geliyor
+    node scripts/selftest/network_gap.js "Dueling Wand" "id:<taramanın yazdığı senaryo adı>" 300
+    node scripts/selftest/network_gap.js "Dueling Wand" "fams:ColdDamageWeaponPrefix@2,IncreasedCastSpeed@3" 300
 
 `network_gap.js`: oynanan eksi vaat edilen maliyet, düğüm düğüm tam olarak paylaştırılır (ziyaret sayısı x oyundaki
 sonuçlar ile ağın sonuçları arasındaki fark, ağın kendi maliyetleriyle değerlenir). Wand'da ağın, craft'ın yarı fiyatını

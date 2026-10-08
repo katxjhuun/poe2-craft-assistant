@@ -1,11 +1,12 @@
 {
  "meta": {
   "patch": "0.5.5",
-  "compiled": "2026-10-07",
+  "compiled": "2026-10-08",
   "from": [
    "poe2_bilgi_bankasi_0.5.5.md (section 10)",
    "compass recipe audit (sections a-f)",
-   "reports/research-crafters-2026-10-07.md (creators' videos and written guides of 0.5.5)"
+   "reports/research-crafters-2026-10-07.md (creators' videos and written guides of 0.5.5)",
+   "transcripts of crafters' videos supplied by the player on 8 Oct 2026 (kept outside the repository)"
   ],
   "verdicts": {
    "verified": "Matches game text or an official patch note, or two independent A/B sources.",
@@ -1955,6 +1956,24 @@
    "claim": "Omens of Crystallisation also aim Runic Alloys",
    "verdict": "rejected",
    "reason": "The omens' game text names only Perfect and Corrupted Essences, and the player confirmed on 8 Oct 2026 that an alloy is not used with a Crystallisation omen. Two creators' written steps pair them (4 July and 26 Sept 2026); those steps are not followed."
+  },
+  {
+   "id": "k59",
+   "claim": "Essence of the Abyss leaves the crafted modifier \"Bears the Mark of the Abyssal Lord\", and the next desecration replaces that Mark instead of taking a free slot or removing another modifier; the essence cannot be used on an item that has a Desecrated modifier",
+   "verdict": "plausible",
+   "reason": "The Mark is in the game data as the essence's two modifiers (a prefix and a suffix, stat essence_abyss_guaranteed_pick). That a bone then replaces it, also on a full item, and that the essence is refused beside a Desecrated modifier, rests on crafters' videos of 0.5.5 (five of the transcripts the player supplied on 8 Oct 2026 show the step). Not yet tested by the player. The planner and the craft network follow it: the essence, aimed with an Omen of Crystallisation at the unwanted modifier's side, then the bone."
+  },
+  {
+   "id": "k60",
+   "claim": "A cheap Perfect Essence aimed with an Omen of Sinistral or Dextral Crystallisation is a tool to remove an unwanted Desecrated modifier: no Omen of Light and no Orb of Annulment are needed. Where that side is full, an essence or alloy of that side removes a modifier of that side without any omen",
+   "verdict": "verified",
+   "reason": "Follows from two game rules that are in the library: a Perfect Essence removes a random modifier and adds its own (recipe c9), and the omen limits the removal to prefixes or suffixes; a side that holds only the unwanted Desecrated modifier, or that one beside a fractured modifier, loses exactly that one. Crafters use it for desecration loops on amulets and rings in 0.5.5 (transcripts supplied on 8 Oct 2026). On a bow that lacks only its Desecrated suffix the craft network's route fell from about 2,690 to about 380 Exalted Orbs with it, and the simulator plays that promise (app/tests/network.test.js). The essence's own modifier stays on the item as a crafted modifier nobody asked for."
+  },
+  {
+   "id": "k61",
+   "claim": "A Rune of Aldur also transforms the modifiers that roll after it was socketed",
+   "verdict": "rejected",
+   "reason": "The rune's text reads \"When socketed, transforms ...\", and the player confirmed on 8 Oct 2026 that a modifier rolled after the rune went in stays what it is. The planner and the craft network transform only what is on the item when the rune is socketed (and never a Chaos modifier)."
   }
  ],
  "tests": [
@@ -2261,7 +2280,7 @@
    "how": "Tell in which league the two staves are listed. Mind Roar has Fire lines a Gelid Staff cannot roll (no tier shown): a route that ignores the base, such as the Recombinator, if Expedition brought it back in 0.5.5 (Expedition is core content again in Standard and Forbidden Rites). To test the fracture part: on a wand with a fractured \"+# to Level of all Cold Spell Skills\", use Exalted Orbs with Omen of Sinistral Exaltation and see whether \"#% increased Fire Damage\" ever comes.",
    "claims": [],
    "status": "confirmed",
-   "note": "The Runes of Aldur: Passion of Aldur turns Cold and Lightning modifiers into equivalent Fire ones (Breath: Cold, Ire: Lightning, Betrayal: Chaos) while socketed; fractured modifiers stay. Both staves carry Passion of Aldur. The Recombinator was removed with 0.5.0 (your research).",
+   "note": "The Runes of Aldur: Passion of Aldur turns Cold and Lightning modifiers into equivalent Fire ones (Breath: Cold, Ire: Lightning, Betrayal: Chaos) at the moment it is socketed; what rolls afterwards is not transformed (the player, 8 Oct 2026: claim k61); fractured modifiers stay. Both staves carry Passion of Aldur. The Recombinator was removed with 0.5.0 (your research).",
    "source": "rune texts in the game data (augments), the two staves (Ghoul Beam, Mind Roar) and your report on the Recombinator (27 Sept 2026)"
   },
   {
