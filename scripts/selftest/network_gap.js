@@ -1,0 +1,67 @@
+/* Where the gap between the promised and the played cost of a route comes from, node by node.
+ *
+ * played - promised = the sum over the network's nodes of (visits per craft) x (what the step leads to in play - what
+ * the network says it leads to), both valued with the network's own costs. So every node's share of the gap is exact,
+ * and the outcome that carries it can be named: this is how a wrong chance in the network is found (on wands the
+ * network once promised half of what a craft costs; this measure pointed at the modifier the other side's tags stop).
+ *
+ *   node scripts/selftest/network_gap.js "<base>" <k | nK> [crafts] [seconds] [rows]
+ *
+ * <k>: the k-th special request of the sweep for that base (0 value, 1 another element, 2 rune pool, 3 four suffixes,
+ * 4 five modifiers on a jewel, 5 two crafted-only modifiers); n<K>: its K-th drawn scenario (network_sweep.js).
+ * A single process and a few hundred crafts: fine next to the game. Many crafts belong in the cloud workflow.
+ */
+'use strict';
+const path = require('path');
+const { ROOT, load, weightsFor } = require('./lib.js');
+const NW = require(path.join(ROOT, 'app', 'network.js'));
+const SW = require('./network_sweep.js');
+const { play } = require('./network_check.js');
+const { ix, priceOf } = load();
+const [base, kStr, runsStr, secStr, rowsStr] = process.argv.slice(2);
+const t = SW.table(base);
+const singles = t.nat.prefix.length + t.nat.suffix.length + t.des.prefix.length + t.des.suffix.length;
+const sc = SW.scenario(base, /^n/.test(kStr) ? singles + +kStr.slice(1) : singles + 6 * (+kStr) + 5);
+const input = { ix, item: sc.item, targets: sc.targets, locks: {}, priceOf, baseCost: 1, weights: weightsFor(base), essences: t.essences, quality: sc.qualityMode };
+const net = NW.route(input);
+const s = net.start, want = net.cost(s);
+console.log(sc.id, '|', sc.kind);
+console.log('targets:', net.goals.map((g) => `${g.label} [${g.side}, ${g.kind}${g.tier ? ', T' + g.tier : ''}${g.minValue != null ? ', >=' + g.minValue : ''}]`).join(' | '));
+console.log('item:', sc.item.rarity, sc.item.mods.map((m) => `${m.slot[0]}:${m.fam || m.text}${m.fractured ? '(F)' : ''}${m.desecrated ? '(D)' : ''}`).join(', '));
+const steps = net.materials(s).reduce((x, m) => x + m.uses, 0);
+const audit = new Map();
+const got = play(net, input, +runsStr || 200, sc.seed, Math.max(5000, Math.round(steps * 60)), (+secStr || 60) * 1000, audit);
+console.log(`${net.N} nodes | promised ${want.toFixed(1)} | played ${isFinite(got.mean) ? got.mean.toFixed(1) : '-'} ±${(got.se || 0).toFixed(1)} (x${(got.mean / want).toFixed(3)}) over ${got.runs}${got.off ? ', OFF ' + got.off : ''}${got.done < got.runs ? ', unfinished ' + (got.runs - got.done) : ''}`);
+const d = (k) => {
+  if (k < 0) return 'OFF NETWORK';
+  const w = net.describe(k);
+  return `${w.rarity} has[${w.has.join('; ')}]${w.low.length ? ' low[' + w.low.join(';') + ']' : ''}${w.twin.length ? ' twin[' + w.twin.join(';') + ']' : ''}${w.inWay.length ? ' inWay[' + w.inWay.join(';') + ']' : ''}${w.runes.length ? ' runes[' + w.runes.join(';') + ']' : ''} others ${w.otherPrefixes}/${w.otherSuffixes}${w.hidden ? ' hidden ' + w.hidden : ''}${w.desecratedOther ? ' desOther ' + w.desecratedOther : ''}${w.fracturedOther ? ' fracOther' : ''}${w.allowance ? ' allowance' : ''}${net.done(k) ? ' DONE' : ''}`;
+};
+const V = (k) => (k < 0 ? NaN : net.cost(k));
+const rows = [];
+let total = 0;
+for (const [node, rec] of audit) {
+  const step = net.step(node);
+  if (!step) continue;
+  const model = new Map();
+  for (let q = 0; q < step.out.length; q += 2) { const k = step.out[q + 1] === -1 ? net.n0 : step.out[q + 1]; model.set(k, (model.get(k) || 0) + step.out[q]); }
+  let gap = 0;
+  const parts = [];
+  for (const k of new Set([...model.keys(), ...rec.to.keys()])) {
+    const m = model.get(k) || 0, g = (rec.to.get(k) || 0) / rec.n;
+    if (k < 0) continue;
+    const c = (g - m) * V(k);
+    gap += c;
+    parts.push({ k, m, g, c });
+  }
+  const share = gap * rec.n / got.runs;
+  total += share;
+  rows.push({ node, n: rec.n, share, step, parts });
+}
+console.log(`gap played - promised: ${(got.mean - want).toFixed(1)}; explained by the nodes below: ${total.toFixed(1)}`);
+rows.sort((a, b) => Math.abs(b.share) - Math.abs(a.share));
+for (const x of rows.slice(0, +rowsStr || 8)) {
+  console.log(`\n${x.share >= 0 ? '+' : ''}${x.share.toFixed(1)}  (${(x.n / got.runs).toFixed(1)} visits per craft)  ${d(x.node)} -> ${x.step.names.join(' + ') || x.step.a.op}${x.step.a.hide ? ' (hide)' : ''}  ${JSON.stringify(x.step.a)}`);
+  x.parts.sort((a, b) => Math.abs(b.g - b.m) - Math.abs(a.g - a.m));
+  for (const p of x.parts.slice(0, 6)) console.log(`      model ${(p.m * 100).toFixed(2).padStart(6)}%  played ${(p.g * 100).toFixed(2).padStart(6)}%  value ${V(p.k).toFixed(0).padStart(7)}  -> ${d(p.k)}`);
+}

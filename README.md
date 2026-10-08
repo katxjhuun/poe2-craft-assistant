@@ -60,10 +60,24 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   Light döngüsü kendiliğinden çıkar).
 - Catalyst quality oyuncunun seçimi: dokunma (varsayılan), olanı Omen of Catalysing Exaltation ile harca, ya da catalyst
   ekleyip harca.
-- Ağın henüz kapsamadıkları (değere göre hedef, rune'un açtığı mod havuzu, beş modlu jewel) eski simülatörle, tek rota
-  olarak planlanır.
-- Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler; ağın henüz
-  bilmediği adımlar orada: Omen of Whittling, Greater Exaltation, Putrefaction, Astrid's Creativity takmak).
+- **Her istek ağdan geçer** (oyuncunun 8 Ekim 2026 kararı: "ağın kapsamadığı hiçbir şey istemiyorum"). Sayfa artık eski
+  simülatöre düşmez; simüle edilen planlayıcı, işçileri, ilerleme halkası ve profil kalıntıları sayfadan kaldırıldı. Ağ
+  sayfada ayrı bir iş parçacığında (Web Worker) çözülür. Ağda olanlar: bütün orb'lar (tier ve taraf omen'leriyle), Orb
+  of Alchemy, essence'lar (Magic ve Perfect, çok sonuçlular dahil), alloy'lar, liquid emotion'lar ve jewel'ın "+1
+  modifier allowed" modu (beş modlu jewel), kemikler (lich omen'leri, Abyssal Echoes, modu gizli bırakma), Fracturing
+  Orb, Omen of Whittling, Greater Exaltation, catalyst'ler, değere göre hedef ve Divine Orb, Flux, Rune of Aldur,
+  Astrid's Creativity, Serle's Triumph, rune havuzları (gerekirse Artificer's Orb ile yuva).
+- Cevap bir rota değilse nedenini söyler: `blocked` (Mirrored, Corrupted, Sanctified, Unique), `impossible` (item seviyesi
+  yetmiyor, rune için yuva yok, hiçbir kural kümesi hedeflerle bitmiyor).
+- **Havuz modeli.** Kimsenin istemediği modlar ortalanır, ama havuzdaki her kayıt tek tek izlenir: bir mod kendi
+  grubundakileri ve etiketlerinin (oyun verisi `adds_tags`) durdurduklarını havuzdan çıkarır, karşı tarafta da ("+ to
+  Level of all Fire Spell Skills" suffix'i wand'da Chaos Damage prefix'ini tutar). Yapıştırılan item'ın kendi
+  engelleri bilinen durumlardır. Çekilmiş havuzlarla karşılaştırma: etiketsiz sınıflarda %0,6, wand ve staff'ta %2,4
+  içinde.
+- Henüz modellenmeyenler: Putrefaction, Vaal / Sanctify ile bitirme kumarı, Essence of the Abyss, Hinekora's Lock, Flux
+  ve Aldur'un Magic aşaması. Açık oyun-içi soru: Rune of Aldur takılıyken sonradan gelen başka element modu da
+  dönüşüyor mu (ağ ve simülatör "hayır" sayıyor).
+- Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler).
 
 Doğrulama (ağın vaadi, her modu bilen simülatörde oynanan maliyetle karşılaştırılır):
 
@@ -71,14 +85,21 @@ Doğrulama (ağın vaadi, her modu bilen simülatörde oynanan maliyetle karşı
     node scripts/selftest/network_check.js --limit 24      # yerelde birkaç saniye, tek çekirdek
     node scripts/selftest/network_sweep.js --shard 0/5 --minutes 17
     node scripts/selftest/network_sweep.js --deep --runs 100000 --minutes 17
+    node scripts/selftest/network_gap.js "Dueling Wand" n6 150      # fark hangi adımdan geliyor
 
-Geniş tarama bulutta çalışır, oyuncunun bilgisayarında değil: `.github/workflows/network.yml` (yalnız elle başlar; beş
-geniş iş ve her senaryoyu 100.000 kez oynayan bir iş; her iş kendini durdurur, başlatma başına en çok 140 dakika; özel
-depoda ayda 2.000 ücretsiz dakika var, fiyat işi bunun ~300'ünü kullanır). Sonuçlar işin özetinde ve `sweep-*` çıktılarında.
+`network_gap.js`: oynanan eksi vaat edilen maliyet, düğüm düğüm tam olarak paylaştırılır (ziyaret sayısı x oyundaki
+sonuçlar ile ağın sonuçları arasındaki fark, ağın kendi maliyetleriyle değerlenir). Wand'da ağın, craft'ın yarı fiyatını
+vaat ettiği hatayı bu ölçüm buldu.
+
+Geniş tarama bulutta çalışır, oyuncunun bilgisayarında değil: `.github/workflows/network.yml` (yalnız elle başlar:
+`mode=broad` çok senaryo, `mode=deep` her senaryoyu 100.000 kez oynar; her iş kendini durdurur). Depo 8 Ekim 2026'dan
+beri herkese açık, Actions dakikaları ücretsiz. Taramanın her altıncı çekilmiş senaryosu özel bir istektir: değere göre
+hedef, item'da başka elementin direnci, rune havuzu, dört suffix (Serle's Triumph), beş modlu jewel, iki crafted mod
+(Astrid's Creativity). Sonuçlar işin özetinde ve `sweep-*` çıktılarında.
 
 ## Tam tarama (`scripts/selftest/sweep.js`)
 
-(Eski planner'ın strateji ayarları için; 7 Ekim 2026'dan beri sayfa yalnız ağın kapsamadığı item'larda bu planner'a düşer.)
+(Eski planner'ın strateji ayarları için. 8 Ekim 2026'dan beri sayfa bu planner'ı kullanmaz; simülatör ağın denetçisi olarak kalır.)
 
 
 Self-test senaryolarının her birinde (başlangıç item'i + hedefler) planner'ın bütün strateji ayarlarının çarpımını (yaklaşık 10,6 milyon kombinasyon) kapsar ve sayfanın Cheap / Balanced / Premium seçimlerini denetler.
