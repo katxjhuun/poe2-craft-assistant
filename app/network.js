@@ -1737,6 +1737,39 @@
       }
       return X;
     }
+    /**
+     * Expected visits to every node from node s0 under the rule set, until the item is finished or given up for a new
+     * base: row s0 of the inverse that `evaluate` applies, with the same blocks, transposed.
+     */
+    function visitsFrom(s0) {
+      // the rule set's edges that enter a block from outside, by the node they point at
+      const at = new Int32Array(N + 1);
+      const each = (fn) => { for (let s = 0; s < N; s++) { if (pol[s] < 0) continue; const o = acts[s][pol[s]].out, bi = blockOf[s]; for (let t = 0; t < o.length; t += 2) { const s2 = o[t + 1]; if (s2 !== RESTART && blockOf[s2] !== bi) fn(s, s2, GAMMA * o[t], bi); } } };
+      each((s, s2) => { at[s2 + 1]++; });
+      for (let s = 0; s < N; s++) at[s + 1] += at[s];
+      const src = new Int32Array(at[N]), val = new Float64Array(at[N]), fill = at.slice(0, N);
+      const next = blocks.map(() => new Set());
+      each((s, s2, p, bi) => { const q = fill[s2]++; src[q] = s; val[q] = p; next[bi].add(blockOf[s2]); });
+      const nu = new Float64Array(N), R = new Float64Array(maxBlock), Y = new Float64Array(maxBlock);
+      const dirty = new Uint8Array(blocks.length);
+      dirty[blockOf[s0]] = 1;
+      let left = 1;
+      for (let pass = 0; pass < 600 && left > 0; pass++) {
+        // (the blocks in the order opposite to evaluate's: what flows into a block comes from the blocks before it)
+        for (let bi = blocks.length - 1; bi >= 0; bi--) {
+          if (!dirty[bi]) continue;
+          dirty[bi] = 0; left--;
+          const b = blocks[bi], m = b.length;
+          for (let li = 0; li < m; li++) { const t = b[li]; let v = t === s0 ? 1 : 0; for (let q = at[t], e = at[t + 1]; q < e; q++) v += val[q] * nu[src[q]]; R[li] = v; }
+          const f = luOf(bi);
+          luSolveT(f.A, f.perm, R, m, Y);
+          let delta = 0;
+          for (let li = 0; li < m; li++) { const v = R[li], old = nu[b[li]], ch = Math.abs(v - old); if (ch > 1e-300) { const dv = ch / (Math.abs(v) + 1e-300); if (dv > delta) delta = dv; } nu[b[li]] = v; }
+          if (delta > 1e-11) for (const bj of next[bi]) if (!dirty[bj]) { dirty[bj] = 1; left++; }
+        }
+      }
+      return nu;
+    }
     const V = new Float64Array(N);
     let x = 0;
     // what a new base costs in the equations: its price, plus a charge that keeps the craft within the number of bases
@@ -1816,17 +1849,28 @@
       const nameSet = new Map();
       for (let s = 0; s < N; s++) if (pol[s] >= 0) for (const n of actNames(acts[s][pol[s]].a)) if (!nameSet.has(n)) nameSet.set(n, nameSet.size);
       const names = [...nameSet.keys()];
-      const rhs = names.map(() => ({ d: new Float64Array(N), bnd: 0 }));
       // money only: the cost and its second moment (M = c^2 + 2 c E[V'] + E[M']) leave the charge on bases out
       const cost = new Float64Array(N);
-      for (let s = 0; s < N; s++) if (pol[s] >= 0) { const act = acts[s][pol[s]]; cost[s] = act.cost; for (const n of actNames(act.a)) rhs[nameSet.get(n)].d[s] += act.a.count || 1; }
-      rhs.push({ d: cost, bnd: 0 });
-      const X = evaluate(rhs);
-      const whole = (k, s) => X[k][s] + (1 - Fv[s]) * (Fv[n0] > 1e-250 ? X[k][n0] / Fv[n0] : 0);
-      const K = names.length;
+      for (let s = 0; s < N; s++) if (pol[s] >= 0) cost[s] = acts[s][pol[s]].cost;
+      const X = evaluate([{ d: cost, bnd: 0 }]);
+      // Every currency's count from a node: the visits to each node from it until the item is finished or given up
+      // (visitsFrom: one solve), times what the step there uses. (A solve per currency, thirty of them, took most of
+      // an answer's time on a large network.)
+      const counts = new Map();
+      const countsFrom = (s0) => {
+        let c = counts.get(s0);
+        if (!c) {
+          c = new Float64Array(names.length);
+          const nu = visitsFrom(s0);
+          for (let t = 0; t < N; t++) { if (!(nu[t] > 0) || pol[t] < 0) continue; const a = acts[t][pol[t]].a; for (const n of actNames(a)) c[nameSet.get(n)] += nu[t] * (a.count || 1); }
+          counts.set(s0, c);
+        }
+        return c;
+      };
+      const whole = (k, s) => countsFrom(s)[k] + (1 - Fv[s]) * (Fv[n0] > 1e-250 ? countsFrom(n0)[k] / Fv[n0] : 0);
       const money = new Float64Array(N);
-      for (let s = 0; s < N; s++) money[s] = whole(K, s);
-      const moneyBase = Fv[n0] > 1e-250 ? X[K][n0] / Fv[n0] : BIG;
+      for (let s = 0; s < N; s++) money[s] = X[0][s] + (1 - Fv[s]) * (Fv[n0] > 1e-250 ? X[0][n0] / Fv[n0] : 0);
+      const moneyBase = Fv[n0] > 1e-250 ? X[0][n0] / Fv[n0] : BIG;
       const d2 = new Float64Array(N);
       for (let s = 0; s < N; s++) if (pol[s] >= 0) {
         const act = acts[s][pol[s]], o = act.out;
@@ -1893,7 +1937,7 @@
        * Keep the craft from node s within `max` new bases on average: a charge per base is raised until the rule set
        * that is cheapest with it needs no more. Returns the charge (0 when the limit never bound).
        */
-      fitBases(s, max) {
+      fitBases(s, max, hint) {
         if (charge) { charge = 0; solve(); }
         const free = basesAt(s);
         if (!(max >= 0) || free <= max || !(x < BIG)) return 0;
@@ -1904,11 +1948,12 @@
         holdX = true;
         let on = 0;
         const probe = (z) => { charge = z - z0; on = z; solve(false); return basesAt(s); };
-        let lo = z0, hi = z0 * Math.min(3, Math.max(1.3, Math.sqrt(free / Math.max(0.5, max)))), at = Infinity;
-        for (let k = 0; k < 40; k++) { at = probe(hi); if (at <= max) break; lo = hi; hi *= 1.6; }
+        // (hint: the charge a smaller network of the same request needed: the search starts there and is short)
+        let lo = z0, hi = hint > 0 ? z0 + hint * 1.03 : z0 * Math.min(3, Math.max(1.3, Math.sqrt(free / Math.max(0.5, max)))), at = Infinity;
+        for (let k = 0; k < 40; k++) { at = probe(hi); if (at <= max) break; lo = hi; hi = hint > 0 ? z0 + (hi - z0) * 1.3 : hi * 1.6; }
         // back down while the route is far under the limit (a cheaper one may still keep to it); a very large
         // network gets fewer of these steps
-        for (let k = 0, steps = N > 25000 ? 3 : 8; k < steps && at < 0.75 * max && hi / lo > 1.02; k++) {
+        for (let k = 0, steps = hint > 0 ? 1 : N > 25000 ? 3 : 8; k < steps && at < (hint > 0 ? 0.5 : 0.75) * max && hi / lo > 1.02; k++) {
           const mid = Math.sqrt(lo * hi), b = probe(mid);
           if (b <= max) { hi = mid; at = b; } else lo = mid;
         }
@@ -2037,6 +2082,13 @@
     for (let i = 0, n = m * K; i < n; i++) R[i] = Y[i];
   }
 
+  /** The transposed system with the same factors: R (m numbers) becomes y, where (the matrix)^T y = R. Y: room for m numbers. */
+  function luSolveT(A, perm, R, m, Y) {
+    for (let i = 0; i < m; i++) { let v = R[i]; for (let j = 0; j < i; j++) v -= A[j * m + i] * Y[j]; Y[i] = v / A[i * m + i]; }
+    for (let i = m - 1; i >= 0; i--) { let v = Y[i]; for (let j = i + 1; j < m; j++) v -= A[j * m + i] * Y[j]; Y[i] = v; }
+    for (let i = 0; i < m; i++) R[perm[i]] = Y[i];
+  }
+
   /** Regularised lower incomplete gamma P(a, x). */
   function gammaP(a, x) {
     if (!(x > 0)) return 0;
@@ -2079,37 +2131,67 @@
   /** The same, with the charge on white bases fitted to a limit of bases per finished item: {net, charge}. */
   function routeFit(input, baseLimit) {
     const nT = Object.values(input.targets || {}).filter((t) => t && t.fam).length, many = nT >= 7;
-    const fit = (net) => (baseLimit > 0 && !net.done(net.start) ? net.fitBases(net.start, +baseLimit) : 0);
+    const fit = (net, hint) => (baseLimit > 0 && !net.done(net.start) ? net.fitBases(net.start, +baseLimit, hint) : 0);
+    const bad = (net) => net.unsupported || net.impossible || net.blocked;
     // [lite, targets followed at most, states at most]. Up to five targets fit with all of them followed; with six the
     // two with the largest groups are (a try that does not fit is time lost, so none is made that is known not to).
     const tries = many ? [[1, 0, 150000], [2, 0, 1000000]] : (nT <= 5 ? [[0, 8, 160000]] : []).concat(nT > FOLLOW6 ? [[0, FOLLOW6, 160000]] : [], [[0, 0, 150000], [1, 0, 400000], [2, 0, 1000000]]);
-    // first with Omen of Whittling at its best (see WBEST in build): most routes do not use it, and then this is the answer
-    let net = null;
-    for (const [lite, track, maxStates] of tries) {
-      net = build(Object.assign({}, input, { lite, track, maxStates, whittle: 'best' }));
-      if (net.unsupported !== 'too many item states') break;
+    /** The largest network that fits, with the omen as `whittle` says. */
+    const full = (whittle) => {
+      let n = null;
+      for (const [lite, track, maxStates] of tries) {
+        n = build(Object.assign({}, input, { lite, track, maxStates, whittle }));
+        if (n.unsupported !== 'too many item states') break;
+      }
+      return n;
+    };
+    const done = (net, hint) => (bad(net) ? { net, charge: 0 } : { net, charge: fit(net, hint) });
+    /**
+     * The route leans on Omen of Whittling: the network with the levels followed, in as many classes and with as many
+     * targets' blockers followed as fit (each class and each followed target has its known share of the size; from:
+     * a network of the request without classes). null when nothing fits.
+     */
+    const withLevels = (from, hint) => {
+      const base = from.N / Math.pow(1.4, from.track), seen = new Set(), plans = [];
+      for (const classes of [3, 2]) for (const track of [from.track, Math.min(from.track, 2), 0]) {
+        const k = classes + '|' + track;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        // (three classes a side make the network about six times as large, two about two and a half times; 65,000
+        // nodes at most: such a network takes a quarter of a minute to solve and as long again to fit to a base limit)
+        const size = base * Math.pow(1.4, track) * (classes === 3 ? 6 : 2.6);
+        if (size <= 65000) plans.push({ classes, track, size });
+      }
+      // the first that should fit, and when it does not after all, the smallest (a try that does not fit costs as
+      // much time as one that does: no more than two)
+      const order = plans.length > 1 ? [plans[0], plans.slice().sort((a, b) => a.size - b.size)[0]] : plans;
+      for (let k = 0; k < order.length; k++) {
+        if (k && order[k] === order[0]) break;
+        const n2 = build(Object.assign({}, input, { lite: 0, track: order[k].track, maxStates: 100000, whittle: 'levels', classes: order[k].classes }));
+        if (n2.unsupported !== 'too many item states') return done(n2, hint);
+      }
+      return null;
+    };
+    // Omen of Whittling is first solved at its best (see WBEST in build): most routes do not use it even then, and a
+    // route that does not is the route with the real omen too.
+    if (!many && nT >= 4) {
+      // Four targets or more: the networks are large (a minute to solve and fit), so the small one (no blockers
+      // followed) says whether the omen is worth having, also under the base limit, where more is repaired. If it is,
+      // the levels are followed in as large a network as fits; if not, the large network is solved without the omen.
+      const pre = build(Object.assign({}, input, { lite: 0, track: 0, maxStates: 150000, whittle: 'best' }));
+      if (!bad(pre)) {
+        let hint = 0;
+        const uses = pre.usesIdeal() || (baseLimit > 0 && !pre.done(pre.start) && ((hint = fit(pre)), pre.usesIdeal()));
+        const got = uses ? withLevels(pre, hint) : null;
+        return got || done(full('none'), hint);
+      }
     }
-    if (net.unsupported || net.impossible || net.blocked) return { net, charge: 0 };
-    let charge = fit(net);
-    if (!net.usesIdeal()) return { net, charge };
-    // the route leans on the omen: the network again with the levels followed, in as many classes and with as many
-    // targets' blockers followed as fit (each class and each followed target has its known share of the size)
-    const base = net.N / Math.pow(1.4, net.track), seen = new Set();
-    for (const classes of [3, 2]) for (const track of [net.track, Math.min(net.track, 2), 0]) {
-      const k = classes + '|' + track;
-      if (seen.has(k)) continue;
-      seen.add(k);
-      // (three classes a side make the network about six times as large, two about two and a half times)
-      if (base * Math.pow(1.4, track) * (classes === 3 ? 6 : 2.6) > 130000) continue;
-      const n2 = build(Object.assign({}, input, { lite: 0, track, maxStates: 165000, whittle: 'levels', classes }));
-      if (n2.unsupported === 'too many item states') continue;
-      if (n2.unsupported || n2.impossible || n2.blocked) return { net: n2, charge: 0 };
-      return { net: n2, charge: fit(n2) };
-    }
-    // no room for the classes: the route without the omen
-    const n3 = build(Object.assign({}, input, { lite: 0, track: net.track, maxStates: 1000000, whittle: 'none' }));
-    if (n3.unsupported || n3.impossible || n3.blocked) return { net: n3, charge: 0 };
-    return { net: n3, charge: fit(n3) };
+    const net = full('best');
+    if (bad(net)) return { net, charge: 0 };
+    // (a route that uses the omen is solved again: fitting the base limit to this network first would be time lost)
+    let hint = 0;
+    if (!net.usesIdeal()) { hint = fit(net); if (!net.usesIdeal()) return { net, charge: hint }; }
+    return withLevels(net, hint) || done(full('none'), hint);
   }
 
   /**

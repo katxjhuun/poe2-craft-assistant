@@ -3501,7 +3501,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (busy) {
       html += `<div class="job">
         <div class="job-status">Route:<b>Solving the craft network…</b></div>
-        <p class="sub" style="margin:8px 0 0">Every state this item can reach with ${nTargets} target${nTargets === 1 ? '' : 's'} is being solved, with every modifier that could get in a target's way. Nothing is simulated. One to three targets take a few seconds, five or six up to a minute.</p>
+        <p class="sub" style="margin:8px 0 0">Every state this item can reach with ${nTargets} target${nTargets === 1 ? '' : 's'} is being solved, with every modifier that could get in a target's way. Nothing is simulated. One to three targets take a few seconds, five or six a minute or two (the longest when Omen of Whittling is worth using: its network is solved twice).</p>
         <div class="job-foot"><span class="sub num" id="planSecs">${jobSecs()}</span><button class="btn" type="button" id="stopBtn">Cancel</button></div>
       </div>`;
       el.innerHTML = html;
