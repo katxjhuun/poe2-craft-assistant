@@ -54,7 +54,7 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
 - **Rota** = her düğümde ortalamada en ucuz kenar. Simülasyon yok: maliyetler denklemlerden çözülür (her zaman biten bir
   kural kümesinden başlayan policy iteration; uzun "at, tutmadı, yine at" döngüleri bloklar içinde tam çözülür, yeni
   beyaz base tek bir bilinmeyendir). Beyaz base'te iki hedef yaklaşık 1 saniye (6.700 düğüm), üç hedef 3 saniye,
-  dört hedef 9 saniye, beş altı hedef yarım dakika ile bir dakika arası (ağ o zaman 100.000 düğüme varır).
+  dört hedef 9 saniye; beş hedef ve 100 base sınırıyla botlarda 35 ile 75 saniye (8 Ekim 2026 ölçümü; önce 4 dakika).
 - **Engeller izlenir** (oyuncunun 8 Ekim 2026 kararı: "daha büyük bir ağ gerekiyorsa büyüt"). Bir hedefin grubundan
   gelen mod (düşük tier, kardeş mod) ya da onu etiketleriyle durduran karşı taraf modu, craft sırasında gelse bile o
   hedefin durumudur: item'da kaldıkça hedef gelemez ve rota onu kaldırmayı seçebilir. Önceden bu şans her atışta
@@ -88,6 +88,21 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   grubundan bir ikizi (wand, staff ve focus'ta element hasarı prefix'leri) o grubu hedef gibi tutar. Well of Souls'ta
   yalnızca-Desecrated bir seçenek hedefle aynı gruptansa (wand'da "#% increased Elemental Damage" ile Cold Damage) o
   çekilişte hedef artık gelemez.
+- **Omen of Whittling.** Omen en düşük seviyeli modu siler. Kimsenin istemediği modların en düşük seviyesi, taraf
+  başına bir sınıf olarak düğümdedir (hedeflerin alabileceği en düşük seviyenin altında mı, üstünde mi). Omen yalnız
+  neyi sileceği kesin olan düğümlerde bir kenardır: bir tarafta, item'daki bütün hedeflerin altında kalan bir mod
+  varsa. Crafter'ların "whittle angle" dediği durum budur. Sınıflar ağı 2,6 ile 6 kat büyütür; çoğu rota omen'i
+  kullanmadığı için önce omen "en iyi hâliyle" (oyuncu neyi sileceğini seçiyormuş gibi) çözülür ve yalnız rota onu
+  kullanıyorsa sınıflı ağ kurulur. Sınıfların sığmadığı isteklerde ve küçük ağlarda omen rotaya girmez.
+- **Değerler oturana kadar çözülür.** Blokları aşan döngüler (hedef silinir, yeniden atılır) tur başına şansıyla
+  oturur; yalnız blok geçişleriyle 25.000 beyaz base'lik bir quiver rotası beşte bir eksik değerlenmişti. Geçişler
+  yetmediğinde rotanın ulaştığı düğümlerin değerleri hızlandırılmış geçişlerle (Anderson) oturtulur; `net.settled`.
+- **Kuralların reddettiği adım yok.** Oynatma her adımı simülatörün kurallarına sorar (`P.validate`); reddedilen adım
+  taramada uyuşmazlıktır. Böyle bulunanlar: lich omen'leri yalnız silah ve takıda, kendi tarafı dolu essence başka
+  tarafa nişanlanamaz, Astrid's Creativity ile bile üçüncü crafted mod olmaz.
+- Bilinen sınır: düğüm, kimsenin istemediği tek bir crafted modu sayar. Astrid's Creativity ile ikincisini bırakacak
+  adımlar (araç essence'i ile alaşımı art arda kullanmak gibi) rotaya girmez; bu yüzden bazı rotalar olabilecek en
+  ucuzundan pahalıdır (bir yayda 565 yerine 667 ex).
 - Henüz modellenmeyenler: Putrefaction, Vaal / Sanctify ile bitirme kumarı, Hinekora's Lock, Flux ve Aldur'un Magic
   aşaması. Rune of Aldur, takıldıktan sonra gelen modu dönüştürmez (oyuncu 8 Ekim 2026'da doğruladı: iddia k61).
 - Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler).

@@ -258,9 +258,10 @@ test('network: the Well of Souls beside a desecrated-only modifier of the group 
 });
 
 test('network: an essence as a tool against the unwanted Desecrated modifier (no Omen of Light)', () => {
-  // A bow with its three prefixes wants a Desecrated suffix. When the Well of Souls misses, a Perfect essence aimed at
-  // the suffixes with an Omen of Crystallisation replaces the miss (claim k60), which costs a tenth of Omen of Light
-  // and an Orb of Annulment. Its promise is played.
+  // A bow with its three prefixes wants a Desecrated suffix. When the Well of Souls misses, an essence or alloy takes
+  // the miss away (claim k60): aimed at the suffixes with an Omen of Crystallisation, or without an omen once the
+  // suffixes are full. That costs a fraction of Omen of Light and an Orb of Annulment. Its promise is played, and the
+  // simulator's rules refuse none of its steps.
   const { E: E2, load, weightsFor, rng, renderItem } = require('../../scripts/selftest/lib.js');
   const SW = require('../../scripts/selftest/network_sweep.js');
   const { play } = require('../../scripts/selftest/network_check.js');
@@ -280,15 +281,17 @@ test('network: an essence as a tool against the unwanted Desecrated modifier (no
   const net = NW.route(input);
   assert.ok(!net.impossible && !net.unsupported);
   const names = net.materials(net.start).map((m) => m.name);
-  assert.ok(names.some((n) => /Crystallisation/.test(n)) && names.some((n) => /Essence/.test(n)), 'the tool is in the route: ' + names.join(', '));
+  assert.ok(names.some((n) => /Essence|Alloy/.test(n)), 'the tool is in the route: ' + names.join(', '));
   assert.ok(!names.includes('Omen of Light'), 'no Omen of Light');
-  const tool = net.rules(net.start, 8).find((x) => (x.names || []).some((n) => /Essence/.test(n)));
-  assert.ok(tool && tool.when.desecratedOther, 'it is used on the unwanted Desecrated modifier');
+  const tool = net.rules(net.start, 10).find((x) => x.when.desecratedOther && (x.names || []).some((n) => /Essence|Alloy/.test(n)));
+  assert.ok(tool, 'it is used on the unwanted Desecrated modifier');
   const got = play(net, input, 100, 5, 20000);
   assert.equal(got.off, 0, 'no craft leaves the network');
+  assert.equal(got.refused, 0, 'the rules allow every step');
   assert.equal(got.done, got.runs);
   const want = net.cost(net.start);
   assert.ok(Math.abs(got.mean - want) <= 4 * got.se + 0.08 * want, `played ${got.mean.toFixed(1)} ± ${got.se.toFixed(1)}, promised ${want.toFixed(1)}`);
+  assert.ok(net.settled, 'the values are settled');
 });
 
 test('planner: Essence of the Abyss leaves a Mark that the next desecration replaces (claim k59)', () => {
@@ -325,4 +328,25 @@ test('planner: Essence of the Abyss leaves a Mark that the next desecration repl
     const withDes = Object.assign({}, st, { mods: st.mods.slice(1).map((m, k) => (k === 0 ? Object.assign({}, m, { des: true }) : m)) });
     assert.match(P.validate(ctx, withDes, a), /cannot be used on an item that has a Desecrated modifier/);
   }
+});
+
+test('network: the values of a craft of very many turns are settled (a quiver with six targets)', () => {
+  // A loop that crosses the solver's blocks (a target is lost and rolled again) settles by its chance per turn. With
+  // passes over the blocks alone this route, 25,000 white bases long, was valued at 508,446 with its equations a
+  // thousandth off, and played at 646,000: the accelerated sweeps settle it (656,662 at the prices of 8 Oct 2026).
+  const SW = require('../../scripts/selftest/network_sweep.js');
+  const { load, weightsFor } = require('../../scripts/selftest/lib.js');
+  const L = load();
+  const id = 'Visceral Quiver|set6|rare, other modifiers|9';
+  let sc = null;
+  for (let n = 0; n < 400 && !sc; n++) { let x = null; try { x = SW.scenario('Visceral Quiver', n, true); } catch (e) { x = null; } if (x && x.id === id) sc = x; }
+  assert.ok(sc, 'the scenario is drawn');
+  const net = NW.build({ ix: L.ix, item: sc.item, targets: sc.targets, locks: {}, priceOf: L.priceOf, baseCost: 1, weights: weightsFor(sc.base), essences: SW.table(sc.base).essences, quality: sc.qualityMode, lite: 0, track: 0, whittle: 'none', maxStates: 200000 });
+  assert.ok(!net.unsupported && !net.impossible);
+  assert.ok(net.settled, 'the values satisfy their own equations');
+  // the route's first step and what follows it add up to the item's value
+  const s = net.start, st = net.step(s);
+  let v = st.cost;
+  for (let t = 0; t < st.out.length; t += 2) v += st.out[t] * net.cost(st.out[t + 1] === -1 ? net.n0 : st.out[t + 1]);
+  assert.ok(Math.abs(v - net.cost(s)) <= 1e-6 * net.cost(s), `${v} vs ${net.cost(s)}`);
 });

@@ -298,8 +298,8 @@ function runOne(sc, runs, withRivals, deep, limitMs) {
   const ratio = got.mean / want, z = (got.mean - want) / (got.se || 1);
   Object.assign(out, { nodes: net.N, lite: net.lite || 0, runs: got.runs, asked: n, uses: got.steps, network: want, played: got.mean, se: got.se, ratio, z, done: got.done, off: got.off,
     // refused: steps of the route that the simulator's rules do not allow (the network and the rules disagree)
-    refused: got.refused || 0, track: net.track, classes: net.classes, whittle: net.whittle,
-    pass: got.done === got.runs && got.off === 0 && !got.refused && (Math.abs(ratio - 1) <= 0.15 || Math.abs(z) <= 3) });
+    refused: got.refused || 0, track: net.track, classes: net.classes, whittle: net.whittle, settled: net.settled !== false,
+    pass: got.done === got.runs && got.off === 0 && !got.refused && net.settled !== false && (Math.abs(ratio - 1) <= 0.15 || Math.abs(z) <= 3) });
   if (withRivals) {
     const b = rivals(sc, input);
     if (b) Object.assign(out, { rival: b.cps, rivalRoute: b.route, rivalParams: b.params, rivalCheaper: b.cps < 0.85 * want });
@@ -355,7 +355,7 @@ if (require.main === module) {
     '| Class | Scenarios | Agree | Do not | Outside | Errors |', '|---|---|---|---|---|---|',
     ...[...byCls.entries()].sort().map(([c, v]) => `| ${c} | ${v.n} | ${v.ok} | ${v.bad} | ${v.skip} | ${v.err} |`), '',
     'Outside the network: ' + ([...skipWhy.entries()].map(([k, v]) => `${k} (${v})`).join(', ') || 'none'), '');
-  if (bad.length) lines.push('### Promise and play disagree', '', ...bad.sort((a, b) => Math.abs(b.ratio - 1) - Math.abs(a.ratio - 1)).slice(0, 25).map((r) => `- ${r.id}: promised ${r.network.toFixed(1)}, played ${isFinite(r.played) ? r.played.toFixed(1) : '—'} (x${isFinite(r.ratio) ? r.ratio.toFixed(2) : '—'}), ${r.nodes} nodes${r.off ? ', ' + r.off + ' runs left the network' : ''}${r.refused ? ', ' + r.refused + ' steps the rules refuse' : ''}${r.done < r.runs ? ', ' + (r.runs - r.done) + ' unfinished' : ''}`), '');
+  if (bad.length) lines.push('### Promise and play disagree', '', ...bad.sort((a, b) => Math.abs(b.ratio - 1) - Math.abs(a.ratio - 1)).slice(0, 25).map((r) => `- ${r.id}: promised ${r.network.toFixed(1)}, played ${isFinite(r.played) ? r.played.toFixed(1) : '—'} (x${isFinite(r.ratio) ? r.ratio.toFixed(2) : '—'}), ${r.nodes} nodes${r.off ? ', ' + r.off + ' runs left the network' : ''}${r.refused ? ', ' + r.refused + ' steps the rules refuse' : ''}${r.settled === false ? ', values not settled' : ''}${r.done < r.runs ? ', ' + (r.runs - r.done) + ' unfinished' : ''}`), '');
   if (cheaper.length) lines.push('### An old route is cheaper', '', ...cheaper.sort((a, b) => a.rival / a.network - b.rival / b.network).slice(0, 25).map((r) => `- ${r.id}: network ${r.network.toFixed(1)}, old route ${r.rival.toFixed(1)} (${JSON.stringify(r.rivalParams)}: ${r.rivalRoute.join(', ')})`), '');
   if (errors.length) lines.push('### Errors', '', ...errors.slice(0, 15).map((r) => `- ${r.id}: ${r.error}`), '');
   const text = lines.join('\n');

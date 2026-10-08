@@ -489,9 +489,8 @@
       }
       return L;
     }
-    /** Share of them with a level of x or more, and with exactly x. */
+    /** Share of them with a level of x or more. */
     function atLeast(si, floor, x) { const L = levelsOf(si, floor); if (!L.total) return 1; let w = 0; for (const e of L.list) if (e[0] >= x) w += e[1]; return w / L.total; }
-    function exactly(si, floor, x) { const L = levelsOf(si, floor); if (!L.total) return 0; for (const e of L.list) if (e[0] === x) return e[1] / L.total; return 0; }
 
     // A smaller network for a request with very many targets (see route): no Fracturing Orb, and an essence or the
     // Well of Souls as the source of a natural target only for the two hardest of them (lite 1) or for none (lite 2).
@@ -541,7 +540,8 @@
     // class + the suffixes'): 0 under LCUT[0], the lowest level any target's modifier can have (the omen then takes
     // one of them for certain); then up to LCUT[1], a level near the targets' highest; then from there on. A modifier
     // that rolls arrives with the class of its level, which depends on the orb's minimum modifier level. Per side,
-    // because steps that clear one side are common: what is left on the other side keeps its class. (Their levels once were drawn anew from the whole pool at every use, and a target's level was the mean
+    // because steps that clear one side are common: what is left on the other side keeps its class.
+    // The omen is an edge only where the classes tell for certain what it removes (see whittled). (Their levels once were drawn anew from the whole pool at every use, and a target's level was the mean
     // of its tiers: six T1 targets on a helmet were promised at two thirds of what they cost, because a modifier from
     // a Perfect orb is rarely under them.) The full network only.
     // The classes make the network about three times as large, and most routes never use the omen. So route() first
@@ -572,7 +572,7 @@
     const clsAt = (S, si) => (si === 0 ? (S.fl / 3) | 0 : S.fl % 3);
     const setCls = (n, si, c) => { n.fl = si === 0 ? c * 3 + (n.fl % 3) : ((n.fl / 3) | 0) * 3 + c; };
     /** (a side without such a modifier: one node whatever its class was) */
-    const canon = (n) => { if (n.fl) { if (n.fl >= 3 && nSide(n, 0) === 0) n.fl %= 3; if (n.fl % 3 && nSide(n, 1) === 0) n.fl -= n.fl % 3; } return n; };
+    const canon = (n) => { if (!n.cx) n.ct = 0; if (n.fl) { if (n.fl >= 3 && nSide(n, 0) === 0) n.fl %= 3; if (n.fl % 3 && nSide(n, 1) === 0) n.fl -= n.fl % 3; } return n; };
     const clsMemo = new Map();
     /** The class of a new modifier nobody asked for, rolled on side si at a minimum modifier level: the chance of each. */
     function clsDist(si, floor) {
@@ -653,17 +653,17 @@
     const states = [], index = new Map(), acts = [];
     // a node's key as one number: the targets' statuses in base 9, then the small fields (it stays under 2^53)
     const FLK = NCLS > 1 ? 9 : 1; // (the two classes of the lowest levels, see LCUT)
-    const KEY_REST = 3 * 4 * 4 * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2 * FLK;
+    const KEY_REST = 3 * 4 * 4 * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2 * FLK * 3;
     const keyOf = (S) => {
       let a = 0;
       for (let i = 0; i < G; i++) a = a * 10 + S.g[i];
       let k = S.r;
       k = k * 4 + S.j[0]; k = k * 4 + S.j[1]; k = k * 10 + (S.fg + 1); k = k * 3 + S.fj; k = k * 3 + S.cx; k = k * 3 + S.dj; k = k * 3 + S.du;
-      k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw; k = k * 2 + S.kx; k = k * 2 + S.kf; k = k * FLK + S.fl;
+      k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw; k = k * 2 + S.kx; k = k * 2 + S.kf; k = k * FLK + S.fl; k = k * 3 + S.ct;
       // (one number up to seven targets, six with the classes; beyond, the two parts no longer fit a number exactly)
       return G <= (FLK > 1 ? 6 : 7) ? a * KEY_REST + k : a + ':' + k;
     };
-    const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad, aw: S.aw, kx: S.kx, kf: S.kf, fl: S.fl });
+    const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad, aw: S.aw, kx: S.kx, kf: S.kf, fl: S.fl, ct: S.ct });
     function idOf(S) {
       canon(S);
       const k = keyOf(S);
@@ -704,7 +704,8 @@
     // a desecrated-only one). What they take out of the pool is their own groups (knownTake), which is mostly
     // nothing, where an average modifier takes a fifth of the pool with it: counted as average ones, a mace with the
     // tool's modifier on it was promised a tenth too cheap.
-    const CXM = [0, 1].map((si) => (TOOL[si] || FILL[si] ? kb.mods[(TOOL[si] || FILL[si]).mod] : null));
+    // (S.ct says whose the crafted one is: 1 the aimed tool's of its side, 2 the unaimed one's, 0 not known)
+    const CXM = (si, ct) => (ct === 1 && TOOL[si] ? kb.mods[TOOL[si].mod] : ct === 2 && FILL[si] ? kb.mods[FILL[si].mod] : null);
     const DJL = [0, 1].map((si) => (ctx.bone ? P.desPoolFor(ctx, SIDES[si], 0, null) : []));
     const DJD = [0, 1].map((si) => {
       if (!DJL[si].length) return false;
@@ -712,14 +713,14 @@
       const pb = 1 - atLeast(si, 0, DJL[si].reduce((x, e) => Math.max(x, e.lvl), 0) + 1);
       return 0.8 * pb * pb + 0.15 * pb + 0.05 >= 0.5;
     });
-    const unknown = (S, si) => S.j[si] + (S.fj === si + 1 && !(S.kf && FRAC.si === si) ? 1 : 0) + (S.cx === si + 1 && !CXM[si] ? 1 : 0) + (S.dj === si + 1 && !DJD[si] ? 1 : 0);
+    const unknown = (S, si) => S.j[si] + (S.fj === si + 1 && !(S.kf && FRAC.si === si) ? 1 : 0) + (S.cx === si + 1 && !CXM(si, S.ct) ? 1 : 0) + (S.dj === si + 1 && !DJD[si] ? 1 : 0);
     /** What the crafted (kind 0) or the Desecrated (kind 1) modifier nobody asked for takes from the anonymous weight of side si in pool s. */
-    function knownTake(s, si, kind) {
-      const key = 'k' + kind;
+    function knownTake(s, si, kind, ct) {
+      const key = 'k' + kind + (ct || '');
       let v = s.takes.get(key);
       if (v == null) {
         v = 0;
-        if (kind === 0) { for (let q = 0; q < s.pool.length; q++) if (s.anon[q] && s.pool[q].grp.some((x) => CXM[si].grp.includes(x))) v += s.ws[q]; }
+        if (kind === 0) { const m = CXM(si, ct); for (let q = 0; q < s.pool.length; q++) if (s.anon[q] && s.pool[q].grp.some((x) => m.grp.includes(x))) v += s.ws[q]; }
         else for (const e of DJL[si]) for (let q = 0; q < s.pool.length; q++) if (s.anon[q] && s.pool[q].grp.some((x) => e.grp.includes(x))) v += s.ws[q] / DJL[si].length;
         s.takes.set(key, v);
       }
@@ -729,7 +730,7 @@
     function knownLeft(S, si, s, J0) {
       let g = 1;
       if (!(J0 > 0)) return g;
-      if (S.cx === si + 1 && CXM[si]) g *= Math.max(0, 1 - knownTake(s, si, 0) / J0);
+      if (S.cx === si + 1 && CXM(si, S.ct)) g *= Math.max(0, 1 - knownTake(s, si, 0, S.ct) / J0);
       if (S.dj === si + 1 && DJD[si]) g *= Math.max(0, 1 - knownTake(s, si, 1) / J0);
       return g;
     }
@@ -907,10 +908,13 @@
       return n && s0.W > 0 ? Math.pow(1 - Math.min(1, s0.low[i] / s0.W), n) : 1;
     }
     /**
-     * Omen of Whittling: the Chaos Orb removes the modifier of the lowest level; of several at that level, one at
-     * random. [[chance, unit]]. A target's level is one of its fitting tiers' (every way they can be is counted). The
-     * modifiers nobody asked for: the lowest of them is of the node's class (S.fl), within it their levels are the
-     * pool's. null with a hidden modifier (its level is not known).
+     * Omen of Whittling: the Chaos Orb removes the modifier of the lowest level. [[chance, unit]], and only where the
+     * node tells who that is: a side holds a modifier nobody asked for whose class lies under every level the targets
+     * on the item can have. The omen then takes one of those for certain (the way crafters use it: "it is a whittle
+     * angle" when the lowest modifier is one to lose). Elsewhere the edge is not offered (null): within a class the
+     * levels are not known, and a modifier that once survived the omen survives it again, which no chance drawn anew
+     * at every use describes (a quiver's route that used the omen there was promised at an eighth of what it cost).
+     * Also null with a hidden modifier (its level is not known).
      */
     const whitMemo = new Map();
     function levelsOn(i, x) {
@@ -920,73 +924,31 @@
       return goalLv[i];
     }
     function whittled(S) {
-      if (S.du) return null;
-      const known = [], anon = [], oth = [];
+      if (S.du || NCLS < 2) return null;
       let sig = S.fl + '|' + S.fg + '|';
+      for (let i = 0; i < G; i++) sig += S.g[i];
+      sig += '|' + S.j[0] + S.j[1] + (xOn(S, 0) ? 1 : 0) + (xOn(S, 1) ? 1 : 0);
+      if (whitMemo.has(sig)) return whitMemo.get(sig);
+      // the lowest level a target on the item can have (a fractured one is not removed: it does not count)
+      let low = Infinity;
+      const anon = [];
       for (let i = 0; i < G; i++) {
         const x = S.g[i];
-        sig += x;
         if (!there(x) || S.fg === i) continue;
-        if (x === BLOCKED) anon.push({ k: 'g', i, si: goals[i].si, w: 1 }); else known.push({ k: 'g', i, si: goals[i].si, w: 1, lv: levelsOn(i, x) });
+        if (x === BLOCKED) anon.push({ k: 'g', i, si: goals[i].si, w: 1 });
+        else for (const e of levelsOn(i, x)) if (e[0] < low) low = e[0];
       }
       for (let si = 0; si < 2; si++) if (S.j[si]) anon.push(...plain(S, si));
-      if (S.cx) oth.push({ k: 'cx', si: S.cx - 1, w: 1 });
-      if (S.dj) oth.push({ k: 'dj', si: S.dj - 1, w: 1 });
-      if (S.aw) oth.push({ k: 'aw', si: awSide(S), w: 1 });
-      if (!known.length && !anon.length && !oth.length) return null;
-      sig += '|' + S.j[0] + S.j[1] + (xOn(S, 0) ? 1 : 0) + (xOn(S, 1) ? 1 : 0) + S.cx + S.dj + S.aw;
-      if (whitMemo.has(sig)) return whitMemo.get(sig);
-      const units = anon.concat(oth), acc = new Map();
-      const add = (u, p) => { if (p > 0) acc.set(u, (acc.get(u) || 0) + p); };
-      // a side's class: the lowest of its `anon` has a level from lo on and under hi
-      const sides = [0, 1].map((si) => {
-        const n = anon.reduce((x, u) => x + (u.si === si ? u.w : 0), 0), c = clsAt(S, si);
-        const lo = NCLS > 1 && n && c > 0 ? LCUT[c - 1] : -Infinity, hi = NCLS > 1 && n && c < NCLS - 1 ? LCUT[c] : Infinity;
-        const A = (x) => Math.pow(atLeast(si, 0, x), n);
-        return { n, lo, hi, A, Alo: lo === -Infinity ? 1 : A(lo), Ahi: hi === Infinity ? 0 : A(hi) };
-      });
-      /** Chance that none of a side's `anon` has a level under L. */
-      const sideNone = (sd, L) => {
-        if (!sd.n || L <= sd.lo) return 1;
-        if (L >= sd.hi) return 0;
-        const den = sd.Alo - sd.Ahi;
-        return den > 1e-12 ? Math.max(0, Math.min(1, (sd.A(L) - sd.Ahi) / den)) : sd.A(L);
-      };
-      // every way the targets' levels can be: [chance, level of each]
-      let combos = [[1, []]];
-      if (known.reduce((x, t) => x * t.lv.length, 1) > 400) combos = [[1, known.map((t) => t.lv.reduce((x, e) => x + e[0] * e[1], 0))]];
-      else for (const t of known) { const next = []; for (const [p, ls] of combos) for (const [lvl, q] of t.lv) next.push([p * q, ls.concat(lvl)]); combos = next; }
-      for (const [pi, ls] of combos) {
-        if (!known.length) { const tw = units.reduce((x, u) => x + u.w, 0); for (const u of units) add(u, pi * u.w / tw); continue; }
-        const L = Math.min(...ls), tied = known.filter((t, k) => ls[k] === L);
-        const qS = [sideNone(sides[0], L), sideNone(sides[1], L)];
-        let qO = 1;
-        for (const u of oth) qO *= atLeast(u.si, 0, L);
-        const q0 = qS[0] * qS[1] * qO;
-        if (q0 < 1) {
-          // a modifier nobody asked for lies under every target: the omen takes the lowest of those
-          const mO = 1 - qO, tot = (1 - qS[0]) + (1 - qS[1]) + mO;
-          for (let si = 0; si < 2; si++) if (qS[si] < 1) { const mine = anon.filter((u) => u.si === si), tw = mine.reduce((x, u) => x + u.w, 0); for (const u of mine) add(u, pi * (1 - q0) * ((1 - qS[si]) / tot) * u.w / tw); }
-          if (mO > 0) { const ws = oth.map((u) => 1 - atLeast(u.si, 0, L)), tw = ws.reduce((x, y) => x + y, 0); oth.forEach((u, k) => add(u, pi * (1 - q0) * (mO / tot) * ws[k] / tw)); }
-        }
-        if (q0 > 0) {
-          // none does: the lowest target, or a modifier that happens to have exactly its level (one of them at random)
-          const mods = [];
-          for (const u of units) { const al = atLeast(u.si, 0, L), tau = al > 0 ? Math.min(1, exactly(u.si, 0, L) / al) : 0; for (let k = 0; k < u.w; k++) mods.push([u, tau]); }
-          let dist = [1];
-          for (const [, tau] of mods) { const d2 = new Array(dist.length + 1).fill(0); for (let k = 0; k < dist.length; k++) { d2[k] += dist[k] * (1 - tau); d2[k + 1] += dist[k] * tau; } dist = d2; }
-          let each = 0;
-          for (let m = 0; m < dist.length; m++) each += dist[m] / (tied.length + m);
-          for (const t of tied) add(t, pi * q0 * each);
-          const rest = 1 - tied.length * each, tw = mods.reduce((x, e) => x + e[1], 0);
-          if (rest > 1e-12 && tw > 0) for (const [u, tau] of mods) add(u, pi * q0 * rest * tau / tw);
-        }
+      // the sides whose lowest such modifier is surely under that level (with no target to lose, any of them)
+      const sure = [0, 1].filter((si) => nSide(S, si) > 0 && (low === Infinity || (clsAt(S, si) < NCLS - 1 && LCUT[clsAt(S, si)] <= low)));
+      let out = null;
+      if (sure.length) {
+        // (two such sides: the lowest of all is on either, by how many each holds)
+        const us = anon.filter((u) => sure.includes(u.si)), tw = us.reduce((x, u) => x + u.w, 0);
+        if (tw > 0) out = us.map((u) => [u.w / tw, u]);
       }
-      let tot = 0;
-      for (const p of acc.values()) tot += p;
-      const out = tot > 0 ? [...acc.entries()].filter(([, p]) => p > 1e-10).map(([u, p]) => [p / tot, u]) : null;
-      whitMemo.set(sig, out && out.length ? out : null);
-      return whitMemo.get(sig);
+      whitMemo.set(sig, out);
+      return out;
     }
 
     // ---- the Well of Souls: what the three options offer, and which one the player takes
@@ -1192,7 +1154,7 @@
     const revealed = (S1, si, i, status) => { const S2 = addRolled(S1, i, si, status); if (i < 0) { S2.j[si]--; S2.dj = si + 1; } return S2; };
 
     // ---- edges
-    const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FS0, ad: AD0, aw: 0, kx: 0, kf: 0, fl: 0 };
+    const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FS0, ad: AD0, aw: 0, kx: 0, kf: 0, fl: 0, ct: 0 };
     const RESTART = -1; // edge target: a fresh white base (its value is solved as one number, see solve)
     /** A socket for a rune: the node with one socket less and what it costs first (an Artificer's Orb), or null. */
     function socket(S) {
@@ -1273,6 +1235,7 @@
         if (craftedUsed(S) < capOf(S)) for (let i = 0; i < G; i++) {
           const g = goals[i], r = g.magicEss;
           if (!wanted(S.g[i]) || !r) continue;
+          if (r.pHit < 1 && S.cx) continue; // (a miss would be a second crafted modifier nobody asked for: see S.cx)
           const S1 = cp(S); S1.r = 2;
           if (open(S1, g.si) > 0 || S.g[i] === TWIN) {
             const outs = [], free = clear(S1, i);
@@ -1354,6 +1317,7 @@
       if (craftedUsed(S) < capOf(S)) for (let i = 0; i < G; i++) {
         const g = goals[i], r = g.rareEss;
         if (!wanted(S.g[i]) || !r || r.liquid) continue;
+        if (r.pHit < 1 && S.cx) continue; // (a miss would be a second crafted modifier nobody asked for: see S.cx)
         // Crystallisation omens aim Perfect and Corrupted Essences only: not alloys (game text; the player, 8 Oct 2026), not liquid emotions
         const aim = r.alloy ? [-1] : [-1, 0, 1];
         for (const v of aim) {
@@ -1379,15 +1343,19 @@
       if (S.dj && craftedUsed(S) < capOf(S)) for (const T of TOOL) {
         const v = S.dj - 1;
         if (!T || PR.crystal[v] == null) continue;
+        // (S.cx is the one crafted modifier nobody asked for that a node counts: a second one, which Astrid's Creativity
+        // would allow, would be taken for a plain modifier and leave room for a third crafted one that the rules
+        // refuse. The tool is used where its modifier becomes that one or takes its place.)
+        if (S.cx && !(S.cx === T.si + 1 && S.ct === 1)) continue;
         // (an essence whose own side is full removes from that side: aimed elsewhere it cannot be used, planner.js validate)
         if (T.si !== v && open(S, T.si) < 1) continue;
         const us = units(S, (si) => si === v), tw = us.reduce((x, u) => x + u.w, 0);
         if (!tw) continue;
         const outs = [];
         for (const u of us) for (const [q, S1] of without(S, u, false)) {
-          // (a crafted modifier that is on that side already is this tool's own from an earlier use, with Astrid's
-          // Creativity: an essence does not add a second modifier of its group, so nothing comes)
-          if (open(S1, T.si) > 0) { if (!S1.cx) S1.cx = T.si + 1; else if (S1.cx !== T.si + 1) junkAt(S1, T.si, kb.mods[T.mod].lvl); }
+          // (the tool's own modifier from an earlier use is still there, with Astrid's Creativity: an essence does not
+          // add a second modifier of its group, so nothing comes)
+          if (!S1.cx && open(S1, T.si) > 0) { S1.cx = T.si + 1; S1.ct = 1; }
           outs.push([q * u.w / tw, S1]);
         }
         push({ op: 'pessence', item: T.item, mod: T.mod, side: SIDES[v], tool: true }, T.price + PR.crystal[v], outs);
@@ -1396,11 +1364,12 @@
       // side removes a modifier of that side
       if (S.dj && craftedUsed(S) < capOf(S) && FILL[S.dj - 1] && open(S, S.dj - 1) === 0) {
         const T = FILL[S.dj - 1], v = S.dj - 1;
-        const us = units(S, (si) => si === v), tw = us.reduce((x, u) => x + u.w, 0);
+        const mine = TOOL[v] && TOOL[v].item === T.item ? 1 : 2; // (S.ct: whose modifier the crafted one then is)
+        const us = units(S, (si) => si === v), tw = S.cx && !(S.cx === v + 1 && S.ct === mine) ? 0 : us.reduce((x, u) => x + u.w, 0);
         if (tw) {
           const outs = [];
           for (const u of us) for (const [q, S1] of without(S, u, false)) {
-            if (open(S1, v) > 0) { if (!S1.cx) S1.cx = v + 1; else if (S1.cx !== v + 1) junkAt(S1, v, kb.mods[T.mod].lvl); }
+            if (!S1.cx && open(S1, v) > 0) { S1.cx = v + 1; S1.ct = mine; }
             outs.push([q * u.w / tw, S1]);
           }
           push({ op: 'pessence', item: T.item, mod: T.mod, tool: true }, T.price, outs);
@@ -1445,6 +1414,7 @@
       // a liquid emotion: a modifier goes, and its crafted modifier comes on the side that opened (one of two for some)
       if (craftedUsed(S) < capOf(S)) for (const em of EMO) {
         if (!em.outs.some((o) => (o.goal >= 0 && wanted(S.g[o.goal])) || (o.cap >= 0 && over[o.cap] && !S.aw))) continue;
+        if (S.cx && em.outs.some((o) => o.goal < 0 && o.cap < 0)) continue; // (see S.cx: no second crafted modifier nobody asked for)
         const sides = [...new Set(em.outs.map((o) => o.si))];
         const from = sides.some((si) => open(S, si) > 0) ? -1 : sides.length === 1 ? sides[0] : -1; // R_SWAP_REMOVAL
         const fitAt = (S1) => em.outs.filter((o) => open(S1, o.si) > 0 && (o.goal < 0 || wanted(S1.g[o.goal])));
@@ -1595,7 +1565,7 @@
         else if (m.frac) S.fj = si + 1;
         else if (m.unrevealed) S.du = si + 1;
         else if (m.des) S.dj = si + 1;
-        else if (m.crafted && !S.cx) S.cx = si + 1;
+        else if (m.crafted && !S.cx) { S.cx = si + 1; S.ct = TOOL[si] && m.id === TOOL[si].mod ? 1 : FILL[si] && m.id === FILL[si].mod ? 2 : 0; }
         else { S.j[si]++; lowest[si] = Math.min(lowest[si], m.lvl || 1); }
       }
       if (NCLS > 1) for (let si = 0; si < 2; si++) if (nSide(S, si) > 0) setCls(S, si, clsOf(lowest[si] === Infinity ? 1 : lowest[si]));
@@ -1679,10 +1649,78 @@
     }
     let maxBlock = 0;
     for (const b of blocks) if (b.length > maxBlock) maxBlock = b.length;
+    // How many times the blocks are gone through for exact values, at most. A loop that crosses blocks (a target is
+    // lost and rolled again) settles by its chance per turn, so a craft of very many turns needs many passes: with
+    // 600 a quiver's route of 25,000 white bases was valued a fifth too low, its values not yet settled.
+    // After them the values of the nodes a route reaches are settled by accelerated sweeps (see anderson).
+    const EXACT_PASSES = input.passes || 200;
+    /**
+     * The fixed point of `sweep` (it turns the vector X into the next one in place), for when the passes over the
+     * blocks ran out before the values settled. A loop that crosses blocks (a target is lost and rolled again,
+     * hundreds of times in a craft that costs a fortune) settles by its chance per turn, far too slowly for passes
+     * alone: a quiver's route was valued a fifth too low after 600 of them and was not settled after 5,000. Here the
+     * last few sweeps' changes are combined so that the slow loops' share of the error leaves at once (Anderson
+     * acceleration: the least-squares mix of the last steps that would have made this sweep's change smallest).
+     * mask: the nodes whose values must settle (those a route reaches; null: all). Somewhere no route goes a rule set
+     * may never finish, and such nodes have no values to settle on.
+     * True when it settled.
+     */
+    function anderson(X, mask, sweep) {
+      const M = 10, dX = [], dF = [];
+      const start = Float64Array.from(X);
+      let x = Float64Array.from(X), xPrev = null, fPrev = null, done = false, sweeps = 0, best = Infinity, bestAt = 0;
+      // (a rule set that never finishes somewhere has no values to settle on: when eighty sweeps bring nothing, stop)
+      for (let it = 0; it < 800 && !done && it - bestAt <= 80; it++) {
+        if (late()) break;
+        X.set(x);
+        sweep(); sweeps++;
+        // f: what the sweep changed; settled when that is nothing next to the values (and next to the largest of them:
+        // a chance of 1e-20 somewhere in the network need not be right to ten digits)
+        const f = new Float64Array(N);
+        let err = 0, big = 0;
+        for (let i = 0; i < N; i++) { if (mask && !mask[i]) continue; const a = Math.abs(X[i]); if (a > big && a < BIG / 2) big = a; }
+        const floor = 1e-14 * big + 1e-300;
+        for (let i = 0; i < N; i++) { const g = X[i]; f[i] = g - x[i]; if (mask && !mask[i]) continue; const a = Math.abs(f[i]); if (a > 1e-300) { const e = a / (Math.abs(g) + floor); if (e > err) err = e; } }
+        if (err <= 1e-10) { done = true; break; }
+        if (err < best * 0.5) { best = err; bestAt = it; }
+        if (fPrev) {
+          const a = new Float64Array(N), b = new Float64Array(N);
+          for (let i = 0; i < N; i++) { a[i] = x[i] - xPrev[i]; b[i] = f[i] - fPrev[i]; }
+          dX.push(a); dF.push(b);
+          if (dX.length > M) { dX.shift(); dF.shift(); }
+        }
+        const next = new Float64Array(N);
+        for (let i = 0; i < N; i++) next[i] = x[i] + f[i];
+        const m = dF.length;
+        if (m) {
+          // gamma = argmin |f - dF gamma|: the normal equations, m by m
+          const G = new Float64Array(m * m), c = new Float64Array(m);
+          for (let p = 0; p < m; p++) {
+            const u = dF[p];
+            for (let q = p; q < m; q++) { const w = dF[q]; let v = 0; for (let i = 0; i < N; i++) v += u[i] * w[i]; G[p * m + q] = G[q * m + p] = v; }
+            let v = 0;
+            for (let i = 0; i < N; i++) v += u[i] * f[i];
+            c[p] = v;
+          }
+          let tr = 0;
+          for (let p = 0; p < m; p++) tr += G[p * m + p];
+          for (let p = 0; p < m; p++) G[p * m + p] += 1e-12 * tr / m + 1e-300;
+          luSolve(G, luFactor(G, m), c, m, 1, new Float64Array(m));
+          let ok = true;
+          for (let p = 0; p < m; p++) if (!isFinite(c[p])) ok = false;
+          if (ok) for (let p = 0; p < m; p++) { const g = c[p], a = dX[p], b = dF[p]; for (let i = 0; i < N; i++) next[i] -= g * (a[i] + b[i]); }
+          else { dX.length = 0; dF.length = 0; }
+        }
+        xPrev = x; fPrev = f; x = next;
+      }
+      timing.sweeps = (timing.sweeps || 0) + sweeps;
+      if (done) timing.settledBy = (timing.settledBy || 0) + 1; else { timing.gaveUp = (timing.gaveUp || 0) + 1; X.set(start); }
+      return done;
+    }
     /** maxPasses, tol: a rough answer is enough while the rule set still changes a lot (see solve). */
     function evaluate(rhs, maxPasses, tol) {
       const K = rhs.length;
-      maxPasses = maxPasses || 600; tol = tol || 1e-11;
+      maxPasses = maxPasses || EXACT_PASSES; tol = tol || 1e-11;
       const X = rhs.map((r) => { if (r.x0) return Float64Array.from(r.x0); const a = new Float64Array(N); if (r.term) for (let s = 0; s < N; s++) if (pol[s] === -1) a[s] = r.term; return a; });
       // the rule set's edges that leave their block, as flat rows (what stays inside a block is in its factors)
       const row = new Int32Array(N + 1);
@@ -1734,6 +1772,32 @@
           }
           if (delta > tol) { const rl = readerList[bi]; for (let i = 0; i < rl.length; i++) if (!dirty[rl[i]]) { dirty[rl[i]] = 1; left++; } }
         }
+        timing.passes = pass + 1;
+      }
+      // (blocks that were still changing when the passes ran out: the values are not settled; see anderson)
+      timing.unsettled = left;
+      if (left > 0 && maxPasses >= EXACT_PASSES) {
+        const R1 = new Float64Array(maxBlock), Y1 = new Float64Array(maxBlock), mask = reached();
+        for (let k = 0; k < K; k++) {
+          const r = rhs[k], d = r.d, Xk = X[k], bnd = r.bnd || 0, term = r.term || 0, stuck = r.stuck || 0;
+          const ok = anderson(Xk, mask, () => {
+            for (let bi = 0; bi < blocks.length; bi++) {
+              const b = blocks[bi], m = b.length;
+              for (let li = 0; li < m; li++) {
+                const s = b[li];
+                if (pol[s] < 0) { R1[li] = pol[s] === -1 ? term : stuck; continue; }
+                let v = (d ? d[s] : 0) + back[s] * bnd;
+                for (let t = row[s], e = row[s + 1]; t < e; t++) v += val[t] * Xk[col[t]];
+                R1[li] = v;
+              }
+              const f = luOf(bi);
+              luSolve(f.A, f.perm, R1, m, 1, Y1);
+              for (let li = 0; li < m; li++) Xk[b[li]] = R1[li];
+            }
+          });
+          if (ok && k === K - 1) timing.unsettled = 0;
+          if (!ok) break;
+        }
       }
       return X;
     }
@@ -1768,6 +1832,15 @@
           if (delta > 1e-11) for (const bj of next[bi]) if (!dirty[bj]) { dirty[bj] = 1; left++; }
         }
       }
+      if (left > 0) anderson(nu, null, () => {
+        for (let bi = blocks.length - 1; bi >= 0; bi--) {
+          const b = blocks[bi], m = b.length;
+          for (let li = 0; li < m; li++) { const t = b[li]; let v = t === s0 ? 1 : 0; for (let q = at[t], e = at[t + 1]; q < e; q++) v += val[q] * nu[src[q]]; R[li] = v; }
+          const f = luOf(bi);
+          luSolveT(f.A, f.perm, R, m, Y);
+          for (let li = 0; li < m; li++) nu[b[li]] = R[li];
+        }
+      });
       return nu;
     }
     const V = new Float64Array(N);
@@ -1778,6 +1851,7 @@
     const costOf = (act) => (act.a.op === 'newbase' ? act.cost + charge : act.cost);
     const qOf = (s, act) => { let c = costOf(act); const o = act.out; for (let t = 0; t < o.length; t += 2) c += o[t] * (o[t + 1] === RESTART ? x : V[o[t + 1]]); return c; };
     // the first rule set: one that always ends
+    const essOnly = new Set(goals.filter((g) => g.kind === 'ess').flatMap((g) => [g.rareEss, g.magicEss].filter(Boolean).map((r) => r.mod)));
     for (let s = 0; s < N; s++) {
       const S = states[s], list = acts[s];
       if (!list.length) { pol[s] = done(S) ? -1 : -2; continue; }
@@ -1794,10 +1868,14 @@
         if (a < 0) a = find((e) => e.op === 'rune_rule');
         if (a < 0 && rollable) a = find((e) => e.op === 'exalt' && !e.side && !e.greater && !e.catalyse);
         if (a < 0) a = find((e) => e.op === 'divine');
-        if (a < 0) a = find((e) => e.op === 'pessence' && !e.side);
+        // (an essence for a target that only an essence gives; for the other targets a swap by essence would go round
+        // for ever where a new base is the way out: a start whose white base is worth 1e15 leaves the first rounds
+        // nothing to compare)
+        if (a < 0) a = find((e) => e.op === 'pessence' && !e.side && !e.tool && essOnly.has(e.mod));
         if (a < 0) a = find((e) => e.op === 'bone' && !e.hide);
       }
       if (a < 0) a = find((e) => e.op === 'newbase');
+      if (a < 0 && S.r === 2) a = find((e) => e.op === 'pessence' && !e.side);
       pol[s] = a < 0 ? 0 : a;
     }
     let Fv = new Float64Array(N), Av = null, rounds = 0, sol = null;
@@ -1814,7 +1892,7 @@
         if (late()) { timedOut = true; break; }
         const d = new Float64Array(N);
         for (let s = 0; s < N; s++) if (pol[s] >= 0) d[s] = costOf(acts[s][pol[s]]);
-        const passes = !rough ? 600 : last > N / 20 ? 3 : last > N / 300 ? 8 : 24;
+        const passes = !rough ? EXACT_PASSES : last > N / 20 ? 3 : last > N / 300 ? 8 : 24;
         const [A, F] = evaluate([{ d, bnd: 0, stuck: BIG, x0: Av }, { bnd: 0, term: 1, x0: Av ? Fv : null }], passes, rough ? 1e-7 : 1e-11);
         if (!holdX) x = F[n0] > 1e-250 ? A[n0] / F[n0] : BIG;
         for (let s = 0; s < N; s++) V[s] = Math.min(BIG, A[s] + (1 - F[s]) * x);
@@ -1834,6 +1912,37 @@
         if (!changed) { if (!rough) break; rough = false; }
       }
       sol = null;
+    }
+    /** The nodes a route reaches under the rule set: from the item, from a white base, from the starts a player can buy. */
+    function reached() {
+      const seen = new Uint8Array(N), q = [];
+      const add = (k) => { if (!seen[k]) { seen[k] = 1; q.push(k); } };
+      add(start); add(n0);
+      for (const e of entries) add(e.id);
+      while (q.length) {
+        const k = q.pop();
+        if (pol[k] < 0) continue;
+        const o = acts[k][pol[k]].out;
+        for (let t = 1; t < o.length; t += 2) if (o[t] !== RESTART) add(o[t]);
+      }
+      return seen;
+    }
+    /** How far the values of the nodes the route reaches are from their own equations, at worst (relative). */
+    function unsolved() {
+      const seen = new Uint8Array(N), q = [start];
+      seen[start] = 1;
+      if (!seen[n0]) { seen[n0] = 1; q.push(n0); }
+      let worst = 0;
+      while (q.length) {
+        const k = q.pop();
+        if (pol[k] < 0) continue;
+        const act = acts[k][pol[k]], o = act.out;
+        let v = costOf(act);
+        for (let t = 0; t < o.length; t += 2) { const to = o[t + 1]; if (to === RESTART) v += o[t] * x; else { v += o[t] * V[to]; if (!seen[to]) { seen[to] = 1; q.push(to); } } }
+        const r = Math.abs(v - V[k]) / Math.max(1, Math.abs(V[k]));
+        if (r > worst) worst = r;
+      }
+      return worst;
     }
     solve();
     timing.solve = Date.now() - tick;
@@ -1893,6 +2002,8 @@
     const net = {
       ctx, goals, states, acts, pol, start, n0, N, timing, lite, track: followed.filter(Boolean).length, classes: NCLS, whittle: WBEST ? 'best' : WNONE ? 'none' : 'levels', wellRank, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
       get rounds() { return rounds; },
+      /** Did the last valuation settle (see anderson)? A route whose values did not is not to be trusted. */
+      get settled() { return !timing.unsettled || unsolved() <= 1e-7; },
       get base() { return solution().money[n0]; },
       nodeOf(st) {
         // the node with what is known to be in the way, when the network has it (the pasted item and what follows from it)
