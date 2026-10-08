@@ -105,3 +105,67 @@ test('network: its promise matches the simulator (two items, played 600 times ea
     assert.ok(Math.abs(got.mean - net.cost(net.start)) <= 4 * got.se + 0.05 * net.cost(net.start), `${got.mean} ± ${got.se} vs ${net.cost(net.start)}`);
   }
 });
+
+// ---- what the cloud sweep's special requests and the gap measure found (8 Oct 2026)
+const item = (cls, lines) => E.parseItem(ix, ['Item Class: ' + cls, ...lines].join('\n')).item;
+const labelOf = (id) => E.template(kb.mods[id].txt.split('\n')[0]);
+const poolOf = (base, side) => [...E.poolFor(ix, kb.bases[base].sig)].filter(([, pe]) => pe.side === side).map(([id, pe]) => ({ id, tier: pe.tier, fam: kb.mods[id].fam }));
+
+test('network: a rune the targets need and the item cannot socket is "impossible", never a cost', () => {
+  // four suffixes need Serle's Triumph; an Artificer's Orb adds no socket on a ring
+  const ring = item('Rings', ['Rarity: Normal', 'Biostatic Ring', '--------', 'Item Level: 82']);
+  const prices = Object.assign({}, PRICES, { "Serle's Triumph": 1000, "Artificer's Orb": 1 });
+  const res = [/to Fire Resistance$/, /to Cold Resistance$/, /to Lightning Resistance$/, /to Chaos Resistance$/].map((re) => ['suffix', re, 4]);
+  const net = NW.route(inputFor(ring, res, { priceOf: (n) => (prices[n] != null ? prices[n] : null) }));
+  assert.ok(net.impossible, 'no route is promised');
+  assert.match(net.impossible[0].why, /socket|holds/);
+  // the same four suffixes on gloves (Artificer's Orb works there) have a route with the rune in it
+  const gloves = item('Gloves', ['Rarity: Normal', 'Massive Mitts', '--------', 'Item Level: 82']);
+  const g = NW.route(inputFor(gloves, res, { priceOf: (n) => (prices[n] != null ? prices[n] : null) }));
+  assert.ok(!g.impossible && !g.unsupported, JSON.stringify(g.impossible || g.unsupported));
+  assert.ok(g.cost(g.start) < 1e9);
+  assert.ok(g.materials(g.start).some((m) => m.name === "Serle's Triumph"));
+});
+
+test('network: a modifier of the other side that keeps a target out with its tags is known', () => {
+  // on a wand "+ to Level of all Fire Spell Skills" (suffix) stops the Chaos Damage prefix (game data adds_tags)
+  const base = 'Dueling Wand';
+  const fire = poolOf(base, 'suffix').filter((e) => /Level of all Fire Spell Skills$/.test(labelOf(e.id))).sort((a, b) => a.tier - b.tier)[0];
+  const chaos = poolOf(base, 'prefix').filter((e) => /increased Chaos Damage$/.test(labelOf(e.id)))[0];
+  assert.ok(fire && chaos && (kb.mods[fire.id].at || []).includes('no_chaos_spell_mods'));
+  const wand = item('Wands', ['Rarity: Rare', 'Test', base, '--------', 'Item Level: 82', '--------', '{ Suffix Modifier "x" (Tier: 1) }', kb.mods[fire.id].txt.split('\n')[0].replace(/\(?(\d+)[^ ]*/, '$1')]);
+  assert.equal(wand.mods.length, 1, 'the suffix was read');
+  const input = inputFor(wand, [['prefix', /increased Chaos Damage$/, 3]]);
+  const net = NW.route(input);
+  assert.ok(!net.impossible && !net.unsupported);
+  const d = net.describe(net.start);
+  assert.deepEqual(d.across.length, 1, 'the target is kept out by the suffix');
+  // no step of the route tries to roll the prefix while the suffix is there: every exalt-like step from the start node is absent
+  const step = net.step(net.start);
+  assert.ok(step && !['exalt', 'regal', 'augment'].includes(step.a.op), 'no roll for a prefix that cannot come: ' + JSON.stringify(step && step.a));
+  // a white wand has the same target without that state
+  const white = NW.route(inputFor(item('Wands', ['Rarity: Normal', base, '--------', 'Item Level: 82']), [['prefix', /increased Chaos Damage$/, 3]]));
+  assert.equal(white.describe(white.start).across.length, 0);
+});
+
+test('network: the answer for the page is plain data', () => {
+  const a = NW.answer(inputFor(boots(WHITE), [MS, FIRE]), { budget: 500, baseLimit: 50 });
+  const copy = JSON.parse(JSON.stringify(a));
+  assert.deepEqual(Object.keys(copy).sort(), Object.keys(a).sort());
+  assert.ok(a.net && a.meanCost > 0 && a.p > 0 && a.p <= 1 && a.next.names.length && a.steps.length && a.rules.length);
+  assert.ok(a.bases <= 50 * 1.05, 'the base limit binds: ' + a.bases);
+  const blocked = NW.answer(inputFor(boots(['Rarity: Rare', 'Test', 'Totemic Greaves', '--------', 'Item Level: 82', '--------', 'Corrupted']), [MS]), {});
+  assert.equal(blocked.blocked, 'Corrupted');
+});
+
+test('planner: a Rune of Aldur never transforms a Chaos modifier (rune texts)', () => {
+  const base = 'Dueling Wand';
+  const ctx = P.makeContext(ix, item('Wands', ['Rarity: Normal', base, '--------', 'Item Level: 82']), {});
+  const chaos = poolOf(base, 'prefix').filter((e) => /increased Chaos Damage$/.test(labelOf(e.id)))[0];
+  const fire = poolOf(base, 'prefix').filter((e) => /increased Fire Damage$/.test(labelOf(e.id)))[0];
+  const t = P.aldurTwin(ctx, chaos.id, 'Cold');
+  assert.ok(!t || t === chaos.id, 'Chaos Damage stays under Breath of Aldur');
+  const f = P.aldurTwin(ctx, fire.id, 'Cold');
+  assert.ok(f && f !== fire.id && /Cold/.test(kb.mods[f].txt), 'Fire Damage becomes Cold Damage');
+});
+
