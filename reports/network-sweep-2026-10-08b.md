@@ -104,8 +104,25 @@ examined yet.
 - `Time-Lost Diamond|set2|white|0` at today's prices: network 6,588 promised, 7,075 +- 448 played, old planner route
   6,139 over 300 trials (not clearly cheaper; the next run measures it with more plays).
 
+## Found the same evening by replaying more six-target scenarios
+
+- **The solver's values were not settled on crafts of very many turns.** A loop that crosses the solver's blocks (a
+  target is lost and rolled again) settles by its chance per turn. With 600 passes a quiver's route of 25,000 white
+  bases was valued at 508,446 while its own equations were a thousandth off; it plays at 646,000. After the passes
+  the nodes a route reaches are now settled by accelerated sweeps (656,662). This under-valued the dearest routes and
+  is the likeliest cause of the many six-target rows between 1.2 and 2.8 in this run.
+- **Omen of Whittling only where it is certain.** Within a class the levels are not known, and a modifier that once
+  survived the omen survives it again: the omen is an edge only where a side holds a modifier whose class lies under
+  every level the targets on the item can have. Visceral Quiver with six targets: 377,975 promised against 3,017,716
+  played before, 656,662 against 645,882 +- 62,154 after.
+- **An exact crafted count.** With Astrid's Creativity a second crafted modifier nobody asked for was taken for a
+  plain one, which left room for a third that the rules refuse (Sirenscale Gloves: 8 refused steps in 60 crafts, none
+  now). Steps that would leave a second one are not offered; a route that needs both an aimed essence and an alloy
+  as tools is dearer than it could be (a bow: 667 where 565 was possible).
+- Maji Talisman with six targets: 392,753 promised, 342,941 +- 29,771 played (it was 702,606 against 1,729,744).
+
 ## The next run
 
-Run [37815332074](https://github.com/katxjhuun/poe2-craft-assistant/actions/runs/37815332074), started 8 Oct 17:16 UTC
-on commit 20e960e: deep, 16 runners, 325 minutes, the drawn scenarios. (Two runs started earlier the same afternoon,
-37803372648 and 37807771485, were replaced by it: the code changed after each had started.)
+Run [37825276057](https://github.com/katxjhuun/poe2-craft-assistant/actions/runs/37825276057), started 8 Oct 18:34 UTC
+on commit 9f48c52: deep, 16 runners, 325 minutes, the drawn scenarios. (Three runs started earlier the same day,
+37803372648, 37807771485 and 37815332074, were each replaced: the code changed after they had started.)
