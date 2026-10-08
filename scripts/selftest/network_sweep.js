@@ -272,7 +272,7 @@ function rivals(sc, input) {
   return best;
 }
 
-function runOne(sc, runs, withRivals, deep) {
+function runOne(sc, runs, withRivals, deep, limitMs) {
   const { ix, priceOf } = load();
   const input = { ix, item: sc.item, targets: sc.targets, locks: {}, priceOf, baseCost: 1, weights: weightsFor(sc.base), essences: table(sc.base).essences, quality: sc.qualityMode };
   const t0 = Date.now();
@@ -288,7 +288,8 @@ function runOne(sc, runs, withRivals, deep) {
   const stepsGuess = net.materials(s).reduce((x, m) => x + m.uses, 0);
   const n = deep ? runs : Math.max(120, Math.min(runs, Math.round(6e5 / Math.max(1, stepsGuess))));
   // a craft of thousands of uses, played 100,000 times, takes hours: such a scenario stops after 40 minutes and says how far it got
-  const got = play(net, input, n, sc.seed, Math.max(5000, Math.round(stepsGuess * 60)), deep ? 40 * 60000 : 0);
+  // (near the end of the run the limit is what is left of it, so the process ends on time and its report is written)
+  const got = play(net, input, n, sc.seed, Math.max(5000, Math.round(stepsGuess * 60)), deep ? Math.min(40 * 60000, limitMs > 0 ? limitMs : 40 * 60000) : 0);
   const ratio = got.mean / want, z = (got.mean - want) / (got.se || 1);
   Object.assign(out, { nodes: net.N, lite: net.lite || 0, runs: got.runs, asked: n, uses: got.steps, network: want, played: got.mean, se: got.se, ratio, z, done: got.done, off: got.off,
     pass: got.done === got.runs && got.off === 0 && (Math.abs(ratio - 1) <= 0.15 || Math.abs(z) <= 3) });
@@ -319,7 +320,7 @@ if (require.main === module) {
       if (sc) live++;
       if (!sc || !mine) continue;
       let res;
-      try { res = runOne(sc, runs, every > 0 && out.length % every === 0, deep); } catch (e) { res = { id: sc.id, cls: sc.cls, kind: sc.kind, error: String(e && e.stack || e).split('\n').slice(0, 2).join(' | ') }; }
+      try { res = runOne(sc, runs, every > 0 && out.length % every === 0, deep, Math.max(60000, deadline + 5 * 60000 - Date.now())); } catch (e) { res = { id: sc.id, cls: sc.cls, kind: sc.kind, error: String(e && e.stack || e).split('\n').slice(0, 2).join(' | ') }; }
       out.push(res);
       if (Date.now() > deadline) break outer;
     }
