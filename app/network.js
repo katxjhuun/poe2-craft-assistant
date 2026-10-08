@@ -1909,10 +1909,11 @@
     for (let s = 0; s < N; s++) for (const act of acts[s]) { const o = act.out; for (let t = 1; t < o.length; t += 2) if (o[t] !== RESTART && blockOf[o[t]] !== blockOf[s]) readers[blockOf[o[t]]].add(blockOf[s]); }
     const readerList = readers.map((x) => [...x]);
     // a block's matrix changes only when its part of the rule set does: its factors are kept until then
-    const luCache = blocks.map(() => null);
+    const luCache = blocks.map(() => null), luStale = new Uint8Array(blocks.length);
     function luOf(bi) {
       const b = blocks[bi], m = b.length, c = luCache[bi];
-      if (c) { let same = true; for (let li = 0; li < m; li++) if (c.pol[li] !== pol[b[li]]) { same = false; break; } if (same) return c; }
+      if (c && !luStale[bi]) { let same = true; for (let li = 0; li < m; li++) if (c.pol[li] !== pol[b[li]]) { same = false; break; } if (same) return c; }
+      luStale[bi] = 0;
       const A = new Float64Array(m * m), mine = new Int32Array(m);
       for (let li = 0; li < m; li++) {
         const s = b[li];
@@ -2165,15 +2166,152 @@
      * up with chance 1 - F(s), and every white base after it with chance 1 - F(N0): (1 - F(s)) / F(N0) bases in all.
      */
     const basesAt = (s) => (Fv[n0] > 1e-250 ? (1 - Fv[s]) / Fv[n0] : Infinity);
+    /** The currency items a step uses, in the order they are used. */
+    const actNames = (a) => (a.op === 'reveal' ? (a.echoes ? [OMEN.echoes] : []) : (a.pre ? P.actionNames(a.pre, ctx) : []).concat(P.actionNames(a, ctx)));
+    // ---- Hinekora's Lock: "Allows an item to foresee the result of the next Currency item used on it. Modifying the
+    // item in any way removes the ability to foresee."
+    // With the lock on the item the player looks at what each currency would do and uses the one whose result is
+    // worth most: the step costs the lock plus E[min over the currencies of (its price + the value of its result)],
+    // where without the lock it is min over the currencies of E[...]. The results of different currency items are
+    // taken to be drawn apart; of the steps that use the same currency item (with and without an omen) only one is
+    // looked at, since whether an omen changes the result that is shown or draws another is not known. What a lock
+    // does not show: a bone's modifier (it is chosen at the Well of Souls afterwards), the reveal there, a rune. Those
+    // can still be used, unseen, and so can a new base. When nothing shown is worth using and no target goes by
+    // value, a Divine Orb changes the item without changing what it is: the lock is spent and can be used again.
+    // The lock can win at most what the item is worth, so it is no edge at all while it costs more than giving the
+    // item up does (LOCK >= base + charge + a white base's value: at 517,000 Exalted Orbs nearly every craft).
+    const LOCK = input.lock === false ? null : price("Hinekora's Lock");
+    const BURN = LOCK != null && PR.divine != null && goals.every((g) => g.minValue == null) ? PR.divine : null;
+    const SEEN = new Set(['transmute', 'augment', 'regal', 'alchemy', 'exalt', 'chaos', 'annul', 'essence', 'pessence', 'liquid', 'fracture', 'divine', 'vaal']);
+    const lockAt = LOCK != null ? new Int32Array(N).fill(-1) : null;
+    const FIN = index.get(keyOf(FINISHED));
+    /** The new bases an edge takes: its outcomes that lose the item have paid for one each. */
+    const nbOf = (a) => (a.op === 'newbase' ? 1 : a.bases || 0);
+    /** What an edge costs when its result is known: its price, and a base only where the item is lost. */
+    const seenCost = (act, to) => act.cost - nbOf(act.a) * baseCost + (to === RESTART ? baseCost : 0);
+    /**
+     * The lock's edge at node s for the values as they stand, put into acts[s] when it beats `limit` (the best the
+     * node has without it; qs: every edge's cost in all). -> null, or {moved: the edge is not what it was}.
+     */
+    function lockEdge(s, qs, limit) {
+      const list = acts[s], li = lockAt[s];
+      const cand = new Map();
+      let cap = Infinity, capK = -1;
+      for (let k = 0; k < list.length; k++) {
+        if (k === li) continue;
+        const act = list[k], q = qs[k];
+        // a step whose result is not shown is worth what it is worth on average: the best of them is what is left
+        // to do when nothing shown is better
+        if (!SEEN.has(act.a.op) || act.a.ideal) { if (q < cap) { cap = q; capK = k; } continue; }
+        const names = actNames(act.a), key = names[names.length - 1], old = cand.get(key);
+        if (!old || q < old[1]) cand.set(key, [k, q]);
+      }
+      if (!cand.size) return null;
+      if (BURN != null && BURN + V[s] < cap) { cap = BURN + V[s]; capK = -2; }
+      const add = (m, key, v) => m.set(key, (m.get(key) || 0) + v);
+      /** The edge when the steps `ks` are looked at (one per currency item): {q: its cost in all, cost, flat: its outcomes, a}, or null when it cannot beat the limit. */
+      const make = (ks) => {
+        const ent = [], mass = new Map();
+        let floor = cap;
+        for (const k of ks) {
+          const act = list[k], o = act.out;
+          mass.set(k, 1);
+          for (let t = 0; t < o.length; t += 2) { const to = o[t + 1], y = seenCost(act, to) + (to === RESTART ? charge + x : V[to]); ent.push([y, o[t], k, to]); if (y < floor) floor = y; }
+        }
+        // (the lock cannot do better than the best single result)
+        if (!(LOCK + floor < limit)) return null;
+        ent.sort((a, b) => a[0] - b[0] || a[2] - b[2]);
+        // the results from the best down: one is used when every other currency shows something worse
+        let q = LOCK, cost = LOCK, bases = 0, left = 1;
+        const out = new Map(), also = new Map(), plan = [];
+        for (const [y, p, k, to] of ent) {
+          if (!(y < cap)) break;
+          let pr = p;
+          for (const [k2, m2] of mass) if (k2 !== k) pr *= m2;
+          mass.set(k, Math.max(0, mass.get(k) - p));
+          if (!(pr > 0)) { if (mass.get(k) <= 1e-15) break; continue; }
+          const act = list[k];
+          q += pr * y; cost += pr * seenCost(act, to); left -= pr;
+          add(out, to, pr);
+          if (to === RESTART) { bases += pr; add(also, 'New base', pr); }
+          for (const n of actNames(act.a)) add(also, n, pr * (act.a.count || 1));
+          for (const [n, c] of act.a.also || []) if (n !== 'New base') add(also, n, pr * c);
+          if (plan.length < 24) plan.push([k, to, pr]);
+          if (mass.get(k) <= 1e-15) break; // (this currency always shows something at least as good as what is left)
+        }
+        left = Math.max(0, left);
+        if (left > 1e-15) {
+          if (capK === -1) return null; // (nothing to fall back on: cannot be, a new base is always there)
+          q += left * cap;
+          if (capK === -2) { cost += left * BURN; add(out, s, left); add(also, 'Divine Orb', left); }
+          else {
+            const act = list[capK], o = act.out;
+            cost += left * act.cost; bases += left * nbOf(act.a);
+            for (let t = 0; t < o.length; t += 2) add(out, o[t + 1], left * o[t]);
+            for (const n of actNames(act.a)) add(also, n, left * (act.a.count || 1));
+            for (const [n, c] of act.a.also || []) add(also, n, left * c);
+          }
+        }
+        if (!(q < limit)) return null;
+        const flat = [];
+        for (const [to, p] of out) flat.push(p, to);
+        const a = { op: 'lock', item: "Hinekora's Lock", bases, also: [...also], cand: [...mass.keys()], cap: capK, capY: cap, rest: left, plan };
+        if (list.some((e, k) => k !== li && e.a.ideal && (k === capK || mass.has(k)))) a.ideal = true;
+        return { q, cost, flat, a };
+      };
+      // Which step of a currency item is looked at: the one that is cheapest on average. For the lock another one may
+      // be better (the best of several results asks for spread, not for a good average), so an edge that stands is
+      // also made again with the steps it has: the better of the two. An edge made again is then never worse than
+      // the one it replaces, which is what keeps every round's rule set one that ends.
+      const old = li >= 0 ? list[li] : null;
+      let got = make([...cand.values()].map((c) => c[0]));
+      if (old && pol[s] === li) { const alt = make(old.a.cand); if (alt && (!got || alt.q < got.q)) got = alt; }
+      if (!got) return null;
+      const { cost, flat, a } = got;
+      let moved = !old || old.out.length !== flat.length || Math.abs(old.cost - cost) > 1e-9 * (1 + Math.abs(cost));
+      if (!moved) for (let t = 0; t < flat.length; t += 2) if (old.out[t + 1] !== flat[t + 1] || Math.abs(old.out[t] - flat[t]) > 1e-7) { moved = true; break; }
+      // (the edge is kept as the values make it now, also when its chances have not moved: what is left to do when
+      // nothing shown is worth using is told by a value, capY, and that one moves with every round)
+      if (old && !moved) { old.a = a; return { moved: false }; }
+      const act = { a, cost, out: flat };
+      if (li < 0) { lockAt[s] = list.length; list.push(act); } else list[li] = act;
+      luStale[blockOf[s]] = 1;
+      return { moved: true };
+    }
+    // The lock comes in only once the rule set without it has settled. Against the first rounds' values (a white
+    // base worth 1e13 before the rule set has taken shape) a lock for half a million looks cheap everywhere, and the
+    // rule set it makes then, "spend the lock with a Divine Orb until a currency shows the perfect result", is one
+    // that the rounds after it take for ever to leave.
+    let lockArmed = false;
     /** Improve the rule set until no node has a cheaper edge (it starts from the rule set of the last solve). */
     function solve(exact) {
+      improve(exact);
+      if (exact !== false && LOCK != null && !lockArmed && !timedOut && LOCK < baseCost + charge + x) { lockArmed = true; improve(exact); }
+      sol = null;
+    }
+    function improve(exact) {
       // exact === false: a probe of the search for the base charge. It only has to tell on which side of the limit the
       // charge lands, so it stops when the roughly valued rule set has all but settled.
       // While many nodes still change their edge, the rule set is valued roughly (a few passes over the blocks) and
       // improved again; the exact values come once it has settled, and it must stand unchanged against those.
       let rough = true, last = N;
+      // With the lock in the rule set every round's values are exact, and a round whose values did not settle ends
+      // the search: the rule set goes back to the last one that was valued exactly (`snap`). The lock's edge takes
+      // the best of many results, so against values that are too low somewhere it takes just those: on a quiver a
+      // round valued four thousandths off was followed by a rule set that went round in circles for ever.
+      let snap = null;
+      const take = () => { const locks = []; for (let s = 0; s < N; s++) if (lockAt[s] >= 0 && pol[s] === lockAt[s]) { const e = acts[s][lockAt[s]]; locks.push([s, e, e.a]); } return { pol: Int32Array.from(pol), locks, A: Av, F: Fv, x, v: V[start] }; };
+      const back = (k) => {
+        pol.set(k.pol);
+        for (const [s, e, a] of k.locks) { e.a = a; acts[s][lockAt[s]] = e; }
+        Av = k.A; Fv = k.F; x = k.x;
+        for (let s = 0; s < N; s++) V[s] = Math.min(BIG, Av[s] + (1 - Fv[s]) * x);
+        luStale.fill(1); timing.unsettled = 0;
+      };
       for (let it = 0; it < 400; it++, rounds++) {
         if (late()) { timedOut = true; break; }
+        const locking = lockArmed && exact !== false && LOCK < baseCost + charge + x;
+        if (locking) rough = false;
         const d = new Float64Array(N);
         for (let s = 0; s < N; s++) if (pol[s] >= 0) d[s] = costOf(acts[s][pol[s]]);
         const passes = !rough ? EXACT_PASSES : last > N / 20 ? 3 : last > N / 300 ? 8 : 24;
@@ -2181,21 +2319,45 @@
         if (!holdX) x = F[n0] > 1e-250 ? A[n0] / F[n0] : BIG;
         for (let s = 0; s < N; s++) V[s] = Math.min(BIG, A[s] + (1 - F[s]) * x);
         Fv = F; Av = A;
+        if (locking) {
+          if (timing.unsettled && unsolved() > 1e-7) { if (snap) back(snap); break; }
+          // (no cheaper than the last round, for the item and for a white base: the search is over)
+          if (snap && !(x < snap.x * (1 - 1e-7)) && !(V[start] < snap.v * (1 - 1e-7))) { if (x > snap.x || V[start] > snap.v) back(snap); break; }
+          snap = take();
+        }
         let changed = 0;
+        // (Hinekora's Lock is an edge only where it can pay at all: see LOCK)
+        const lockOn = lockArmed && LOCK < baseCost + charge + x;
         for (let s = 0; s < N; s++) {
           const list = acts[s];
           if (list.length < 2) continue;
-          let best = pol[s], bq = qOf(s, list[pol[s]]);
-          // against rough values an edge must be clearly cheaper to be taken (else the rule set flutters)
-          const slack = (rough ? 1e-6 : 1e-9) * (1 + Math.abs(bq));
-          for (let a = 0; a < list.length; a++) { if (a === pol[s]) continue; const v = qOf(s, list[a]); if (v < bq - slack) { bq = v; best = a; } }
-          if (best !== pol[s]) { pol[s] = best; changed++; }
+          const li = lockAt ? lockAt[s] : -1;
+          if (li < 0 && !lockOn) {
+            let best = pol[s], bq = qOf(s, list[pol[s]]);
+            // against rough values an edge must be clearly cheaper to be taken (else the rule set flutters)
+            const slack = (rough ? 1e-6 : 1e-9) * (1 + Math.abs(bq));
+            for (let a = 0; a < list.length; a++) { if (a === pol[s]) continue; const v = qOf(s, list[a]); if (v < bq - slack) { bq = v; best = a; } }
+            if (best !== pol[s]) { pol[s] = best; changed++; }
+            continue;
+          }
+          // with the lock: the best edge without it first, then the lock's edge as the values make it now
+          const held = pol[s] === li, qs = new Float64Array(list.length);
+          let best = held ? -1 : pol[s], bq = held ? Infinity : qOf(s, list[pol[s]]);
+          const slack = (rough ? 1e-6 : 1e-9) * (1 + Math.abs(held ? V[s] : bq));
+          for (let a = 0; a < list.length; a++) {
+            if (a === li) continue;
+            const v = a === pol[s] ? bq : qOf(s, list[a]);
+            qs[a] = v;
+            if (a !== pol[s] && v < bq - (best < 0 ? 0 : slack)) { bq = v; best = a; }
+          }
+          const lk = lockOn ? lockEdge(s, qs, held ? bq + slack : bq - slack) : null;
+          if (lk) { if (!held) { pol[s] = lockAt[s]; changed++; } else if (lk.moved) changed++; }
+          else if (best !== pol[s]) { pol[s] = best; changed++; }
         }
         last = changed;
         if (exact === false && changed <= N / 2000) break;
         if (!changed) { if (!rough) break; rough = false; }
       }
-      sol = null;
     }
     /**
      * The base limit of a large network, from the price of giving up (z) that a smaller network of the request needed.
@@ -2279,7 +2441,6 @@
     if (!done(startS) && !(V[start] < BIG / 1000)) return { impossible: [{ label: goals.map((g) => g.label).join(' + '), why: 'no currency with a price brings this item to all of these targets' }] };
 
     // ---- what the rule set uses: every currency's expected count, and how far the cost spreads
-    const actNames = (a) => (a.op === 'reveal' ? (a.echoes ? [OMEN.echoes] : []) : (a.pre ? P.actionNames(a.pre, ctx) : []).concat(P.actionNames(a, ctx)));
     /** Expected counts of every currency and the cost's second moment, for the rule set as it stands. */
     function solution() {
       if (sol) return sol;
@@ -2343,6 +2504,43 @@
       done: (s) => done(states[s]),
       /** The step to use at node s: {a, names, cost, out}, or null when done or stuck. */
       step(s) { return pol[s] >= 0 ? Object.assign({ names: actNames(acts[s][pol[s]].a) }, acts[s][pol[s]]) : null; },
+      /** Hinekora's Lock at node s: the steps to look at with it, one per currency item ([{k, a, names}]), or null. */
+      lockSteps(s) {
+        const e = pol[s] >= 0 ? acts[s][pol[s]] : null;
+        return e && e.a.op === 'lock' ? e.a.cand.map((k) => ({ k, a: acts[s][k].a, names: actNames(acts[s][k].a) })) : null;
+      },
+      /**
+       * What is used after looking: seen = [[k, the item as step k would leave it]] -> {k, cost} for the result that is
+       * worth most, or {rest: the step to use unseen, cost} / {burn: true, cost} when nothing shown is worth using.
+       * cost: the lock and what is used (a base too where the item is lost).
+       */
+      lockUse(s, seen) {
+        const e = acts[s][pol[s]], list = acts[s];
+        let bestY = e.a.capY, pick = null;
+        for (const [k, st] of seen) {
+          const act = list[k];
+          let to;
+          if (st.corrupted || st.sanctified) to = done(nodeOf(st, true)) ? FIN : RESTART;
+          else { to = net.nodeOf(st); if (to < 0) continue; }
+          const y = seenCost(act, to) + (to === RESTART ? charge + x : V[to]);
+          if (y < bestY) { bestY = y; pick = { k, to, cost: LOCK + seenCost(act, to) }; }
+        }
+        // (y: what the item is worth after the choice, with what the choice costs; want: the same as the edge has it on average. For the checks.)
+        const out = pick || (e.a.cap === -2 ? { burn: true, cost: LOCK + BURN } : { rest: Object.assign({ names: actNames(list[e.a.cap].a) }, list[e.a.cap]), cost: LOCK + list[e.a.cap].cost });
+        out.y = bestY; out.want = qOf(s, e) - LOCK;
+        return out;
+      },
+      /** The same as lines for a player: what to use for which result, best first ([{names, to: 'done' | 'lost' | what the item is then, share}]), and what is left to do. */
+      lockList(s, max) {
+        const e = pol[s] >= 0 ? acts[s][pol[s]] : null;
+        if (!e || e.a.op !== 'lock') return null;
+        const list = acts[s];
+        return {
+          look: e.a.cand.map((k) => actNames(list[k].a)),
+          lines: e.a.plan.slice(0, max || 10).map(([k, to, p]) => ({ names: actNames(list[k].a), to: to === RESTART ? 'lost' : done(states[to]) ? 'done' : describe(states[to]), share: p })),
+          rest: e.a.rest > 1e-9 ? { names: e.a.cap === -2 ? ['Divine Orb'] : actNames(list[e.a.cap].a), burn: e.a.cap === -2, share: e.a.rest } : null,
+        };
+      },
       /** Chance that the step at node s adds a target the item does not have. */
       hit(s) {
         if (pol[s] < 0) return 0;
@@ -2431,7 +2629,8 @@
         const so = solution();
         const total = (act) => { let c = act.cost; const o = act.out; for (let t = 0; t < o.length; t += 2) c += o[t] * (o[t + 1] === RESTART ? so.moneyBase : so.money[o[t + 1]]); return c; };
         // (not the omen at its best: that is no step a player can take)
-        return acts[s].map((act, i) => ({ a: act.a, names: actNames(act.a), cost: act.cost, total: total(act), best: i === pol[s] })).filter((o) => !o.a.ideal).sort((a, b) => (b.best - a.best) || (a.total - b.total));
+        // (nor a lock's edge the route does not use: it is what earlier values made of it)
+        return acts[s].map((act, i) => ({ a: act.a, names: actNames(act.a), cost: act.cost, total: total(act), best: i === pol[s] })).filter((o) => !o.a.ideal && (o.best || o.a.op !== 'lock')).sort((a, b) => (b.best - a.best) || (a.total - b.total));
       },
       /** What buying a starting point is worth: the price up to which it beats rolling it from a white base. */
       entries() {
@@ -2677,7 +2876,7 @@
     return {
       net: true, label: 'Route', goals: net.goals.map(plain), params: null, nodes: net.N, lite: net.lite, track: net.track, ms: Date.now() - t0, timing: net.timing,
       meanCost: net.cost(s), sd: net.sd(s), budget: B, p: B > 0 ? net.within(s, B) : null, bases: net.bases(s), charge,
-      next: done ? { done: true } : step ? Object.assign({}, step.a, { names: well(step.names), hit: net.hit(s) }, sanctNow != null ? { ends: sanctNow } : step.a.bases != null && step.a.op !== 'extraction' ? { ends: 1 - step.a.bases } : null)
+      next: done ? { done: true } : step ? Object.assign({}, step.a, { names: well(step.names), hit: net.hit(s) }, step.a.op === 'lock' ? { look: net.lockList(s, 10), plan: null, also: null } : null, sanctNow != null ? { ends: sanctNow } : step.a.bases != null && step.a.op !== 'extraction' ? { ends: 1 - step.a.bases } : null)
         : { fail: 'No currency brings this item to the targets.' },
       // the materials of the whole craft
       steps: done ? [] : net.materials(s).map((m) => ({ names: [m.name], avg: m.uses, ok: m.uses, cost: m.price })),

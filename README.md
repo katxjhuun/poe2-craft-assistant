@@ -131,9 +131,16 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   Craft edilen item'ın prefix ve suffix'lerine dokunmayan currency'ler: Orb of Chance, Mirror of Kalandra,
   Architect's, Sacrifice ve Cultivation orb'ları, Verisium, kalite currency'leri, Omen of the Blessed (yalnız
   implicit). Flask ve charm craft'ı, anoint ve Verisium Anvil kapsam dışıdır.
-- **Hinekora's Lock** (517.000 ex): beyaz base'in değeri bu fiyatın altında kalan hiçbir craft'ta en ucuz yol
-  olamaz (kilidin kazandırabileceği en çok şey item'ı baştan yapmanın maliyetidir), bu yüzden sayfadaki hemen her
-  istekte rota onsuz da en ucuzudur. Daha pahalı craft'lar için kilitli adım ağa ayrıca eklenir.
+- **Hinekora's Lock.** Ağda bir kenardır: kilit takılınca her currency'nin sonucu önceden görülür ve en iyisi
+  kullanılır; adımın maliyeti kilit + E[en küçük (fiyat + sonucun değeri)] olur (kilitsiz adım, beklenenlerin en
+  küçüğüdür). Farklı currency item'larının sonuçları bağımsız sayılır; aynı currency'nin omen'li ve omen'siz
+  hâllerinden yalnız birine bakılır (omen'in gösterilen sonucu değiştirip değiştirmediği bilinmiyor: iddia k62, test
+  t36). Kemiğin modu (Well'de seçilir), açılış ve rune'lar gösterilmez; gösterilenlerin hiçbiri değmezse rota bunlardan
+  birini ya da yeni base'i kullanır, değere göre hedef yoksa bir Divine Orb ile kilidi harcayıp yeniden dener.
+  Kilit en çok item'ın değeri kadar kazandırabilir, bu yüzden "vazgeçme fiyatı"ndan pahalıyken (517.000 ex ile
+  neredeyse her craft'ta) hiç kenar değildir; kilitsiz kural seti oturduktan sonra devreye girer ve her turu kesin
+  değerlenir. 667.000 ex'lik bir quiver craft'ında bugünkü fiyatla kullanılmaz; kilit 80.000 ex olsaydı craft
+  546.814 ex'e, 20.000 ex olsaydı 367.941 ex'e inerdi. Oynatma: botta kilit 3 ex iken 268,1 vaat, 266,1 ± 5,6 oynanan.
 - Rune of Aldur, takıldıktan sonra gelen modu dönüştürmez (oyuncu 8 Ekim 2026'da doğruladı: iddia k61).
 - Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler).
 

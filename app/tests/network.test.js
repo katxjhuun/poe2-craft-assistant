@@ -495,3 +495,51 @@ test('network: a large network keeps to the base limit from a small one\'s price
   assert.ok(full.cost(full.start) >= c0 * (1 - 1e-9), 'fewer bases never cost less');
   assert.ok(Math.abs(held.cost(held.start) / full.cost(full.start) - 1) < 0.05, `${held.cost(held.start)} vs ${full.cost(full.start)}`);
 });
+
+test("network: Hinekora's Lock is the best of what the currencies show, and no edge while it costs more than the item", () => {
+  const X = lockWorld(), base = 'Totemic Greaves';
+  const targets = {};
+  [['prefix', /increased Movement Speed$/], ['suffix', /to Fire Resistance$/]].forEach(([side, re], k) => { const f = X.tiers(base, side, re); targets[side + '-' + k] = { fam: f.fam, group: side, minTier: 1, required: true, label: f.label }; });
+  const build = (lock) => { const inp = Object.assign(X.input(X.item(base, 'Normal'), targets, { "Hinekora's Lock": lock }), { lite: 0, track: 8, whittle: 'none' }); return [NW.build(inp), inp]; };
+  const [plain] = build(null), [dear] = build(1e6), [cheap, inp] = build(3);
+  const c0 = plain.cost(plain.start), s = cheap.start;
+  // dearer than the whole craft: the lock can win at most what the item is worth, so the route is the one without it
+  assert.ok(Math.abs(dear.cost(dear.start) - c0) < 1e-9 * c0);
+  assert.ok(!dear.materials(dear.start).some((m) => m.name === "Hinekora's Lock"));
+  // for 3 ex it is used, the craft is cheaper, and the values are exact
+  assert.ok(cheap.settled);
+  const mats = cheap.materials(s), lock = mats.find((m) => m.name === "Hinekora's Lock");
+  assert.ok(lock && lock.uses > 1, 'the lock is in the route');
+  assert.ok(cheap.cost(s) < c0 * 0.9, `${cheap.cost(s)} vs ${c0}`);
+  const sum = mats.reduce((t, m) => t + m.cost, 0);
+  assert.ok(Math.abs(sum - cheap.cost(s)) < 1e-6 * cheap.cost(s), `materials ${sum} vs ${cheap.cost(s)}`);
+  // a node where the lock is the step: one step per currency item is looked at, and the edge is the expected best of
+  // their results (counted here by drawing each currency's result from its own edge)
+  const n = cheap.rules(s, 200).find((x) => x.a && x.a.op === 'lock').node, e = cheap.acts[n][cheap.pol[n]], list = cheap.acts[n];
+  const names = cheap.lockSteps(n).map((c) => c.names[c.names.length - 1]);
+  assert.equal(new Set(names).size, names.length, 'one step per currency item');
+  const val = (to) => (to === -1 ? cheap.cost(cheap.n0) + 1 : cheap.cost(to));
+  let want = e.cost, drawn = 0;
+  for (let t = 0; t < e.out.length; t += 2) want += e.out[t] * (e.out[t + 1] === -1 ? cheap.cost(cheap.n0) : cheap.cost(e.out[t + 1]));
+  const r = X.L.rng(5), N = 60000;
+  for (let i = 0; i < N; i++) {
+    let best = e.a.capY;
+    for (const k of e.a.cand) {
+      const o = list[k].out;
+      let u = r(), to = o[o.length - 1];
+      for (let t = 0; t < o.length; t += 2) { u -= o[t]; if (u <= 0) { to = o[t + 1]; break; } }
+      const y = list[k].cost - (list[k].a.bases || 0) + val(to);
+      if (y < best) best = y;
+    }
+    drawn += 3 + best;
+  }
+  assert.ok(Math.abs(drawn / N / want - 1) < 0.01, `edge ${want}, drawn ${drawn / N}`);
+  // the lines for the player add up, best first
+  const L = cheap.lockList(n, 50);
+  assert.ok(L.look.length === names.length && L.lines.length > 0);
+  // and the play (every currency used on a copy of the item, the route's choice kept) costs what the route says
+  const got = X.play(cheap, inp, 500, 3, 20000, 90000);
+  assert.equal(got.refused, 0);
+  assert.equal(got.done, got.runs);
+  assert.ok(Math.abs(got.mean / cheap.cost(s) - 1) < 0.1 || Math.abs(got.mean - cheap.cost(s)) < 3 * got.se, `${got.mean} vs ${cheap.cost(s)}`);
+});

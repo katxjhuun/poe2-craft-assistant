@@ -112,9 +112,40 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
       if (net.done(node)) { ok = true; break; }
       const step = net.step(node);
       if (!step) break;
-      cost += step.cost;
-      const a = step.a;
+      let a = step.a;
       lastA = a;
+      // (a step the simulator's rules refuse is a disagreement between the network and the rules: counted, and kept for the audit)
+      const refuse = (x) => { const why = P.validate(ctx, st, x); if (why) { refused++; if (audit) (audit.refused = audit.refused || []).push({ from: node, a: x, why, item: st.rarity + ' ' + st.mods.map((m) => `${m.side[0]}:${m.unrevealed ? '(hidden)' : m.fam}${m.frac ? '(F)' : ''}${m.des ? '(D)' : ''}${m.crafted ? '(C)' : ''}`).join(', ') }); } };
+      if (a.op === 'lock') {
+        // Hinekora's Lock: every currency the route looks at is used on a copy of the item (what the lock shows), and
+        // the route says which of the results to take. Each copy has its own draws: the results of different currency
+        // items are taken to be drawn apart (network.js LOCK).
+        refuse({ op: 'hinekora' });
+        st = P.apply(ctx, st, { op: 'hinekora' }, r).state;
+        const seen = [];
+        for (const c of net.lockSteps(node)) {
+          let s2 = { ...st, mods: st.mods.map((m) => ({ ...m })) };
+          const why = (c.a.pre && P.validate(ctx, s2, c.a.pre)) || null;
+          if (c.a.pre) s2 = P.apply(ctx, s2, c.a.pre, r).state;
+          const why2 = why || P.validate(ctx, s2, c.a);
+          const pick = wanted(s2);
+          s2 = P.apply(ctx, s2, c.a, r, (opts) => pick(opts) || dull(opts)).state;
+          seen.push([c.k, s2, why2, c.a]);
+        }
+        const use = net.lockUse(node, seen);
+        cost += use.cost;
+        if (audit) { const L = audit.locks || (audit.locks = new Map()), rec = L.get(node) || { n: 0, y: 0, want: use.want, to: new Map() }; rec.n++; rec.y += use.y; const key = use.k != null ? use.k + '>' + use.to : use.burn ? 'burn' : 'rest'; rec.to.set(key, (rec.to.get(key) || 0) + 1); L.set(node, rec); }
+        if (use.burn) { refuse({ op: 'divine' }); st = P.apply(ctx, st, { op: 'divine' }, r).state; continue; }
+        if (use.k != null) {
+          const hit = seen.find((x) => x[0] === use.k);
+          if (hit[2]) { refused++; if (audit) (audit.refused = audit.refused || []).push({ from: node, a: hit[3], why: hit[2], item: 'with Hinekora\'s Lock' }); }
+          st = hit[1];
+          continue;
+        }
+        a = use.rest.a; // nothing shown is worth using: this step, unseen (its cost is counted above)
+        st.foresight = false; // (whatever is used on the item spends the lock)
+        lastA = a;
+      } else cost += step.cost;
       if (a.op === 'reveal') {
         const i = st.mods.findIndex((m) => m.unrevealed);
         const side = st.mods[i].side;
@@ -138,8 +169,6 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
       } else if (a.op === 'catalyst') {
         for (let i = 0; i < a.count; i++) st = P.apply(ctx, st, a, r).state;
       } else {
-        // (a step the simulator's rules refuse is a disagreement between the network and the rules: counted, and kept for the audit)
-        const refuse = (x) => { const why = P.validate(ctx, st, x); if (why) { refused++; if (audit) (audit.refused = audit.refused || []).push({ from: node, a: x, why, item: st.rarity + ' ' + st.mods.map((m) => `${m.side[0]}:${m.unrevealed ? '(hidden)' : m.fam}${m.frac ? '(F)' : ''}${m.des ? '(D)' : ''}${m.crafted ? '(C)' : ''}`).join(', ') }); } };
         if (a.pre) { refuse(a.pre); st = P.apply(ctx, st, a.pre, r).state; }
         refuse(a);
         const pick = wanted(st);

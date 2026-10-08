@@ -1974,6 +1974,18 @@
    "claim": "A Rune of Aldur also transforms the modifiers that roll after it was socketed",
    "verdict": "rejected",
    "reason": "The rune's text reads \"When socketed, transforms ...\", and the player confirmed on 8 Oct 2026 that a modifier rolled after the rune went in stays what it is. The planner and the craft network transform only what is on the item when the rune is socketed (and never a Chaos modifier)."
+  },
+  {
+   "id": "k62",
+   "claim": "With Hinekora's Lock on an item, every currency item held over it shows its own result, the results of different currency items are drawn apart, and any currency that is used (a Divine Orb too) spends the lock",
+   "verdict": "plausible",
+   "reason": "Game text: \"Allows an item to foresee the result of the next Currency item used on it. Modifying the item in any way removes the ability to foresee.\" That each currency item has its own result, shown again and again until the item changes, is how the lock is used by crafters; the game files say nothing about how the results are drawn. The craft network builds its lock step on this: the player looks at one step per currency item and uses the best result (app/network.js, LOCK). Not counted on: whether an omen changes the result that is shown or draws another one (only one step per currency item is looked at), a bone's modifier (it is chosen at the Well of Souls afterwards), the reveal there, and runes. Open test t36."
+  },
+  {
+   "id": "k63",
+   "claim": "Omen of Putrefaction reveals its up to six Desecrated modifiers like any other, three options each, and a modifier taken at one reveal takes the Well's entries of its groups out of the next reveals of the item",
+   "verdict": "plausible",
+   "reason": "Game text: \"your next Desecration attempt will replace all modifiers on the item creating an item with up to 6 Unrevealed modifiers and Corrupting the item\". No group twice on an item is the game's rule for every modifier (game_keywords, modifier groups), so a modifier taken at a reveal keeps the other entries of its groups from being offered; the simulator and the craft network both count on it (the route takes, on a miss, the desecrated-only option that removes the most entries). That each of the six is revealed with three options is the planner's reading of \"Unrevealed modifiers\" (claim k11)."
   }
  ],
  "tests": [
@@ -2330,6 +2342,15 @@
    "note": "A Fracturing Orb does not land on a hidden Desecrated modifier: with four modifiers of which one is a hidden Desecrated one, the fracture is one of the other three (1 in 3).",
    "status": "refuted",
    "source": "the player (8 Oct 2026); three guides and creators say the same (see claim k57)"
+  },
+  {
+   "id": "t36",
+   "question": "Hinekora's Lock: does each currency show its own result, and does an omen change the result that is shown?",
+   "how": "Put a Hinekora's Lock on a Rare item with an open slot. Hold an Exalted Orb, a Greater Exalted Orb and a Chaos Orb over it and note the three results. Then activate an Omen of Sinistral Exaltation and hold the Exalted Orb over it again: is the result the same modifier, another prefix, or something else? Use a Divine Orb and check that the lock is gone.",
+   "claims": [
+    "k62"
+   ],
+   "note": "The route looks at one step per currency item until this is known; if an omen draws its own result, the lock is worth more than the route counts."
   }
  ]
 }

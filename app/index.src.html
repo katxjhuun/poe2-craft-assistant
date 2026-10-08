@@ -3393,6 +3393,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       case 'divine':
         if (a.sanctify) return `With Omen of Sanctification the Divine Orb multiplies every value by a random 78% to 122% (a fractured modifier keeps its value) and Sanctifies the item: it cannot be changed again.${ends(a) != null ? ` The values the goals ask for are there afterwards in ${p1(ends(a))} of uses; otherwise the item is lost and the craft starts again on a new base.` : ''}`;
         return 'Rerolls the values of every mod except fractured ones; the mods themselves stay.';
+      case 'lock': return `Put Hinekora's Lock on the item, then hold each currency of the list over it: the item shows what that currency would do. Use the one the list ranks first among what you see${a.look && a.look.rest ? '; when none of the listed results shows, ' + (a.look.rest.burn ? 'use a Divine Orb (it changes nothing the goals ask for and spends the lock, so the lock can be used again)' : a.look.rest.names.join('') === 'New base' ? 'start again on a new base' : 'use ' + a.look.rest.names.join(' + ') + ' (its result is not shown)') : ''}. Any currency you use spends the lock.`;
       case 'vaal': return `A last throw for an item the route would give up: one use in four swaps one to three modifiers for random ones.${ends(a) != null ? ` That finishes the item in ${p1(ends(a))} of uses.` : ''} The item is Corrupted either way: when it is not finished, start again on a new base (the route counts it).`;
       case 'extraction': return `Destroys the item and returns the augments that are not socket-bound (Astrid's Creativity), for the next base. The route gives an item up this way when the rune is worth more than the orb.`;
       case 'aldur': return `${a.pre ? "First an Artificer's Orb for the socket. " : ''}Socket it: the item's modifiers of another element become the same ones of this rune's element. Socket-bound: it cannot be taken out or replaced.`;
@@ -3415,6 +3416,15 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       ? ` <span class="badge verify" title="${esc(r.rule)}. This rule comes from a single community source.">Verify in game</span>` : '';
   }
   const usesText = (x) => (x >= 9.95 ? String(Math.round(x)) : x >= 0.95 ? String(+x.toFixed(1)) : String(+x.toFixed(2)));
+  /** Hinekora's Lock: the currencies to hold over the item, and which result to take, best first. */
+  function lockHtml(L) {
+    const then = (to) => (to === 'done' ? 'the item is finished' : to === 'lost' ? 'the item is lost (a new base)' : [to.has.length ? 'has ' + to.has.map(esc).join(' + ') : 'no target',
+      to.inWay && to.inWay.length ? 'a modifier in the way of ' + to.inWay.map(esc).join(' + ') : '',
+      to.otherPrefixes + to.otherSuffixes ? `${to.otherPrefixes} other prefix${to.otherPrefixes === 1 ? '' : 'es'} and ${to.otherSuffixes} suffix${to.otherSuffixes === 1 ? '' : 'es'}` : ''].filter(Boolean).join(', '));
+    return `<div class="sub" style="margin-top:6px">Hold these over the item: ${L.look.map((n) => esc(n.join(' + '))).join(', ')}.</div>
+      <ol class="rules-list" style="margin-top:4px">${L.lines.map((l) => `<li><span class="share">${pct(l.share)}</span><span>${esc(l.names.join(' + '))} when it shows: <span class="then">${then(l.to)}</span></span></li>`).join('')}
+      ${L.rest ? `<li><span class="share">${pct(L.rest.share)}</span><span>none of these shows: <span class="then">${esc(L.rest.names.join(' + '))}${L.rest.burn ? ' (the item stays as it is; use the lock again)' : ''}</span></span></li>` : ''}</ol>`;
+  }
   /** The network's route: cost and budget, the step to use now, the materials, other ways, and the rules it follows. */
   function routeHtml(r) {
     if (r.blocked) {
@@ -3446,7 +3456,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       : `<div class="row"><div class="st-names" title="${esc(stepHelp(nx, null))}">${namesHtml(nx.names)}</div>${chance}${irrev(nx) && !S.ack[ackKey(nx)]
           ? '<button class="btn primary" type="button" id="reviewBtn">Before you use it…</button>'
           : '<button class="btn primary" type="button" id="appliedBtn">I applied this</button>'}</div>
-         ${nx.hide ? '<div class="sub">Do not reveal it yet.</div>' : ''}${irrev(nx) ? `<div class="irrev"><b>Cannot be undone.</b> ${esc(irrev(nx))}</div>` : ''}`;
+         ${nx.look ? lockHtml(nx.look) : ''}${nx.hide ? '<div class="sub">Do not reveal it yet.</div>' : ''}${irrev(nx) ? `<div class="irrev"><b>Cannot be undone.</b> ${esc(irrev(nx))}</div>` : ''}`;
     // (a count under zero: what the route gets back on balance, a rune that an Orb of Extraction returns)
     const rows = r.steps.filter((st) => Math.abs(st.avg) >= 0.005);
     const alts = [];
