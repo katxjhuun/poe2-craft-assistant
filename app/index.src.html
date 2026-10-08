@@ -3421,6 +3421,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       w.low && w.low.length ? 'value too low on ' + list(w.low) : '',
       w.twin && w.twin.length ? 'another element in place of ' + list(w.twin) : '',
       w.inWay && w.inWay.length ? 'a modifier of the same group in the way of ' + list(w.inWay) : '',
+      w.across && w.across.length ? 'a modifier of the other side keeps ' + list(w.across) + ' from rolling' : '',
       w.otherPrefixes + w.otherSuffixes ? `${w.otherPrefixes} other prefix${w.otherPrefixes === 1 ? '' : 'es'} and ${w.otherSuffixes} suffix${w.otherSuffixes === 1 ? '' : 'es'}` : '',
       w.allowance ? `+1 ${w.allowance === 'prefix' ? 'Prefix' : 'Suffix'} Modifier allowed` : '',
       w.runes && w.runes.length ? 'socketed ' + list(w.runes) : '',

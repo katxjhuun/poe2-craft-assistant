@@ -1005,7 +1005,9 @@
     fire: "Xoph's Catalyst", cold: "Tul's Catalyst", lightning: "Esh's Catalyst", chaos: "Chayula's Catalyst", attack: 'Reaver Catalyst',
     caster: 'Sibilant Catalyst', speed: 'Skittering Catalyst', attribute: 'Adaptive Catalyst', minion: 'Necrotic Catalyst' };
   const ALDUR_ELEMENT = { 'Passion of Aldur': 'Fire', 'Breath of Aldur': 'Cold', 'Ire of Aldur': 'Lightning', 'Betrayal of Aldur': 'Chaos' };
-  const ELEMENT_WORDS = ['Fire', 'Cold', 'Lightning', 'Chaos'];
+  // what a Rune of Aldur transforms: "all Cold and Lightning modifiers" (Passion), "Fire and Lightning" (Breath), "Fire and
+  // Cold" (Ire), "Fire, Cold and Lightning" (Betrayal, into Chaos). A Chaos modifier is never transformed.
+  const ELEMENT_WORDS = ['Fire', 'Cold', 'Lightning'];
   /** The modifier a Rune of Aldur turns this one into: its id with the element named the rune's way (same tier), if it exists. */
   function aldurTwin(ctx, id, to) {
     // the same answer for a modifier and an element every time: kept per context (the policy asks on every step)
