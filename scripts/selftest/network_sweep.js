@@ -168,8 +168,11 @@ function special(t, which, n, r, mk) {
   return mk(`crafted2|${two.map((x) => x.m.fam).join('+')}|${n}`, "two crafted-only modifiers (Astrid's Creativity), white", [], 'Normal', targets);
 }
 
-/** The n-th scenario of a base (0, 1, 2, ...): singles first, then desecrated singles, then drawn sets. null when n is a single past the list. */
-function scenario(base, n) {
+/**
+ * The n-th scenario of a base (0, 1, 2, ...): singles first, then desecrated singles, then drawn sets. null when n is a
+ * single past the list. plain: no special requests (the drawn set every index had before 8 Oct 2026, to replay an old run).
+ */
+function scenario(base, n, plain) {
   const { ix, kb } = load();
   const t = table(base);
   const singles = SIDES.flatMap((s) => t.nat[s]);
@@ -191,7 +194,7 @@ function scenario(base, n) {
   }
   n -= desSingles.length;
   // every sixth: a special request, in turn (a base without that case gets a drawn set instead)
-  if (n % 6 === 5) { const sp = special(t, Math.floor(n / 6) % 6, n, r, mk); if (sp) return sp; }
+  if (n % 6 === 5 && !plain) { const sp = special(t, Math.floor(n / 6) % 6, n, r, mk); if (sp) return sp; }
   // a drawn set of two to six targets (jewels: up to four), tiers within three of the best
   const maxK = Math.min(6, t.lim.prefix + t.lim.suffix);
   const k = 2 + (n % Math.max(1, maxK - 1));

@@ -169,3 +169,36 @@ test('planner: a Rune of Aldur never transforms a Chaos modifier (rune texts)', 
   assert.ok(f && f !== fire.id && /Cold/.test(kb.mods[f].txt), 'Fire Damage becomes Cold Damage');
 });
 
+// ---- what the 100,000-play cloud run of 7 Oct 2026 found (scenarios of scripts/selftest/network_sweep.js, by id)
+test('network: scenarios the deep cloud run found wrong stay right', () => {
+  const SW = require('../../scripts/selftest/network_sweep.js');
+  const { load, weightsFor } = require('../../scripts/selftest/lib.js');
+  const { play } = require('../../scripts/selftest/network_check.js');
+  const L = load();
+  const find = (id) => { const base = id.split('|')[0]; for (let n = 0; n < 400; n++) { let sc = null; try { sc = SW.scenario(base, n, true); } catch (e) { sc = null; } if (sc && sc.id === id) return sc; } throw new Error('no scenario ' + id); };
+  const input = (sc) => ({ ix: L.ix, item: sc.item, targets: sc.targets, locks: {}, priceOf: L.priceOf, baseCost: 1, weights: weightsFor(sc.base), essences: SW.table(sc.base).essences, quality: sc.qualityMode });
+  const check = (id, runs, tol) => {
+    const sc = find(id), net = NW.route(input(sc));
+    assert.ok(!net.impossible && !net.unsupported, id);
+    const got = play(net, input(sc), runs, 7, 20000);
+    assert.equal(got.off, 0, id + ': no craft leaves the network');
+    assert.equal(got.done, got.runs, id + ': every craft ends');
+    const want = net.cost(net.start);
+    assert.ok(Math.abs(got.mean - want) <= 4 * got.se + tol * want, `${id}: played ${got.mean.toFixed(1)} ± ${got.se.toFixed(1)}, promised ${want.toFixed(1)}`);
+    return net;
+  };
+  // a helmet: an alloy adds Mana Cost Efficiency as a crafted prefix, which is not the Desecrated suffix that was asked
+  // for (the crafts once left the network there)
+  const helm = check('Cryptic Crown|desecrated|ManaCostEfficiency', 500, 0.05);
+  assert.equal(helm.goals[0].rareEss, null);
+  // a quiver whose Critical Hit Chance suffix leaves the lich one suffix to offer: the first bone is sure (the network
+  // once said one in two)
+  const quiver = check('Visceral Quiver|desecrated|ManaCostEfficiency', 300, 0.03);
+  const first = quiver.step(quiver.start);
+  if (first && first.a.op === 'bone' && first.a.lich) assert.ok(quiver.hit(quiver.start) > 0.99, 'hit ' + quiver.hit(quiver.start));
+  // boots, where the local defences are half of the prefix pool (the Well's later options were lost: 0.82)
+  check('Grand Cuisses|set2|rare, another modifier fractured|5', 600, 0.08);
+  // a staff: Chaos Damage with a modifier of the other side that stops it (1.22), and five targets (0.65)
+  check('Permafrost Staff|one|ChaosDamageWeaponPrefix|T1', 500, 0.08);
+});
+

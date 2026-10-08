@@ -8,7 +8,8 @@
  *   node scripts/selftest/network_gap.js "<base>" <k | nK> [crafts] [seconds] [rows]
  *
  * <k>: the k-th special request of the sweep for that base (0 value, 1 another element, 2 rune pool, 3 four suffixes,
- * 4 five modifiers on a jewel, 5 two crafted-only modifiers); n<K>: its K-th drawn scenario (network_sweep.js).
+ * 4 five modifiers on a jewel, 5 two crafted-only modifiers); n<K>: its K-th drawn scenario (network_sweep.js);
+ * id:<scenario id>: the scenario a sweep report names (as it was drawn before the special requests).
  * A single process and a few hundred crafts: fine next to the game. Many crafts belong in the cloud workflow.
  */
 'use strict';
@@ -21,7 +22,10 @@ const { ix, priceOf } = load();
 const [base, kStr, runsStr, secStr, rowsStr] = process.argv.slice(2);
 const t = SW.table(base);
 const singles = t.nat.prefix.length + t.nat.suffix.length + t.des.prefix.length + t.des.suffix.length;
-const sc = SW.scenario(base, /^n/.test(kStr) ? singles + +kStr.slice(1) : singles + 6 * (+kStr) + 5);
+let sc = null;
+if (/^id:/.test(kStr)) { for (let n = 0; n < 600 && !sc; n++) { let x = null; try { x = SW.scenario(base, n, true); } catch (e) { x = null; } if (x && x.id === kStr.slice(3)) sc = x; } }
+else sc = SW.scenario(base, /^n/.test(kStr) ? singles + +kStr.slice(1) : singles + 6 * (+kStr) + 5);
+if (!sc) { console.log('no such scenario'); process.exit(1); }
 const input = { ix, item: sc.item, targets: sc.targets, locks: {}, priceOf, baseCost: 1, weights: weightsFor(base), essences: t.essences, quality: sc.qualityMode };
 const net = NW.route(input);
 const s = net.start, want = net.cost(s);

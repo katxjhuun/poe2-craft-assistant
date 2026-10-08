@@ -106,11 +106,16 @@
 
     // ---- the essence, alloy or liquid emotion that gives a goal's modifier: the cheapest priced one that meets it.
     // One that adds one of several modifiers (game table EssenceMods) hits with the share of the wanted one.
+    // A Desecrated target comes from the Well of Souls only (a crafted modifier of the same family is not it), and a
+    // source counts only when its modifier is of the target's side: on helmets an alloy adds Mana Cost Efficiency as a
+    // crafted prefix, which is not the Desecrated suffix of that name.
     for (const g of goals) {
       const list = [];
-      for (const r of g.ess || []) {
+      for (const r of g.kind === 'des' ? [] : g.ess || []) {
         const pr = price(r.item);
         if (pr == null) continue;
+        const km = kb.mods[r.mod];
+        if (!km || (km.gen === 'p' ? 0 : 1) !== g.si) continue;
         const pe = ctx.pool.get(r.mod);
         if (g.minValue != null ? reach(r.mod, g) < 0 : !(!g.tier || g.kind === 'ess' || (pe && pe.tier <= g.tier))) continue;
         const o = kb.essence_outcomes && kb.essence_outcomes[r.item];
@@ -251,6 +256,15 @@
     const tagMask = (S) => { let m = 0; for (let k = 0; k < tagIdx.length; k++) { const x = S.g[tagIdx[k]]; if (x !== ABSENT && x !== BLOCKED && x !== TWIN && x !== XBLOCKED) m |= 1 << k; } return m; };
     const stopMemo = new Map();
     const fracBlocks = new Set(); // (filled from the pasted item, see nodeOf)
+    // the pasted item's own other modifiers (not of a target's family): their groups, and whether those keep a
+    // desecrated-only modifier off the Well's lists (only then is "they are all still there" worth a state)
+    const OWN = new Set(), ownIds = [];
+    for (const m of st0.mods) if (m.id && !m.unrevealed && !goals.some((g) => g.fam === m.fam)) { ownIds.push(m.id); for (const x of m.grp || []) OWN.add(x); }
+    // its fractured modifier that is no target stays for the item's life: what it takes out of the pools is known
+    // exactly (S.kf marks the items that come from the pasted one; a white base has none)
+    const FRAC = (() => { const m = st0.mods.find((x) => x.frac && x.id && kb.mods[x.id] && !goals.some((g) => g.fam === x.fam)); return m ? { id: m.id, si: m.side === 'prefix' ? 0 : 1, grp: m.grp || [], fam: m.fam } : null; })();
+    const ownMatters = ctx.bone && goals.some((g) => g.kind === 'des') && OWN.size > 0
+      && [0, 1].some((si) => P.desPoolFor(ctx, SIDES[si], 0, null).some((e) => e.grp.some((x) => OWN.has(x))));
     /** Do the tags of modifier `id` stop every natural tier of target i? */
     function stops(id, i) {
       const at = kb.mods[id].at, g = goals[i];
@@ -323,11 +337,11 @@
       for (const q of own) for (const k of keysOf(pool[q])) { let l = byGrp.get(k); if (!l) byGrp.set(k, l = []); l.push(q); }
       const gw = new Float64Array(pool.length), tw = new Float64Array(pool.length);
       const mark = new Int32Array(pool.length).fill(-1);
-      let J = 0, sq = 0, cu = 0;
+      let J = 0;
       for (const q of own) {
         let X = 0;
         for (const k of keysOf(pool[q])) for (const o of byGrp.get(k)) if (mark[o] !== q) { mark[o] = q; X += ws[o]; }
-        gw[q] = X; J += ws[q]; sq += ws[q] * X; cu += ws[q] * X * X;
+        gw[q] = X; J += ws[q];
       }
       let other = null, tx = null; // the other side's pool, read only when a modifier of this side has tags
       for (const q of own) {
@@ -338,6 +352,15 @@
         for (const o of own) if (!shares.has(o) && !pool[o].rune && E.tagBlocked(kb.mods[pool[o].id], ctx.baseTags, added)) tw[o] += ws[q];
         if (!other) { other = P.sidePool(ctx, SIDES[1 - si], floor).filter((o) => !theirs.has(o.fam)); tx = new Float64Array(other.length); }
         for (let o = 0; o < other.length; o++) if (E.tagBlocked(kb.mods[other[o].id], ctx.baseTags, added)) tx[o] += ws[q];
+      }
+      // what the pasted item's fractured modifier takes from this side: its groups (on its own side) and its tags
+      let fracTake = 0;
+      if (FRAC) {
+        const at = kb.mods[FRAC.id].at, added = at ? new Set(at) : null;
+        for (const q of own) {
+          const e = pool[q];
+          if ((FRAC.si === si && (e.fam === FRAC.fam || e.grp.some((x) => FRAC.grp.includes(x)))) || (added && !e.rune && E.tagBlocked(kb.mods[e.id], ctx.baseTags, added))) fracTake += ws[q];
+        }
       }
       const NMAX = 7;
       const left = new Float64Array(NMAX + 1), across = new Float64Array(NMAX + 1).fill(1);
@@ -354,9 +377,7 @@
           if (other && X0 > 0) { let fx = 0; for (let o = 0; o < other.length; o++) { sx[o] *= Math.max(0, 1 - tx[o] / J); fx += other[o].w * sx[o]; } across[n] = fx / X0; }
         }
       }
-      const block = J > 0 ? sq / J : 0;
-      // blockVar: how far single modifiers fall from the average of what one takes (some take a quarter of the pool)
-      s = { W, ok, low, nearW, twin, cross, J, left, across, blockVar: J > 0 ? Math.max(0, cu / J - block * block) : 0 };
+      s = { W, ok, low, nearW, twin, cross, J, left, across, fracTake };
       statCache.set(key, s);
       return s;
     }
@@ -459,14 +480,17 @@
     // ---- nodes
     const states = [], index = new Map(), acts = [];
     // a node's key as one number: the targets' statuses in base 9, then the small fields (it stays under 2^53)
+    const KEY_REST = 3 * 4 * 4 * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2;
     const keyOf = (S) => {
-      let k = 0;
-      for (let i = 0; i < G; i++) k = k * 10 + S.g[i];
-      k = k * 3 + S.r; k = k * 4 + S.j[0]; k = k * 4 + S.j[1]; k = k * 10 + (S.fg + 1); k = k * 3 + S.fj; k = k * 3 + S.cx; k = k * 3 + S.dj; k = k * 3 + S.du;
-      k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw;
-      return k;
+      let a = 0;
+      for (let i = 0; i < G; i++) a = a * 10 + S.g[i];
+      let k = S.r;
+      k = k * 4 + S.j[0]; k = k * 4 + S.j[1]; k = k * 10 + (S.fg + 1); k = k * 3 + S.fj; k = k * 3 + S.cx; k = k * 3 + S.dj; k = k * 3 + S.du;
+      k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw; k = k * 2 + S.kx; k = k * 2 + S.kf;
+      // (one number up to seven targets; with eight the two parts no longer fit a number exactly)
+      return G <= 7 ? a * KEY_REST + k : a + ':' + k;
     };
-    const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad, aw: S.aw });
+    const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad, aw: S.aw, kx: S.kx, kf: S.kf });
     function idOf(S) {
       const k = keyOf(S);
       let i = index.get(k);
@@ -491,18 +515,19 @@
 
     /**
      * What is left of side si's pool on item S next to `present` (the targets' own weight) and the modifiers nobody
-     * asked for (s: the side's pool numbers at this minimum modifier level). A target's chance is its weight over what
-     * is left; averaged over which modifiers the others are, 1 / left is more than 1 / (the average left), by their
-     * spread (second order).
+     * asked for (s: the side's pool numbers at this minimum modifier level): the average over which modifiers they
+     * are. (A correction for their spread was tried and dropped: where one group is half the pool, as the local
+     * defences on boots and body armour, a second order term is far off.)
      */
-    function leftOf(S, si, s, present, floor, tm) {
-      const n = Math.min(others(S, si), s.left.length - 1), m = others(S, 1 - si);
+    /** The modifiers nobody asked for and nobody knows, on side si (the pasted item's fractured one is known). */
+    const unknown = (S, si) => others(S, si) - (S.kf && FRAC.si === si ? 1 : 0);
+    function leftOf(S, si, s, present, floor, tm, extra) {
+      // extra: modifiers drawn on top of the item's (the Well's options before this one: no two share a group)
+      const n = Math.min(unknown(S, si) + (extra || 0), s.left.length - 1), m = unknown(S, 1 - si);
       // the other side's modifiers stop a share of this side's pool with their tags
       const share = m ? stats(1 - si, floor, 1, S.u, tm).across[Math.min(m, s.left.length - 1)] : 1;
-      const rest = s.left[n] * share;
-      const v = s.W - s.J + rest - present;
-      if (!(v > 0) || !n) return v;
-      return v / (1 + Math.min(0.5, n * s.blockVar / (v * v)));
+      const rest = s.left[n] * share * (S.kf && s.J > 0 ? Math.max(0, 1 - s.fracTake / s.J) : 1);
+      return s.W - s.J + rest - present;
     }
     /**
      * Chance that none of the modifiers nobody asked for keeps natural target i out: none of its own side is of its
@@ -513,9 +538,9 @@
       // that tier. Measured on ten cheap scenarios against the level 0 pool: mean error 2.5% against 3.1%.)
       const g = goals[i], tm = tagMask(S);
       let p = 1;
-      const n = others(S, g.si);
+      const n = unknown(S, g.si);
       if (n) { const s0 = stats(g.si, floor || 0, 1, S.u, tm); if (s0.W > 0) p *= Math.pow(1 - Math.min(1, s0.low[i] / s0.W), n); }
-      const m = others(S, 1 - g.si);
+      const m = unknown(S, 1 - g.si);
       if (m) { const sx = stats(1 - g.si, floor || 0, 1, S.u, tm); if (sx.W > 0 && sx.cross[i] > 0) p *= Math.pow(1 - Math.min(1, sx.cross[i] / sx.W), m); }
       return p;
     }
@@ -587,6 +612,8 @@
     }
     function removeUnit(S, u) {
       const n = cp(S);
+      // (kx: the pasted item's own other modifiers are all still there; which one a removal took is not known)
+      if (u.k !== 'du' && u.k !== 'aw' && !(u.k === 'g' && S.g[u.i] !== BLOCKED)) n.kx = 0;
       if (u.k === 'g') n.g[u.i] = ABSENT;
       else if (u.k === 'j') n.j[u.si]--;
       else if (u.k === 'jx') { n.j[u.si]--; for (let i = 0; i < G; i++) if (n.g[i] === XBLOCKED && goals[i].si !== u.si && !fracBlocks.has(i)) n.g[i] = ABSENT; }
@@ -642,13 +669,79 @@
       return desCache.get(k);
     }
     /** [[chance, goal index or -1, status]] for a desecrated modifier revealed on side si of S (S without the hidden modifier). */
+    /**
+     * The desecrated-only modifiers the Well can offer on this item: none of a group that is on it. Known for the
+     * targets that are there and, while the pasted item's own other modifiers are all still there (S.kx), for those
+     * (a quiver with a Critical Hit Chance suffix leaves Kurgal one suffix to offer, not two).
+     */
+    function desFor(S, si, floor, lich) {
+      const list = desList(si, floor, lich);
+      const tg = [];
+      for (let i = 0; i < G; i++) if (there(S.g[i]) && S.g[i] !== TWIN && S.g[i] !== BLOCKED) for (const x of goals[i].grp) tg.push(x);
+      if (!S.kx && !S.kf && !tg.length) return list;
+      return list.filter((e) => !e.grp.some((x) => (S.kx && OWN.has(x)) || (S.kf && FRAC.grp.includes(x)) || tg.includes(x)));
+    }
+    const offMemo = new Map();
+    /**
+     * Chance that one unknown modifier of side si is of a desecrated-only modifier's group (and keeps it off the list).
+     * Not counted: modifiers of the target's own group (grp): with one of those on the item the target is "in the way",
+     * a state of its own, so here none is.
+     */
+    function offBy(e, si, grp) {
+      const k = e.id + '|' + si + '|' + grp.join(',');
+      if (!offMemo.has(k)) {
+        const pool = P.sidePool(ctx, SIDES[si], 0);
+        let w = 0, tot = 0;
+        for (const o of pool) { if (o.grp.some((x) => grp.includes(x))) continue; tot += o.w; if (o.grp.some((x) => e.grp.includes(x))) w += o.w; }
+        offMemo.set(k, tot > 0 ? w / tot : 0);
+      }
+      return offMemo.get(k);
+    }
+    /**
+     * The Well's list next to n unknown modifiers, for a target with `hits` entries on it: {size: the list's expected
+     * length, pick: the chance that one even draw from it is the target, kin: how many of the others are of the
+     * target's own group (expected), kinShare: their share among the others}. Every other entry is there with its
+     * own chance (none of the n is of its group); `pick` averages hits / (hits + how many others are there).
+     */
+    function listFor(list, isHit, si, n, grp) {
+      const stay = [];
+      let hits = 0, kin = 0, all = 0;
+      for (const e of list) {
+        if (isHit(e)) { hits++; continue; }
+        const p = n > 0 ? Math.pow(1 - offBy(e, si, grp), n) : 1;
+        stay.push(p); all += p;
+        if (e.grp.some((x) => grp.includes(x))) kin += p; // of the target's own group: once it is an option, the target cannot be one
+      }
+      // how many of the others are there: the distribution of a sum of independent yes/no
+      let dist = [1];
+      for (const p of stay) { const d2 = new Array(dist.length + 1).fill(0); for (let k = 0; k < dist.length; k++) { d2[k] += dist[k] * (1 - p); d2[k + 1] += dist[k] * p; } dist = d2; }
+      let pick = 0, size = hits;
+      for (let k = 0; k < dist.length; k++) { if (hits) pick += dist[k] * hits / (hits + k); size += dist[k] * k; }
+      return { size, pick, kin, kinShare: all > 0 ? kin / all : 0 };
+    }
+    const takeMemo = new Map();
+    /** What one desecrated-only option takes out of the side's base modifiers on average (those of its groups: "+# to Strength and Dexterity" takes both attributes). */
+    function exTake(list, si, floor) {
+      if (!list.length) return 0;
+      const k = si + '|' + floor + '|' + list.map((e) => e.id).join(',');
+      if (!takeMemo.has(k)) {
+        const pool = P.sidePool(ctx, SIDES[si], floor);
+        let sum = 0;
+        for (const e of list) for (const o of pool) if (o.grp.some((x) => e.grp.includes(x))) sum += o.w;
+        takeMemo.set(k, sum / list.length);
+      }
+      return takeMemo.get(k);
+    }
     function reveal(S, si, floor, lich, echoes) {
-      const ex = desList(si, floor, null), ll = lich ? desList(si, floor, lich) : null;
+      const ex = desFor(S, si, floor, null), ll = lich ? desFor(S, si, floor, lich) : null;
+      // modifiers nobody knows on this side (the pasted item's own are known while S.kx: the lists are cut already)
+      const unk = S.kx ? 0 : unknown(S, si);
       const s = stats(si, floor, 1, S.u & R_ALDUR, tagMask(S)), s0 = floor ? stats(si, 0, 1, S.u & R_ALDUR, tagMask(S)) : s; // (the Well of Souls does not offer a rune's pool: open test t33)
       const n = others(S, si);
       let present = 0;
       for (let i = 0; i < G; i++) { const x = S.g[i]; if (there(x) && x !== TWIN && goals[i].si === si) present += s.ok[i] + s.nearW[i] + (x === BLOCKED ? s.low[i] / 2 : s.low[i]); }
-      const avail = Math.max(1e-9, leftOf(S, si, s, present, floor, tagMask(S)));
+      const tm = tagMask(S);
+      const avail = Math.max(1e-9, leftOf(S, si, s, present, floor, tm));
       const want = [];
       for (let i = 0; i < G; i++) {
         const g = goals[i];
@@ -656,14 +749,14 @@
         if (g.kind === 'des') {
           const hit = (e) => e.fam === g.fam && fits(g, e);
           const c = ex.filter(hit).length, cl = ll ? ll.filter(hit).length : 0;
-          if (c || cl) want.push({ i, des: true, c, cl, share: pv[i] });
+          if (c || cl) want.push({ i, des: true, c, cl, share: pv[i], all: listFor(ex, hit, si, unk, g.grp), lich: ll ? listFor(ll, hit, si, unk, g.grp) : null });
         } else if (g.kind === 'nat' && !g.noWell && s.ok[i] + s.nearW[i] > 0) {
           const beta = unblocked(S, i, floor);
           want.push({ i, des: false, w: Math.min(avail, (s.ok[i] + s.nearW[i]) * beta), low: s.low[i] * beta, share: s.ok[i] / (s.ok[i] + s.nearW[i]) });
         }
       }
       if (!want.length) return [[1, -1, 0]];
-      const gone = Math.max(0, s.J - s.left[1]);
+      const taken = exTake(ex, si, floor);
       want.sort((a, b) => (b.des - a.des) || ((a.w || 0) - (b.w || 0)));
       const pick = new Float64Array(G);
       let missAll = 0;
@@ -671,26 +764,39 @@
       for (let k = 0; k < chances.length; k++) {
         // desecrated-only options and base modifier options among the three (planner.js revealOptions)
         const nEx = ex.length ? k + 1 : 0;
-        const exDraws = ll && ll.length ? Math.max(0, nEx - 1) : nEx;
-        const normDraws = 3 - (ll && ll.length ? 1 : 0) - exDraws;
+        // (a desecrated-only option that cannot be drawn any more, the list being used up, is a base modifier instead)
+        const lichFirst = ll && ll.length ? 1 : 0;
+        const exDraws = Math.min(Math.max(0, nEx - lichFirst), Math.max(0, ex.length - lichFirst));
+        const normDraws = 3 - lichFirst - exDraws;
         let rem = 1;
         for (const wnt of want) {
           let off;
           if (wnt.des) {
-            let none = 1;
-            for (let t = 0; t < exDraws; t++) none *= Math.max(0, 1 - wnt.c / Math.max(1, ex.length - t));
-            if (ll && ll.length) none *= 1 - wnt.cl / ll.length;
-            off = 1 - none;
+            // The lich's option is drawn first and is one of the desecrated-only ones: it is gone for the draws after
+            // it. No two options share a group: an option of the target's own group ends the target's chance.
+            const first = ll && ll.length ? 1 : 0;
+            let alive = 1;
+            off = 0;
+            if (first) { off = wnt.lich.pick; alive = (1 - wnt.lich.pick) * (1 - wnt.lich.kinShare); }
+            for (let t = 0; t < exDraws && alive > 0; t++) {
+              const size = Math.max(wnt.c, 1, wnt.all.size - first - t);
+              const p = Math.min(1, wnt.c / size), k = Math.min(1 - p, wnt.all.kin / size);
+              off += alive * p;
+              alive *= 1 - p - k;
+            }
           } else {
             // the base modifier options are drawn one after the other, and no two share a group: an option of the
             // target's own group (a lower tier) ends its chance, any other one leaves less in the pool for the next
-            let alive = 1, at = avail;
+            let alive = 1;
             off = 0;
-            for (let t = 0; t < normDraws && at > 0; t++) {
+            // (the desecrated-only options are drawn before them and take the base modifiers of their groups along)
+            const gone = (lichFirst + exDraws) * taken;
+            for (let t = 0; t < normDraws && alive > 0; t++) {
+              const at = (t ? leftOf(S, si, s, present, floor, tm, t) : avail) - gone;
+              if (!(at > 0)) break;
               const w = Math.min(at, wnt.w), l = Math.min(at - w, wnt.low);
               off += alive * w / at;
               alive *= (at - w - l) / at;
-              at -= gone;
             }
           }
           pick[wnt.i] += chances[k] * rem * off;
@@ -713,7 +819,7 @@
     const revealed = (S1, si, i, status) => { const S2 = addRolled(S1, i, si, status); if (i < 0) { S2.j[si]--; S2.dj = si + 1; } return S2; };
 
     // ---- edges
-    const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FS0, ad: AD0, aw: 0 };
+    const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FS0, ad: AD0, aw: 0, kx: 0, kf: 0 };
     const RESTART = -1; // edge target: a fresh white base (its value is solved as one number, see solve)
     /** A socket for a rune: the node with one socket less and what it costs first (an Artificer's Orb), or null. */
     function socket(S) {
@@ -1016,6 +1122,8 @@
         else if (m.crafted && !S.cx) S.cx = si + 1;
         else S.j[si]++;
       }
+      if (known && ownMatters && ownIds.every((id) => st.mods.some((m) => m.id === id))) S.kx = 1;
+      if (known && FRAC && S.fj === FRAC.si + 1 && st.mods.some((m) => m.frac && m.id === FRAC.id)) S.kf = 1;
       // a modifier whose tags stop a target of the other side (known for the pasted item; rolled ones are averaged)
       if (known) for (const m of st.mods) {
         if (!m.id || !kb.mods[m.id] || !kb.mods[m.id].at || m.unrevealed) continue;
