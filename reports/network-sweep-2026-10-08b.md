@@ -95,8 +95,17 @@ examined yet.
   targets: 4,687 promised against 4,104 played before, 3,996 promised and 4,009 +- 29 played after (4,000 crafts).
 - On a miss at the Well of Souls the play takes an option that is in no target's way, and the page says so.
 
+- The page was measured with five T1 targets on boots and a limit of 100 bases: no answer after 160 seconds. The count
+  of every currency now comes from one transposed solve in place of a solve per currency, the small network decides
+  whether the omen is worth having before a large one is solved, and the base limit's search starts from the small
+  network's charge: 37 seconds in the browser (48, 87 and 36 seconds for T1, T2 and T3 in a single process).
+- Replayed after that: Cryptic Crown with six targets 177,272 promised, 178,519 +- 16,650 played (60 crafts); Fanatic
+  Bow with five targets 0.95; Grand Regalia with five targets 0.98.
+- `Time-Lost Diamond|set2|white|0` at today's prices: network 6,588 promised, 7,075 +- 448 played, old planner route
+  6,139 over 300 trials (not clearly cheaper; the next run measures it with more plays).
+
 ## The next run
 
-Run [37807771485](https://github.com/katxjhuun/poe2-craft-assistant/actions/runs/37807771485), started 8 Oct 16:18 UTC
-on commit 977dfa7: deep, 16 runners, 325 minutes, the drawn scenarios. (It replaced run 37803372648, which had
-started half an hour earlier on commit b63a4d3.)
+Run [37815332074](https://github.com/katxjhuun/poe2-craft-assistant/actions/runs/37815332074), started 8 Oct 17:16 UTC
+on commit 20e960e: deep, 16 runners, 325 minutes, the drawn scenarios. (Two runs started earlier the same afternoon,
+37803372648 and 37807771485, were replaced by it: the code changed after each had started.)
