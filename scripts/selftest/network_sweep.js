@@ -315,6 +315,7 @@ if (require.main === module) {
   const firstDrawn = (base) => { const t = table(base); return t.nat.prefix.length + t.nat.suffix.length + t.des.prefix.length + t.des.suffix.length; };
   const bases = testBases();
   const deadline = Date.now() + minutes * 60000;
+  const jsonOut = arg('json', null);
   const out = [];
   let i = 0, round = 0, live = bases.length;
   // round by round over the bases, so every class is covered however short the run
@@ -329,6 +330,8 @@ if (require.main === module) {
       let res;
       try { res = runOne(sc, runs, every > 0 && out.length % every === 0, deep, Math.max(60000, deadline + 5 * 60000 - Date.now())); } catch (e) { res = { id: sc.id, cls: sc.cls, kind: sc.kind, error: String(e && e.stack || e).split('\n').slice(0, 2).join(' | ') }; }
       out.push(res);
+      // (the results so far, after every scenario: a process that is stopped before its report still leaves them)
+      if (jsonOut) { try { fs.writeFileSync(jsonOut, JSON.stringify({ at: new Date().toISOString(), shard, shards, minutes, partial: true, results: out })); } catch (e) { /* the report at the end still comes */ } }
       if (Date.now() > deadline) break outer;
     }
     live = bases.length; // drawn sets never end: only the clock stops the run
