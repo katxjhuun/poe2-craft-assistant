@@ -3342,6 +3342,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const sides = [...new Set(ids.filter((id) => id && S.ix.kb.mods[id]).map((id) => (S.ix.kb.mods[id].gen === 'p' ? 'prefix' : 'suffix')))];
     return sides.length === 1 ? ` (one of the ${sides[0]}es when they are full)` : '';
   }
+  // (the route counts the Desecrated modifier of a miss as one that blocks nothing)
+  const NO_TARGET_PICK = ' If none of the three is a goal, take one that is not of a missing goal\u2019s kind (a lower tier or a hybrid of it would keep the goal out).';
   function stepHelp(a, params) {
     switch (a.op) {
       case 'newbase': return 'A mod missed the goals and fixing it would cost more: start again on a fresh white base.';
@@ -3362,10 +3364,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
         return `Removes a random ${a.side || 'modifier'}${a.side ? '' : swapNote([a.mod])} and adds ${essenceAdds(a)}. Uses the crafted slot.`;
       case 'liquid': return `Removes a random modifier${swapNote(liquidMods(a))} and adds ${liquidAdds(a)} as a crafted mod. Uses the crafted slot.`;
       case 'catalyst': return `Use ${a.count || 'enough'} of them: the catalyst quality goes to 20%, for the next Omen of Catalysing Exaltation.`;
-      case 'reveal': return 'Reveal the hidden Desecrated modifier at the Well of Souls and take the target when it is offered' + (a.echoes ? '; Abyssal Echoes lets you reroll the three once.' : '.');
+      case 'reveal': return 'Reveal the hidden Desecrated modifier at the Well of Souls and take the target when it is offered' + (a.echoes ? '; Abyssal Echoes lets you reroll the three once.' : '.') + NO_TARGET_PICK;
       case 'bone': if (a.hide) return 'Adds a hidden Desecrated modifier and leaves it unrevealed for now: it counts as a modifier, and a Fracturing Orb never picks it.';
-        if (a.mark) return `First Essence of the Abyss${a.pre && a.pre.side ? ', aimed at the ' + a.pre.side + 'es by the omen' : ''}: it replaces one modifier with "Bears the Mark of the Abyssal Lord". Then the bone: its Desecrated modifier takes the Mark's place, so nothing else is removed. Reveal it at the Well of Souls and pick 1 of 3${a.lich ? ' (with the lich omen, only the modifiers of that lich)' : ''}${a.echoes ? '; Abyssal Echoes lets you reroll the three once' : ''}. Keep the one the goals ask for.`;
-        return `Adds a hidden Desecrated ${a.side || 'prefix or suffix (the side is set now, at random)'}. Reveal it at the Well of Souls and pick 1 of 3: base modifiers of that side and desecrated-only ones${a.lich ? ' (with the lich omen, only that lich\'s)' : ''}${a.echoes ? '; Abyssal Echoes lets you reroll the three once' : ''}. Keep the one the goals ask for.`;
+        if (a.mark) return `First Essence of the Abyss${a.pre && a.pre.side ? ', aimed at the ' + a.pre.side + 'es by the omen' : ''}: it replaces one modifier with "Bears the Mark of the Abyssal Lord". Then the bone: its Desecrated modifier takes the Mark's place, so nothing else is removed. Reveal it at the Well of Souls and pick 1 of 3${a.lich ? ' (with the lich omen, only the modifiers of that lich)' : ''}${a.echoes ? '; Abyssal Echoes lets you reroll the three once' : ''}. Keep the one the goals ask for.${NO_TARGET_PICK}`;
+        return `Adds a hidden Desecrated ${a.side || 'prefix or suffix (the side is set now, at random)'}. Reveal it at the Well of Souls and pick 1 of 3: base modifiers of that side and desecrated-only ones${a.lich ? ' (with the lich omen, only that lich\'s)' : ''}${a.echoes ? '; Abyssal Echoes lets you reroll the three once' : ''}. Keep the one the goals ask for.${NO_TARGET_PICK}`;
       case 'fracture': return 'Locks one random mod for good (never a hidden Desecrated one). It cannot be undone; the route uses it where locking a target pays for the misses.';
       case 'divine': return 'Rerolls the values of every mod except fractured ones; the mods themselves stay.';
       case 'aldur': return `${a.pre ? "First an Artificer's Orb for the socket. " : ''}Socket it: the item's modifiers of another element become the same ones of this rune's element. Socket-bound: it cannot be taken out or replaced.`;

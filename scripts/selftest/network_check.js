@@ -56,9 +56,13 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
   // no target among the options: the highest one that is no target at all (the network counts it as an unwanted
   // Desecrated modifier)
   // (failing that, one of a target's family that does not meet it; only when all three are targets is one taken)
+  // Not one that is in a target's way, though: a modifier of a target's group (a hybrid of it, a lower tier) keeps the
+  // target out for as long as it is there, and no two options share a group, so another option is nearly always
+  // there. The network counts the unwanted Desecrated modifier as one that blocks nothing; a player picks that way.
+  const inWay = (e) => goals.some((g) => g.kind === 'nat' && e.side === g.side && (e.fam === g.fam || (g.grp || []).some((x) => (e.grp || []).includes(x))));
   const dull = (opts) => {
     const l = opts.slice().sort((x, y) => y.lvl - x.lvl);
-    return l.find((e) => !goals.some((g) => e.fam === g.fam)) || l.find((e) => !goals.some((g) => fitsGoal(e, g))) || l[0] || null;
+    return l.find((e) => !inWay(e)) || l.find((e) => !goals.some((g) => e.fam === g.fam)) || l.find((e) => !goals.some((g) => fitsGoal(e, g))) || l[0] || null;
   };
   const desMod = (e) => ({ id: e.id, fam: e.fam, side: e.side, lvl: e.lvl, grp: e.grp, tier: e.tier, frac: false, des: true, crafted: false, lock: false });
   const st0 = P.toState(ctx, input.item, input.locks);

@@ -548,9 +548,13 @@
     // solves a network that has the omen at its best (input.whittle 'best': the player picks what it removes, one edge
     // per modifier, marked `ideal`) and no classes. No real omen is better than that, so a route that does not use it
     // there is the route with the real omen too, at the same cost. Only when it is used is the network built again with
-    // the levels followed (input.classes: 3, 2 or 1 classes, as many as fit).
+    // the levels followed (input.classes: 3 or 2 classes a side, as many as fit). Where not even two fit, and in the
+    // smaller networks, the omen is left out (input.whittle 'none'): without the classes its chances are wrong by a
+    // factor (a talisman with six targets was promised at half of what it cost), and a route without the omen is a
+    // true route.
     const WBEST = !lite && input.whittle === 'best';
-    const WHIT = !lite && !WBEST && PR.whittling != null && (input.classes == null || input.classes > 1);
+    const WNONE = !!lite || input.whittle === 'none' || input.classes === 1;
+    const WHIT = !WBEST && !WNONE && PR.whittling != null;
     const LCUT = (() => {
       if (!WHIT) return [];
       const all = [...new Set(goalLv.flatMap((l) => l.map((x) => x[0])))].sort((a, b) => a - b);
@@ -694,18 +698,52 @@
     });
     const presentMask = (S, si) => { let m = 0; for (let i = 0; i < G; i++) if (goals[i].si === si && there(S.g[i]) && (S.g[i] !== TWIN || twinGrp[i])) m |= 1 << i; return m; };
     /** The modifiers nobody asked for and nobody knows, on side si (the pasted item's fractured one is known). */
-    const unknown = (S, si) => others(S, si) - (S.kf && FRAC.si === si ? 1 : 0);
+    // A crafted or a Desecrated modifier nobody asked for is no draw from the pool like the others. The crafted one is
+    // an essence's own modifier (the tool's, where there is one for that side: CXM), the Desecrated one mostly a
+    // desecrated-only modifier (the option of the highest level is taken on a miss: DJD says whether that is mostly
+    // a desecrated-only one). What they take out of the pool is their own groups (knownTake), which is mostly
+    // nothing, where an average modifier takes a fifth of the pool with it: counted as average ones, a mace with the
+    // tool's modifier on it was promised a tenth too cheap.
+    const CXM = [0, 1].map((si) => (TOOL[si] || FILL[si] ? kb.mods[(TOOL[si] || FILL[si]).mod] : null));
+    const DJL = [0, 1].map((si) => (ctx.bone ? P.desPoolFor(ctx, SIDES[si], 0, null) : []));
+    const DJD = [0, 1].map((si) => {
+      if (!DJL[si].length) return false;
+      // one desecrated-only option of three (80%), two (15%) or three: is the highest of the three one of them?
+      const pb = 1 - atLeast(si, 0, DJL[si].reduce((x, e) => Math.max(x, e.lvl), 0) + 1);
+      return 0.8 * pb * pb + 0.15 * pb + 0.05 >= 0.5;
+    });
+    const unknown = (S, si) => S.j[si] + (S.fj === si + 1 && !(S.kf && FRAC.si === si) ? 1 : 0) + (S.cx === si + 1 && !CXM[si] ? 1 : 0) + (S.dj === si + 1 && !DJD[si] ? 1 : 0);
+    /** What the crafted (kind 0) or the Desecrated (kind 1) modifier nobody asked for takes from the anonymous weight of side si in pool s. */
+    function knownTake(s, si, kind) {
+      const key = 'k' + kind;
+      let v = s.takes.get(key);
+      if (v == null) {
+        v = 0;
+        if (kind === 0) { for (let q = 0; q < s.pool.length; q++) if (s.anon[q] && s.pool[q].grp.some((x) => CXM[si].grp.includes(x))) v += s.ws[q]; }
+        else for (const e of DJL[si]) for (let q = 0; q < s.pool.length; q++) if (s.anon[q] && s.pool[q].grp.some((x) => e.grp.includes(x))) v += s.ws[q] / DJL[si].length;
+        s.takes.set(key, v);
+      }
+      return v;
+    }
+    /** The share of side si's anonymous weight (J0 of it) that those two leave. */
+    function knownLeft(S, si, s, J0) {
+      let g = 1;
+      if (!(J0 > 0)) return g;
+      if (S.cx === si + 1 && CXM[si]) g *= Math.max(0, 1 - knownTake(s, si, 0) / J0);
+      if (S.dj === si + 1 && DJD[si]) g *= Math.max(0, 1 - knownTake(s, si, 1) / J0);
+      return g;
+    }
     /** What the cases of a side's pool share: the tags of the other side, the pasted item's fractured modifier, the dominant group. */
     function mix(S, si, s, floor, tm) {
       const NM = s.left.length - 1;
       const n = Math.min(unknown(S, si), NM), m = unknown(S, 1 - si);
       // the other side's modifiers stop a share of this side's pool with their tags
       const share = m ? stats(1 - si, floor, 1, S.u, tm, presentMask(S, 1 - si)).across[Math.min(m, NM)] : 1;
-      if (!s.big) return { NM, n, share, f: S.kf && s.J > 0 ? Math.max(0, 1 - s.fracTake / s.J) : 1, q: 1, fracIn: false };
+      if (!s.big) return { NM, n, share, f: (S.kf && s.J > 0 ? Math.max(0, 1 - s.fracTake / s.J) : 1) * knownLeft(S, si, s, s.J), q: 1, fracIn: false };
       // the pasted item's fractured modifier is of the dominant group: that group is known to be on the item
       const fracIn = !!(S.kf && FRAC.si === si && FRAC.grp.includes(s.big.key));
       const JR = s.J - s.big.w;
-      const f = S.kf && !fracIn && JR > 0 ? Math.max(0, 1 - s.fracTake / JR) : 1;
+      const f = (S.kf && !fracIn && JR > 0 ? Math.max(0, 1 - s.fracTake / JR) : 1) * knownLeft(S, si, s, JR);
       // q: none of the n modifiers is of the dominant group (each was drawn from what the ones before it left)
       let q = fracIn ? 0 : 1;
       for (let k = 0; k < n && q > 0; k++) q *= s.leftR[k] * f / (s.big.w + s.leftR[k] * f);
@@ -1292,7 +1330,7 @@
             const S1 = removeUnit(S, u), m1 = openMask(S1);
             if (m1) push({ op: 'chaos', tier: t.tier, whittle: true, ideal: true }, t.price + PR.whittling, rolled(S1, m1, t.floor));
           }
-        } else if (PR.whittling != null) {
+        } else if (PR.whittling != null && !WNONE) {
           const ws = whittled(S);
           if (ws) {
             const outs = [];
@@ -1347,7 +1385,9 @@
         if (!tw) continue;
         const outs = [];
         for (const u of us) for (const [q, S1] of without(S, u, false)) {
-          if (open(S1, T.si) > 0) { if (!S1.cx) S1.cx = T.si + 1; else junkAt(S1, T.si, kb.mods[T.mod].lvl); }
+          // (a crafted modifier that is on that side already is this tool's own from an earlier use, with Astrid's
+          // Creativity: an essence does not add a second modifier of its group, so nothing comes)
+          if (open(S1, T.si) > 0) { if (!S1.cx) S1.cx = T.si + 1; else if (S1.cx !== T.si + 1) junkAt(S1, T.si, kb.mods[T.mod].lvl); }
           outs.push([q * u.w / tw, S1]);
         }
         push({ op: 'pessence', item: T.item, mod: T.mod, side: SIDES[v], tool: true }, T.price + PR.crystal[v], outs);
@@ -1360,7 +1400,7 @@
         if (tw) {
           const outs = [];
           for (const u of us) for (const [q, S1] of without(S, u, false)) {
-            if (open(S1, v) > 0) { if (!S1.cx) S1.cx = v + 1; else junkAt(S1, v, kb.mods[T.mod].lvl); }
+            if (open(S1, v) > 0) { if (!S1.cx) S1.cx = v + 1; else if (S1.cx !== v + 1) junkAt(S1, v, kb.mods[T.mod].lvl); }
             outs.push([q * u.w / tw, S1]);
           }
           push({ op: 'pessence', item: T.item, mod: T.mod, tool: true }, T.price, outs);
@@ -1807,7 +1847,7 @@
     const basesAt = (s) => (Fv[n0] > 1e-250 ? (1 - Fv[s]) / Fv[n0] : Infinity);
 
     const net = {
-      ctx, goals, states, acts, pol, start, n0, N, timing, lite, track: followed.filter(Boolean).length, classes: NCLS, whittle: WBEST ? 'best' : 'levels', wellRank, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
+      ctx, goals, states, acts, pol, start, n0, N, timing, lite, track: followed.filter(Boolean).length, classes: NCLS, whittle: WBEST ? 'best' : WNONE ? 'none' : 'levels', wellRank, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
       get rounds() { return rounds; },
       get base() { return solution().money[n0]; },
       nodeOf(st) {
@@ -2055,18 +2095,21 @@
     // the route leans on the omen: the network again with the levels followed, in as many classes and with as many
     // targets' blockers followed as fit (each class and each followed target has its known share of the size)
     const base = net.N / Math.pow(1.4, net.track), seen = new Set();
-    for (const classes of [3, 2, 1]) for (const track of [net.track, Math.min(net.track, 2), 0]) {
+    for (const classes of [3, 2]) for (const track of [net.track, Math.min(net.track, 2), 0]) {
       const k = classes + '|' + track;
       if (seen.has(k)) continue;
       seen.add(k);
       // (three classes a side make the network about six times as large, two about two and a half times)
-      if (classes > 1 && base * Math.pow(1.4, track) * (classes === 3 ? 6 : 2.6) > 120000) continue;
-      const n2 = build(Object.assign({}, input, { lite: 0, track, maxStates: classes > 1 ? 150000 : 1000000, whittle: 'levels', classes }));
+      if (base * Math.pow(1.4, track) * (classes === 3 ? 6 : 2.6) > 130000) continue;
+      const n2 = build(Object.assign({}, input, { lite: 0, track, maxStates: 165000, whittle: 'levels', classes }));
       if (n2.unsupported === 'too many item states') continue;
       if (n2.unsupported || n2.impossible || n2.blocked) return { net: n2, charge: 0 };
       return { net: n2, charge: fit(n2) };
     }
-    return { net, charge };
+    // no room for the classes: the route without the omen
+    const n3 = build(Object.assign({}, input, { lite: 0, track: net.track, maxStates: 1000000, whittle: 'none' }));
+    if (n3.unsupported || n3.impossible || n3.blocked) return { net: n3, charge: 0 };
+    return { net: n3, charge: fit(n3) };
   }
 
   /**
