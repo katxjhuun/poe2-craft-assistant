@@ -86,8 +86,17 @@ examined yet.
   Exalted Orbs before, 381 promised and 367 ± 24 played now.
 - Essence of the Abyss, then a bone on its Mark (claim k59).
 
+## After this report was first written (the same day)
+
+- Where the level classes do not fit into the network, the route is the one without Omen of Whittling (the talisman
+  row above). The omen is in a route only when its levels are followed.
+- A crafted modifier nobody asked for (the tool essence's own) and the Desecrated modifier of a miss take their own
+  groups out of the pool, which is mostly nothing; they were counted as average modifiers. Fortified Hammer with two
+  targets: 4,687 promised against 4,104 played before, 3,996 promised and 4,009 +- 29 played after (4,000 crafts).
+- On a miss at the Well of Souls the play takes an option that is in no target's way, and the page says so.
+
 ## The next run
 
-Run [37803372648](https://github.com/katxjhuun/poe2-craft-assistant/actions/runs/37803372648) was started on commit
-b63a4d3 and replaced by the run named in the next report: the fallback for requests where the level classes do not
-fit (leave the omen out) came after it had started.
+Run [37807771485](https://github.com/katxjhuun/poe2-craft-assistant/actions/runs/37807771485), started 8 Oct 16:18 UTC
+on commit 977dfa7: deep, 16 runners, 325 minutes, the drawn scenarios. (It replaced run 37803372648, which had
+started half an hour earlier on commit b63a4d3.)
