@@ -121,8 +121,29 @@ examined yet.
   as tools is dearer than it could be (a bow: 667 where 565 was possible).
 - Maji Talisman with six targets: 392,753 promised, 342,941 +- 29,771 played (it was 702,606 against 1,729,744).
 
+## Later that night: the limit lifted, the last currencies added
+
+- **"A bow: 667 where 565 was possible" was wrong.** The 565 ex route left a third crafted modifier on the item: 22 of
+  its steps in 300 crafts were refused by the rules. The node now holds two crafted modifiers nobody asked for, each
+  with whose it is, and with both the cheapest legal route is 667 ex (played 624 +- 47, nothing refused).
+- **Steps that finish an item or lose it** are edges, each checked by using the step on one item many times: Vaal Orb
+  (1.43% on a full boot, the simulator counts 1.44%), Omen of Sanctification with a Divine Orb (a value two over the
+  top of T1: 31.2% against 31.2%), Omen of Putrefaction with a bone (a bow, one Desecrated target: 45.1% against
+  44.9%; with Abyssal Echoes 53.7% against 53.9%). For Desecrated targets alone Putrefaction is mostly the route: a bow
+  with two costs 50 ex, played 50.4 +- 2.3.
+- **Found on the way.** Several Desecrated targets of one side were taken for independent in a reveal (one draw of nine
+  is either with two ninths, not 1 - (8/9)^2): low for every reveal. The runes of the pasted item (Astrid's Creativity,
+  Serle's Triumph) were in every new base for nothing. A target by value was never taken at the Well in the play.
+- **Hinekora's Lock** is an edge: the lock plus the expected best of what the currencies show. It is no edge while it
+  costs more than giving the item up does, so at 517,000 ex the route of nearly every craft is the one without it; the
+  667,000 ex quiver does not use it either. With the lock at 3 ex a boot's craft is promised 268.1 and plays at
+  266.1 +- 5.6.
+- Still a little off: Putrefaction for base-modifier targets with Abyssal Echoes (23.2% against 22.1%), and the lock
+  where the blockers of the targets are not followed (the currencies' results share them).
+
 ## The next run
 
-Run [37825276057](https://github.com/katxjhuun/poe2-craft-assistant/actions/runs/37825276057), started 8 Oct 18:34 UTC
-on commit 9f48c52: deep, 16 runners, 325 minutes, the drawn scenarios. (Three runs started earlier the same day,
-37803372648, 37807771485 and 37815332074, were each replaced: the code changed after they had started.)
+Run [37851539057](https://github.com/katxjhuun/poe2-craft-assistant/actions/runs/37851539057), started 8 Oct 22:08 UTC
+on commit 709fcd0: deep, 16 runners, 325 minutes, the drawn scenarios. It replaced run 37825276057 (commit 9f48c52),
+whose code it no longer checks; three runs started earlier the same day (37803372648, 37807771485 and 37815332074)
+were each replaced the same way.
