@@ -38,14 +38,27 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
   const lim = E.slotLimits({ rarity: 'Rare', slotDelta: ctx.slotDelta }, ctx.cls);
   const count = (st, side) => st.mods.filter((m) => m.side === side).length;
   const open = (st, side) => Math.max(0, lim[side] + (side === 'suffix' ? st.xSuffix || 0 : 0) - count(st, side)); // Serle's Triumph: one more suffix
-  const goals = net.goals.slice().sort((a, b) => (b.kind === 'des') - (a.kind === 'des'));
-  const wanted = (st) => (opts) => {
+  // (the order in which targets are taken at the Well of Souls is the network's: net.wellRank)
+  const goals = net.goals.map((g, i) => [g, net.wellRank ? net.wellRank[i] : g.kind === 'des' ? -1 : 0]).sort((a, b) => a[1] - b[1]).map((x) => x[0]);
+  // The option to take at the Well of Souls: a target when one is offered (an offered modifier is never of a group
+  // that is on the item, so a target that is offered is one the item lacks: also the one a bone has just replaced on
+  // a full item). A smaller network (net.lite) takes the Well only for some of the natural targets: its rules do not
+  // take the others there, so the play does not either.
+  const fitsGoal = (e, g) => e.side === g.side && P.meets({ fam: e.fam, tier: e.tier, des: true }, g, g.tier);
+  const wanted = () => (opts) => {
     for (const g of goals) {
-      if (P.goalMet(st, g)) continue;
-      const o = opts.find((e) => e.side === g.side && P.meets({ fam: e.fam, tier: e.tier, des: true }, g, g.tier));
+      if (g.kind === 'nat' && g.noWell) continue;
+      const o = opts.find((e) => fitsGoal(e, g));
       if (o) return o;
     }
     return null;
+  };
+  // no target among the options: the highest one that is no target at all (the network counts it as an unwanted
+  // Desecrated modifier)
+  // (failing that, one of a target's family that does not meet it; only when all three are targets is one taken)
+  const dull = (opts) => {
+    const l = opts.slice().sort((x, y) => y.lvl - x.lvl);
+    return l.find((e) => !goals.some((g) => e.fam === g.fam)) || l.find((e) => !goals.some((g) => fitsGoal(e, g))) || l[0] || null;
   };
   const desMod = (e) => ({ id: e.id, fam: e.fam, side: e.side, lvl: e.lvl, grp: e.grp, tier: e.tier, frac: false, des: true, crafted: false, lock: false });
   const st0 = P.toState(ctx, input.item, input.locks);
@@ -55,11 +68,13 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
     if (n === 40 && done === 0) break; // not one of forty crafts ends: the rules and the simulator disagree, more plays say nothing
     played++;
     let st = { ...st0, mods: st0.mods.map((m) => ({ ...m })) };
-    let cost = 0, k = 0, ok = false;
+    let cost = 0, k = 0, ok = false, lastA = null;
     from = -1;
     for (; k < maxSteps; k++) {
       const node = net.nodeOf(st);
       if (audit && from >= 0) { const rec = audit.get(from) || { n: 0, to: new Map() }; rec.n++; rec.to.set(node, (rec.to.get(node) || 0) + 1); audit.set(from, rec); }
+      // (an item the network has no node for: kept with the step that led to it, for the audit)
+      if (node < 0 && audit && from >= 0) (audit.offs = audit.offs || []).push({ from, a: lastA, state: net.stateOf ? JSON.stringify(net.stateOf(st, false)) : '', item: st.rarity + ' ' + st.mods.map((m) => `${m.side[0]}:${m.unrevealed ? '(hidden)' : m.fam}${m.tier ? ' T' + m.tier : ''}${m.frac ? '(F)' : ''}${m.des ? '(D)' : ''}${m.crafted ? '(C)' : ''}`).join(', ') });
       from = node;
       if (node < 0) { off++; break; }
       if (net.done(node)) { ok = true; break; }
@@ -67,6 +82,7 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
       if (!step) break;
       cost += step.cost;
       const a = step.a;
+      lastA = a;
       if (a.op === 'reveal') {
         const i = st.mods.findIndex((m) => m.unrevealed);
         const side = st.mods[i].side;
@@ -74,7 +90,7 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
         const pick = wanted(st);
         let opts = P.revealOptions(ctx, st, side, 0, null, r), choice = pick(opts);
         if (!choice && a.echoes) { opts = P.revealOptions(ctx, st, side, 0, null, r); choice = pick(opts); }
-        if (!choice) choice = opts.slice().sort((x, y) => y.lvl - x.lvl)[0];
+        if (!choice) choice = dull(opts);
         if (choice) st.mods.push(desMod(choice));
       } else if (a.op === 'bone' && a.hide) {
         // as the simulator places a desecrated modifier, but left hidden
@@ -92,7 +108,8 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
       } else {
         if (a.pre) st = P.apply(ctx, st, a.pre, r).state;
         const pick = wanted(st);
-        st = P.apply(ctx, st, a, r, (opts) => pick(opts)).state;
+        // (with Abyssal Echoes the first three options are declined when no target is among them: `again` is the reroll)
+        st = P.apply(ctx, st, a, r, (opts, again) => pick(opts) || (a.echoes && !again ? null : dull(opts))).state;
       }
     }
     if (ok) { done++; sum += cost; sq += cost * cost; }

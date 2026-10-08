@@ -190,6 +190,8 @@
     const POOL = pooled.length ? { tag: pooled[0].rune, item: pooled[0].runeItem, price: price(pooled[0].runeItem) } : null;
     const hasPool = !!(POOL && (st0.tags || []).includes(POOL.tag));
     if (POOL && POOL.price == null && !hasPool) return { impossible: pooled.map((g) => ({ label: g.label, why: `needs the rune ${POOL.item}, which has no price` })) };
+    /** Does crafted modifier `id` count for target g (its tier, or a value it can reach)? */
+    const takes = (g, id) => (g.kind === 'ess' ? true : g.minValue != null ? reach(id, g) >= 0 : !g.tier || !!(ctx.pool.get(id) && ctx.pool.get(id).tier <= g.tier));
     // ---- liquid emotions (jewels): each adds its crafted modifier on a prefix or on a suffix. Potent Liquid Contempt
     // adds "+1 Suffix Modifier allowed" as a prefix or "+1 Prefix Modifier allowed" as a suffix: with it a side takes
     // a third modifier, which stays when the allowance is removed again (rules R_JEWEL_SLOTS, R_NO_SPACE; recipe c15).
@@ -203,7 +205,7 @@
         if (pr == null) continue;
         const outs = mods.map((id) => {
           const m = kb.mods[id], cap = ctx.capMods.get(id);
-          return { mod: id, si: m.gen === 'p' ? 0 : 1, cap: cap ? (cap.prefix ? 0 : 1) : -1, goal: goals.findIndex((g) => g.kind !== 'des' && g.fam === m.fam && g.si === (m.gen === 'p' ? 0 : 1)) };
+          return { mod: id, si: m.gen === 'p' ? 0 : 1, cap: cap ? (cap.prefix ? 0 : 1) : -1, goal: goals.findIndex((g) => g.kind !== 'des' && g.fam === m.fam && g.si === (m.gen === 'p' ? 0 : 1) && takes(g, id)) };
         });
         if (outs.some((o) => o.goal >= 0 || (o.cap >= 0 && over[o.cap]))) EMO.push({ item: name, price: pr, outs });
       }
@@ -276,23 +278,44 @@
       }
       return stopMemo.get(k);
     }
+    // Another element's twin of target i (what a Flux or a Rune of Aldur turns into it) has tags of its own: on a wand
+    // a Fire or Lightning Damage prefix keeps "Freeze Buildup" off. Which element the twin is of is not known: the
+    // share of the twins, by their weight, that stop target k.
+    const twinStops = goals.map((g, i) => {
+      if (!conv[i]) return null;
+      const pool = P.sidePool(ctx, g.side, 0).filter((e) => conv[i].src.has(e.id));
+      const tot = pool.reduce((x, e) => x + e.w, 0);
+      if (!(tot > 0)) return null;
+      const out = goals.map((_, k) => (k === i ? 0 : pool.reduce((x, e) => x + (stops(e.id, k) ? e.w : 0), 0) / tot));
+      return out.some((x) => x > 0) ? out : null;
+    });
     /**
      * mult: how much Omen of Catalysing Exaltation raises the weight of the catalyst's type of modifier (1: no omen).
      * bits: the runes socketed that change the rolls (a pool rune adds its pool; with a Rune of Aldur in, another
      * element's modifier can no longer be turned into the target).
      * tm: the tag-giving targets on the item (tagMask): what their tags stop is not in the pool.
+     * pm: the targets of this side that are on the item (presentMask): their groups are not in the pool.
      * -> { W, ok, low, nearW, twin, block }: per goal the weight that meets it, that lands under its value, that is in
      * its way, and that is its twin of another element.
      */
-    function stats(si, floor, mult, bits, tm) {
+    function stats(si, floor, mult, bits, tm, pm) {
       mult = mult > 1 ? mult : 1;
       bits = (bits || 0) & (R_POOL | R_ALDUR);
-      tm = tm || 0;
-      const key = si + '|' + floor + '|' + mult + '|' + bits + '|' + tm;
+      tm = tm || 0; pm = pm || 0;
+      const key = si + '|' + floor + '|' + mult + '|' + bits + '|' + tm + '|' + pm;
       let s = statCache.get(key);
       if (s) return s;
       let pool = P.sidePool(ctx, SIDES[si], floor);
       if (POOL && (bits & R_POOL)) pool = pool.concat(P.runeSide(ctx, POOL.tag, SIDES[si], floor));
+      if (pm) {
+        // pm: the targets of this side that are on the item (or have a modifier of their group in their way). What
+        // is of their groups cannot roll, and no other modifier on the item can be of them either: they are out
+        // of the pool before the rest is counted ("+# to Armour" takes the local defences, half of a body armour's
+        // prefixes, with it).
+        const fams = new Set(), grps = new Set();
+        for (let i = 0; i < G; i++) if (pm & (1 << i)) { fams.add(goals[i].fam); for (const x of goals[i].grp) grps.add(x); }
+        pool = pool.filter((e) => !fams.has(e.fam) && !e.grp.some((x) => grps.has(x)));
+      }
       if (tm) {
         const added = new Set();
         for (let k = 0; k < tagIdx.length; k++) if (tm & (1 << k)) for (const t of goalTags[tagIdx[k]]) added.add(t);
@@ -377,7 +400,36 @@
           if (other && X0 > 0) { let fx = 0; for (let o = 0; o < other.length; o++) { sx[o] *= Math.max(0, 1 - tx[o] / J); fx += other[o].w * sx[o]; } across[n] = fx / X0; }
         }
       }
-      s = { W, ok, low, nearW, twin, cross, J, left, across, fracTake };
+      // The dominant group: one group that is a fifth or more of what nobody asked for (the local defences are half of
+      // the prefixes on body armour and boots). Whether a modifier of it is on the item is followed as two cases
+      // instead of an average: with one the pool is small and the targets of that group cannot roll, without one the
+      // pool is large. leftR[n]: what is left of the rest next to n modifiers that are not of that group.
+      let big = null, leftR = null;
+      {
+        const gsum = new Map();
+        for (const q of own) for (const x of pool[q].grp || []) gsum.set(x, (gsum.get(x) || 0) + ws[q]);
+        let best = null;
+        for (const [k, w] of gsum) if (!best || w > best[1]) best = [k, w];
+        if (best && J > 0 && best[1] / J >= 0.2 && best[1] < J) {
+          const inB = (e) => (e.grp || []).includes(best[0]);
+          let mineW = 0;
+          const has = new Set();
+          for (let q = 0; q < pool.length; q++) if (mine.has(pool[q].fam) && inB(pool[q])) mineW += ws[q];
+          for (let i = 0; i < G; i++) if (goals[i].si === si && goals[i].kind === 'nat' && goals[i].grp.includes(best[0])) has.add(i);
+          big = { key: best[0], w: best[1], mineW, has };
+          const rest = own.filter((q) => !inB(pool[q])), JR = J - best[1];
+          leftR = new Float64Array(NMAX + 1);
+          leftR[0] = JR;
+          const surv = new Float64Array(pool.length).fill(1);
+          for (let n = 1; n <= NMAX; n++) {
+            const L = leftR[n - 1];
+            let f = 0;
+            if (L > 0) for (const q of rest) { surv[q] *= Math.max(0, 1 - Math.min(1, gw[q] / L) - tw[q] / J); f += ws[q] * surv[q]; }
+            leftR[n] = f;
+          }
+        }
+      }
+      s = { W, ok, low, nearW, twin, cross, J, left, across, fracTake, big, leftR };
       statCache.set(key, s);
       return s;
     }
@@ -514,74 +566,96 @@
     const wanted = (x) => x === ABSENT || x === TWIN;
 
     /**
-     * What is left of side si's pool on item S next to `present` (the targets' own weight) and the modifiers nobody
-     * asked for (s: the side's pool numbers at this minimum modifier level): the average over which modifiers they
-     * are. (A correction for their spread was tried and dropped: where one group is half the pool, as the local
-     * defences on boots and body armour, a second order term is far off.)
-     */
+    /** The targets of side si that are on the item, or kept out by a modifier of their own group (a bit each). */
+    const presentMask = (S, si) => { let m = 0; for (let i = 0; i < G; i++) if (goals[i].si === si && there(S.g[i]) && S.g[i] !== TWIN) m |= 1 << i; return m; };
     /** The modifiers nobody asked for and nobody knows, on side si (the pasted item's fractured one is known). */
     const unknown = (S, si) => others(S, si) - (S.kf && FRAC.si === si ? 1 : 0);
-    function leftOf(S, si, s, present, floor, tm, extra) {
-      // extra: modifiers drawn on top of the item's (the Well's options before this one: no two share a group)
-      const n = Math.min(unknown(S, si) + (extra || 0), s.left.length - 1), m = unknown(S, 1 - si);
+    /** What the cases of a side's pool share: the tags of the other side, the pasted item's fractured modifier, the dominant group. */
+    function mix(S, si, s, floor, tm) {
+      const NM = s.left.length - 1;
+      const n = Math.min(unknown(S, si), NM), m = unknown(S, 1 - si);
       // the other side's modifiers stop a share of this side's pool with their tags
-      const share = m ? stats(1 - si, floor, 1, S.u, tm).across[Math.min(m, s.left.length - 1)] : 1;
-      const rest = s.left[n] * share * (S.kf && s.J > 0 ? Math.max(0, 1 - s.fracTake / s.J) : 1);
-      return s.W - s.J + rest - present;
+      const share = m ? stats(1 - si, floor, 1, S.u, tm, presentMask(S, 1 - si)).across[Math.min(m, NM)] : 1;
+      if (!s.big) return { NM, n, share, f: S.kf && s.J > 0 ? Math.max(0, 1 - s.fracTake / s.J) : 1, q: 1, fracIn: false };
+      // the pasted item's fractured modifier is of the dominant group: that group is known to be on the item
+      const fracIn = !!(S.kf && FRAC.si === si && FRAC.grp.includes(s.big.key));
+      const JR = s.J - s.big.w;
+      const f = S.kf && !fracIn && JR > 0 ? Math.max(0, 1 - s.fracTake / JR) : 1;
+      // q: none of the n modifiers is of the dominant group (each was drawn from what the ones before it left)
+      let q = fracIn ? 0 : 1;
+      for (let k = 0; k < n && q > 0; k++) q *= s.leftR[k] * f / (s.big.w + s.leftR[k] * f);
+      return { NM, n, share, f, q, fracIn };
+    }
+    /** The pool of side si on item S as cases: [{p, pool, big}] (big: the dominant group can still roll). */
+    function cases(S, si, s, floor, tm) {
+      const x = mix(S, si, s, floor, tm), mineAll = s.W - s.J; // (mineAll: the entries of the targets still wanted here)
+      if (!s.big) return [{ p: 1, pool: mineAll + s.left[x.n] * x.share * x.f, big: true }];
+      const out = [];
+      if (x.q > 1e-12) out.push({ p: x.q, pool: mineAll + (s.big.w + s.leftR[x.n] * x.f) * x.share, big: true });
+      if (x.q < 1 - 1e-12) out.push({ p: 1 - x.q, pool: mineAll - s.big.mineW + s.leftR[x.fracIn ? x.n : Math.max(0, x.n - 1)] * x.f * x.share, big: false });
+      return out;
     }
     /**
      * Chance that none of the modifiers nobody asked for keeps natural target i out: none of its own side is of its
      * group or stops it with its tags, and none of the other side stops it.
      */
-    function unblocked(S, i, floor) {
+    function unblocked(S, i, floor, ownIsCase) {
       // (the pool at the minimum modifier level of the orb in use: the modifiers on the item mostly came from orbs of
       // that tier. Measured on ten cheap scenarios against the level 0 pool: mean error 2.5% against 3.1%.)
       const g = goals[i], tm = tagMask(S);
       let p = 1;
-      const n = unknown(S, g.si);
-      if (n) { const s0 = stats(g.si, floor || 0, 1, S.u, tm); if (s0.W > 0) p *= Math.pow(1 - Math.min(1, s0.low[i] / s0.W), n); }
+      // (ownIsCase: the target is of the dominant group; whether a modifier of that group is on the item is a case)
+      const n = ownIsCase ? 0 : unknown(S, g.si);
+      if (n) { const s0 = stats(g.si, floor || 0, 1, S.u, tm, presentMask(S, g.si)); if (s0.W > 0) p *= Math.pow(1 - Math.min(1, s0.low[i] / s0.W), n); }
       const m = unknown(S, 1 - g.si);
-      if (m) { const sx = stats(1 - g.si, floor || 0, 1, S.u, tm); if (sx.W > 0 && sx.cross[i] > 0) p *= Math.pow(1 - Math.min(1, sx.cross[i] / sx.W), m); }
+      if (m) { const sx = stats(1 - g.si, floor || 0, 1, S.u, tm, presentMask(S, 1 - g.si)); if (sx.W > 0 && sx.cross[i] > 0) p *= Math.pow(1 - Math.min(1, sx.cross[i] / sx.W), m); }
+      // another target's twin of another element on the item may stop this one with its tags
+      for (let k = 0; k < G; k++) if (S.g[k] === TWIN && twinStops[k]) p *= 1 - twinStops[k][i];
       return p;
     }
     /** A random modifier for the open sides in `mask` (bit 0 prefix, bit 1 suffix): [[chance, goal index or -1, side, status]]. */
     function roll(S, mask, floor, mult) {
-      const parts = [];
-      let total = 0;
+      const tm = tagMask(S), sides = [];
       for (let si = 0; si < 2; si++) {
         if (!(mask & (1 << si))) continue;
-        const tm = tagMask(S);
-        const s = stats(si, floor, mult, S.u, tm), s0 = floor || mult > 1 ? stats(si, 0, 1, S.u, tm) : s;
-        const n = others(S, si);
-        // a target that is there, or has a modifier in its way, is out of the pool with its group (of a group with
-        // several families, half is taken to be left)
-        let present = 0;
-        for (let i = 0; i < G; i++) {
-          const x = S.g[i];
-          if (!there(x) || x === TWIN || goals[i].si !== si) continue;
-          present += s.ok[i] + s.nearW[i] + (x === BLOCKED ? s.low[i] / 2 : s.low[i]);
-        }
-        const avail = Math.max(0, leftOf(S, si, s, present, floor, tm));
-        if (avail <= 0) continue;
-        let hit = 0;
-        const hits = [];
-        const take = (w, i, status) => { w = Math.min(avail - hit, w); if (w > 0) { hits.push([w, i, si, status]); hit += w; } };
+        const s = stats(si, floor, mult, S.u, tm, presentMask(S, si));
+        const cs = cases(S, si, s, floor, tm).filter((c) => c.pool > 0);
+        if (!cs.length) continue;
+        // what can roll for a target on this side: [weight, target, status, of the dominant group]
+        const ws = [];
         for (let i = 0; i < G; i++) {
           const g = goals[i];
           if (!wanted(S.g[i]) || g.si !== si) continue;
           // a rolled modifier of the group of a Desecrated or crafted-only target is known as such (bones, essences and alloys are too dear to waste)
-          if (g.kind !== 'nat') { take(s.low[i], i, BLOCKED); continue; }
+          if (g.kind !== 'nat') { if (s.low[i] > 0) ws.push([s.low[i], i, BLOCKED, false]); continue; }
           // an unknown modifier is of the target's group, or stops it with its tags, with some chance: then it cannot roll
-          const beta = unblocked(S, i, floor);
-          take(s.ok[i] * beta, i, NATURAL);
-          take(s.nearW[i] * beta, i, NATURAL + NEAR);
+          const inBig = !!(s.big && s.big.has.has(i));
+          const beta = unblocked(S, i, floor, inBig);
+          if (s.ok[i] > 0) ws.push([s.ok[i] * beta, i, NATURAL, inBig]);
+          if (s.nearW[i] > 0) ws.push([s.nearW[i] * beta, i, NATURAL + NEAR, inBig]);
           // (what keeps the target out keeps its twin of another element out as well: they are of one group)
-          if (S.g[i] === ABSENT) take(s.twin[i] * beta, i, TWIN);
+          if (S.g[i] === ABSENT && s.twin[i] > 0) ws.push([s.twin[i] * beta, i, TWIN, false]);
         }
-        parts.push(...hits, [avail - hit, -1, si, 0]);
-        total += avail;
+        sides.push({ si, cs, ws });
       }
-      return total > 0 ? parts.filter((x) => x[0] > 0).map(([w, i, si, status]) => [w / total, i, si, status]) : [];
+      if (!sides.length) return [];
+      const acc = new Map();
+      let sum = 0;
+      const add = (p, i, si, status) => { if (!(p > 0)) return; sum += p; const k = i * 64 + si * 32 + status; const e = acc.get(k); if (e) e[0] += p; else acc.set(k, [p, i, si, status]); };
+      const A = sides[0], B = sides[1] || null;
+      for (const ca of A.cs) for (const cb of B ? B.cs : [null]) {
+        const pc = ca.p * (cb ? cb.p : 1), total = ca.pool + (cb ? cb.pool : 0);
+        for (const [sd, c] of cb ? [[A, ca], [B, cb]] : [[A, ca]]) {
+          let hit = 0;
+          for (const [w0, i, status, inBig] of sd.ws) {
+            if (inBig && !c.big) continue;
+            const w = Math.min(c.pool - hit, w0);
+            if (w > 0) { add(pc * w / total, i, sd.si, status); hit += w; }
+          }
+          add(pc * (c.pool - hit) / total, -1, sd.si, 0);
+        }
+      }
+      return [...acc.values()].map(([p, i, si, status]) => [p / sum, i, si, status]);
     }
     function addRolled(S, i, si, status) {
       const n = cp(S);
@@ -628,7 +702,7 @@
     function clear(S, i) {
       const g = goals[i];
       if (g.kind !== 'nat') return 1;
-      const s0 = stats(g.si, 0, 1, S.u, tagMask(S)), n = others(S, g.si);
+      const s0 = stats(g.si, 0, 1, S.u, tagMask(S), presentMask(S, g.si)), n = others(S, g.si);
       return n && s0.W > 0 ? Math.pow(1 - Math.min(1, s0.low[i] / s0.W), n) : 1;
     }
     /**
@@ -719,6 +793,9 @@
       for (let k = 0; k < dist.length; k++) { if (hits) pick += dist[k] * hits / (hits + k); size += dist[k] * k; }
       return { size, pick, kin, kinShare: all > 0 ? kin / all : 0 };
     }
+    // The target to take first when the Well of Souls offers several: a Desecrated one, then the base modifier that is
+    // rarest in the pool (the one hardest to get any other way).
+    const wellRank = goals.map((g, i) => { if (g.kind === 'des') return -1; if (g.kind !== 'nat') return Infinity; const s = stats(g.si, 0, 1, 0, 0, 0); return s.ok[i] + s.nearW[i]; });
     const takeMemo = new Map();
     /** What one desecrated-only option takes out of the side's base modifiers on average (those of its groups: "+# to Strength and Dexterity" takes both attributes). */
     function exTake(list, si, floor) {
@@ -732,16 +809,45 @@
       }
       return takeMemo.get(k);
     }
+    /**
+     * Chance that a base modifier target is among `draws` base options of the Well. The options are drawn one after the
+     * other and no two share a group: an option of the target's own group (a lower tier) ends its chance, an option of
+     * the dominant group takes that group out, any other one leaves less for the next. gone: what the desecrated-only
+     * options drawn before them took along.
+     */
+    function wellNat(S, si, s, floor, tm, wnt, draws, gone) {
+      const x = mix(S, si, s, floor, tm), mineAll = s.W - s.J;
+      const inBig = !!(s.big && s.big.has.has(wnt.i));
+      // [chance that the target can still come, the dominant group is in the pool, modifiers and options that are not of it]
+      let states = !s.big ? [[1, true, x.n]] : [[x.q, true, x.n]].concat(inBig ? [] : [[1 - x.q, false, x.fracIn ? x.n : Math.max(0, x.n - 1)]]);
+      let off = 0;
+      for (let t = 0; t < draws; t++) {
+        const next = [];
+        for (const [p, bigIn, k] of states) {
+          if (!(p > 1e-15)) continue;
+          const kk = Math.min(k, x.NM);
+          const bw = s.big && bigIn ? s.big.w * x.share : 0;
+          const rest = (s.big ? s.leftR[kk] : s.left[kk]) * x.f * x.share;
+          const pool = mineAll - (s.big && !bigIn ? s.big.mineW : 0) + bw + rest - gone;
+          if (!(pool > 0)) continue;
+          const w = Math.min(pool, wnt.w);
+          off += p * w / pool;
+          const kill = inBig ? 0 : Math.min(pool - w, wnt.low);
+          const bigDraw = s.big && bigIn ? Math.max(0, Math.min(pool - w - kill, bw + s.big.mineW - (inBig ? w : 0))) : 0;
+          const other = pool - w - kill - bigDraw;
+          if (bigDraw > 0 && !inBig) next.push([p * bigDraw / pool, false, k]);
+          if (other > 0) next.push([p * other / pool, bigIn, k + 1]);
+        }
+        states = next;
+      }
+      return off;
+    }
     function reveal(S, si, floor, lich, echoes) {
       const ex = desFor(S, si, floor, null), ll = lich ? desFor(S, si, floor, lich) : null;
       // modifiers nobody knows on this side (the pasted item's own are known while S.kx: the lists are cut already)
       const unk = S.kx ? 0 : unknown(S, si);
-      const s = stats(si, floor, 1, S.u & R_ALDUR, tagMask(S)), s0 = floor ? stats(si, 0, 1, S.u & R_ALDUR, tagMask(S)) : s; // (the Well of Souls does not offer a rune's pool: open test t33)
-      const n = others(S, si);
-      let present = 0;
-      for (let i = 0; i < G; i++) { const x = S.g[i]; if (there(x) && x !== TWIN && goals[i].si === si) present += s.ok[i] + s.nearW[i] + (x === BLOCKED ? s.low[i] / 2 : s.low[i]); }
+      const s = stats(si, floor, 1, S.u & R_ALDUR, tagMask(S), presentMask(S, si)); // (the Well of Souls does not offer a rune's pool: open test t33)
       const tm = tagMask(S);
-      const avail = Math.max(1e-9, leftOf(S, si, s, present, floor, tm));
       const want = [];
       for (let i = 0; i < G; i++) {
         const g = goals[i];
@@ -751,13 +857,14 @@
           const c = ex.filter(hit).length, cl = ll ? ll.filter(hit).length : 0;
           if (c || cl) want.push({ i, des: true, c, cl, share: pv[i], all: listFor(ex, hit, si, unk, g.grp), lich: ll ? listFor(ll, hit, si, unk, g.grp) : null });
         } else if (g.kind === 'nat' && !g.noWell && s.ok[i] + s.nearW[i] > 0) {
-          const beta = unblocked(S, i, floor);
-          want.push({ i, des: false, w: Math.min(avail, (s.ok[i] + s.nearW[i]) * beta), low: s.low[i] * beta, share: s.ok[i] / (s.ok[i] + s.nearW[i]) });
+          const beta = unblocked(S, i, floor, !!(s.big && s.big.has.has(i)));
+          want.push({ i, des: false, w: (s.ok[i] + s.nearW[i]) * beta, low: s.low[i] * beta, share: s.ok[i] / (s.ok[i] + s.nearW[i]) });
         }
       }
       if (!want.length) return [[1, -1, 0]];
       const taken = exTake(ex, si, floor);
-      want.sort((a, b) => (b.des - a.des) || ((a.w || 0) - (b.w || 0)));
+      // which target to take when the Well offers more than one: wellRank (the same order on every item)
+      want.sort((a, b) => wellRank[a.i] - wellRank[b.i]);
       const pick = new Float64Array(G);
       let missAll = 0;
       const chances = ex.length ? P.DES_OPTIONS : [1];
@@ -785,19 +892,8 @@
               alive *= 1 - p - k;
             }
           } else {
-            // the base modifier options are drawn one after the other, and no two share a group: an option of the
-            // target's own group (a lower tier) ends its chance, any other one leaves less in the pool for the next
-            let alive = 1;
-            off = 0;
-            // (the desecrated-only options are drawn before them and take the base modifiers of their groups along)
-            const gone = (lichFirst + exDraws) * taken;
-            for (let t = 0; t < normDraws && alive > 0; t++) {
-              const at = (t ? leftOf(S, si, s, present, floor, tm, t) : avail) - gone;
-              if (!(at > 0)) break;
-              const w = Math.min(at, wnt.w), l = Math.min(at - w, wnt.low);
-              off += alive * w / at;
-              alive *= (at - w - l) / at;
-            }
+            // (the desecrated-only options are drawn before the base ones and take the base modifiers of their groups along)
+            off = wellNat(S, si, s, floor, tm, wnt, normDraws, (lichFirst + exDraws) * taken);
           }
           pick[wnt.i] += chances[k] * rem * off;
           rem *= 1 - off;
@@ -995,10 +1091,17 @@
         for (const u of us) {
           const S1 = removeUnit(S, u), fit = fitAt(S1);
           for (const o of fit) {
-            let S2;
-            if (o.goal >= 0) S2 = addRolled(S1, o.goal, o.si, CRAFTED);
-            else { S2 = cp(S1); if (o.cap >= 0) S2.aw = o.cap + 1; else if (!S2.cx) S2.cx = o.si + 1; else S2.j[o.si]++; }
-            outs.push([u.w / tw / fit.length, S2]);
+            const p = u.w / tw / fit.length;
+            if (o.goal >= 0) {
+              // a target by value arrives at or under its value
+              const ok = Math.max(0, Math.min(1, reach(o.mod, goals[o.goal])));
+              if (ok > 0) outs.push([p * ok, addRolled(S1, o.goal, o.si, CRAFTED)]);
+              if (ok < 1) outs.push([p * (1 - ok), addRolled(S1, o.goal, o.si, CRAFTED + NEAR)]);
+              continue;
+            }
+            const S2 = cp(S1);
+            if (o.cap >= 0) S2.aw = o.cap + 1; else if (!S2.cx) S2.cx = o.si + 1; else S2.j[o.si]++;
+            outs.push([p, S2]);
           }
         }
         push({ op: 'liquid', item: em.item }, em.price, outs);
@@ -1362,7 +1465,7 @@
     const basesAt = (s) => (Fv[n0] > 1e-250 ? (1 - Fv[s]) / Fv[n0] : Infinity);
 
     const net = {
-      ctx, goals, states, acts, pol, start, n0, N, timing, lite, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
+      ctx, goals, states, acts, pol, start, n0, N, timing, lite, wellRank, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
       get rounds() { return rounds; },
       get base() { return solution().money[n0]; },
       nodeOf(st) {
@@ -1465,7 +1568,9 @@
       },
       describe: (s) => describe(states[s]),
       price,
-      /** The pool numbers of a side (for the checks): stats(side index, minimum modifier level, catalyst boost, rune bits, tag mask). */
+      /** The node's state an item would have, whether the network has that node or not (for the checks). */
+      stateOf: (st, known) => nodeOf(st, known !== false),
+      /** The pool numbers of a side (for the checks): stats(side index, minimum modifier level, catalyst boost, rune bits, tag mask, present mask). */
       poolStats: stats,
     };
     function describe(S) {

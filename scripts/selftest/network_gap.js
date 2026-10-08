@@ -63,6 +63,17 @@ for (const [node, rec] of audit) {
   rows.push({ node, n: rec.n, share, step, parts });
 }
 console.log(`gap played - promised: ${(got.mean - want).toFixed(1)}; explained by the nodes below: ${total.toFixed(1)}`);
+// crafts that left the network: the node, the step and the item the network has no node for
+if (audit.offs && audit.offs.length) {
+  console.log(`
+${audit.offs.length} craft(s) left the network:`);
+  const seen = new Set();
+  for (const o of audit.offs) { const k = o.from + '|' + JSON.stringify(o.a); if (seen.has(k) || seen.size >= 6) continue; seen.add(k); console.log(`   from ${d(o.from)}
+     by ${JSON.stringify(o.a)}
+     to an item with ${o.item}
+     its state: ${o.state}
+     the node it came from: ${JSON.stringify(net.states[o.from])}`); const st = net.step(o.from); if (st) { const rows = []; for (let q = 0; q < st.out.length; q += 2) rows.push([st.out[q], st.out[q + 1]]); rows.sort((x, y) => y[0] - x[0]); for (const [p, k2] of rows.slice(0, 8)) console.log(`        the network: ${(p * 100).toFixed(2)}% ${k2 < 0 ? 'NEW BASE' : d(k2)}`); } }
+}
 rows.sort((a, b) => Math.abs(b.share) - Math.abs(a.share));
 for (const x of rows.slice(0, +rowsStr || 8)) {
   console.log(`\n${x.share >= 0 ? '+' : ''}${x.share.toFixed(1)}  (${(x.n / got.runs).toFixed(1)} visits per craft)  ${d(x.node)} -> ${x.step.names.join(' + ') || x.step.a.op}${x.step.a.hide ? ' (hide)' : ''}  ${JSON.stringify(x.step.a)}`);
