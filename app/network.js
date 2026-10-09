@@ -1677,6 +1677,9 @@
         const aim = r.alloy ? [-1] : [-1, 0, 1];
         for (const v of aim) {
           if (v >= 0 && PR.crystal[v] == null) continue;
+          // (aimed at the other side while its own side is full, the essence cannot be used at all: planner.js validate.
+          // The fourth deep run's play was refused 223 such uses of Essence of Hysteria.)
+          if (v >= 0 && v !== g.si && open(S, g.si) < 1) continue;
           const from = v >= 0 ? v : open(S, g.si) === 0 ? g.si : -1; // R_SWAP_REMOVAL
           const us = units(S, (si) => from < 0 || si === from), tw = us.reduce((x, u) => x + u.w, 0);
           const outs = [];
