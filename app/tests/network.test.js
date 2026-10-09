@@ -543,3 +543,50 @@ test("network: Hinekora's Lock is the best of what the currencies show, and no e
   assert.equal(got.done, got.runs);
   assert.ok(Math.abs(got.mean / cheap.cost(s) - 1) < 0.1 || Math.abs(got.mean - cheap.cost(s)) < 3 * got.se, `${got.mean} vs ${cheap.cost(s)}`);
 });
+
+// ---- what the third deep cloud run found (run 37851539057, 9 Oct 2026)
+test('network: what the third deep run found: a group mate across the sides, one twin for two targets, long Well lists', () => {
+  const X = lockWorld();
+  const find = (id) => { const base = id.split('|')[0]; for (let n = 0; n < 900; n++) { let sc = null; try { sc = X.SW.scenario(base, n); } catch (e) { sc = null; } if (sc && sc.id === id) return sc; } throw new Error('no scenario ' + id); };
+  const played = (net, inp, runs, tol, what) => {
+    const got = X.play(net, inp, runs, 7, 20000, 90000), want = net.cost(net.start);
+    assert.equal(got.off, 0, what + ': no craft leaves the network');
+    assert.equal(got.refused, 0, what + ': the rules allow every step');
+    assert.equal(got.done, got.runs, what + ': every craft ends');
+    assert.ok(Math.abs(got.mean - want) <= 4 * got.se + tol * want, `${what}: played ${got.mean.toFixed(1)} ± ${got.se.toFixed(1)}, promised ${want.toFixed(1)}`);
+  };
+  // A belt: the Desecrated suffix "Thorns Critical Hit Chance" cannot come while a Thorns prefix is on the item (no
+  // group twice on an item, whatever the side). The route took bone after bone on such items: 786 promised, 1,211
+  // played. The prefix is a state of the target now, like a modifier that stops a target with its tags.
+  const sc = find('Runemastered Heavy Belt|set2|rare, some targets there|10');
+  const inp = { ix: X.D.ix, item: sc.item, targets: sc.targets, locks: {}, priceOf: X.D.priceOf, baseCost: 1, weights: X.L.weightsFor(sc.base), essences: X.SW.table(sc.base).essences, quality: sc.qualityMode };
+  const belt = NW.route(inp);
+  assert.ok(belt.states.some((S) => S.g.includes(9)), 'the Thorns prefix that keeps the suffix out is a state');
+  played(belt, inp, 700, 0.06, 'belt');
+
+  // A ring with Chaos and Fire Resistance wanted: a Cold Resistance of a high tier is the twin of either (Void Flux,
+  // Blazing Flux), but it is one modifier. It was counted for both when it rolled, and after the first Flux the
+  // route still had the "second twin" that the Flux had turned as well: 4,290 promised for a body armour that
+  // plays at 8,930.
+  const base = 'Biostatic Ring', fire = X.tiers(base, 'suffix', /to Fire Resistance$/), chaos = X.tiers(base, 'suffix', /to Chaos Resistance$/), cold = X.tiers(base, 'suffix', /to Cold Resistance$/), lit = X.tiers(base, 'suffix', /to Lightning Resistance$/);
+  const targets = {};
+  [[chaos, 2], [fire, 2]].forEach(([t, tier], k) => { targets['suffix-' + k] = { fam: t.fam, group: 'suffix', minTier: tier, required: true, label: t.label }; });
+  const white = X.input(X.item(base, 'Normal'), targets), ring = NW.route(white);
+  played(ring, white, 500, 0.08, 'ring');
+  // with a Cold and a Lightning Resistance on the item (one twin each): a Flux finishes one target and leaves the
+  // other without its twin
+  const both = X.input(X.item(base, 'Rare', [{ id: cold.ids[1], side: 'suffix', tier: 1 }, { id: lit.ids[1], side: 'suffix', tier: 1 }]), targets), net2 = NW.route(both);
+  const st = P.toState(net2.ctx, both.item, {}), node = net2.nodeOf(st);
+  const twins = net2.states[node].g.filter((x) => x === 8).length;
+  assert.equal(twins, 2, 'each of the two is the twin of one target');
+  for (const e of net2.acts[node].filter((x) => x.a.op === 'flux')) for (let t = 1; t < e.out.length; t += 2) assert.ok(!net2.states[e.out[t]].g.includes(8), `after ${e.a.to} Flux no twin is left`);
+  played(net2, both, 400, 0.08, 'ring with two twins');
+
+  // An amulet (11 and 20 entries on the Well's lists): what Omen of Putrefaction's reveals take off the lists was
+  // followed item by item, and a network of 1,600 nodes took 19 seconds to build (a large one ran out of memory).
+  const am = 'Runemastered Veridical Chain', life = X.tiers(am, 'prefix', /to maximum Life$/), str = X.tiers(am, 'suffix', /to Strength$/);
+  const t2 = { 'prefix-0': { fam: life.fam, group: 'prefix', minTier: 2, required: true, label: life.label }, 'suffix-1': { fam: str.fam, group: 'suffix', minTier: 2, required: true, label: str.label } };
+  const amulet = NW.build(Object.assign(X.input(X.item(am, 'Normal'), t2), { lite: 0, track: 0, whittle: 'none' }));
+  assert.ok(amulet.acts.some((l) => l.some((e) => e.a.putrefy)), 'the omen is an edge');
+  assert.ok(amulet.timing.expand < 6000, `built in ${amulet.timing.expand} ms`);
+});

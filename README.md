@@ -141,6 +141,16 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   neredeyse her craft'ta) hiç kenar değildir; kilitsiz kural seti oturduktan sonra devreye girer ve her turu kesin
   değerlenir. 667.000 ex'lik bir quiver craft'ında bugünkü fiyatla kullanılmaz; kilit 80.000 ex olsaydı craft
   546.814 ex'e, 20.000 ex olsaydı 367.941 ex'e inerdi. Oynatma: botta kilit 3 ex iken 268,1 vaat, 266,1 ± 5,6 oynanan.
+- **Üçüncü derin taramanın bulduğu (9 Ekim 2026, `reports/network-sweep-2026-10-09.md`).** Putrefaction, Well listesi
+  uzun eşyalarda (amulet 11+20, body armour 7+22, jewel 29 girdi) her ıska çiftini ayrı durum sayıyordu: 1.600 düğümlük
+  ağ 19 saniyede kuruluyor, büyükleri belleği dolduruyordu; listeler artık yalnız cevabın gerektirdiği kadar izlenir
+  (0,2 saniye). Chaos ve bir element direnci birlikte istenince tek bir mod iki hedefin "ikizi" sayılıyordu (Void Flux
+  ve Blazing Flux): bir modun tek durumu vardır, ve bir Flux öteki hedefin ikizini de çevirir (Grand Cuisses: 1.239
+  vaat, 2.611 oynanan; şimdi 2.173'e karşı 2.159). Karşı taraftaki grup arkadaşı da hedefi tutar (kemerde Thorns
+  prefix'i, Desecrated "Thorns Critical Hit Chance" suffix'ini): bu artık bir durumdur. Item'ı kilitleyen adımlar,
+  onlarsız kural seti kabaca oturduktan sonra devreye girer (yoksa çözücü hiç bitmeyen bir kural setinde kalabiliyordu).
+  Düğümün engeli bilmediği yerde kuralların reddettiği adımda oynatma, kuralların izin verdiği sıradaki en ucuz adımı
+  alır ve bunu nedeniyle birlikte "sapma" olarak sayar.
 - Rune of Aldur, takıldıktan sonra gelen modu dönüştürmez (oyuncu 8 Ekim 2026'da doğruladı: iddia k61).
 - Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler).
 

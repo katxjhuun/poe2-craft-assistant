@@ -84,9 +84,12 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
   };
   const desMod = (e) => ({ id: e.id, fam: e.fam, side: e.side, lvl: e.lvl, grp: e.grp, tier: e.tier, frac: false, des: true, crafted: false, lock: false });
   const st0 = P.toState(ctx, input.item, input.locks);
-  let sum = 0, sq = 0, done = 0, steps = 0, off = 0, refused = 0;
+  let sum = 0, sq = 0, done = 0, steps = 0, off = 0, refused = 0, detours = 0;
+  // why a step was refused, and why another one was used in its place: reason -> how often
+  const whyOf = new Map(), detourWhy = new Map();
+  const note = (m, a, text) => { const k = `${a.op}${a.item ? ' ' + a.item : ''}: ${text}`; m.set(k, (m.get(k) || 0) + 1); };
   for (let n = 0; n < runs; n++) {
-    if (until && (n & 255) === 0 && n >= 2000 && Date.now() > until) break;
+    if (until && (n & 15) === 0 && n >= 200 && Date.now() > until) break;
     if (n === 40 && done === 0) break; // not one of forty crafts ends: the rules and the simulator disagree, more plays say nothing
     played++;
     let st = { ...st0, mods: st0.mods.map((m) => ({ ...m })) };
@@ -108,14 +111,25 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
       // (an item the network has no node for: kept with the step that led to it, for the audit)
       if (node < 0 && audit && from >= 0) (audit.offs = audit.offs || []).push({ from, a: lastA, state: net.stateOf ? JSON.stringify(net.stateOf(st, false)) : '', item: st.rarity + ' ' + st.mods.map((m) => `${m.side[0]}:${m.unrevealed ? '(hidden)' : m.fam}${m.tier ? ' T' + m.tier : ''}${m.frac ? '(F)' : ''}${m.des ? '(D)' : ''}${m.crafted ? '(C)' : ''}`).join(', ') });
       from = node;
-      if (node < 0) { off++; break; }
+      // (an item with every target on it is finished, also one the network has no node for: what else is on it does not matter any more)
+      if (node < 0) { if (net.finished && net.finished(st)) { ok = true; break; } off++; break; }
       if (net.done(node)) { ok = true; break; }
-      const step = net.step(node);
+      let step = net.step(node);
       if (!step) break;
+      // A step the rules refuse on this very item, where the network's node does not know what is in a target's way
+      // (not every target's blockers are followed in a large network): the player sees the item and takes the next
+      // cheapest step the rules allow. Counted as a detour, with the reason; the cost shows what it does to the promise.
+      if (step.a.op !== 'lock' && step.a.op !== 'reveal' && !(step.a.op === 'bone' && step.a.hide) && step.a.op !== 'catalyst') {
+        const bad = P.validate(ctx, st, step.a.pre || step.a);
+        if (bad) {
+          const alt = net.options(node).find((o) => !o.best && o.a.op !== 'lock' && !P.validate(ctx, st, o.a.pre || o.a));
+          if (alt) { detours++; note(detourWhy, step.a, bad); step = alt; }
+        }
+      }
       let a = step.a;
       lastA = a;
       // (a step the simulator's rules refuse is a disagreement between the network and the rules: counted, and kept for the audit)
-      const refuse = (x) => { const why = P.validate(ctx, st, x); if (why) { refused++; if (audit) (audit.refused = audit.refused || []).push({ from: node, a: x, why, item: st.rarity + ' ' + st.mods.map((m) => `${m.side[0]}:${m.unrevealed ? '(hidden)' : m.fam}${m.frac ? '(F)' : ''}${m.des ? '(D)' : ''}${m.crafted ? '(C)' : ''}`).join(', ') }); } };
+      const refuse = (x) => { const why = P.validate(ctx, st, x); if (why) { refused++; note(whyOf, x, why); if (audit) (audit.refused = audit.refused || []).push({ from: node, a: x, why, item: st.rarity + ' ' + st.mods.map((m) => `${m.side[0]}:${m.unrevealed ? '(hidden)' : m.fam}${m.frac ? '(F)' : ''}${m.des ? '(D)' : ''}${m.crafted ? '(C)' : ''}`).join(', ') }); } };
       if (a.op === 'lock') {
         // Hinekora's Lock: every currency the route looks at is used on a copy of the item (what the lock shows), and
         // the route says which of the results to take. Each copy has its own draws: the results of different currency
@@ -183,7 +197,8 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
   }
   const mean = done ? sum / done : NaN;
   const sd = done > 1 ? Math.sqrt(Math.max(0, sq / done - mean * mean)) : 0;
-  return { mean, se: done ? sd / Math.sqrt(done) : NaN, sd, done, steps: steps / Math.max(1, played), off, refused, runs: played };
+  const top = (m) => [...m.entries()].sort((x, y) => y[1] - x[1]).slice(0, 3).map(([k, c]) => `${c}x ${k}`);
+  return { mean, se: done ? sd / Math.sqrt(done) : NaN, sd, done, steps: steps / Math.max(1, played), off, refused, runs: played, detours, why: top(whyOf), detourWhy: top(detourWhy) };
 }
 
 function check(sc, runs, seed, tol) {

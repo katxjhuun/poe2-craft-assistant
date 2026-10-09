@@ -388,25 +388,35 @@
       let W = 0;
       const ws = new Float64Array(pool.length);
       const ok = new Float64Array(G), low = new Float64Array(G), nearW = new Float64Array(G), twin = new Float64Array(G), cross = new Float64Array(G);
+      // One modifier can be something for two targets of its side: a Cold Resistance of a high tier is the Cold target
+      // and, for a Flux, the twin of the Fire and of the Chaos one; one of a low tier is in the Cold target's way and
+      // may still be the twin of another. It is one modifier and gets one status (nodeOf: the target it meets, else a
+      // twin, else in a target's way; of two alike the first target). multi: such entries, [[target, kind, weight,
+      // weight under the value]] with kind 0 it meets the target, 2 its twin, 3 in its way; roll takes the doubles out.
+      const multi = [];
       for (let q = 0; q < pool.length; q++) {
         const e = pool[q];
         const w = mult > 1 && (kb.mods[e.id].mt || []).includes(CAT.tag) ? e.w * mult : e.w;
         W += w; ws[q] = w;
+        let roles = null;
+        const role = (i, kind, a, b) => { (roles || (roles = [])).push([i, kind, a, b || 0]); };
         for (let i = 0; i < G; i++) {
           const g = goals[i];
-          // a target of the other side that this modifier's tags stop (a "+ to Level of all Fire Spell Skills" suffix
-          // keeps the Chaos Damage prefix off a wand)
-          if (g.si !== si) { if (!e.rune && stops(e.id, i)) cross[i] += w; continue; }
+          // a target of the other side that this modifier keeps out: with its tags (a "+ to Level of all Fire Spell
+          // Skills" suffix keeps the Chaos Damage prefix off a wand), or by being of its group (no group twice on an
+          // item, whatever the side: a belt's Thorns prefix keeps the Desecrated "Thorns Critical Hit Chance" suffix off)
+          if (g.si !== si) { if ((!e.rune && stops(e.id, i)) || (g.grp.length && e.fam !== g.fam && e.grp.some((x) => g.grp.includes(x)))) cross[i] += w; continue; }
           if (g.kind === 'nat' && e.fam === g.fam) {
-            if (g.minValue != null) { const p = reach(e.id, g); if (p < 0) low[i] += w; else { ok[i] += w * p; nearW[i] += w * (1 - p); } }
-            else if (!g.tier || e.tier <= g.tier) ok[i] += w; else low[i] += w;
+            if (g.minValue != null) { const p = reach(e.id, g); if (p < 0) { low[i] += w; role(i, 3, w); } else { ok[i] += w * p; nearW[i] += w * (1 - p); role(i, 0, w * p, w * (1 - p)); } }
+            else if (!g.tier || e.tier <= g.tier) { ok[i] += w; role(i, 0, w); } else { low[i] += w; role(i, 3, w); }
           } else if (conv[i] && conv[i].src.has(e.id)) {
             // (a Rune of Aldur transforms what is on the item when it is socketed: with it in, another element's
             // modifier that rolls later stays what it is, one more modifier nobody asked for)
-            if (!(conv[i].via === 'aldur' && (bits & R_ALDUR))) twin[i] += w;
-          } else if (g.grp.length && e.grp.some((x) => g.grp.includes(x))) low[i] += w; // of the target's group: it keeps the target out
-          else if (!e.rune && stops(e.id, i)) low[i] += w; // its tags keep the target out
+            if (!(conv[i].via === 'aldur' && (bits & R_ALDUR))) { twin[i] += w; role(i, 2, w); }
+          } else if (g.grp.length && e.grp.some((x) => g.grp.includes(x))) { low[i] += w; role(i, 3, w); } // of the target's group: it keeps the target out
+          else if (!e.rune && stops(e.id, i)) { low[i] += w; role(i, 3, w); } // its tags keep the target out
         }
+        if (roles && roles.length > 1) multi.push(roles);
       }
       // What modifiers nobody asked for take out of the pools. They are picked by their weight, and a picked one leaves
       // with everything of its groups (its own family, and on wands, staves and foci its sister families) and with
@@ -499,7 +509,7 @@
       }
       const anon = new Uint8Array(pool.length);
       for (const q of own) anon[q] = 1;
-      s = { W, ok, low, nearW, twin, cross, J, left, across, fracTake, big, leftR, pool, ws, anon, takes: new Map() };
+      s = { W, ok, low, nearW, twin, cross, multi, J, left, across, fracTake, big, leftR, pool, ws, anon, takes: new Map() };
       statCache.set(key, s);
       return s;
     }
@@ -544,7 +554,10 @@
     // craft. Without it only the pasted item's own blockers are, and a rolled one is a chance that is drawn anew at
     // every roll, though on the item it stays: where one group is half of the pool (local defences) that is 10% off.
     // More states: the full network only.
-    const TRACK = TRACKED;
+    // (also when no natural target is followed: a Desecrated or crafted-only target with modifiers of its group on
+    // the other side. Bones are too dear to use on an item where it cannot come.)
+    const XGRP = TMAX > 0 && goals.some((g) => g.kind !== 'nat' && g.grp.length && P.sidePool(ctx, SIDES[1 - g.si], 0).some((e) => e.fam !== g.fam && e.grp.some((x) => g.grp.includes(x))));
+    const TRACK = TRACKED || XGRP;
     if (lite) {
       const nat = [];
       for (let i = 0; i < G; i++) if (goals[i].kind === 'nat' && !goals[i].kept) { const st = stats(goals[i].si, 0, 1, R_POOL | R_ALDUR); nat.push([i, (st.ok[i] + st.nearW[i]) / (st.W || 1)]); }
@@ -852,24 +865,42 @@
         const cs = cases(S, si, s, floor, tm).filter((c) => c.pool > 0);
         if (!cs.length) continue;
         // what can roll for a target on this side: [weight, target, status, of the dominant group]
-        const ws = [];
+        const ws = [], at = new Map(), betas = new Float64Array(G).fill(1);
+        const put = (w, i, status, inBig) => { at.set(i * 16 + status, ws.length); ws.push([w, i, status, inBig]); };
         for (let i = 0; i < G; i++) {
           const g = goals[i];
           if (!wanted(S.g[i]) || g.si !== si) continue;
           // a rolled modifier of the group of a Desecrated or crafted-only target is known as such (bones, essences and alloys are too dear to waste)
-          if (g.kind !== 'nat') { if (s.low[i] > 0) ws.push([s.low[i], i, BLOCKED, false]); continue; }
+          if (g.kind !== 'nat') { if (s.low[i] > 0) put(s.low[i], i, BLOCKED, false); continue; }
           // an unknown modifier is of the target's group, or stops it with its tags, with some chance: then it cannot roll
           const inBig = !!(s.big && s.big.has.has(i));
           const beta = unblocked(S, i, floor, inBig);
-          if (s.ok[i] > 0) ws.push([s.ok[i] * beta, i, NATURAL, inBig]);
-          if (s.nearW[i] > 0) ws.push([s.nearW[i] * beta, i, NATURAL + NEAR, inBig]);
-          if (followed[i] && s.low[i] > 0) ws.push([s.low[i], i, BLOCKED, false]);
+          betas[i] = beta;
+          if (s.ok[i] > 0) put(s.ok[i] * beta, i, NATURAL, inBig);
+          if (s.nearW[i] > 0) put(s.nearW[i] * beta, i, NATURAL + NEAR, inBig);
+          if (followed[i] && s.low[i] > 0) put(s.low[i], i, BLOCKED, false);
           // (what keeps the target out keeps its twin of another element out as well: they are of one group)
-          if (S.g[i] === ABSENT && s.twin[i] > 0) ws.push([s.twin[i] * beta, i, TWIN, false]);
+          if (S.g[i] === ABSENT && s.twin[i] > 0) put(s.twin[i] * beta, i, TWIN, false);
+        }
+        // a modifier that is something for two targets has one status: the others' weights lose it (see stats, multi)
+        for (const roles of s.multi) {
+          let win = -1;
+          const live = roles.map(([i, kind], k) => {
+            const g = goals[i];
+            const on = wanted(S.g[i]) && (kind === 3 ? g.kind !== 'nat' || followed[i] : g.kind === 'nat' && (kind !== 2 || S.g[i] === ABSENT));
+            if (on && (win < 0 || kind < roles[win][1])) win = k;
+            return on;
+          });
+          for (let k = 0; k < roles.length; k++) {
+            if (!live[k] || k === win) continue;
+            const [i, kind, a, b] = roles[k];
+            const cut = (status, w) => { const q = at.get(i * 16 + status); if (q !== undefined && w > 0) ws[q][0] = Math.max(0, ws[q][0] - w); };
+            if (kind === 0) { cut(NATURAL, a * betas[i]); cut(NATURAL + NEAR, b * betas[i]); } else if (kind === 2) cut(TWIN, a * betas[i]); else cut(BLOCKED, a);
+          }
         }
         // a modifier of this side that stops a wanted target of the other side: [share of the anonymous ones, target]
         const xs = [];
-        if (TRACK && s.J > 0) for (let k = 0; k < G; k++) if (goals[k].si !== si && goals[k].kind === 'nat' && S.g[k] === ABSENT && s.cross[k] > 0) xs.push([Math.min(1, s.cross[k] / s.J), k]);
+        if (TRACK && s.J > 0) for (let k = 0; k < G; k++) if (goals[k].si !== si && S.g[k] === ABSENT && s.cross[k] > 0) xs.push([Math.min(1, s.cross[k] / s.J), k]);
         sides.push({ si, cs, ws, xs });
       }
       if (!sides.length) return [];
@@ -1152,7 +1183,7 @@
       // (S.pd: of those, the desecrated-only ones of an Omen of Putrefaction: they take list entries, not base modifiers)
       const unk = S.kx ? 0 : Math.max(0, unknown(S, si) - (S.pd || 0));
       const s = stats(si, floor, 1, S.u & R_ALDUR, tagMask(S), presentMask(S, si)); // (the Well of Souls does not offer a rune's pool: open test t33)
-      const tm = tagMask(S);
+      const tm = tagMask(S), tm0 = tm;
       const want = [];
       for (let i = 0; i < G; i++) {
         const g = goals[i];
@@ -1161,7 +1192,10 @@
           const hit = (e) => e.fam === g.fam && fits(g, e);
           const c = ex.filter(hit).length, cl = ll ? ll.filter(hit).length : 0;
           const gone = S.px ? 0 : S.pd || 0;
-          if (c || cl) want.push({ i, des: true, c, cl, hit, grp: g.grp, share: pv[i], all: listFor(ex, hit, si, unk, g.grp, gone), lich: ll ? listFor(ll, hit, si, unk, g.grp, gone) : null });
+          // (xb: the chance that no modifier of the other side is of the target's group; with the sides followed that is a state)
+          let xb = 1;
+          if (!TRACK) { const m = unknown(S, 1 - si); if (m) { const sx = stats(1 - si, floor || 0, 1, S.u, tm0, presentMask(S, 1 - si)); if (sx.W > 0 && sx.cross[i] > 0) xb = Math.pow(1 - Math.min(1, sx.cross[i] / sx.W), m); } }
+          if (c || cl) want.push({ i, des: true, c, cl, hit, grp: g.grp, xb, share: pv[i], all: listFor(ex, hit, si, unk, g.grp, gone), lich: ll ? listFor(ll, hit, si, unk, g.grp, gone) : null });
         } else if (g.kind === 'nat' && !g.noWell && s.ok[i] + s.nearW[i] > 0) {
           const beta = unblocked(S, i, floor, !!(s.big && s.big.has.has(i)));
           // (what is left of the modifiers nobody knows next to the ones on the item, as a share: see mix)
@@ -1199,7 +1233,7 @@
         const lichFirst = ll && ll.length ? 1 : 0;
         const exDraws = Math.min(Math.max(0, nEx - lichFirst), Math.max(0, ex.length - lichFirst));
         const normDraws = 3 - lichFirst - exDraws;
-        let rem = 1, nd = 0, before = 0;
+        let rem = 1, nd = 0, before = 0, took = 0;
         for (const wnt of want) {
           let off;
           if (wnt.des) {
@@ -1215,10 +1249,11 @@
               alive *= 1 - p - k;
             }
             // (one of the first nd is offered with chance `any`: this one is taken when none of those before it is)
-            off = Math.max(0, any - before);
+            off = Math.max(0, any - before) * wnt.xb;
             pick[wnt.i] += chances[k] * off;
             before = Math.max(before, any);
-            rem = 1 - before;
+            took += off;
+            rem = 1 - took;
             continue;
           } else {
             // (the desecrated-only options are drawn before the base ones: one of the target's own group ends its
@@ -1248,8 +1283,21 @@
     const revealed = (S1, si, i, status) => { const S2 = addRolled(S1, i, si, status); if (i < 0) { S2.j[si]--; S2.dj = si + 1; } return S2; };
 
     // ---- edges
+    /** The share of target k's twins (by weight) that a Flux to element `to` turns: all but those of that element itself. */
+    const turnedMemo = new Map();
+    function turnedBy(k, to) {
+      const key = k + '|' + to;
+      if (!turnedMemo.has(key)) {
+        const own = to === 'chaos' ? null : new RegExp('^' + to + 'resistance$', 'i');
+        let all = 0, off = 0;
+        for (const e of P.sidePool(ctx, goals[k].side, 0)) if (conv[k].src.has(e.id)) { all += e.w; if (!(own && own.test(e.fam))) off += e.w; }
+        turnedMemo.set(key, all > 0 ? off / all : 1);
+      }
+      return turnedMemo.get(key);
+    }
     const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FSN, ad: AD0, aw: 0, kx: 0, kf: 0, fl: 0, ct: 0, cy: 0, cu: 0 };
     const RESTART = -1; // edge target: a fresh white base (its value is solved as one number, see solve)
+    let hasLost = false; // (some node has a step that locks the item: see lostArmed)
     // (a finished item that is locked: one node for all of them)
     const FINISHED = (() => { const n = cp(N0); n.r = 2; for (let i = 0; i < G; i++) n.g[i] = goals[i].kind === 'des' ? DESECRATED : NATURAL; return n; })();
     /** "A random modifier goes and a random one comes" (no minimum modifier level): [[chance, node]]. */
@@ -1356,30 +1404,53 @@
       base.r = 2; base.u = S.u; base.fs = S.fs; base.ad = S.ad; base.kf = S.kf; base.fj = S.fj;
       if (S.fg >= 0) { base.fg = S.fg; base.g[S.fg] = S.g[S.fg]; }
       for (let i = 0; i < G; i++) if (base.g[i] === ABSENT && (goals[i].kind === 'ess' || goals[i].rune || goals[i].noWell)) return 0;
-      let dist = new Map([[keyOf(base), [1, base]]]), first = true;
+      // What is followed of the Well's lists is kept as small as the answer allows. On an amulet (11 and 20 entries)
+      // every item that differed in what its misses had taken off either list was a state of its own: a network of
+      // 1,600 nodes took 19 seconds where it takes a fifth of one without the omen, and a large one neither ended
+      // nor fitted in memory. So:
+      //  - an item that cannot be finished any more (a target missing on a side with no reveal left for it) is
+      //    dropped at once, and one that is finished is not revealed further;
+      //  - the entries a miss takes off its own side's list are followed only while a target of that side is missing
+      //    and another reveal of the side follows (S.px);
+      //  - what a prefix takes off the suffixes' list (S.py) is all that the second side is told of the first.
+      const other = desList(1, floor, null);
+      const ids = (x) => (x && x.size ? [...x].sort().join(',') : '');
+      const key = (S2) => keyOf(S2) + '|' + (S2.pd || 0) + '|' + ids(S2.px) + '|' + ids(S2.py);
+      const lacks = (S2, si) => { let n = 0; for (let i = 0; i < G; i++) if (goals[i].si === si && !met(S2.g[i])) n++; return n; };
+      const merged = (list, change) => { const m = new Map(); for (const [p, Sa] of list) { change(Sa); const k = key(Sa), old = m.get(k); if (old) old[0] += p; else m.set(k, [p, Sa]); } return m; };
+      let dist = new Map([[key(base), [1, base]]]), first = true;
       for (let si = 0; si < 2; si++) {
         for (let guard = 0; guard < 6; guard++) {
+          if (late()) return 0;
           const next = new Map();
           let any = false;
-          const put = (p, S2) => { if (!(p > 0)) return; const k = keyOf(S2) + '|' + (S2.pd || 0) + '|' + (S2.px ? [...S2.px].sort().join(',') : ''), old = next.get(k); if (old) old[0] += p; else next.set(k, [p, S2]); };
+          const put = (p, S2) => { if (!(p > 0)) return; const k = key(S2), old = next.get(k); if (old) old[0] += p; else next.set(k, [p, S2]); };
           for (const [p, Sa] of dist.values()) {
-            if (open(Sa, si) < 1) { put(p, Sa); continue; }
+            const room = open(Sa, si);
+            if (room < 1 || done(Sa)) { put(p, Sa); continue; }
             any = true;
+            const need = lacks(Sa, si), follow = need > 0 && room > 1;
             let taken = null;
             for (const [q, i, status] of reveal(Sa, si, floor, null, echoes && first)) {
-              if (i >= 0) { const S2 = addRolled(Sa, i, si, status); S2.pd = Sa.pd || 0; S2.px = Sa.px; put(p * q, S2); continue; }
+              if (i >= 0) {
+                const S2 = addRolled(Sa, i, si, status);
+                S2.pd = Sa.pd || 0; S2.px = Sa.px; S2.py = Sa.py;
+                if (lacks(S2, si) <= room - 1) put(p * q, S2);
+                continue;
+              }
               // no target among the three: a desecrated-only modifier that takes entries off the Well's list of this
               // side, or a base modifier (missTaken)
+              if (need > room - 1) continue; // (the reveal was the last one a missing target of this side had)
               if (!taken) { const l0 = desFor(Sa, si, floor, null); taken = missTaken(Sa, si, Sa.px ? l0.filter((e) => !Sa.px.has(e.id)) : l0); }
-              for (const [pm, ids, grp] of taken) {
+              for (const [pm, off, grp] of taken) {
                 const S2 = cp(Sa);
                 S2.j[si]++;
-                if (ids) {
-                  S2.pd = (Sa.pd || 0) + 1; S2.px = new Set(Sa.px || []);
-                  for (const id of ids) S2.px.add(id);
+                S2.pd = (Sa.pd || 0) + (off ? 1 : 0); S2.px = Sa.px; S2.py = Sa.py;
+                if (off) {
+                  if (follow) { S2.px = new Set(Sa.px || []); for (const id of off) S2.px.add(id); }
                   // (no group twice on an item, whatever the side: the other side's list loses its entries of these groups)
-                  if (si === 0) for (const f of desList(1, floor, null)) if (f.grp.some((x) => grp.includes(x))) S2.px.add(f.id);
-                } else { S2.pd = Sa.pd || 0; S2.px = Sa.px || new Set(); }
+                  if (si === 0) for (const f of other) if (f.grp.some((x) => grp.includes(x)) && !(S2.py && S2.py.has(f.id))) { if (S2.py === Sa.py) S2.py = new Set(Sa.py || []); S2.py.add(f.id); }
+                }
                 put(p * q * pm, S2);
               }
             }
@@ -1387,9 +1458,11 @@
           dist = next;
           if (!any) break;
           first = false;
+          // (more kinds of item than can be followed: the lists are counted from here on, not followed: S.pd)
+          if (dist.size > 3000) dist = merged(dist.values(), (Sa) => { Sa.px = null; });
         }
-        // (the other side: none of its modifiers is on the item yet; what the first side took off its list stays off)
-        for (const e of dist.values()) e[1].pd = 0;
+        // the other side: none of its modifiers is on the item yet; its list is without what the first side took off it
+        dist = merged([...dist.values()].filter(([, Sa]) => lacks(Sa, si) <= open(Sa, si)), (Sa) => { Sa.pd = 0; Sa.px = Sa.py && Sa.py.size ? Sa.py : null; Sa.py = null; });
       }
       let p = 0;
       for (const [q, Sa] of dist.values()) if (done(Sa)) p += q;
@@ -1454,7 +1527,7 @@
       if (keyOf(S) !== keyOf(N0)) push({ op: 'newbase' }, baseCost, [[1, RESTART]]);
       // ---- steps that lock the item (Corrupted or Sanctified): it is finished then, or lost and a new base is due.
       // `lost`: the step with the chance p of finishing; the base of the other case is in its cost and its counts.
-      const lost = (a, cost, p) => { if (p > 1e-12) push(Object.assign(a, { bases: 1 - p, also: [['New base', 1 - p]] }), cost + (1 - p) * baseCost, p < 1 ? [[p, FINISHED], [1 - p, RESTART]] : [[1, FINISHED]]); };
+      const lost = (a, cost, p) => { if (p > 1e-12) hasLost = true; if (p > 1e-12) push(Object.assign(a, { bases: 1 - p, also: [['New base', 1 - p]] }), cost + (1 - p) * baseCost, p < 1 ? [[p, FINISHED], [1 - p, RESTART]] : [[1, FINISHED]]); };
       if (S.r === 2) {
         // Vaal Orb: one of four things, each as likely: nothing, a corruption enchantment, a socket (a jewel: a
         // modifier added past the limit or one removed), or one to three times "a random modifier goes and a random
@@ -1714,7 +1787,25 @@
         if (harm) continue;
         const S1 = cp(S);
         for (const i of is) S1.g[i] = NATURAL;
-        push({ op: 'flux', to }, conv[is[0]].price, [[1, S1]]);
+        // The twin kept for another resistance target is turned as well, unless it is of this Flux's own element (Void
+        // Flux turns all three): it is then a second modifier of this Flux's resistance, one nobody asked for, and the
+        // other target has no twin any more. (The route took the first Flux for one target and promised the second
+        // one for the other: 48 ex promised where the item was worth 1,070.)
+        let outs = [[1, S1]];
+        for (let k = 0; k < G; k++) {
+          if (S.g[k] !== TWIN || is.includes(k) || !conv[k] || conv[k].via !== 'flux' || S.fg === k) continue;
+          const sh = turnedBy(k, to);
+          if (!(sh > 0)) continue;
+          const next = [];
+          for (const [p, Sa] of outs) {
+            const Sb = cp(Sa);
+            Sb.g[k] = ABSENT; junkAt(Sb, goals[k].si, goalLvl[k]);
+            next.push([p * sh, Sb]);
+            if (sh < 1) next.push([p * (1 - sh), Sa]);
+          }
+          outs = next;
+        }
+        push({ op: 'flux', to }, conv[is[0]].price, outs);
       }
       if (ALD && !(S.u & R_ALDUR)) {
         const is = [];
@@ -1726,7 +1817,13 @@
           const S1 = sk.S;
           S1.u |= R_ALDUR;
           for (const i of is) S1.g[i] = NATURAL;
-          push(Object.assign({ op: 'aldur', item: ALD.rune }, sk.pre ? { pre: sk.pre } : null), ALD.price + sk.cost, [[1, S1]]);
+          // (an essence's own modifier of another element is turned as well: it is no longer the tool's modifier the
+          // node knew it as. A staff's "Gain % of Damage as Extra Cold Damage" became Extra Fire, and the finished
+          // item had no node.)
+          const turns = (si, kind) => { const m = kind === 1 && TOOL[si] ? TOOL[si].mod : kind === 2 && FILL[si] ? FILL[si].mod : null; if (!m) return false; const t = P.aldurTwin(ctx, m, ALD.to); return !!t && t !== m; };
+          if (S1.cx && turns(S1.cx - 1, S1.ct)) S1.ct = 0;
+          if (S1.cy && turns(S1.cy - 1, S1.cu)) S1.cu = 0;
+          push(Object.assign({ op: 'aldur', item: ALD.rune }, sk.pre ? { pre: sk.pre } : null), ALD.price + sk.cost, [[1, canon(S1)]]);
         }
       }
       // Orb of Extraction: the item is destroyed and its augments come back, all but the socket-bound ones (Serle's
@@ -1851,11 +1948,12 @@
       // a modifier whose tags stop a target of the other side (known for the pasted item; rolled ones are averaged or
       // followed). Not a target that is on the item: what its tags stop is out of the pools while it is there
       // (tagMask), and what a twin stops is counted with the twin (twinStops).
+      // (and one that is of a target's group: no group twice on an item, whatever the side)
       if (known) for (const m of st.mods) {
-        if (!m.id || !kb.mods[m.id] || !kb.mods[m.id].at || m.unrevealed) continue;
+        if (!m.id || !kb.mods[m.id] || m.unrevealed) continue;
         if (role.get(m) === 1 || (known === 2 && role.get(m) === 2)) continue;
-        const si = m.side === 'prefix' ? 0 : 1;
-        for (let k = 0; k < G; k++) if (S.g[k] === ABSENT && goals[k].si !== si && stops(m.id, k)) S.g[k] = XBLOCKED;
+        const si = m.side === 'prefix' ? 0 : 1, tags = !!kb.mods[m.id].at;
+        for (let k = 0; k < G; k++) if (S.g[k] === ABSENT && goals[k].si !== si && ((tags && stops(m.id, k)) || (goals[k].grp.length && m.fam !== goals[k].fam && (m.grp || []).some((x) => goals[k].grp.includes(x))))) S.g[k] = XBLOCKED;
       }
       return S;
     }
@@ -2283,13 +2381,20 @@
     // rule set it makes then, "spend the lock with a Divine Orb until a currency shows the perfect result", is one
     // that the rounds after it take for ever to leave.
     let lockArmed = false;
+    // The steps that lock an item (Vaal Orb, Sanctification, Putrefaction: the item is finished or lost) come in once
+    // the rule set without them has settled roughly, for the same reason. While the first rounds' values are far
+    // off, "lose the item nearly always, for a few Exalted Orbs" can look better than every other edge: a bow's rule
+    // set became one that finishes an item once in 1e15 tries, and stayed there.
+    let lostArmed = false;
+    const locks = (a) => a.bases != null && a.op !== 'extraction' && a.op !== 'lock' && a.op !== 'newbase';
     /** Improve the rule set until no node has a cheaper edge (it starts from the rule set of the last solve). */
     function solve(exact) {
+      if (exact !== false && hasLost && !lostArmed) { improve(exact, true); lostArmed = true; }
       improve(exact);
       if (exact !== false && LOCK != null && !lockArmed && !timedOut && LOCK < baseCost + charge + x) { lockArmed = true; improve(exact); }
       sol = null;
     }
-    function improve(exact) {
+    function improve(exact, roughOnly) {
       // exact === false: a probe of the search for the base charge. It only has to tell on which side of the limit the
       // charge lands, so it stops when the roughly valued rule set has all but settled.
       // While many nodes still change their edge, the rule set is valued roughly (a few passes over the blocks) and
@@ -2336,7 +2441,7 @@
             let best = pol[s], bq = qOf(s, list[pol[s]]);
             // against rough values an edge must be clearly cheaper to be taken (else the rule set flutters)
             const slack = (rough ? 1e-6 : 1e-9) * (1 + Math.abs(bq));
-            for (let a = 0; a < list.length; a++) { if (a === pol[s]) continue; const v = qOf(s, list[a]); if (v < bq - slack) { bq = v; best = a; } }
+            for (let a = 0; a < list.length; a++) { if (a === pol[s] || (!lostArmed && locks(list[a].a))) continue; const v = qOf(s, list[a]); if (v < bq - slack) { bq = v; best = a; } }
             if (best !== pol[s]) { pol[s] = best; changed++; }
             continue;
           }
@@ -2345,7 +2450,7 @@
           let best = held ? -1 : pol[s], bq = held ? Infinity : qOf(s, list[pol[s]]);
           const slack = (rough ? 1e-6 : 1e-9) * (1 + Math.abs(held ? V[s] : bq));
           for (let a = 0; a < list.length; a++) {
-            if (a === li) continue;
+            if (a === li || (!lostArmed && a !== pol[s] && locks(list[a].a))) continue;
             const v = a === pol[s] ? bq : qOf(s, list[a]);
             qs[a] = v;
             if (a !== pol[s] && v < bq - (best < 0 ? 0 : slack)) { bq = v; best = a; }
@@ -2356,7 +2461,7 @@
         }
         last = changed;
         if (exact === false && changed <= N / 2000) break;
-        if (!changed) { if (!rough) break; rough = false; }
+        if (!changed) { if (!rough || roughOnly) break; rough = false; }
       }
     }
     /**
