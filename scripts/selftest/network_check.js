@@ -86,7 +86,10 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
   const st0 = P.toState(ctx, input.item, input.locks);
   let sum = 0, sq = 0, done = 0, steps = 0, off = 0, refused = 0, detours = 0;
   // why a step was refused, and why another one was used in its place: reason -> how often
-  const whyOf = new Map(), detourWhy = new Map();
+  const whyOf = new Map(), detourWhy = new Map(), endWhy = new Map(), futileWhy = new Map();
+  let futile = 0;
+  // what an item looks like, in a few words (for the reasons a craft did not end)
+  const look = (st) => { const c = (f) => st.mods.filter(f).length; return `${st.rarity} ${c((m) => m.side === 'prefix')}/${c((m) => m.side === 'suffix')}${c((m) => m.crafted) ? ' crafted ' + c((m) => m.crafted) : ''}${c((m) => m.des && !m.unrevealed) ? ' desecrated ' + c((m) => m.des && !m.unrevealed) : ''}${c((m) => m.unrevealed) ? ' hidden' : ''}${c((m) => m.frac) ? ' fractured' : ''}${st.aldur ? ' aldur' : ''}${(st.tags || []).length ? ' pool rune' : ''}${st.xCrafted ? ' astrid' : ''}${st.xSuffix ? ' serle' : ''}`; };
   const note = (m, a, text) => { const k = `${a.op}${a.item ? ' ' + a.item : ''}: ${text}`; m.set(k, (m.get(k) || 0) + 1); };
   for (let n = 0; n < runs; n++) {
     if (until && (n & 15) === 0 && n >= 200 && Date.now() > until) break;
@@ -95,6 +98,8 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
     let st = { ...st0, mods: st0.mods.map((m) => ({ ...m })) };
     let cost = 0, k = 0, ok = false, lastA = null;
     from = -1;
+    // how often a node's step was used on the item in hand (see "futile" below)
+    const used = new Map();
     for (; k < maxSteps; k++) {
       // a locked item (Corrupted or Sanctified) is finished when every target is on it, else it is lost: a new base
       // (which the step that locked it has paid for)
@@ -112,10 +117,31 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
       if (node < 0 && audit && from >= 0) (audit.offs = audit.offs || []).push({ from, a: lastA, state: net.stateOf ? JSON.stringify(net.stateOf(st, false)) : '', item: st.rarity + ' ' + st.mods.map((m) => `${m.side[0]}:${m.unrevealed ? '(hidden)' : m.fam}${m.tier ? ' T' + m.tier : ''}${m.frac ? '(F)' : ''}${m.des ? '(D)' : ''}${m.crafted ? '(C)' : ''}`).join(', ') });
       from = node;
       // (an item with every target on it is finished, also one the network has no node for: what else is on it does not matter any more)
-      if (node < 0) { if (net.finished && net.finished(st)) { ok = true; break; } off++; break; }
+      if (node < 0) { if (net.finished && net.finished(st)) { ok = true; break; } off++; note(endWhy, lastA || { op: 'start' }, 'left the network as ' + look(st)); break; }
       if (net.done(node)) { ok = true; break; }
       let step = net.step(node);
-      if (!step) break;
+      if (!step) { note(endWhy, lastA || { op: 'start' }, 'no step for ' + look(st)); break; }
+      // Futile: a step that should have added a target by now with all but one chance in ten thousand, and has not.
+      // In a network that does not follow every target's blockers, an item can hold a modifier in a target's way that
+      // its node does not know (a lower tier of the target): the route takes bone after bone, the Well never offers
+      // the target, and the craft never ends (4 of 500 on a ring). The page builds the route again from every pasted
+      // item and sees the modifier; the play, which keeps one network, gives the item up for a new base instead and
+      // counts it (the base is paid for).
+      if (step.a.op === 'newbase') used.clear();
+      else {
+        const h = net.hit(node);
+        if (h > 0) {
+          const c = (used.get(node) || 0) + 1;
+          used.set(node, c);
+          if (c >= 8 && Math.pow(1 - h, c) < 1e-4) {
+            futile++; note(futileWhy, step.a, `${c} uses on ${look(st)}`);
+            st = P.apply(ctx, st, { op: 'newbase' }, r).state; st.destroyed = false;
+            cost += net.price('New base') || 0;
+            used.clear(); from = -1;
+            continue;
+          }
+        }
+      }
       // A step the rules refuse on this very item, where the network's node does not know what is in a target's way
       // (not every target's blockers are followed in a large network): the player sees the item and takes the next
       // cheapest step the rules allow. Counted as a detour, with the reason; the cost shows what it does to the promise.
@@ -193,12 +219,13 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
       }
     }
     if (ok) { done++; sum += cost; sq += cost * cost; }
+    else if (k >= maxSteps) note(endWhy, lastA || { op: 'start' }, `not finished within ${maxSteps} uses`);
     steps += k;
   }
   const mean = done ? sum / done : NaN;
   const sd = done > 1 ? Math.sqrt(Math.max(0, sq / done - mean * mean)) : 0;
   const top = (m) => [...m.entries()].sort((x, y) => y[1] - x[1]).slice(0, 3).map(([k, c]) => `${c}x ${k}`);
-  return { mean, se: done ? sd / Math.sqrt(done) : NaN, sd, done, steps: steps / Math.max(1, played), off, refused, runs: played, detours, why: top(whyOf), detourWhy: top(detourWhy) };
+  return { mean, se: done ? sd / Math.sqrt(done) : NaN, sd, done, steps: steps / Math.max(1, played), off, refused, runs: played, detours, why: top(whyOf), detourWhy: top(detourWhy), endWhy: top(endWhy), futile, futileWhy: top(futileWhy) };
 }
 
 function check(sc, runs, seed, tol) {

@@ -298,7 +298,7 @@ function runOne(sc, runs, withRivals, deep, limitMs) {
   const ratio = got.mean / want, z = (got.mean - want) / (got.se || 1);
   Object.assign(out, { nodes: net.N, lite: net.lite || 0, runs: got.runs, asked: n, uses: got.steps, network: want, played: got.mean, se: got.se, ratio, z, done: got.done, off: got.off,
     // refused: steps of the route that the simulator's rules do not allow (the network and the rules disagree)
-    refused: got.refused || 0, why: got.why || [], detours: got.detours || 0, detourWhy: got.detourWhy || [], track: net.track, classes: net.classes, whittle: net.whittle, settled: net.settled !== false,
+    refused: got.refused || 0, why: got.why || [], detours: got.detours || 0, detourWhy: got.detourWhy || [], endWhy: got.endWhy || [], futile: got.futile || 0, futileWhy: got.futileWhy || [], track: net.track, classes: net.classes, whittle: net.whittle, settled: net.settled !== false,
     pass: got.done === got.runs && got.off === 0 && !got.refused && net.settled !== false && (Math.abs(ratio - 1) <= 0.15 || Math.abs(z) <= 3) });
   if (withRivals) {
     const b = rivals(sc, input);
@@ -355,7 +355,7 @@ if (require.main === module) {
     '| Class | Scenarios | Agree | Do not | Outside | Errors |', '|---|---|---|---|---|---|',
     ...[...byCls.entries()].sort().map(([c, v]) => `| ${c} | ${v.n} | ${v.ok} | ${v.bad} | ${v.skip} | ${v.err} |`), '',
     'Outside the network: ' + ([...skipWhy.entries()].map(([k, v]) => `${k} (${v})`).join(', ') || 'none'), '');
-  if (bad.length) lines.push('### Promise and play disagree', '', ...bad.sort((a, b) => Math.abs(b.ratio - 1) - Math.abs(a.ratio - 1)).slice(0, 25).map((r) => `- ${r.id}: promised ${r.network.toFixed(1)}, played ${isFinite(r.played) ? r.played.toFixed(1) : '—'} (x${isFinite(r.ratio) ? r.ratio.toFixed(2) : '—'}), ${r.nodes} nodes${r.off ? ', ' + r.off + ' runs left the network' : ''}${r.refused ? ', ' + r.refused + ' steps the rules refuse (' + (r.why || []).join('; ') + ')' : ''}${r.detours ? ', ' + r.detours + ' detours' : ''}${r.settled === false ? ', values not settled' : ''}${r.done < r.runs ? ', ' + (r.runs - r.done) + ' unfinished' : ''}`), '');
+  if (bad.length) lines.push('### Promise and play disagree', '', ...bad.sort((a, b) => Math.abs(b.ratio - 1) - Math.abs(a.ratio - 1)).slice(0, 25).map((r) => `- ${r.id}: promised ${r.network.toFixed(1)}, played ${isFinite(r.played) ? r.played.toFixed(1) : '—'} (x${isFinite(r.ratio) ? r.ratio.toFixed(2) : '—'}), ${r.nodes} nodes${r.off ? ', ' + r.off + ' runs left the network' : ''}${r.refused ? ', ' + r.refused + ' steps the rules refuse (' + (r.why || []).join('; ') + ')' : ''}${r.detours ? ', ' + r.detours + ' detours' : ''}${r.futile ? ', ' + r.futile + ' items given up as futile' : ''}${r.settled === false ? ', values not settled' : ''}${r.done < r.runs ? ', ' + (r.runs - r.done) + ' unfinished' + ((r.endWhy || []).length ? ' (' + r.endWhy.join('; ') + ')' : '') : ''}`), '');
   // steps the rules refused on the item in hand, where another step was taken (the node did not know what was in a target's way)
   const detoured = out.filter((r) => r.detours > 0);
   if (detoured.length) {
@@ -364,6 +364,10 @@ if (require.main === module) {
     lines.push('### Detours', '', `${detoured.length} scenarios took another step where the rules refused the route's on the item in hand (${detoured.reduce((x, r) => x + r.detours, 0).toLocaleString('en-US')} times in all):`,
       ...[...reasons.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, c]) => `- ${c.toLocaleString('en-US')}x ${k}`), '');
   }
+  // items given up because a step that should long have worked had not (a blocker the node does not know)
+  const gaveUp = out.filter((r) => r.futile > 0);
+  if (gaveUp.length) lines.push('### Items given up as futile', '', `${gaveUp.length} scenarios (${gaveUp.reduce((x, r) => x + r.futile, 0).toLocaleString('en-US')} items in ${gaveUp.reduce((x, r) => x + r.runs, 0).toLocaleString('en-US')} crafts): a step that should have added a target with all but one chance in ten thousand had not; the item holds a modifier in the target's way that its node does not know.`,
+    ...gaveUp.sort((a, b) => b.futile / b.runs - a.futile / a.runs).slice(0, 6).map((r) => `- ${r.id}: ${r.futile} in ${r.runs} crafts, track ${r.track}, ${r.whittle} (${(r.futileWhy || []).slice(0, 2).join('; ')})`), '');
   if (cheaper.length) lines.push('### An old route is cheaper', '', ...cheaper.sort((a, b) => a.rival / a.network - b.rival / b.network).slice(0, 25).map((r) => `- ${r.id}: network ${r.network.toFixed(1)}, old route ${r.rival.toFixed(1)} (${JSON.stringify(r.rivalParams)}: ${r.rivalRoute.join(', ')})`), '');
   if (errors.length) lines.push('### Errors', '', ...errors.slice(0, 15).map((r) => `- ${r.id}: ${r.error}`), '');
   const text = lines.join('\n');

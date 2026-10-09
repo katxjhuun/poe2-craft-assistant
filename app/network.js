@@ -1474,6 +1474,12 @@
       if (S.ad > 0) { const n = cp(S); n.ad--; return { S: n, cost: artificer, pre: { op: 'artificer' } }; }
       return null;
     }
+    // Memory: a network of 140,000 nodes has three and a half million edges. The step of an edge ({op, tier, side,
+    // ...}) is one of a few hundred: every edge with the same step shares one object (`same`), and an edge that is
+    // the same at every node (a new base, an Orb of Extraction, a Putrefaction with its chance) is one object for all
+    // of them (`shared`). Ten of 64 processes of a deep run ended at their 3.5 GB.
+    const stepPool = new Map(), edgePool = new Map();
+    const same = (a) => { const k = JSON.stringify(a); let x = stepPool.get(k); if (!x) { stepPool.set(k, a); x = a; } return x; };
     function expand(sIdx) {
       const S = states[sIdx];
       const list = [];
@@ -1488,7 +1494,7 @@
         const out = [];
         for (const [t, p] of m) out.push(p / tot, t);
         if (out.length === 2 && out[1] === sIdx) return; // changes nothing
-        list.push({ a, cost, out });
+        list.push({ a: same(a), cost, out });
       };
       /** A rolled modifier's node: one nobody asked for, or one in a target's way, arrives with the class of its level (a node per class under the item's). */
       const arrive = (S1, p, i, si, status, floor, out) => {
@@ -1524,10 +1530,16 @@
         if (PR.alchemy != null) { const R0 = cp(S); R0.r = 2; push({ op: 'alchemy' }, PR.alchemy, rolledN(R0, 4, openMask, 0)); } // Rare with four modifiers
         return;
       }
-      if (keyOf(S) !== keyOf(N0)) push({ op: 'newbase' }, baseCost, [[1, RESTART]]);
+      /** An edge that does not depend on the node: made once (make pushes it), then the same object for every node. */
+      const shared = (key, make) => { const e = edgePool.get(key); if (e) { list.push(e); return; } const n = list.length; make(); if (list.length > n) edgePool.set(key, list[list.length - 1]); };
+      if (keyOf(S) !== keyOf(N0)) shared('newbase', () => push({ op: 'newbase' }, baseCost, [[1, RESTART]]));
       // ---- steps that lock the item (Corrupted or Sanctified): it is finished then, or lost and a new base is due.
       // `lost`: the step with the chance p of finishing; the base of the other case is in its cost and its counts.
-      const lost = (a, cost, p) => { if (p > 1e-12) hasLost = true; if (p > 1e-12) push(Object.assign(a, { bases: 1 - p, also: [['New base', 1 - p]] }), cost + (1 - p) * baseCost, p < 1 ? [[p, FINISHED], [1 - p, RESTART]] : [[1, FINISHED]]); };
+      const lost = (a, cost, p) => {
+        if (!(p > 1e-12)) return;
+        hasLost = true;
+        shared(JSON.stringify(a) + '|' + cost + '|' + p, () => push(Object.assign(a, { bases: 1 - p, also: [['New base', 1 - p]] }), cost + (1 - p) * baseCost, p < 1 ? [[p, FINISHED], [1 - p, RESTART]] : [[1, FINISHED]]));
+      };
       if (S.r === 2) {
         // Vaal Orb: one of four things, each as likely: nothing, a corruption enchantment, a socket (a jewel: a
         // modifier added past the limit or one removed), or one to three times "a random modifier goes and a random
@@ -1831,7 +1843,7 @@
       // Astrid's Creativity is the one the network sockets that comes back: giving the item up this way costs the orb
       // and returns the rune for the next base.
       if (EXTRACT != null && AST && AST.price != null && (S.u & R_ASTRID)) {
-        push({ op: 'extraction', bases: 1, also: [['New base', 1], [AST.item, -1]] }, EXTRACT + baseCost - AST.price, [[1, RESTART]]);
+        shared('extraction', () => push({ op: 'extraction', bases: 1, also: [['New base', 1], [AST.item, -1]] }, EXTRACT + baseCost - AST.price, [[1, RESTART]]));
       }
       // runes that open a slot or a pool
       for (const [R, bit] of [[AST, R_ASTRID], [SER, R_SERLE], [POOL, R_POOL]]) {
@@ -1982,6 +1994,8 @@
     }
     const N = states.length;
     timing.expand = Date.now() - tick; tick = Date.now();
+    // (the tables that only the edges were made from: hundreds of megabytes on a large network)
+    statCache.clear(); afterMemo.clear(); putMemo.clear(); offMemo.clear(); stepPool.clear(); edgePool.clear();
 
     // ---- solve: for every node the cheapest edge on average
     // Nodes are solved in blocks that share rarity stage, targets and fracture: the long loops (roll, miss, roll again)
@@ -2929,20 +2943,26 @@
       // Four targets or more: the networks are large (a minute to solve and fit), so the small one (no blockers
       // followed) says whether the omen is worth having, also under the base limit, where more is repaired. If it is,
       // the levels are followed in as large a network as fits; if not, the large network is solved without the omen.
-      const pre = build(Object.assign({}, input, { lite: 0, track: 0, maxStates: 150000, whittle: 'best' }));
+      // (The small one is let go before the next is built: both at once were more than a process's memory.)
+      let pre = build(Object.assign({}, input, { lite: 0, track: 0, maxStates: 150000, whittle: 'best' }));
       if (!bad(pre)) {
         let hint = 0, uses = pre.usesIdeal();
         if (baseLimit > 0 && !pre.done(pre.start)) { hint = fit(pre) > 0 ? pre.giveUp : 0; uses = uses || pre.usesIdeal(); }
-        const got = uses ? withLevels(pre, hint) : null;
+        const from = { N: pre.N, track: pre.track };
+        pre = null;
+        const got = uses ? withLevels(from, hint) : null;
         return got || done(full('none', hint));
       }
+      pre = null;
     }
-    const net = full('best');
+    let net = full('best');
     if (bad(net)) return { net, charge: 0 };
     // (a route that uses the omen is solved again: fitting the base limit to this network first would be time lost)
     let hint = 0;
     if (!net.usesIdeal()) { const c = fit(net); if (!net.usesIdeal()) return { net, charge: c }; hint = c > 0 ? net.giveUp : 0; }
-    return withLevels(net, hint) || done(full('none', hint));
+    const from = { N: net.N, track: net.track };
+    net = null;
+    return withLevels(from, hint) || done(full('none', hint));
   }
 
   /**
