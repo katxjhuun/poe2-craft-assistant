@@ -411,18 +411,27 @@
       // twin, else in a target's way; of two alike the first target). multi: such entries, [[target, kind, weight,
       // weight under the value]] with kind 0 it meets the target, 2 its twin, 3 in its way; roll takes the doubles out.
       const multi = [];
+      // lowX[i]: of what is in target i's way on this side, the weight that also keeps targets of the other side out,
+      // by the set of those targets (a bit each): one modifier, two effects (a Shock suffix on a staff is in the
+      // Freeze Buildup suffix's way and keeps the Fire Damage prefix off)
+      const lowX = new Array(G).fill(null);
+      // twinX[i]: the same for target i's twins. On a staff the Fire Damage prefix and the Freeze Buildup suffix keep
+      // each other out; the way to both is a Cold Damage prefix (the Fire target's twin, turned by a Rune of Aldur
+      // later) with Freeze Buildup beside it. A Lightning Damage twin keeps Freeze Buildup out for good: which twin
+      // it is decides, and an average over the twins promised two thirds of the real cost there.
+      const twinX = new Array(G).fill(null);
       for (let q = 0; q < pool.length; q++) {
         const e = pool[q];
         const w = mult > 1 && (kb.mods[e.id].mt || []).includes(CAT.tag) ? e.w * mult : e.w;
         W += w; ws[q] = w;
-        let roles = null;
+        let roles = null, xm = 0;
         const role = (i, kind, a, b) => { (roles || (roles = [])).push([i, kind, a, b || 0]); };
         for (let i = 0; i < G; i++) {
           const g = goals[i];
           // a target of the other side that this modifier keeps out: with its tags (a "+ to Level of all Fire Spell
           // Skills" suffix keeps the Chaos Damage prefix off a wand), or by being of its group (no group twice on an
           // item, whatever the side: a belt's Thorns prefix keeps the Desecrated "Thorns Critical Hit Chance" suffix off)
-          if (g.si !== si) { if ((!e.rune && stops(e.id, i)) || (g.grp.length && e.fam !== g.fam && e.grp.some((x) => g.grp.includes(x)))) cross[i] += w; continue; }
+          if (g.si !== si) { if ((!e.rune && stops(e.id, i)) || (g.grp.length && e.fam !== g.fam && e.grp.some((x) => g.grp.includes(x)))) { cross[i] += w; xm |= 1 << i; } continue; }
           if (g.kind === 'nat' && e.fam === g.fam) {
             if (g.minValue != null) { const p = reach(e.id, g); if (p < 0) { low[i] += w; role(i, 3, w); } else { ok[i] += w * p; nearW[i] += w * (1 - p); role(i, 0, w * p, w * (1 - p)); } }
             else if (!g.tier || e.tier <= g.tier) { ok[i] += w; role(i, 0, w); } else { low[i] += w; role(i, 3, w); }
@@ -434,6 +443,9 @@
           else if (!e.rune && stops(e.id, i)) { low[i] += w; role(i, 3, w); } // its tags keep the target out
         }
         if (roles && roles.length > 1) multi.push(roles);
+        // (the status a modifier gets is its first: what meets a target or is its twin is not "in the way" here)
+        if (xm && roles && roles[0][1] === 3) { const i = roles[0][0]; (lowX[i] || (lowX[i] = new Map())).set(xm, ((lowX[i] && lowX[i].get(xm)) || 0) + w); }
+        if (xm && roles && roles[0][1] === 2) { const i = roles[0][0]; (twinX[i] || (twinX[i] = new Map())).set(xm, ((twinX[i] && twinX[i].get(xm)) || 0) + w); }
       }
       // What modifiers nobody asked for take out of the pools. They are picked by their weight, and a picked one leaves
       // with everything of its groups (its own family, and on wands, staves and foci its sister families) and with
@@ -451,6 +463,14 @@
       const claimed = (e) => mine.has(e.fam) || (TRACKED && sideNat.some((i) => followed[i] && ((goals[i].grp.length && e.grp.some((x) => goals[i].grp.includes(x))) || (!e.rune && stops(e.id, i)))));
       const own = [];
       for (let q = 0; q < pool.length; q++) if (!claimed(pool[q])) own.push(q);
+      // crossJ[k]: of the modifiers nobody asked for (the anonymous ones), the weight that keeps target k of the other
+      // side out. (cross[k] counts every modifier of the side that does, also one that is in a followed target's way
+      // here; that one arrives with both effects, see lowX, and must not be counted again among the anonymous.)
+      const crossJ = new Float64Array(G);
+      for (const q of own) {
+        const e = pool[q];
+        for (let i = 0; i < G; i++) { const g = goals[i]; if (g.si !== si && ((!e.rune && stops(e.id, i)) || (g.grp.length && e.fam !== g.fam && e.grp.some((x) => g.grp.includes(x))))) crossJ[i] += ws[q]; }
+      }
       const byGrp = new Map();
       for (const q of own) for (const k of keysOf(pool[q])) { let l = byGrp.get(k); if (!l) byGrp.set(k, l = []); l.push(q); }
       const gw = new Float64Array(pool.length), tw = new Float64Array(pool.length);
@@ -526,7 +546,7 @@
       }
       const anon = new Uint8Array(pool.length);
       for (const q of own) anon[q] = 1;
-      s = { W, ok, low, nearW, twin, cross, multi, J, left, across, fracTake, big, leftR, pool, ws, anon, takes: new Map() };
+      s = { W, ok, low, lowX, twinX, nearW, twin, cross, crossJ, multi, J, left, across, fracTake, big, leftR, pool, ws, anon, takes: new Map() };
       statCache.set(key, s);
       return s;
     }
@@ -667,6 +687,17 @@
       if (!n.cy) n.cu = 0;
       else if (n.cx * 3 + n.ct < n.cy * 3 + n.cu) { const a = n.cx, b = n.ct; n.cx = n.cy; n.ct = n.cu; n.cy = a; n.cu = b; } // (one order for the two)
       if (n.fl) { if (n.fl >= 3 && nSide(n, 0) === 0) n.fl %= 3; if (n.fl % 3 && nSide(n, 1) === 0) n.fl -= n.fl % 3; }
+      // xg (bit of a side): a modifier of that side that is in a target's way there also keeps targets of the other
+      // side out with its tags. When no such modifier is left on the side, what it kept out is free again; a bit
+      // with nothing kept out says nothing.
+      if (n.xg) for (let si = 0; si < 2; si++) {
+        if (!((n.xg >> si) & 1)) continue;
+        let holder = false, held = false;
+        for (let i = 0; i < G; i++) { if (goals[i].si === si) { if (n.g[i] === BLOCKED || n.g[i] === TWIN) holder = true; } else if (n.g[i] === XBLOCKED && !fracBlocks.has(i)) held = true; }
+        if (holder && held) continue;
+        n.xg &= ~(1 << si);
+        if (!holder) for (let i = 0; i < G; i++) if (goals[i].si !== si && n.g[i] === XBLOCKED && !fracBlocks.has(i) && !n.j[si]) n.g[i] = ABSENT;
+      }
       return n;
     };
     const clsMemo = new Map();
@@ -758,7 +789,7 @@
     // refuse; found on 10 Oct 2026 when the bases that change the slot counts were first played.)
     const JMAX = Math.max(3, LIM[0], LIM[1]) + (SER || st0.xSuffix ? 1 : 0); // (a jewel: two and the allowance modifier's one)
     const JK = JMAX + 1;
-    const KEY_REST = 3 * JK * JK * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2 * FLK * 3 * 3 * 3;
+    const KEY_REST = 3 * JK * JK * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2 * FLK * 3 * 3 * 3 * 4;
     const KEY_NUM = Math.pow(10, G) * KEY_REST < 9e15; // (the two parts fit one number exactly)
     const keyOf = (S) => {
       let a = 0;
@@ -766,10 +797,10 @@
       let k = S.r;
       if (S.j[0] > JMAX || S.j[1] > JMAX) throw new Error('more modifiers on a side than a node can count');
       k = k * JK + S.j[0]; k = k * JK + S.j[1]; k = k * 10 + (S.fg + 1); k = k * 3 + S.fj; k = k * 3 + S.cx; k = k * 3 + S.dj; k = k * 3 + S.du;
-      k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw; k = k * 2 + S.kx; k = k * 2 + S.kf; k = k * FLK + S.fl; k = k * 3 + S.ct; k = k * 3 + S.cy; k = k * 3 + S.cu;
+      k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw; k = k * 2 + S.kx; k = k * 2 + S.kf; k = k * FLK + S.fl; k = k * 3 + S.ct; k = k * 3 + S.cy; k = k * 3 + S.cu; k = k * 4 + S.xg;
       return KEY_NUM ? a * KEY_REST + k : a + ':' + k;
     };
-    const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad, aw: S.aw, kx: S.kx, kf: S.kf, fl: S.fl, ct: S.ct, cy: S.cy, cu: S.cu });
+    const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad, aw: S.aw, kx: S.kx, kf: S.kf, fl: S.fl, ct: S.ct, cy: S.cy, cu: S.cu, xg: S.xg });
     function idOf(S) {
       canon(S);
       const k = keyOf(S);
@@ -886,7 +917,7 @@
       const m = TRACK ? 0 : unknown(S, 1 - g.si); // (with blockers followed, one of the other side is a state too)
       if (m) { const sx = stats(1 - g.si, floor || 0, 1, S.u, tm, presentMask(S, 1 - g.si)); if (sx.W > 0 && sx.cross[i] > 0) p *= Math.pow(1 - Math.min(1, sx.cross[i] / sx.W), m); }
       // another target's twin of another element on the item may stop this one with its tags
-      for (let k = 0; k < G; k++) if (S.g[k] === TWIN && twinStops[k]) p *= 1 - twinStops[k][i];
+      for (let k = 0; k < G; k++) if (S.g[k] === TWIN && twinStops[k] && !(TRACK && goals[k].si !== g.si)) p *= 1 - twinStops[k][i];
       return p;
     }
     /** A random modifier for the open sides in `mask` (bit 0 prefix, bit 1 suffix): [[chance, goal index or -1, side, status]]. */
@@ -900,20 +931,43 @@
         // what can roll for a target on this side: [weight, target, status, of the dominant group]
         const ws = [], at = new Map(), betas = new Float64Array(G).fill(1);
         const put = (w, i, status, inBig) => { at.set(i * 16 + status, ws.length); ws.push([w, i, status, inBig]); };
+        // what is in target i's way: the part that also keeps a wanted target of the other side out apart, with
+        // those targets (xm), when blockers are followed across the sides
+        const putLow = (i) => {
+          let rest = s.low[i];
+          const lx = TRACK ? s.lowX[i] : null;
+          if (lx) for (const [m, w] of lx) {
+            let live = 0;
+            for (let k = 0; k < G; k++) if (((m >> k) & 1) && S.g[k] === ABSENT) live |= 1 << k;
+            const ww = live ? Math.min(rest, w) : 0;
+            if (ww > 0) { ws.push([ww, i, BLOCKED, false, live]); rest -= ww; }
+          }
+          if (rest > 0) put(rest, i, BLOCKED, false);
+        };
         for (let i = 0; i < G; i++) {
           const g = goals[i];
           if (!wanted(S.g[i]) || g.si !== si) continue;
           // a rolled modifier of the group of a Desecrated or crafted-only target is known as such (bones, essences and alloys are too dear to waste)
-          if (g.kind !== 'nat') { if (s.low[i] > 0) put(s.low[i], i, BLOCKED, false); continue; }
+          if (g.kind !== 'nat') { if (s.low[i] > 0) putLow(i); continue; }
           // an unknown modifier is of the target's group, or stops it with its tags, with some chance: then it cannot roll
           const inBig = !!(s.big && s.big.has.has(i));
           const beta = unblocked(S, i, floor, inBig);
           betas[i] = beta;
           if (s.ok[i] > 0) put(s.ok[i] * beta, i, NATURAL, inBig);
           if (s.nearW[i] > 0) put(s.nearW[i] * beta, i, NATURAL + NEAR, inBig);
-          if (followed[i] && s.low[i] > 0) put(s.low[i], i, BLOCKED, false);
+          if (followed[i] && s.low[i] > 0) putLow(i);
           // (what keeps the target out keeps its twin of another element out as well: they are of one group)
-          if (S.g[i] === ABSENT && s.twin[i] > 0) put(s.twin[i] * beta, i, TWIN, false);
+          if (S.g[i] === ABSENT && s.twin[i] > 0) {
+            let rest = s.twin[i];
+            const tx = TRACK ? s.twinX[i] : null;
+            if (tx) for (const [m, w] of tx) {
+              let live = 0;
+              for (let k = 0; k < G; k++) if (((m >> k) & 1) && S.g[k] === ABSENT) live |= 1 << k;
+              const ww = live ? Math.min(rest, w) : 0;
+              if (ww > 0) { ws.push([ww * beta, i, TWIN, false, live]); rest -= ww; }
+            }
+            if (rest > 0) put(rest * beta, i, TWIN, false);
+          }
         }
         // a modifier that is something for two targets has one status: the others' weights lose it (see stats, multi)
         for (const roles of s.multi) {
@@ -933,22 +987,23 @@
         }
         // a modifier of this side that stops a wanted target of the other side: [share of the anonymous ones, target]
         const xs = [];
-        if (TRACK && s.J > 0) for (let k = 0; k < G; k++) if (goals[k].si !== si && S.g[k] === ABSENT && s.cross[k] > 0) xs.push([Math.min(1, s.cross[k] / s.J), k]);
+        if (TRACK && s.J > 0) for (let k = 0; k < G; k++) if (goals[k].si !== si && S.g[k] === ABSENT && s.crossJ[k] > 0) xs.push([Math.min(1, s.crossJ[k] / s.J), k]);
         sides.push({ si, cs, ws, xs });
       }
       if (!sides.length) return [];
       const acc = new Map();
       let sum = 0;
-      const add = (p, i, si, status) => { if (!(p > 0)) return; sum += p; const k = i * 64 + si * 32 + status; const e = acc.get(k); if (e) e[0] += p; else acc.set(k, [p, i, si, status]); };
+      // (xm: the targets of the other side that the modifier keeps out as well; it travels in the status, above its four bits)
+      const add = (p, i, si, status, xm) => { if (!(p > 0)) return; sum += p; const k = i * 64 + si * 32 + status + (xm || 0) * 8192; const e = acc.get(k); if (e) e[0] += p; else acc.set(k, [p, i, si, status + (xm || 0) * 16]); };
       const A = sides[0], B = sides[1] || null;
       for (const ca of A.cs) for (const cb of B ? B.cs : [null]) {
         const pc = ca.p * (cb ? cb.p : 1), total = ca.pool + (cb ? cb.pool : 0);
         for (const [sd, c] of cb ? [[A, ca], [B, cb]] : [[A, ca]]) {
           let hit = 0;
-          for (const [w0, i, status, inBig] of sd.ws) {
+          for (const [w0, i, status, inBig, xm] of sd.ws) {
             if (inBig && !c.big) continue;
             const w = Math.min(c.pool - hit, w0);
-            if (w > 0) { add(pc * w / total, i, sd.si, status); hit += w; }
+            if (w > 0) { add(pc * w / total, i, sd.si, status, xm); hit += w; }
           }
           // the rest is a modifier nobody asked for; some of those stop a target of the other side (-2 - k: target k)
           let rest = c.pool - hit, left = 1;
@@ -961,6 +1016,8 @@
     /** cls: the class of the new modifier's level, when it is one nobody asked for or one in a target's way (see LCUT). */
     function addRolled(S, i, si, status, cls) {
       const n = cp(S);
+      const xm = status >> 4; // (targets of the other side that this modifier, in target i's way, keeps out as well)
+      status &= 15;
       let junk = -1; // the side that gets one more modifier its class is about
       if (i >= 0) {
         // the twin stays on the item as another modifier (of the target's own tier, so of about its level)
@@ -972,11 +1029,12 @@
       else if (i < 0) n.j[si]++;
       else n.g[i] = status || NATURAL;
       if (junk >= 0 && NCLS > 1 && cls != null) setCls(n, junk, had ? Math.min(clsAt(n, junk), cls) : cls);
+      if (xm && i >= 0) for (let k = 0; k < G; k++) if (((xm >> k) & 1) && n.g[k] === ABSENT) { n.g[k] = XBLOCKED; n.xg |= 1 << goals[i].si; }
       return n;
     }
     /** The modifiers a removal can take: [{w, k, i, si}] (w: how many of them). pred(side, desecrated). */
     /** Does a plain other modifier of side si keep a target of the other side out (XBLOCKED, and not by the fractured one)? */
-    const xOn = (S, si) => { if (!S.j[si]) return false; for (let i = 0; i < G; i++) if (S.g[i] === XBLOCKED && goals[i].si !== si && !fracBlocks.has(i)) return true; return false; };
+    const xOn = (S, si) => { if (!S.j[si] || ((S.xg >> si) & 1)) return false; for (let i = 0; i < G; i++) if (S.g[i] === XBLOCKED && goals[i].si !== si && !fracBlocks.has(i)) return true; return false; };
     /** The plain others of a side as removal units: the one that keeps a target out ('jx') apart from the rest. */
     function plain(S, si) {
       if (!xOn(S, si)) return [{ w: S.j[si], k: 'j', si }];
@@ -1328,7 +1386,7 @@
       }
       return turnedMemo.get(key);
     }
-    const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FSN, ad: AD0, aw: 0, kx: 0, kf: 0, fl: 0, ct: 0, cy: 0, cu: 0 };
+    const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FSN, ad: AD0, aw: 0, kx: 0, kf: 0, fl: 0, ct: 0, cy: 0, cu: 0, xg: 0 };
     const RESTART = -1; // edge target: a fresh white base (its value is solved as one number, see solve)
     let hasLost = false; // (some node has a step that locks the item: see lostArmed)
     // (a finished item that is locked: one node for all of them)
@@ -1531,7 +1589,7 @@
       };
       /** A rolled modifier's node: one nobody asked for, or one in a target's way, arrives with the class of its level (a node per class under the item's). */
       const arrive = (S1, p, i, si, status, floor, out) => {
-        if (NCLS > 1 && (i < 0 || status === BLOCKED)) {
+        if (NCLS > 1 && (i < 0 || (status & 15) === BLOCKED)) {
           const sj = i >= 0 ? goals[i].si : si;
           const d = clsDist(sj, floor), top = nSide(S1, sj) > 0 ? clsAt(S1, sj) : NCLS - 1;
           let rest = 0;
@@ -1952,8 +2010,11 @@
     // ---- the item as a node
     /**
      * known: also mark a modifier that stands in a natural target's way (the pasted item's own; rolled ones are averaged
-     * unless they are followed). known 2: the same, but a modifier that is in one target's way is not looked at for
-     * what its tags stop on the other side (the states a followed roll leads to).
+     * unless they are followed). known 3: only for the targets whose blockers the network follows (the states its
+     * rolls lead to: an item with a modifier in an unfollowed target's way is then the node that has that modifier as
+     * one nobody asked for, and still knows the rest; without this such an item fell back to the node that knows no
+     * blocker at all, 13% of a staff's items in the sixth deep run's worst scenario). known 2: as true, but a modifier
+     * that is in one target's way is not looked at for what its tags stop on the other side.
      */
     function nodeOf(st, known) {
       const S = cp(N0);
@@ -1978,8 +2039,8 @@
         const v = i >= 0 || m.unrevealed ? -1 : goals.findIndex((g, k) => free(k) && P.nearMiss(m, g));
         const t = i >= 0 || v >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => S.g[k] === ABSENT && goals[k].si === si && conv[k] && conv[k].src.has(m.id) && !(conv[k].via === 'aldur' && st.aldur));
         // not the target, but of its group (a lower tier, a sister modifier) or with tags that stop it: it stands in the target's way
-        const b = i >= 0 || v >= 0 || t >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => S.g[k] === ABSENT && goals[k].si === si && (g.kind !== 'nat' || known) && (m.fam === g.fam || (g.grp.length && (m.grp || []).some((x) => g.grp.includes(x))) || (m.id && kb.mods[m.id] && stops(m.id, k))));
-        const set = (k, x) => { if (S.g[k] === TWIN) { S.j[si]++; lowest[si] = Math.min(lowest[si], goalLvl[k]); } S.g[k] = x; if (m.frac) S.fg = k; role.set(m, x === BLOCKED ? 2 : 1); if (x === BLOCKED) lowest[si] = Math.min(lowest[si], m.lvl || 1); };
+        const b = i >= 0 || v >= 0 || t >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => S.g[k] === ABSENT && goals[k].si === si && (g.kind !== 'nat' || (known && (known !== 3 || followed[k]))) && (m.fam === g.fam || (g.grp.length && (m.grp || []).some((x) => g.grp.includes(x))) || (m.id && kb.mods[m.id] && stops(m.id, k))));
+        const set = (k, x) => { if (S.g[k] === TWIN) { S.j[si]++; lowest[si] = Math.min(lowest[si], goalLvl[k]); } S.g[k] = x; if (m.frac) S.fg = k; role.set(m, x === BLOCKED ? 2 : x === TWIN ? 3 : 1); if (x === BLOCKED) lowest[si] = Math.min(lowest[si], m.lvl || 1); };
         if (i >= 0) set(i, kind);
         else if (v >= 0) set(v, kind + NEAR);
         else if (t >= 0) set(t, TWIN);
@@ -2002,7 +2063,10 @@
         if (!m.id || !kb.mods[m.id] || m.unrevealed) continue;
         if (role.get(m) === 1 || (known === 2 && role.get(m) === 2)) continue;
         const si = m.side === 'prefix' ? 0 : 1, tags = !!kb.mods[m.id].at;
-        for (let k = 0; k < G; k++) if (S.g[k] === ABSENT && goals[k].si !== si && ((tags && stops(m.id, k)) || (goals[k].grp.length && m.fam !== goals[k].fam && (m.grp || []).some((x) => goals[k].grp.includes(x))))) S.g[k] = XBLOCKED;
+        for (let k = 0; k < G; k++) if (S.g[k] === ABSENT && goals[k].si !== si && ((tags && stops(m.id, k)) || (goals[k].grp.length && m.fam !== goals[k].fam && (m.grp || []).some((x) => goals[k].grp.includes(x))))) {
+          S.g[k] = XBLOCKED;
+          if (role.get(m) === 2 || role.get(m) === 3) S.xg |= 1 << si; // (held by a modifier that is in a target's way on its own side, or by a twin: see canon)
+        }
       }
       return S;
     }
@@ -2661,12 +2725,12 @@
         // other one: in the sixth deep run 2% of a crossbow's crafts left the network after an alloy with Astrid's
         // Creativity, and a few crafts of twenty other scenarios.)
         let i;
-        for (const known of [true, 2, false]) { i = index.get(keyOf(canon(nodeOf(st, known)))); if (i !== undefined) return i; }
+        for (const known of [true, 3, 2, false]) { i = index.get(keyOf(canon(nodeOf(st, known)))); if (i !== undefined) return i; }
         // A crafted modifier nobody asked for that the item's reader knows as a tool essence's own, where the edge
         // that left it knew only "some crafted modifier" (an essence for a target that gave its other modifier), or
         // the other way round: the node that differs only in whose the crafted modifiers are. (In the fifth deep run
         // 2% of a body armour's crafts had no node after a Perfect Essence of Seeking for that reason.)
-        for (const known of [true, 2, false]) {
+        for (const known of [true, 3, 2, false]) {
           const S0 = nodeOf(st, known);
           if (!S0.cx && !S0.cy) continue;
           for (const a of [S0.ct, 0, 1, 2]) for (const b of [S0.cu, 0, 1, 2]) {
@@ -2682,7 +2746,7 @@
       /** Is every target on this item (whatever else is on it, and whether the network has a node for it)? */
       finished: (st) => done(nodeOf(st, true)),
       /** For the checks: 0 the node was found with everything known, 1 without what a blocker's tags stop, 2 without blockers, -1 not at all. */
-      mapping(st) { return index.has(keyOf(canon(nodeOf(st, true)))) ? 0 : index.has(keyOf(canon(nodeOf(st, 2)))) ? 1 : index.has(keyOf(canon(nodeOf(st, false)))) ? 2 : -1; },
+      mapping(st) { return index.has(keyOf(canon(nodeOf(st, true)))) ? 0 : index.has(keyOf(canon(nodeOf(st, 3)))) || index.has(keyOf(canon(nodeOf(st, 2)))) ? 1 : index.has(keyOf(canon(nodeOf(st, false)))) ? 2 : -1; },
       done: (s) => done(states[s]),
       /** The step to use at node s: {a, names, cost, out}, or null when done or stuck. */
       step(s) { return pol[s] >= 0 ? Object.assign({ names: actNames(acts[s][pol[s]].a) }, acts[s][pol[s]]) : null; },
@@ -2985,9 +3049,12 @@
     const nT = Object.values(input.targets || {}).filter((t) => t && t.fam).length, many = nT >= 7;
     const fit = (net) => (baseLimit > 0 && !net.done(net.start) ? net.fitBases(net.start, +baseLimit) : 0);
     const bad = (net) => net.unsupported || net.impossible || net.blocked;
+    // (200,000 states for the fully followed network: a staff with two targets that keep each other out by their
+    // tags needs 175,000, about 1.5 GB and a minute and a half; with fewer it followed two of three targets and
+    // played at one and a half times its promise)
     // [lite, targets followed at most, states at most]. Up to five targets fit with all of them followed; with six the
     // two with the largest groups are (a try that does not fit is time lost, so none is made that is known not to).
-    const tries = many ? [[1, 0, 150000], [2, 0, 1000000]] : (nT <= 5 ? [[0, 8, 160000]] : []).concat(nT > FOLLOW6 ? [[0, FOLLOW6, 160000]] : [], [[0, 0, 150000], [1, 0, 400000], [2, 0, 1000000]]);
+    const tries = many ? [[1, 0, 150000], [2, 0, 1000000]] : (nT <= 5 ? [[0, 8, 200000]] : []).concat(nT > FOLLOW6 ? [[0, FOLLOW6, 160000]] : [], [[0, 0, 150000], [1, 0, 400000], [2, 0, 1000000]]);
     /** The largest network that fits, with the omen as `whittle` says. */
     const full = (whittle, hint) => {
       let n = null;
