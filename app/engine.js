@@ -514,7 +514,9 @@
     const basePool = sig ? poolFor(ix, sig) : new Map();
     // modifiers a socketed rune lets the item roll ("Can roll Marksman modifiers") are of its pool as well; the rune
     // lines come before the modifiers in the item text
-    const pool = { get: (id) => basePool.get(id) || runePoolEntry(ix, item, id), has: (id) => basePool.has(id) || !!runePoolEntry(ix, item, id) };
+    // (viaRune: of a rune's pool on this base while that rune is not socketed now: a rune put over it left the modifier)
+    const pool = { get: (id) => basePool.get(id) || runePoolEntry(ix, item, id), has: (id) => basePool.has(id) || !!runePoolEntry(ix, item, id),
+      viaRune: (id) => { if (!item.base) return null; for (const p of runePoolsOn(ix, item.base)) if (p.mods.has(id)) return p.mods.get(id); return null; } };
     const desPool = item.base ? desecratedPoolFor(ix, item.base) : new Map();
     const crafts = item.base ? liquidModsFor(ix, item.base) : null;
     const known = uniqueLinesFor(ix, item);
@@ -567,6 +569,16 @@
       }
       let i = 0;
       while (i < explicitLines.length) {
+        // (alt: a hybrid of a rune's pool that these lines could also be, the rune not being socketed now; the lines
+        // are read as the separate modifiers that roll here, and the reader says so)
+        let alt = null;
+        const put = (mod) => {
+          if (alt && mod.modId) {
+            mod.hybridAlt = alt.modId;
+            warnings.push({ level: 'warn', msg: `"${alt.text.split('\n').join(' / ')}" is read as separate modifiers; it can also be one hybrid modifier that a rune's pool gave. Plain Ctrl+C text does not say which. Alt+Ctrl+C shows it.` });
+          }
+          item.mods.push(mod);
+        };
         const ul = uniqueLine([explicitLines[i]], known, markers(explicitLines[i]));
         if (ul) { item.mods.push(ul); i += 1; continue; }
         const two = i + 1 < explicitLines.length ? [explicitLines[i], explicitLines[i + 1]] : null;
@@ -575,47 +587,55 @@
         // found by the self-test), kept only when they can roll here and the values fit.
         const three = i + 2 < explicitLines.length ? explicitLines.slice(i, i + 3) : null;
         if (three && three.every((l) => markerOf(l) === markerOf(three[0]))) {
-          const hy3 = resolveMod(ix, three, { side: null, header: markers(three[0]), pool, desPool, crafts, ess, ilvl: item.ilvl, warnings: [], hybridOnly: true });
-          if (hy3.modId && (hy3.inPool || markerOf(three[0]) === 'crafted') && hy3.fit !== false) {
+          const hy3 = resolveMod(ix, three, { side: null, header: markers(three[0]), pool, desPool, crafts, ess, ilvl: item.ilvl, warnings: [], hybridOnly: true, plainMarks: true });
+          if (hy3.modId && (hy3.inPool || hy3.viaRune || markerOf(three[0]) === 'crafted') && hy3.fit !== false) {
             // The same three lines can also be two or three mods that roll here (self-test: "% increased Armour and
             // Evasion" + a two-line base Armour and Evasion mod on Thane Mail): flag it like the two-line case.
-            const opt3 = { side: null, pool, desPool, crafts, ess, ilvl: item.ilvl, warnings: [] };
+            const opt3 = { side: null, pool, desPool, crafts, ess, ilvl: item.ilvl, warnings: [], plainMarks: true };
             const ok3 = (m, line) => m.modId && (m.inPool || markerOf(line) === 'crafted') && m.fit !== false;
             const read = (ls) => resolveMod(ix, ls, Object.assign({ header: markers(ls[0]), hybridOnly: ls.length > 1 }, opt3));
+            let split = false;
             for (const sp of [[[three[0]], three.slice(1)], [three.slice(0, 2), [three[2]]], [[three[0]], [three[1]], [three[2]]]]) {
               const ms = sp.map(read);
               if (!ms.every((m, k) => ok3(m, sp[k][0]))) continue;
+              // (a hybrid that only a rune no longer socketed could have given: the separate modifiers are the reading)
+              if (!hy3.inPool && markerOf(three[0]) !== 'crafted') { split = true; alt = hy3; break; }
               hy3.ambiguous = true; hy3.splitAlt = ms.map((m) => m.modId);
               hy3.confidence = Math.max(0.05, +(hy3.confidence - 0.25).toFixed(2));
               warnings.push({ level: 'warn', msg: `"${hy3.text.split('\n').join(' / ')}" can be one hybrid modifier or separate ones; plain Ctrl+C text does not say which. Alt+Ctrl+C shows it.` });
               break;
             }
-            item.mods.push(hy3); i += 3; continue;
+            if (!split) { item.mods.push(hy3); i += 3; continue; }
           }
         }
         if (two && markerOf(two[0]) === markerOf(two[1])) {
-          const hy = resolveMod(ix, two, { side: null, header: markers(two[0]), pool, desPool, crafts, ess, ilvl: item.ilvl, warnings: [], hybridOnly: true });
+          const hy = resolveMod(ix, two, { side: null, header: markers(two[0]), pool, desPool, crafts, ess, ilvl: item.ilvl, warnings: [], hybridOnly: true, plainMarks: true });
           if (hy.modId) {
             // Two lines that also read as two mods which can roll here: keep the hybrid only when it can roll here too
             // and its values fit (found by the self-test: two plain lines were read as a Runes of Aldur alloy hybrid).
             const ok = (m, line) => m.modId && (m.inPool || markerOf(line) === 'crafted') && m.fit !== false;
-            const opt = { side: null, pool, desPool, crafts, ess, ilvl: item.ilvl, warnings: [] };
+            const opt = { side: null, pool, desPool, crafts, ess, ilvl: item.ilvl, warnings: [], plainMarks: true };
             const a = resolveMod(ix, [two[0]], Object.assign({ header: markers(two[0]) }, opt));
             const b = resolveMod(ix, [two[1]], Object.assign({ header: markers(two[1]) }, opt));
-            if (ok(hy, two[0]) || (!ok(a, two[0]) && !ok(b, two[1]))) {
+            // (a hybrid of a rune's pool whose rune is not socketed now: taken when the two lines are not two
+            // modifiers that roll here)
+            const viaRune = hy.viaRune && hy.fit !== false && !(ok(a, two[0]) && ok(b, two[1]));
+            if (hy.viaRune && hy.fit !== false && !viaRune && !ok(hy, two[0])) alt = alt || hy;
+            if (ok(hy, two[0]) || viaRune || (!ok(a, two[0]) && !ok(b, two[1]))) {
               if (ok(hy, two[0]) && ok(a, two[0]) && ok(b, two[1])) {
                 // Both readings can roll here (self-test finding): say so instead of guessing silently.
                 hy.ambiguous = true; hy.splitAlt = [a.modId, b.modId];
                 hy.confidence = Math.max(0.05, +(hy.confidence - 0.25).toFixed(2));
                 warnings.push({ level: 'warn', msg: `"${hy.text.replace('\n', ' / ')}" can be one hybrid modifier or two separate ones; plain Ctrl+C text does not say which. Alt+Ctrl+C shows it.` });
               }
-              item.mods.push(hy); i += 2; continue;
+              put(hy); i += 2; continue;
             }
           }
         }
-        item.mods.push(resolveMod(ix, [explicitLines[i]], { side: null, header: markers(explicitLines[i]), pool, desPool, crafts, ess, ilvl: item.ilvl, warnings, quiet: !!item.unsupported }));
+        put(resolveMod(ix, [explicitLines[i]], { side: null, header: markers(explicitLines[i]), pool, desPool, crafts, ess, ilvl: item.ilvl, warnings, quiet: !!item.unsupported, plainMarks: true }));
         i += 1;
       }
+      settleSides(ix, item, warnings);
     }
 
     // Uniques (kb.uniques): what the knowledge base knows about this one
@@ -631,6 +651,33 @@
     const parseWarnings = warnings.slice();
     validateItem(ix, item, warnings);
     return { item, warnings, parseWarnings };
+  }
+
+  /**
+   * Ctrl+C text: a line that is the same modifier as a prefix and as a suffix (Mark of the Abyssal Lord). The item's
+   * other modifiers settle it when one side is full; otherwise the reader asks (ambiguous, both listed).
+   */
+  function settleSides(ix, item, warnings) {
+    const twins = item.mods.filter((m) => m.sideTwin && m.modId);
+    if (!twins.length) return;
+    const lim = itemLimits(ix, item);
+    for (const m of twins) {
+      const n = { prefix: 0, suffix: 0 };
+      for (const x of item.mods) if (x !== m && !x.sideTwin && (x.slot === 'prefix' || x.slot === 'suffix')) n[x.slot]++;
+      const other = m.slot === 'prefix' ? 'suffix' : 'prefix';
+      const free = { [m.slot]: n[m.slot] < lim[m.slot], [other]: n[other] < lim[other] };
+      const swap = () => {
+        const t = ix.kb.mods[m.sideTwin];
+        const c = (m.candidates || []).find((x) => x.id === m.sideTwin);
+        Object.assign(m, { modId: m.sideTwin, fam: t.fam, slot: other, tier: c ? c.tier : m.tier, lvl: t.lvl, inPool: c ? c.inPool : m.inPool });
+      };
+      if (!free[m.slot] && free[other]) swap();
+      else if (free[m.slot] && free[other] && twins.length === 1) {
+        m.ambiguous = true;
+        m.confidence = Math.min(m.confidence, 0.5);
+        warnings.push({ level: 'warn', msg: `"${m.text}" can be a prefix or a suffix; plain Ctrl+C text does not say which. Alt+Ctrl+C shows it.` });
+      }
+    }
   }
 
   function markers(line) {
@@ -691,7 +738,17 @@
       // ... and on a jewel, a mod its liquid emotions add (game table LiquidEmotionOutcomes), even one from another jewel's pool
       if (h.crafted && ctx.crafts && ctx.crafts.has(e.id)) score += 3;
       if (h.tier && pe && pe.tier === h.tier) score += 2;
-      cands.push({ id: e.id, side, tier: pe ? pe.tier : null, inPool: !!pe, fit, ilvlOk, des, score, lvl: m.lvl });
+      // A modifier of a rune's pool on this base whose rune is not socketed any more (reader check: Soul modifiers of
+      // Medved's Tending on body armour were read as the essence's or an amulet's modifier with the same text).
+      const via = !des && !pe && ctx.pool.viaRune ? ctx.pool.viaRune(e.id) : null;
+      if (via) score += 2;
+      if (via && h.tier && via.tier === h.tier) score += 2;
+      // What only an essence, an alloy or a liquid emotion adds is marked crafted in both copy formats: a line without
+      // the mark is not that modifier while another one fits.
+      if (!des && !pe && !via && !h.crafted && isNonNatural(m)) score -= h.kind ? 4 : 2;
+      // Ctrl+C marks a Desecrated line too
+      if (!h.kind && !h.desecrated && des && ctx.plainMarks) score -= 2;
+      cands.push({ id: e.id, side, tier: pe ? pe.tier : via ? via.tier : null, inPool: !!pe, viaRune: !!via, fit, ilvlOk, des, score, lvl: m.lvl });
     }
     if (ctx.hybridOnly && !cands.length) return { modId: null };
     cands.sort((a, b) => b.score - a.score || b.lvl - a.lvl);
@@ -713,6 +770,9 @@
     if (distinctFams.size > 1) confidence -= 0.25;
     // Plain copies without ranges: overlapping tier ranges of one family fit the value equally (self-test finding).
     const tierAmbiguous = !ctx.side && top.filter((c) => ix.kb.mods[c.id].fam === m.fam && c.tier !== best.tier).length > 0;
+    // Ctrl+C text has no side: the same line as a prefix and as a suffix (Mark of the Abyssal Lord) is settled by the
+    // item's other modifiers afterwards (settleSides), or asked
+    const sideTwin = !ctx.side && top.some((c) => c.side !== best.side) ? top.find((c) => c.side !== best.side).id : null;
     if (tierAmbiguous) confidence -= 0.15;
     confidence = Math.max(0.05, Math.min(0.99, confidence));
 
@@ -721,7 +781,7 @@
       tier: best.tier, gameTier: h.tier || null,
       fractured: !!h.fractured, desecrated: h.kind ? !!h.desecrated : best.des || !!h.desecrated, crafted: !!h.crafted,
       confidence: +confidence.toFixed(2), candidates: cands.slice(0, 6).map((c) => ({ id: c.id, tier: c.tier, side: c.side, inPool: c.inPool, fit: c.fit })),
-      ambiguous: distinctFams.size > 1, tierAmbiguous, inPool: best.inPool, fit: best.fit, ilvlOk: best.ilvlOk, lvl: m.lvl,
+      ambiguous: distinctFams.size > 1, tierAmbiguous, sideTwin, inPool: best.inPool, viaRune: !!best.viaRune, fit: best.fit, ilvlOk: best.ilvlOk, lvl: m.lvl,
       name: h.name || null, tags: h.tags || [],
     };
     // Crafted: non-natural mods (essence/alloy/Genesis) are the crafted slot.
@@ -968,12 +1028,18 @@
   /** Resolve a template target ("+# to Level of all Minion Skills") to a family on this base. */
   function resolveTemplateTarget(ix, item, label) {
     const want = normalize(label);
+    // a natural modifier of the base first; then a Desecrated one; then one the item carries although the base
+    // does not roll it (a Genesis Tree modifier, fractured on a bought ring); then what an essence or an alloy adds
+    const found = [null, null, null];
     for (const side of ['prefix', 'suffix']) {
-      const opts = pickerOptions(ix, item, { side, showImpossible: true });
-      const hit = opts.find((o) => o.group === side && !o.baseReason && normalize(o.label) === want);
+      const opts = pickerOptions(ix, item, { side, showImpossible: true }).filter((o) => normalize(o.label) === want);
+      const hit = opts.find((o) => o.group === side && !o.baseReason);
       if (hit) return hit;
+      found[0] = found[0] || opts.find((o) => o.group === 'desecrated' && !o.baseReason);
+      found[1] = found[1] || opts.find((o) => (item.mods || []).some((m) => m.fam === o.fam && m.slot === side));
+      found[2] = found[2] || opts.find((o) => o.group !== side && o.group !== 'desecrated' && /unverified/.test(o.baseReason || 'unverified'));
     }
-    return null;
+    return found[0] || found[1] || found[2] || null;
   }
 
   // ---------------------------------------------------------------- leak filter

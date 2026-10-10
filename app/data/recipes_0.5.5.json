@@ -1,7 +1,7 @@
 {
  "meta": {
   "patch": "0.5.5",
-  "compiled": "2026-10-08",
+  "compiled": "2026-10-10",
   "from": [
    "poe2_bilgi_bankasi_0.5.5.md (section 10)",
    "compass recipe audit (sections a-f)",
@@ -13,6 +13,10 @@
    "plausible": "Consistent with the rules but rests on one secondary source or needs an in-game test.",
    "outdated": "Was true before 0.5 or only works in a legacy league.",
    "rejected": "Contradicts game text or the 0.5 rules, or comes from PoE1."
+  },
+  "profitModel": {
+   "at": "2026-09-27",
+   "divine": 492
   }
  },
  "recipes": [
@@ -1514,12 +1518,6 @@
    ]
   },
   {
-   "id": "b5",
-   "title": "Buy, craft, sell: finish a Magic wand that has the spell level",
-   "classes": [
-    "Wand",
-    "Staff"
-   ],
    "league_scope": [
     "Forbidden Rites",
     "Runes of Aldur",
@@ -1527,34 +1525,119 @@
    ],
    "verdict": "plausible",
    "source_tier": "C",
-   "min_ilvl": 78,
-   "crafted_slot_use": "optional",
-   "desecrated_slot_use": "last step",
-   "trade": {
-    "buy": "Magic wands with +4 or more to Level of all Cold Spell Skills (the creator's filter of 9 Sept 2026; the same idea for other elements).",
-    "sell": "Sold as wands for one build of that week (Grim Pillars). The video's method was not read: only its filter and title.",
-    "quoted": "None read."
-   },
+   "min_ilvl": 65,
+   "crafted_slot_use": "Greater Essence of Sorcery (or of Alacrity)",
+   "desecrated_slot_use": "a prefix from the Liege",
    "target": [],
-   "steps": [
-    {
-     "text": "The start is bought: the hardest modifier is on the item before any currency is used. Paste the wand, pick the other modifiers as targets, and let the assistant give the route from there.",
-     "names": []
-    }
-   ],
    "checkpoints": [
-    "The assistant's \"Other ways\" lists what a Magic base with a target is worth against rolling it: buy under that."
+    "Do not fix a wand with dead suffixes: sell it for what it brings and craft the next one."
    ],
    "risks": [
-    "A lead only: the steps of the video are not in this recipe."
+    "The sale prices are the creator's listings of one week in September; a build going out of fashion ends the demand.",
+    "A maximum Mana prefix from the Exalted Orb is the common bad result."
+   ],
+   "id": "b5",
+   "title": "Buy, craft, sell: cold spell wands in batches (Grim Pillar)",
+   "classes": [
+    "Wand",
+    "Staff"
+   ],
+   "trade": {
+    "buy": "Magic wands with \"+# to Level of all Cold Spell Skills\" and an open prefix (or spell damage beside it). The creator paid about half a Divine Orb each and bought five in half an hour of watching the trade site.",
+    "sell": "Two Divine Orbs when both suffixes are dead, 6 to 10 with one good suffix, 15 to 30 with good suffixes and prefixes. Five wands of one session were listed for 10, 10, 8, 30 and 15.",
+    "quoted": "About one to one and a half Divine Orbs per wand with the base (9 Sept 2026). The omens and the bone cost a few Exalted Orbs each."
+   },
+   "steps": [
+    {
+     "text": "Greater Essence of Sorcery: the wand becomes Rare with spell damage as its crafted prefix. When the wand already has spell damage, use the cast speed essence instead.",
+     "names": [
+      "Greater Essence of Sorcery",
+      "Greater Essence of Alacrity"
+     ]
+    },
+    {
+     "text": "Omen of Sinistral Necromancy, Omen of the Liege and a Preserved Jawbone: a Desecrated prefix from Amanamu's list. Take increased Elemental Damage, or damage gained as extra Cold. The creator does not pay for Omen of Abyssal Echoes on a wand this cheap.",
+     "names": [
+      "Omen of Sinistral Necromancy",
+      "Omen of the Liege",
+      "Preserved Jawbone"
+     ]
+    },
+    {
+     "text": "Fill what is open with Omen of Greater Exaltation and an Exalted Orb (two modifiers for one orb), or with Greater Exalted Orbs. Wanted suffixes: cast speed, critical damage bonus, critical hit chance for spells.",
+     "names": [
+      "Omen of Greater Exaltation",
+      "Exalted Orb",
+      "Greater Exalted Orb"
+     ]
+    }
    ],
    "sources": [
     {
-     "label": "SaVeQ, \"How to Profit craft Grim Pillar wands\" (trade filter in the description), 9 Sept 2026",
+     "label": "SaVeQ, \"How to Profit craft Grim Pillar wands\" (video transcript supplied by the player), 9 Sept 2026",
      "url": "https://www.youtube.com/watch?v=qdyfBnzqBLo",
      "tier": "C"
     }
-   ]
+   ],
+   "profit": {
+    "said": "2026-09-09",
+    "per": "wand",
+    "buy": {
+     "div": [
+      0.5,
+      0.5
+     ]
+    },
+    "uses": [
+     {
+      "name": "Greater Essence of Sorcery",
+      "n": 1
+     },
+     {
+      "name": "Omen of Sinistral Necromancy",
+      "n": 1
+     },
+     {
+      "name": "Omen of the Liege",
+      "n": 1
+     },
+     {
+      "name": "Preserved Jawbone",
+      "n": 1
+     },
+     {
+      "name": "Omen of Greater Exaltation",
+      "n": 1
+     },
+     {
+      "name": "Exalted Orb",
+      "n": 2
+     }
+    ],
+    "outcomes": [
+     {
+      "label": "Dead suffixes",
+      "div": [
+       2,
+       2
+      ]
+     },
+     {
+      "label": "One good suffix",
+      "div": [
+       6,
+       10
+      ]
+     },
+     {
+      "label": "Good suffixes and prefixes",
+      "div": [
+       15,
+       30
+      ]
+     }
+    ]
+   }
   },
   {
    "id": "b6",
@@ -1606,6 +1689,986 @@
      "tier": "C"
     }
    ]
+  },
+  {
+   "league_scope": [
+    "Forbidden Rites",
+    "Runes of Aldur",
+    "Standard"
+   ],
+   "verdict": "plausible",
+   "source_tier": "C",
+   "min_ilvl": 65,
+   "crafted_slot_use": "not used",
+   "desecrated_slot_use": "the suffix that sells the amulet",
+   "target": [],
+   "checkpoints": [
+    "The amulet must have an open suffix and no Desecrated modifier, or the bone has nowhere to go."
+   ],
+   "risks": [
+    "The hit chance below is the assistant's own (the Well of Souls' three options from Kurgal's list, once rerolled); the creator gives none.",
+    "Prices are the creator's September listings."
+   ],
+   "id": "b7",
+   "title": "Buy, craft, sell: spell level amulets with Quality of all Skills",
+   "classes": [
+    "Amulet"
+   ],
+   "trade": {
+    "buy": "Amulets with \"+# to Level of all Spell Skills\", not Desecrated, with an open suffix. The creator paid 4 to 5 Divine Orbs each. Good extras on the bought amulet: maximum Life, Spirit, maximum Energy Shield, rarity, resistances, cast speed.",
+    "sell": "With \"+#% to Quality of all Skills\": 35 to 40 Divine Orbs at least, 50 to 60 with Life, rarity or Energy Shield beside it. A miss sells for 5 to 6 (the spell level alone is worth 4 to 5); one miss with cast speed sold for 25.",
+    "quoted": "Materials under one Divine Orb per amulet. Eight amulets of one session were listed for about 200 Divine Orbs together; the creator hit the quality five times in eight and calls one or two in eight the usual."
+   },
+   "steps": [
+    {
+     "text": "Omen of Dextral Necromancy (suffix), Omen of the Blackblooded (Kurgal's list) and Omen of Abyssal Echoes, then a Preserved Collarbone. At the Well of Souls take \"+#% to Quality of all Skills\" when it is offered; reroll the three options once with the Echoes when it is not.",
+     "names": [
+      "Omen of Dextral Necromancy",
+      "Omen of the Blackblooded",
+      "Omen of Abyssal Echoes",
+      "Preserved Collarbone"
+     ]
+    },
+    {
+     "text": "Fill the open slots with Greater Exalted Orbs, or with an Exalted Orb and Omen of Greater Exaltation.",
+     "names": [
+      "Greater Exalted Orb",
+      "Omen of Greater Exaltation",
+      "Exalted Orb"
+     ]
+    },
+    {
+     "text": "A miss is sold as it is. Removing the Desecrated modifier with Omen of Light and an Orb of Annulment to try again costs more than the next amulet.",
+     "names": []
+    }
+   ],
+   "sources": [
+    {
+     "label": "\"How I made 300 divs with simple amulet craft POE2-0.5.5\" (video transcript supplied by the player, patch 0.5.5; the channel's intro is SaVeQ's)",
+     "tier": "C"
+    }
+   ],
+   "profit": {
+    "said": "2026-09",
+    "per": "amulet",
+    "buy": {
+     "div": [
+      4,
+      5
+     ]
+    },
+    "uses": [
+     {
+      "name": "Omen of Dextral Necromancy",
+      "n": 1
+     },
+     {
+      "name": "Omen of the Blackblooded",
+      "n": 1
+     },
+     {
+      "name": "Omen of Abyssal Echoes",
+      "n": 1
+     },
+     {
+      "name": "Preserved Collarbone",
+      "n": 1
+     },
+     {
+      "name": "Greater Exalted Orb",
+      "n": 2
+     }
+    ],
+    "outcomes": [
+     {
+      "label": "Quality of all Skills",
+      "div": [
+       35,
+       60
+      ],
+      "hit": true
+     },
+     {
+      "label": "Miss",
+      "div": [
+       5,
+       6
+      ]
+     }
+    ],
+    "goal": {
+     "entry": {
+      "base": "Solar Amulet",
+      "ilvl": 80,
+      "rarity": "Rare",
+      "mods": [
+       {
+        "id": "GlobalSpellGemsLevel3"
+       },
+       {
+        "fam": "IncreasedLife",
+        "tier": 3
+       }
+      ]
+     },
+     "targets": [
+      {
+       "stat": "+# to Level of all Spell Skills",
+       "minTier": 1,
+       "required": true
+      },
+      {
+       "stat": "+#% to Quality of all Skills",
+       "minTier": 1,
+       "required": true
+      }
+     ],
+     "item": "Item Class: Amulets\nRarity: Rare\nBought Item\nSolar Amulet\n--------\nItem Level: 80\n--------\n{ Prefix Modifier (Tier: 3) }\n+85(85-99) to maximum Life\n{ Suffix Modifier (Tier: 1) }\n+3 to Level of all Spell Skills",
+     "model": {
+      "ex": 5038,
+      "items": 2.56,
+      "hit": 0.2555,
+      "uses": [
+       {
+        "name": "New base",
+        "n": 1.56
+       },
+       {
+        "name": "Preserved Collarbone",
+        "n": 4.01
+       },
+       {
+        "name": "Omen of Abyssal Echoes",
+        "n": 4.01
+       },
+       {
+        "name": "Chaos Orb",
+        "n": 5.11
+       },
+       {
+        "name": "Omen of the Blackblooded",
+        "n": 4.01
+       },
+       {
+        "name": "Omen of Dextral Necromancy",
+        "n": 3.93
+       },
+       {
+        "name": "Exalted Orb",
+        "n": 0.56
+       }
+      ]
+     },
+     "restart": "item"
+    }
+   }
+  },
+  {
+   "league_scope": [
+    "Forbidden Rites",
+    "Runes of Aldur",
+    "Standard"
+   ],
+   "verdict": "plausible",
+   "source_tier": "C",
+   "min_ilvl": 79,
+   "crafted_slot_use": "Essence of the Breach for the quality, then Perfect Essence of Enhancement",
+   "desecrated_slot_use": "hidden for the fracture, then Quality of all Skills",
+   "target": [],
+   "checkpoints": [
+    "After a missed fracture decide by the two prefixes: with a good one (rarity, Spirit, Energy Shield) the amulet is finished the same way and still sells; with poor ones sell the base.",
+    "Divine the prefixes before the fracture when they are worth keeping: a fractured modifier keeps its roll."
+   ],
+   "risks": [
+    "The creator would not buy the ready base at 100 Divine Orbs: at that price only the fracture hit pays.",
+    "One build (Trinity) carries the demand."
+   ],
+   "id": "b8",
+   "title": "Buy, craft, sell: Absent Amulet with projectile levels, Spirit and Quality of all Skills",
+   "classes": [
+    "Amulet"
+   ],
+   "trade": {
+    "buy": "Absent Amulets of item level 79 or more, about one Divine Orb each; or one that already has \"+# to Level of all Projectile Skills\" (about 100 Divine Orbs when the video was made).",
+    "sell": "Finished with the level fractured, T1 Spirit, global defences and Quality of all Skills: 360 to 400 Divine Orbs. With a missed fracture and a poor prefix: listed at 150, 100 to cover the cost. A base with the projectile level alone: about 100; with spell or melee levels it sells too, with Spirit about 15, with minion levels little.",
+    "quoted": "900 Chaos Orbs (about 85 Divine Orbs) on white bases gave four amulets with a level or Spirit, one of them the projectile level. The creator spent a little over 100 Divine Orbs on one finished amulet without the fracture."
+   },
+   "steps": [
+    {
+     "text": "Chaos Orbs on the base until \"+# to Level of all Projectile Skills\" rolls. Bases that roll spell or melee levels or Spirit are sold as they are.",
+     "names": [
+      "Chaos Orb"
+     ]
+    },
+    {
+     "text": "Omen of Sinistral Exaltation, Omen of Greater Exaltation and a Perfect Exalted Orb: two prefixes at once. The base holds two prefixes and two suffixes.",
+     "names": [
+      "Omen of Sinistral Exaltation",
+      "Omen of Greater Exaltation",
+      "Perfect Exalted Orb"
+     ]
+    },
+    {
+     "text": "Omen of the Blackblooded and a Preserved Collarbone on the open suffix, left hidden, then a Fracturing Orb: it picks one of the three revealed modifiers, so the level is fractured one time in three.",
+     "names": [
+      "Omen of the Blackblooded",
+      "Preserved Collarbone",
+      "Fracturing Orb"
+     ]
+    },
+    {
+     "text": "Fracture on the level: Essence of the Breach, Carapace Catalysts to full quality, Orbs of Annulment down to the fractured modifier, then Chaos Orbs for T1 Spirit.",
+     "names": [
+      "Essence of the Breach",
+      "Carapace Catalyst",
+      "Orb of Annulment",
+      "Chaos Orb"
+     ]
+    },
+    {
+     "text": "Omen of Dextral Exaltation and an Exalted Orb for any suffix, then Omen of Dextral Crystallisation and Perfect Essence of Enhancement: the essence takes that suffix away and adds global defences as a prefix. The catalyst quality raises it.",
+     "names": [
+      "Omen of Dextral Exaltation",
+      "Exalted Orb",
+      "Omen of Dextral Crystallisation",
+      "Perfect Essence of Enhancement"
+     ]
+    },
+    {
+     "text": "Omen of the Blackblooded, Omen of Abyssal Echoes and a collarbone for Quality of all Skills; on a miss Omen of Light with an Orb of Annulment and again (the video: once at the first try, once at the sixth).",
+     "names": [
+      "Omen of the Blackblooded",
+      "Omen of Abyssal Echoes",
+      "Preserved Collarbone",
+      "Omen of Light",
+      "Orb of Annulment"
+     ]
+    }
+   ],
+   "sources": [
+    {
+     "label": "\"POE2 - 0.5.5 How I made 2000 divines with simple amulet craft\" (video transcript supplied by the player, patch 0.5.5; the channel's intro is SaVeQ's)",
+     "tier": "C"
+    }
+   ],
+   "profit": {
+    "said": "2026-09",
+    "per": "fracture attempt on a base that has the projectile level",
+    "buy": {
+     "div": [
+      85,
+      100
+     ],
+     "note": "a base with the projectile level: bought, or rolled with Chaos Orbs"
+    },
+    "uses": [
+     {
+      "name": "Omen of Sinistral Exaltation",
+      "n": 1
+     },
+     {
+      "name": "Omen of Greater Exaltation",
+      "n": 1
+     },
+     {
+      "name": "Perfect Exalted Orb",
+      "n": 1
+     },
+     {
+      "name": "Omen of the Blackblooded",
+      "n": 1
+     },
+     {
+      "name": "Preserved Collarbone",
+      "n": 1
+     },
+     {
+      "name": "Fracturing Orb",
+      "n": 1
+     }
+    ],
+    "outcomes": [
+     {
+      "label": "Level fractured, then finished",
+      "div": [
+       360,
+       400
+      ],
+      "hit": true,
+      "chance": 0.3333333333333333,
+      "finish": true
+     },
+     {
+      "label": "Fracture missed, sold as it is",
+      "div": [
+       100,
+       150
+      ],
+      "chance": 0.6666666666666666
+     }
+    ],
+    "note": "The fractured amulet is finished with the route the craft network gives (its cost is taken off the 360 to 400); a missed one is sold as the base it still is.",
+    "goal": {
+     "entry": {
+      "base": "Absent Amulet",
+      "ilvl": 80,
+      "rarity": "Rare",
+      "mods": [
+       {
+        "id": "GlobalProjectileSkillGemLevel3",
+        "frac": true
+       }
+      ]
+     },
+     "targets": [
+      {
+       "stat": "+# to Level of all Projectile Skills",
+       "minTier": 1,
+       "required": true
+      },
+      {
+       "stat": "+# to Spirit",
+       "minTier": 1,
+       "required": true
+      },
+      {
+       "stat": "+#% to Quality of all Skills",
+       "minTier": 1,
+       "required": true
+      }
+     ],
+     "item": "Item Class: Amulets\nRarity: Rare\nBought Item\nAbsent Amulet\n--------\nItem Level: 80\n--------\n{ Fractured Suffix Modifier (Tier: 1) }\n+3 to Level of all Projectile Skills",
+     "model": {
+      "ex": 25084,
+      "items": 1,
+      "hit": 0.0228,
+      "uses": [
+       {
+        "name": "Chaos Orb",
+        "n": 233
+       },
+       {
+        "name": "Omen of Light",
+        "n": 1.88
+       },
+       {
+        "name": "Essence of Hysteria",
+        "n": 1
+       },
+       {
+        "name": "Preserved Collarbone",
+        "n": 3.87
+       },
+       {
+        "name": "Omen of Dextral Crystallisation",
+        "n": 2.3
+       },
+       {
+        "name": "Orb of Annulment",
+        "n": 1.88
+       },
+       {
+        "name": "Omen of Abyssal Echoes",
+        "n": 3.87
+       },
+       {
+        "name": "Essence of the Abyss",
+        "n": 1.3
+       }
+      ]
+     },
+     "restart": "never"
+    }
+   }
+  },
+  {
+   "league_scope": [
+    "Forbidden Rites",
+    "Runes of Aldur",
+    "Standard"
+   ],
+   "verdict": "plausible",
+   "source_tier": "C",
+   "min_ilvl": 77,
+   "crafted_slot_use": "Essence of the Breach for the quality, then Perfect Essence of the Mind",
+   "desecrated_slot_use": "hidden for the fracture, then the last suffix",
+   "target": [],
+   "checkpoints": [
+    "A ring whose fracture missed still has the Genesis modifier: finish it more cheaply or sell it.",
+    "Divine the cost efficiency before the fracture."
+   ],
+   "risks": [
+    "The price rests on mana stacking builds of that month.",
+    "The base is the scarce part: the tree gives it rarely."
+   ],
+   "id": "b9",
+   "title": "Buy, craft, sell: Mnemonic Ring for mana stacking",
+   "classes": [
+    "Ring"
+   ],
+   "trade": {
+    "buy": "Mnemonic Rings from the Genesis Tree with T1 \"increased Mana Cost Efficiency of Spells\" (item level 77 or more; T1 spell damage needs 82). The creator bought four for 15 to 20 Divine Orbs each; printing them with Hiveblood gave none in 87 rings.",
+    "sell": "Listed at 420 Divine Orbs; similar rings stood at 391 and none had been listed for more than a day. Plain caster rings from the same tree sold for 50 to 80.",
+    "quoted": "About 200 Chaos Orbs for T1 maximum Mana. The creator's rule: sell 50 Divine Orbs cheaper rather than spend 200 more on a perfect ring."
+   },
+   "steps": [
+    {
+     "text": "At four modifiers: Omen of Dextral Crystallisation with Essence of the Breach takes one suffix away, then Essence of the Abyss and a bone leave a hidden Desecrated modifier. The Fracturing Orb now picks one of three: the cost efficiency one time in three (the video: two of four).",
+     "names": [
+      "Omen of Dextral Crystallisation",
+      "Essence of the Breach",
+      "Essence of the Abyss",
+      "Fracturing Orb"
+     ]
+    },
+    {
+     "text": "Essence of the Breach again, mana catalysts to full quality (a Vaal Catalysing Infuser adds 1 to 2% over it; the first one never corrupts), Orbs of Annulment down to the fractured modifier, then Chaos Orbs for T1 maximum Mana.",
+     "names": [
+      "Essence of the Breach",
+      "Neural Catalyst",
+      "Vaal Catalysing Infuser",
+      "Orb of Annulment",
+      "Chaos Orb"
+     ]
+    },
+    {
+     "text": "Omen of Dextral Exaltation, Omen of Greater Exaltation and a Perfect Exalted Orb: two suffixes. Wanted: cast speed, mana regeneration, intelligence, all elemental resistances, rarity.",
+     "names": [
+      "Omen of Dextral Exaltation",
+      "Omen of Greater Exaltation",
+      "Perfect Exalted Orb"
+     ]
+    },
+    {
+     "text": "Omen of Dextral Crystallisation with Perfect Essence of the Mind: increased maximum Mana as the crafted prefix, and one of the two suffixes goes (an even chance that it is the poor one).",
+     "names": [
+      "Omen of Dextral Crystallisation",
+      "Perfect Essence of the Mind"
+     ]
+    },
+    {
+     "text": "A Perfect Exalted Orb for the open suffix; Omen of Whittling with a Greater Chaos Orb when it is poor. Last an Ancient Collarbone on the suffix, with Omen of Light and an Orb of Annulment to try again.",
+     "names": [
+      "Perfect Exalted Orb",
+      "Omen of Whittling",
+      "Greater Chaos Orb",
+      "Ancient Collarbone",
+      "Omen of Light",
+      "Orb of Annulment"
+     ]
+    }
+   ],
+   "sources": [
+    {
+     "label": "\"Poe2-0.5.5 How to Profit craft Mana Stacking Rings\" (video transcript supplied by the player, patch 0.5.5; the channel's intro is SaVeQ's)",
+     "tier": "C"
+    }
+   ],
+   "profit": {
+    "said": "2026-09",
+    "per": "fracture attempt on a bought ring",
+    "buy": {
+     "div": [
+      15,
+      20
+     ]
+    },
+    "uses": [
+     {
+      "name": "Omen of Dextral Crystallisation",
+      "n": 1
+     },
+     {
+      "name": "Essence of the Breach",
+      "n": 1
+     },
+     {
+      "name": "Essence of the Abyss",
+      "n": 1
+     },
+     {
+      "name": "Preserved Collarbone",
+      "n": 1
+     },
+     {
+      "name": "Fracturing Orb",
+      "n": 1
+     }
+    ],
+    "outcomes": [
+     {
+      "label": "Cost efficiency fractured, then finished",
+      "div": [
+       391,
+       420
+      ],
+      "hit": true,
+      "chance": 0.3333333333333333,
+      "finish": true
+     },
+     {
+      "label": "Fracture missed, sold as a caster ring",
+      "div": [
+       15,
+       80
+      ],
+      "chance": 0.6666666666666666
+     }
+    ],
+    "note": "The fractured ring is finished with the route the craft network gives (T1 maximum Mana and mana regeneration; its cost is taken off the 391 to 420). The creator's own finish also has a crafted Mana prefix and a third suffix.",
+    "goal": {
+     "entry": {
+      "base": "Mnemonic Ring",
+      "ilvl": 80,
+      "rarity": "Rare",
+      "mods": [
+       {
+        "id": "SpellCostEfficiency6",
+        "frac": true
+       }
+      ]
+     },
+     "targets": [
+      {
+       "stat": "#% increased Mana Cost Efficiency of Spells",
+       "minTier": 1,
+       "required": true
+      },
+      {
+       "stat": "+# to maximum Mana",
+       "minTier": 1,
+       "required": true
+      },
+      {
+       "stat": "#% increased Mana Regeneration Rate",
+       "minTier": 2,
+       "required": true
+      }
+     ],
+     "item": "Item Class: Rings\nRarity: Rare\nBought Item\nMnemonic Ring\n--------\nItem Level: 80\n--------\n{ Fractured Prefix Modifier }\n23(23-26)% increased Mana Cost Efficiency of Spells",
+     "model": {
+      "ex": 8462,
+      "items": 1,
+      "hit": 0.03,
+      "uses": [
+       {
+        "name": "Chaos Orb",
+        "n": 68
+       },
+       {
+        "name": "Preserved Collarbone",
+        "n": 11
+       },
+       {
+        "name": "Omen of Abyssal Echoes",
+        "n": 11
+       },
+       {
+        "name": "Essence of Hysteria",
+        "n": 0.85
+       },
+       {
+        "name": "Omen of Sinistral Exaltation",
+        "n": 3.7
+       },
+       {
+        "name": "Greater Exalted Orb",
+        "n": 4.96
+       },
+       {
+        "name": "Perfect Essence of the Mind",
+        "n": 2.55
+       },
+       {
+        "name": "Omen of Sinistral Necromancy",
+        "n": 11
+       }
+      ]
+     },
+     "restart": "never"
+    }
+   }
+  },
+  {
+   "league_scope": [
+    "Forbidden Rites",
+    "Runes of Aldur",
+    "Standard"
+   ],
+   "verdict": "plausible",
+   "source_tier": "C",
+   "min_ilvl": 82,
+   "crafted_slot_use": "Essence of Horror and Mystic Alloy (Astrid's Creativity)",
+   "desecrated_slot_use": "hidden for the fracture, then 35% movement speed",
+   "target": [],
+   "checkpoints": [
+    "A fracture on a poor modifier still gives sellable boots; do not throw the pair away.",
+    "Price the boots before the sanctification: it can also lower the values."
+   ],
+   "risks": [
+    "The fractured suffix of the finished boots is replaced by nothing: the two crafted modifiers take the two other suffix slots."
+   ],
+   "id": "b10",
+   "title": "Buy, craft, sell: energy shield boots with two crafted suffixes, then Sanctify",
+   "classes": [
+    "Boots"
+   ],
+   "trade": {
+    "buy": "Luxurious Slippers of item level 82, about one Divine Orb each. Sandsworn Sandals stood at 15 and Sekhema Sandals at 35: the creator calls those overpriced.",
+    "sell": "About 100 Divine Orbs before sanctifying (one with a T2 resistance sold for 100; one with movement speed fractured and little else for 50). A good sanctification multiplies that.",
+    "quoted": "Fracturing Orbs fell from 12 Divine Orbs to less in a day. Six pairs were fractured in one session."
+   },
+   "steps": [
+    {
+     "text": "Perfect Orb of Transmutation and Perfect Orb of Augmentation; Orb of Annulment and again until the Magic boots carry a T1 resistance, 35% movement speed or intelligence. Then a Perfect Regal Orb.",
+     "names": [
+      "Perfect Orb of Transmutation",
+      "Perfect Orb of Augmentation",
+      "Orb of Annulment",
+      "Perfect Regal Orb"
+     ]
+    },
+    {
+     "text": "Omen of Sinistral Necromancy and a Preserved Rib (a hidden Desecrated prefix), then a Fracturing Orb: one of the three revealed modifiers.",
+     "names": [
+      "Omen of Sinistral Necromancy",
+      "Preserved Rib",
+      "Fracturing Orb"
+     ]
+    },
+    {
+     "text": "Prefixes: Orbs of Annulment, then Omen of Sinistral Exaltation, Omen of Greater Exaltation and a Perfect Exalted Orb for T1 Energy Shield and T1 or T2 maximum Mana; annul and repeat.",
+     "names": [
+      "Orb of Annulment",
+      "Omen of Sinistral Exaltation",
+      "Omen of Greater Exaltation",
+      "Perfect Exalted Orb"
+     ]
+    },
+    {
+     "text": "The Desecrated prefix: Omen of Sinistral Necromancy, Omen of Abyssal Echoes and an Ancient Rib for 35% movement speed; Omen of Light with an Orb of Annulment to try again.",
+     "names": [
+      "Omen of Sinistral Necromancy",
+      "Omen of Abyssal Echoes",
+      "Ancient Rib",
+      "Omen of Light"
+     ]
+    },
+    {
+     "text": "Socket Astrid's Creativity, slam the two open suffixes (Omen of Greater Exaltation with an Exalted Orb), then Essence of Horror and Mystic Alloy: with the prefixes full each replaces a suffix. Effect of socketed augments and Spirit are the two crafted suffixes.",
+     "names": [
+      "Astrid's Creativity",
+      "Omen of Greater Exaltation",
+      "Exalted Orb",
+      "Essence of Horror",
+      "Mystic Alloy"
+     ]
+    },
+    {
+     "text": "Quality, Perfect Iron Runes, then Omen of Sanctification with a Divine Orb.",
+     "names": [
+      "Perfect Iron Rune",
+      "Omen of Sanctification",
+      "Divine Orb"
+     ]
+    }
+   ],
+   "sources": [
+    {
+     "label": "\"How to Profit Craft ES Boots  PoE2 0.5.5\" (video transcript supplied by the player, patch 0.5.5)",
+     "tier": "C"
+    }
+   ],
+   "profit": {
+    "said": "2026-09",
+    "per": "pair",
+    "buy": {
+     "div": [
+      1,
+      1
+     ]
+    },
+    "uses": [
+     {
+      "name": "Perfect Orb of Transmutation",
+      "n": 1
+     },
+     {
+      "name": "Perfect Orb of Augmentation",
+      "n": 1
+     },
+     {
+      "name": "Perfect Regal Orb",
+      "n": 1
+     },
+     {
+      "name": "Omen of Sinistral Necromancy",
+      "n": 2
+     },
+     {
+      "name": "Preserved Rib",
+      "n": 1
+     },
+     {
+      "name": "Fracturing Orb",
+      "n": 1
+     },
+     {
+      "name": "Omen of Sinistral Exaltation",
+      "n": 3
+     },
+     {
+      "name": "Omen of Greater Exaltation",
+      "n": 4
+     },
+     {
+      "name": "Perfect Exalted Orb",
+      "n": 3
+     },
+     {
+      "name": "Orb of Annulment",
+      "n": 6
+     },
+     {
+      "name": "Omen of Abyssal Echoes",
+      "n": 2
+     },
+     {
+      "name": "Ancient Rib",
+      "n": 2
+     },
+     {
+      "name": "Omen of Light",
+      "n": 1
+     },
+     {
+      "name": "Astrid's Creativity",
+      "n": 1
+     },
+     {
+      "name": "Exalted Orb",
+      "n": 1
+     },
+     {
+      "name": "Essence of Horror",
+      "n": 1
+     },
+     {
+      "name": "Mystic Alloy",
+      "n": 1
+     },
+     {
+      "name": "Perfect Iron Rune",
+      "n": 2
+     }
+    ],
+    "outcomes": [
+     {
+      "label": "Finished, not sanctified",
+      "div": [
+       50,
+       100
+      ]
+     }
+    ],
+    "note": "The counts are those of the pairs in the video (three rounds on the prefixes, two bones); yours will differ."
+   }
+  },
+  {
+   "league_scope": [
+    "Forbidden Rites",
+    "Runes of Aldur",
+    "Standard"
+   ],
+   "verdict": "plausible",
+   "source_tier": "C",
+   "min_ilvl": 79,
+   "crafted_slot_use": "Greater Essence of Enhancement",
+   "desecrated_slot_use": "a suffix",
+   "target": [],
+   "checkpoints": [
+    "With a poor prefix after the slam do not pay for the Echoes: finish cheaply and sell."
+   ],
+   "risks": [
+    "Works while players still dress their characters: the first week."
+   ],
+   "id": "b11",
+   "title": "Buy, craft, sell: body armours on the first days of a league",
+   "classes": [
+    "Body Armour"
+   ],
+   "trade": {
+    "buy": "Magic body armours of item level 79 or more with a flat defence modifier of T1 to T3 (Energy Shield on a Vile Robe, armour or evasion on the others) and no \"% increased\" defence modifier: the essence adds that one. About one Exalted Orb each.",
+    "sell": "The creator makes his first Divine Orbs of every league this way; no price per armour is given.",
+    "quoted": "None beyond the base price."
+   },
+   "steps": [
+    {
+     "text": "Greater Essence of Enhancement: Rare, with increased defences as the crafted prefix.",
+     "names": [
+      "Greater Essence of Enhancement"
+     ]
+    },
+    {
+     "text": "Omen of Sinistral Exaltation and an Exalted Orb for the third prefix.",
+     "names": [
+      "Omen of Sinistral Exaltation",
+      "Exalted Orb"
+     ]
+    },
+    {
+     "text": "A Preserved Rib on the suffix; Omen of Abyssal Echoes when the armour is worth it.",
+     "names": [
+      "Preserved Rib",
+      "Omen of Abyssal Echoes"
+     ]
+    },
+    {
+     "text": "Exalted Orbs for what is open, quality, Iron Runes, sell.",
+     "names": [
+      "Exalted Orb",
+      "Greater Iron Rune"
+     ]
+    }
+   ],
+   "sources": [
+    {
+     "label": "\"How I Make Currency EARLY With Simple Crafts  PoE2 0.5.5\" (video transcript supplied by the player, patch 0.5.5)",
+     "tier": "C"
+    }
+   ],
+   "profit": {
+    "said": "2026-09",
+    "per": "armour",
+    "buy": {
+     "ex": [
+      1,
+      1
+     ]
+    },
+    "uses": [
+     {
+      "name": "Greater Essence of Enhancement",
+      "n": 1
+     },
+     {
+      "name": "Omen of Sinistral Exaltation",
+      "n": 1
+     },
+     {
+      "name": "Exalted Orb",
+      "n": 3
+     },
+     {
+      "name": "Preserved Rib",
+      "n": 1
+     },
+     {
+      "name": "Greater Iron Rune",
+      "n": 2
+     }
+    ],
+    "outcomes": [],
+    "note": "The creator gives no sale price: check a finished armour on trade and enter it."
+   }
+  },
+  {
+   "league_scope": [
+    "Forbidden Rites",
+    "Runes of Aldur",
+    "Standard"
+   ],
+   "verdict": "plausible",
+   "source_tier": "C",
+   "min_ilvl": 65,
+   "crafted_slot_use": "a Greater resistance essence",
+   "desecrated_slot_use": "a two-resistance suffix",
+   "target": [],
+   "checkpoints": [
+    "Add up the resistances the belt would have and look that belt up before the collarbone is used."
+   ],
+   "risks": [
+    "Early league only; later the collarbone costs more than such a belt sells for."
+   ],
+   "id": "b12",
+   "title": "Buy, craft, sell: belts with Life and three resistances",
+   "classes": [
+    "Belt"
+   ],
+   "trade": {
+    "buy": "Magic belts with maximum Life (bought, or from the Genesis Tree).",
+    "sell": "The creator counts before the bone: the finished belt must pay the collarbone and leave about 50 Exalted Orbs.",
+    "quoted": "The Preserved Collarbone is the cost of the craft, not the base."
+   },
+   "steps": [
+    {
+     "text": "A Greater resistance essence the belt does not have yet (fire, cold or lightning).",
+     "names": [
+      "Greater Essence of Insulation",
+      "Greater Essence of Thawing",
+      "Greater Essence of Grounding"
+     ]
+    },
+    {
+     "text": "Omen of Dextral Necromancy, the cheapest lich omen, Omen of Abyssal Echoes and a Preserved Collarbone: every lich has four two-resistance suffixes on belts.",
+     "names": [
+      "Omen of Dextral Necromancy",
+      "Omen of the Sovereign",
+      "Omen of Abyssal Echoes",
+      "Preserved Collarbone"
+     ]
+    },
+    {
+     "text": "Exalted Orbs for what is open.",
+     "names": [
+      "Exalted Orb"
+     ]
+    }
+   ],
+   "sources": [
+    {
+     "label": "\"How I Make Currency EARLY With Simple Crafts  PoE2 0.5.5\" (video transcript supplied by the player, patch 0.5.5)",
+     "tier": "C"
+    }
+   ],
+   "profit": {
+    "said": "2026-09",
+    "per": "belt",
+    "buy": {
+     "ex": [
+      1,
+      5
+     ]
+    },
+    "uses": [
+     {
+      "name": "Greater Essence of Thawing",
+      "n": 1
+     },
+     {
+      "name": "Omen of Dextral Necromancy",
+      "n": 1
+     },
+     {
+      "name": "Omen of the Sovereign",
+      "n": 1
+     },
+     {
+      "name": "Omen of Abyssal Echoes",
+      "n": 1
+     },
+     {
+      "name": "Preserved Collarbone",
+      "n": 1
+     },
+     {
+      "name": "Exalted Orb",
+      "n": 2
+     }
+    ],
+    "outcomes": [],
+    "note": "No sale price in the source: enter what such a belt is listed for."
+   }
   }
  ],
  "claims": [

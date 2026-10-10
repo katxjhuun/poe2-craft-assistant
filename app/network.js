@@ -93,11 +93,28 @@
       for (const y of g.ess || []) see(y.mod);
       if (top * SANCT_HI >= g.minValue) { g.stretch = SANCT_HI; g.stretchFrom = top; }
     }
-    const cannot = raw.map((g) => ({ label: g.label, why: P.goalFeasible(ctx, st0, g) })).filter((x) => x.why);
+    // A target that this base cannot roll (a Genesis Tree modifier, one that a Rune of Aldur transformed, a tier over
+    // the item level) is no reason to refuse while the item carries it: it is `held`. Nothing brings it back once it
+    // is gone, and no white base can take the item's place: see BOUND.
+    for (const g of raw) {
+      const why = P.goalFeasible(ctx, st0, g);
+      if (!why || !/cannot roll|no tier reaches/.test(why)) continue;
+      if (st0.mods.some((m) => m.id && P.meets(m, g, g.eff))) g.held = true;
+      // (a modifier the base does not roll has no tier of the base's: the one on the item is the target as it is)
+      else if (g.minValue == null && st0.mods.some((m) => m.id && !m.tier && m.fam === g.fam && (!g.des || m.des))) { g.held = true; g.tier = null; g.eff = null; }
+    }
+    const cannot = raw.filter((g) => !g.held).map((g) => ({ label: g.label, why: P.goalFeasible(ctx, st0, g) })).filter((x) => x.why);
     if (cannot.length) return { impossible: cannot };
 
     const priceOf = input.priceOf || (() => null);
-    const baseCost = input.baseCost > 0 ? +input.baseCost : 0;
+    // What giving the item up means (input.restart): 'white', a white base at input.baseCost (the default); 'item',
+    // another item like the pasted one at input.itemCost (a bought start); 'never', this item is the only one.
+    // BOUND: a restart does not lead to a white base. An item that holds a target which a white base cannot get is
+    // always bound. NONEW: there is no other item (never, or no price for one): every step that gives the item up
+    // or can lose it is left out.
+    const BOUND = input.restart === 'item' || input.restart === 'never' || raw.some((g) => g.held);
+    const NONEW = BOUND && !(input.restart === 'item' && input.itemCost > 0);
+    const baseCost = BOUND ? (NONEW ? 0 : +input.itemCost) : input.baseCost > 0 ? +input.baseCost : 0;
     const price = (name) => {
       if (name === 'New base') return baseCost;
       if (ctx.legacy.has(name)) return null;
@@ -1540,11 +1557,11 @@
       }
       /** An edge that does not depend on the node: made once (make pushes it), then the same object for every node. */
       const shared = (key, make) => { const e = edgePool.get(key); if (e) { list.push(e); return; } const n = list.length; make(); if (list.length > n) edgePool.set(key, list[list.length - 1]); };
-      if (keyOf(S) !== keyOf(N0)) shared('newbase', () => push({ op: 'newbase' }, baseCost, [[1, RESTART]]));
+      if (!NONEW && keyOf(S) !== keyOf(BOUND ? startS : N0)) shared('newbase', () => push({ op: 'newbase' }, baseCost, [[1, RESTART]]));
       // ---- steps that lock the item (Corrupted or Sanctified): it is finished then, or lost and a new base is due.
       // `lost`: the step with the chance p of finishing; the base of the other case is in its cost and its counts.
       const lost = (a, cost, p) => {
-        if (!(p > 1e-12)) return;
+        if (!(p > 1e-12) || (NONEW && p < 1)) return;
         hasLost = true;
         shared(JSON.stringify(a) + '|' + cost + '|' + p, () => push(Object.assign(a, { bases: 1 - p, also: [['New base', 1 - p]] }), cost + (1 - p) * baseCost, p < 1 ? [[p, FINISHED], [1 - p, RESTART]] : [[1, FINISHED]]));
       };
@@ -1854,7 +1871,7 @@
       // Astrid's Creativity is the one the network sockets that comes back: giving the item up this way costs the orb
       // and returns the rune for the next base.
       if (EXTRACT != null && AST && AST.price != null && (S.u & R_ASTRID)) {
-        shared('extraction', () => push({ op: 'extraction', bases: 1, also: [['New base', 1], [AST.item, -1]] }, EXTRACT + baseCost - AST.price, [[1, RESTART]]));
+        if (!NONEW) shared('extraction', () => push({ op: 'extraction', bases: 1, also: [['New base', 1], [AST.item, -1]] }, EXTRACT + baseCost - AST.price, [[1, RESTART]]));
       }
       // runes that open a slot or a pool
       for (const [R, bit] of [[AST, R_ASTRID], [SER, R_SERLE], [POOL, R_POOL]]) {
@@ -1995,7 +2012,8 @@
     }
     const timing = { expand: 0, solve: 0 };
     let tick = Date.now();
-    const start = idOf(startS), n0 = idOf(cp(N0));
+    // (n0: the node a restart leads to: a white base, or with BOUND the item as it was pasted)
+    const start = idOf(startS), n0 = BOUND ? start : idOf(cp(N0));
     for (const e of entries) e.id = idOf(e.S);
     // input.deadline (a time in ms, for the sweeps: a process must end on time): past it there is no answer
     const late = () => input.deadline > 0 && Date.now() > input.deadline;
@@ -2569,7 +2587,11 @@
     timing.solve = Date.now() - tick;
     if (timedOut) return { unsupported: 'out of time', states: N };
     // no rule set ends with the targets (nothing the network knows brings this item, or a white base, to them)
-    if (!done(startS) && !(V[start] < BIG / 1000)) return { impossible: [{ label: goals.map((g) => g.label).join(' + '), why: 'no currency with a price brings this item to all of these targets' }] };
+    if (!done(startS) && !(V[start] < BIG / 1000)) {
+      // (an item that is the only one: every way to the targets can lose a modifier that must stay)
+      if (NONEW) return { impossible: [{ label: goals.map((g) => g.label).join(' + '), why: 'every way to these targets can lose a modifier that must stay, and no white base can take this item\'s place. Give the price of another item like this one (Plan options, "If given up") and the route can take the risk' }] };
+      return { impossible: [{ label: goals.map((g) => g.label).join(' + '), why: 'no currency with a price brings this item to all of these targets' }] };
+    }
 
     // ---- what the rule set uses: every currency's expected count, and how far the cost spreads
     /** Expected counts of every currency and the cost's second moment, for the rule set as it stands. */
@@ -2616,7 +2638,10 @@
     }
     const usesOf = (s, name) => { const so = solution(), k = so.names.indexOf(name); return k < 0 ? 0 : so.uses(s, k); };
     const net = {
-      ctx, goals, states, acts, pol, start, n0, N, timing, lite, track: followed.filter(Boolean).length, classes: NCLS, whittle: WBEST ? 'best' : WNONE ? 'none' : 'levels', wellRank, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
+      ctx, goals, states, acts, pol, start, n0, N, timing, lite,
+      // (bound: a restart is not a white base: another item like the pasted one, or none; held: the targets that no white base can get)
+      bound: BOUND ? { mode: NONEW ? 'never' : 'item', held: raw.filter((g) => g.held).map((g) => g.label), cost: baseCost } : null,
+      track: followed.filter(Boolean).length, classes: NCLS, whittle: WBEST ? 'best' : WNONE ? 'none' : 'levels', wellRank, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
       get rounds() { return rounds; },
       /** Did the last valuation settle (see anderson)? A route whose values did not is not to be trusted. */
       get settled() { return !timing.unsettled || unsolved() <= 1e-7; },
@@ -3028,6 +3053,10 @@
     if (net.unsupported) return { net: true, label: 'Route', unsupported: net.unsupported };
     if (net.impossible) return { net: true, label: 'Route', impossible: net.impossible.map((x) => `${x.label}: ${x.why}`), steps: null };
     const s = net.start, done = net.done(s);
+    // an item that is the only one and that every way to the targets can lose: no route can promise it
+    if (net.bound && net.bound.mode === 'never' && !done && !(net.cost(s) < 1e11)) {
+      return { net: true, label: 'Route', steps: null, impossible: [`${net.bound.held.length ? net.bound.held.join(', ') + ': no white base can get ' + (net.bound.held.length > 1 ? 'them' : 'it') + ', and ' : ''}every way to the targets can lose a modifier that must stay. Give the price of another item like this one (Plan options, "If given up") and the route can take the risk.`] };
+    }
     const step = net.step(s), B = opts.budget > 0 ? +opts.budget : 0;
     // Omen of Sanctification as the step to use now: the chance for the values this very item has (the route's own
     // number is for a value anywhere under the wanted one: a node does not know the value)
@@ -3049,7 +3078,7 @@
     const seen = new Set();
     return {
       net: true, label: 'Route', goals: net.goals.map(plain), params: null, nodes: net.N, lite: net.lite, track: net.track, ms: Date.now() - t0, timing: net.timing,
-      meanCost: net.cost(s), sd: net.sd(s), budget: B, p: B > 0 ? net.within(s, B) : null, bases: net.bases(s), charge,
+      meanCost: net.cost(s), sd: net.sd(s), budget: B, p: B > 0 ? net.within(s, B) : null, bases: net.bases(s), charge, bound: net.bound,
       next: done ? { done: true } : step ? Object.assign({}, step.a, { names: well(step.names), hit: net.hit(s) }, step.a.op === 'lock' ? { look: net.lockList(s, 10), plan: null, also: null } : null, sanctNow != null ? { ends: sanctNow } : step.a.bases != null && step.a.op !== 'extraction' ? { ends: 1 - step.a.bases } : null)
         : { fail: 'No currency brings this item to the targets.' },
       // the materials of the whole craft

@@ -165,3 +165,39 @@ test('claims about a crafting term show the game help text next to them, without
   assert.ok(G.gameTexts(ix, 'Desecrating a full item removes a random modifier').some((r) => /If modifiers are full/.test(r)));
   assert.deepEqual(G.gameTexts(ix, 'Chaos Orb removes one modifier and adds one'), []);
 });
+
+test('profit crafts: every currency is a real one, the bought item reads, its targets resolve and the model is there', () => {
+  const names = new Set(Object.values(kb.currency_roster).flat().concat(Object.keys(kb.augments || {})));
+  const profit = lib.recipes.filter((r) => r.profit);
+  assert.ok(profit.length >= 7, 'the profit crafts of the transcripts are in the library');
+  for (const r of profit) {
+    const p = r.profit;
+    assert.ok(r.trade && r.trade.buy && r.trade.sell, r.id + ': says what to buy and what it sells for');
+    assert.match(p.said, /^\d{4}-\d{2}(-\d{2})?$/, r.id + ': the numbers carry their date');
+    assert.ok(p.buy && (p.buy.div || p.buy.ex), r.id);
+    for (const u of p.uses) { assert.ok(names.has(u.name), `${r.id}: "${u.name}" is not a currency item`); assert.ok(u.n > 0, r.id); }
+    for (const st of r.steps) for (const n of st.names) assert.ok(names.has(n), `${r.id}: step names "${n}"`);
+    for (const o of p.outcomes) assert.ok(o.div[0] <= o.div[1] && o.label, r.id);
+    if (!p.goal) continue;
+    // the item the craft starts from, as the page loads it
+    const read = E.parseItem(ix, p.goal.item);
+    assert.ok(read.item && read.item.base === p.goal.entry.base, r.id);
+    assert.ok(!read.warnings.some((w) => w.level === 'error'), r.id + ': ' + JSON.stringify(read.warnings.filter((w) => w.level === 'error')));
+    for (const t of p.goal.targets) assert.ok(E.resolveTemplateTarget(ix, read.item, t.stat), `${r.id}: "${t.stat}" does not resolve on ${read.item.base}`);
+    assert.ok(p.goal.model && p.goal.model.ex > 0 && p.goal.model.items >= 1, r.id + ': scripts/profit_recipes.js --write was run');
+    assert.ok(['item', 'never'].includes(p.goal.restart), r.id);
+  }
+  assert.ok(lib.meta.profitModel && lib.meta.profitModel.divine > 0);
+});
+
+test('a recipe goal can name a Desecrated modifier, and one the item carries though the base does not roll it', () => {
+  const amulet = E.parseItem(ix, ['Item Class: Amulets', 'Rarity: Normal', 'Solar Amulet', '--------', 'Item Level: 80'].join('\n')).item;
+  const q = E.resolveTemplateTarget(ix, amulet, '+#% to Quality of all Skills');
+  assert.ok(q && q.group === 'desecrated' && q.side === 'suffix');
+  // a natural modifier still comes first
+  assert.equal(E.resolveTemplateTarget(ix, amulet, '+# to Level of all Spell Skills').group, 'suffix');
+  const ring = E.parseItem(ix, ['Item Class: Rings', 'Rarity: Rare', 'Test', 'Mnemonic Ring', '--------', 'Item Level: 80', '--------', '{ Fractured Prefix Modifier }', '24(23-26)% increased Mana Cost Efficiency of Spells'].join('\n')).item;
+  assert.equal(E.resolveTemplateTarget(ix, ring, '#% increased Mana Cost Efficiency of Spells').fam, 'SpellManaCostEfficiency');
+  const bare = E.parseItem(ix, ['Item Class: Rings', 'Rarity: Normal', 'Mnemonic Ring', '--------', 'Item Level: 80'].join('\n')).item;
+  assert.equal(E.resolveTemplateTarget(ix, bare, '#% increased Mana Cost Efficiency of Spells'), null, 'not on a ring that does not carry it');
+});

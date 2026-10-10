@@ -89,6 +89,8 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
   const whyOf = new Map(), detourWhy = new Map(), endWhy = new Map(), gaveUpWhy = new Map();
   let gaveUp = 0;
   // a step that removes a modifier may remove the one that is in a target's way (a bone does on a full item)
+  // a new start: a white base, or with a bound route (net.bound) another item like the pasted one
+  const another = (st) => (net.bound ? P.toState(ctx, input.item, input.locks) : P.apply(ctx, st, { op: 'newbase' }, r).state);
   const removes = (a, st) => a.op === 'chaos' || a.op === 'annul' || a.op === 'pessence' || a.op === 'liquid' || a.op === 'newbase' || a.op === 'extraction' || a.op === 'vaal'
     || (a.op === 'bone' && (a.putrefy || a.mark || (!a.hide && open(st, 'prefix') + open(st, 'suffix') === 0)));
   /** Can edge e of the node do nothing on this item: all it could add is among the targets kept out (blocked), and it removes nothing? */
@@ -110,7 +112,7 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
       // (which the step that locked it has paid for)
       if (st.corrupted || st.sanctified) {
         if (net.finished && net.finished(st)) { ok = true; break; }
-        st = P.apply(ctx, st, { op: 'newbase' }, r).state;
+        st = another(st);
         st.corrupted = false; st.sanctified = false; st.destroyed = false;
         from = -1;
       }
@@ -151,7 +153,7 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
           stuck.set(node, c);
           if (c > 5) {
             gaveUp++; note(gaveUpWhy, step.a, why + ' (' + look(st) + ')');
-            st = P.apply(ctx, st, { op: 'newbase' }, r).state; st.destroyed = false;
+            st = another(st); st.destroyed = false;
             cost += net.price('New base') || 0;
             stuck.clear(); from = -1;
             continue;
@@ -222,9 +224,10 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
         refuse(a);
         const pick = wanted(st);
         // (with Abyssal Echoes the first three options are declined when no target is among them: `again` is the reroll)
-        st = P.apply(ctx, st, a, r, (opts, again, at, side) => pick(opts) || (a.echoes && !again ? null : a.putrefy ? spare(opts, at, side, a.quality === 'Ancient' ? 40 : 0) : dull(opts))).state;
+        if (a.op === 'newbase' && net.bound) st = another(st);
+        else st = P.apply(ctx, st, a, r, (opts, again, at, side) => pick(opts) || (a.echoes && !again ? null : a.putrefy ? spare(opts, at, side, a.quality === 'Ancient' ? 40 : 0) : dull(opts))).state;
         // (an Orb of Extraction destroys the item: the craft goes on with a new base, which the step's cost includes)
-        if (a.op === 'extraction') { st = P.apply(ctx, st, { op: 'newbase' }, r).state; st.destroyed = false; }
+        if (a.op === 'extraction') { st = another(st); st.destroyed = false; }
       }
     }
     if (ok) { done++; sum += cost; sq += cost * cost; }

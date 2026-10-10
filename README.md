@@ -39,6 +39,8 @@ scripts\selftest\capped.cmd node scripts/selftest/sweep.js --workers 25   # tam 
 scripts\selftest\capped.cmd node scripts/selftest/sweep_planner.js --workers 25   # planner'ı taramaya karşı ölçer (~30 dk)
 python scripts/kb_update.py build          # yeni bilgi tabanı adayı, sonra check / approve
 python scripts/fetch_icons.py              # yeni fiyatlı eşyaların ikonları, sonra scripts/build_icons.py
+node scripts/selftest/reader_check.js      # okuyucu: her base, taşıyabildiği her mod, iki kopyalama biçimi (~20 sn)
+node scripts/profit_recipes.js --write     # kâr tariflerini denetler, hedefli olanların ağ maliyetini yazar
 ```
 
 `.kb_cache/` (indirilen oyun verisi, fiyat saatleri, ikonlar) ve `app/dist/` depoya girmez.
@@ -174,6 +176,34 @@ beri herkese açık, Actions dakikaları ücretsiz. Taramanın her altıncı çe
 hedef, item'da başka elementin direnci, rune havuzu, dört suffix (Serle's Triumph), beş modlu jewel, iki crafted mod
 (Astrid's Creativity). Sonuçlar işin özetinde ve `sweep-*` çıktılarında.
 
+### Eşyadan vazgeçmek ne demek (`input.restart`)
+
+Ağda "yeni base" kenarı varsayılan olarak beyaz bir base'e götürür. İki durum daha var (10 Ekim 2026):
+
+- `restart: 'item'` + `itemCost`: başlangıç satın alınmış bir eşyadır; vazgeçilince aynısından bir tane daha alınır.
+  Yeniden başlama düğümü yapıştırılan eşyanın kendisidir (`net.n0 === net.start`), fiyatı `itemCost`. Sayfada
+  Plan options > "If given up" > "another item like this".
+- `restart: 'never'`, ya da başka eşya fiyatı verilmemişse: eşya tektir. Eşyadan vazgeçen ve onu kaybedebilen her kenar
+  (yeni base, Vaal Orb, Sanctification, Putrefaction, Extraction) ağdan çıkar.
+- Beyaz bir base'in hiçbir zaman alamayacağı bir hedef eşyanın üzerindeyse (Genesis Tree modu, Rune of Aldur'un
+  çevirdiği mod, item seviyesinin üstünde bir tier) hedef `held` olur ve eşya kendiliğinden bağlıdır (`net.bound`).
+  Eskiden böyle bir istek "bu mod bu base'de atılamaz" diye geri çevriliyordu. Tutulan mod kaybedilebiliyorsa ve
+  başka eşya fiyatı yoksa cevap, nedenini söyleyen bir "imkânsız"dır.
+
+## Kâr tarifleri (`app/data/recipes_0.5.5.json`, `profit` alanı)
+
+"Al, craftla, sat" tarifleri: oyuncunun verdiği video dökümlerinden (depoda değil) okunan yöntemler. Her tarifte ne
+alınacağı, bir denemenin malzemeleri (`uses`), kaynağın söylediği alış ve satış fiyatları tarihleriyle (`buy`,
+`outcomes`) ve varsa ağın çözebileceği hedef (`goal`: başlangıç eşyası + hedef modlar) bulunur.
+
+- Sayfa (Recipes & guides > Profit crafts) malzemeleri o anki borsa fiyatlarıyla toplar; satış fiyatı kaynağın
+  rakamıdır, çünkü trade sitesi sorgulanmaz. Oyuncu kendi alış ve satış fiyatını girince kâr ona göre hesaplanır.
+- Hedefli tariflerde ağ, satın alınan eşyadan hedefe giden rotayı o anki fiyatlarla ayrı bir worker'da çözer:
+  rotanın maliyeti, ortalama kaç eşya gittiği ve tek denemenin isabet şansı ağın kendi sayılarıdır.
+- "Load this craft" başlangıç eşyasını ve hedefleri sayfaya koyar, yeniden başlama biçimini ve eşya fiyatını ayarlar.
+- `scripts/profit_recipes.js` adları ve etiketleri denetler; `--write` başlangıç eşyasının metnini ve ağın o günkü
+  maliyetini (`goal.model`, fiyat günü `meta.profitModel`) dosyaya yazar. Sayfa canlı sonuç gelene kadar onu gösterir.
+
 ## Tam tarama (`scripts/selftest/sweep.js`)
 
 (Eski planner'ın strateji ayarları için. 8 Ekim 2026'dan beri sayfa bu planner'ı kullanmaz; simülatör ağın denetçisi olarak kalır.)
@@ -251,7 +281,7 @@ Amaç: yapıştırılan item hangi durumda olursa olsun, hedef item'e giden craf
 - Beyaz bazdan başlayan planlarda yeni baza dönmek çoğu zaman pahalı omen'lerle düzeltmekten ucuzdur ama çok sayıda baz ister. Baz fiyatı ve eşya başına baz sınırı oyuncunun girdisidir.
 - Rare item değeri kullanıcının kaydettiği fiyatlardan tahmin edilir. Price check (Exiled Exchange 2'den uyarlandı) aramayı kurar ve resmi sitede açar; ilan çekilmez.
 - Unique fiyatları poe.ninja'dan gelir; ilan sayısı olmadığı için nadir unique'lerde gerçek satıştan uzak olabilir.
-- Ctrl+C (basit) metninde tier yoktur; aynı metne uyan hibrit ve yerel/genel modlar seçim için işaretlenir.
+- Ctrl+C (basit) metninde tier ve taraf yoktur; aynı metne uyan hibrit ve yerel/genel modlar, aynı satırın hem prefix hem suffix olabildiği modlar (Mark of the Abyssal Lord) seçim için işaretlenir. `scripts/selftest/reader_check.js` 1.617 base'in taşıyabildiği her modu (doğal, Desecrated, essence/alloy/liquid, rune havuzu; fractured ve Corrupted işaretleriyle) iki biçimde yazıp geri okur: Alt+Ctrl+C'de 141.968 modun hepsi doğru (10'u sorulur), Ctrl+C'de yanlış okunan yok, 691'i sorulur. Rune'u sonradan değiştirilmiş eşyadaki rune havuzu modları da okunur.
 - Fiyat paketi npm'de herkese açık; Standard ligde EE2 ile resmi özet arasındaki fark koruma sınırına yakın.
 - Veri 0.5.5'e kilitli. Yeni oyun verisi çıkınca sayfada uyarı bandı çıkar; bilgi tabanını yeniden üretmek elle yapılır: `kb_update.py build`, `check`, `approve`, sonra yayın.
 - Self-test simülatörün veriye ve kurallara uyduğunu doğrular, oyunun davranışını değil. Oyun içi testlerin (t1–t31) hepsi kapandı.

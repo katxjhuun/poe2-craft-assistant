@@ -620,3 +620,63 @@ test('network: the cheaper orb tier is used, also when it is the higher one; an 
   const tight = NW.build(inputFor(boots(WHITE), [MS, LIFE, FIRE], { track: 8, whittle: 'none' }));
   assert.deepEqual(tight.hiddenBlocks(st, tight.nodeOf(st)), []);
 });
+
+// ---- an item that no white base can replace, and a bought start (10 Oct 2026)
+const ringWith = (lines) => E.parseItem(ix, ['Item Class: Rings', 'Rarity: Rare', 'Test Ring', 'Mnemonic Ring', '--------', 'Item Level: 80', '--------', ...lines].join('\n')).item;
+const GENESIS = { fam: 'SpellManaCostEfficiency', group: 'prefix', minTier: 1, required: true, label: '#% increased Mana Cost Efficiency of Spells' };
+
+test('network: a target the item carries and no white base can get is held, and the item is never given up', () => {
+  // A Mnemonic Ring from the Genesis Tree with its "Mana Cost Efficiency of Spells" fractured (the mana stacking
+  // craft): the base does not roll that modifier, and the network called the request impossible.
+  const item = ringWith(['{ Fractured Prefix Modifier }', '24(23-26)% increased Mana Cost Efficiency of Spells']);
+  assert.equal(item.mods[0].fam, 'SpellManaCostEfficiency');
+  const input = inputFor(item, [['prefix', /^\+\(\d+-\d+\) to maximum Mana$/, 3], ['suffix', /to Fire Resistance$/, 3]]);
+  input.targets['prefix-9'] = GENESIS;
+  const net = NW.build(input);
+  assert.ok(!net.impossible, JSON.stringify(net.impossible));
+  assert.equal(net.bound.mode, 'never');
+  assert.equal(net.bound.held.length, 1);
+  assert.ok(!net.acts.some((list) => list.some((e) => e.a.op === 'newbase' || (e.a.bases > 0))), 'no step gives the item up or can lose it');
+  const want = net.cost(net.start);
+  assert.ok(want > 0 && want < 1e7, String(want));
+  assert.equal(net.bases(net.start), 0);
+  const X = lockWorld(), got = X.play(net, input, 300, 3, 20000, 60000);
+  assert.equal(got.done, got.runs, 'every craft ends on the one ring');
+  assert.ok(Math.abs(got.mean - want) < Math.max(4 * got.se, 0.08 * want), `played ${got.mean} ±${got.se}, promised ${want}`);
+  // the answer for the page says why the route stays on the item
+  const a = NW.answer(input, {});
+  assert.equal(a.bound.mode, 'never');
+  assert.ok(a.steps.length > 0 && !a.steps.some((s) => s.names.includes('New base')));
+});
+
+test('network: without a price for another one, an item whose held modifier every route can lose has no route; with a price it has', () => {
+  // the Genesis prefix is not fractured and the prefixes are full: every removal on that side can take it
+  const lines = ['{ Prefix Modifier }', '24(23-26)% increased Mana Cost Efficiency of Spells', '{ Prefix Modifier (Tier: 6) }', '+40(38-49) to maximum Mana', '{ Prefix Modifier (Tier: 3) }', '12(10-14)% increased Rarity of Items found'];
+  const item = ringWith(lines);
+  assert.equal(item.mods.length, 3);
+  const input = inputFor(item, [['prefix', /^\+\(\d+-\d+\) to maximum Life$/, 3]]);
+  input.targets['prefix-9'] = GENESIS;
+  const a = NW.answer(input, {});
+  assert.ok(a.impossible && /price of another item/.test(a.impossible[0]), JSON.stringify(a.impossible || a.meanCost));
+  const b = NW.answer(Object.assign({}, input, { restart: 'item', itemCost: 2000 }), {});
+  assert.ok(!b.impossible && b.meanCost > 0, JSON.stringify(b.impossible));
+  assert.equal(b.bound.mode, 'item');
+  assert.ok(b.steps.some((s) => s.names.includes('New base') && s.cost === 2000), 'another ring is a material of the craft, at its price');
+});
+
+test('network: a bought start: giving the item up takes another item like it, at its price', () => {
+  // Magic boots that have the movement speed: a white base would have to roll it again; another bought pair has it.
+  const item = boots(['Rarity: Magic', 'Totemic Greaves', '--------', 'Item Level: 82', '--------', '{ Prefix Modifier (Tier: 3) }', '25(24-26)% increased Movement Speed']);
+  const white = NW.build(inputFor(item, [MS, FIRE, LIFE]));
+  const input = inputFor(item, [MS, FIRE, LIFE], { restart: 'item', itemCost: 30 });
+  const net = NW.build(input);
+  assert.equal(net.bound.mode, 'item');
+  assert.equal(net.n0, net.start, 'a restart leads to the item as it was pasted');
+  assert.ok(!white.bound);
+  // dearer bought pairs make the craft dearer, and a free one is the cheapest
+  const at = (c) => { const n = NW.build(inputFor(item, [MS, FIRE, LIFE], { restart: 'item', itemCost: c })); return n.cost(n.start); };
+  assert.ok(at(1) < at(30) && at(30) < at(3000));
+  const X = lockWorld(), got = X.play(net, input, 400, 3, 20000, 60000), want = net.cost(net.start);
+  assert.equal(got.done, got.runs);
+  assert.ok(Math.abs(got.mean - want) < Math.max(4 * got.se, 0.08 * want), `played ${got.mean} ±${got.se}, promised ${want}`);
+});

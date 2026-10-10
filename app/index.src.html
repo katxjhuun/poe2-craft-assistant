@@ -467,6 +467,15 @@ details.ops[open] > summary { margin-bottom: 8px; }
 .lib-list { display: grid; gap: 12px; }
 .rcard { border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; background: var(--inset); }
 .rcard.off { opacity: .62; }
+.ptable { width: 100%; border-collapse: collapse; margin: 10px 0 2px; font-size: 14px; }
+.ptable td { padding: 5px 0; border-top: 1px solid var(--line); vertical-align: top; }
+.ptable td.num { text-align: right; white-space: nowrap; padding-left: 12px; font-variant-numeric: tabular-nums; }
+.ptable tr.phead td { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; padding-top: 10px; }
+.puses { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 4px; color: var(--muted); font-size: 12px; }
+.puses span { display: inline-flex; align-items: center; gap: 2px; }
+.pmine { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; margin-top: 10px; }
+.pmine label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; }
+.pmine input { width: 64px; }
 .rhead { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .rhead b { font: 18px/1.25 var(--f-game); font-weight: 400; color: #E2D8BF; }
 .rmeta { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
@@ -824,6 +833,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     <div class="dlg-head"><h2 id="libTitle">Recipes &amp; guides</h2><span class="muted" id="libSub"></span><button class="icon-btn" type="button" data-close aria-label="Close"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>
     <div class="ex-tabs" id="libTabs" role="tablist" aria-label="Sections">
       <button type="button" class="chip" data-libtab="recipes" aria-pressed="true">Recipes</button>
+      <button type="button" class="chip" data-libtab="profit" aria-pressed="false">Profit crafts</button>
       <button type="button" class="chip" data-libtab="check" aria-pressed="false">Check a guide</button>
       <button type="button" class="chip" data-libtab="log" aria-pressed="false">Claim log</button>
       <button type="button" class="chip" data-libtab="tests" aria-pressed="false">In-game tests</button>
@@ -924,7 +934,10 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     ex: { q: '', cat: 'All', sort: 'vol', sel: DIV, qty: 1 }, db: null, unsubLeague: null, pricesState: 'loading',
     overrides: store.get('overrides', {}), nameBySid: {},
     route: null, planState: 'idle', unit: store.get('unit', 'auto'), planArmed: false, optOpen: false, detailOpen: false, budgetUnit: store.get('budgetUnit', 'div'), quality: store.get('quality', 'lock'),
-    budget: store.get('budget', ''), baseCost: store.get('baseCost', '1'), baseLimit: store.get('baseLimit', '100'), spent: store.get('spent', []),
+    budget: store.get('budget', ''), baseCost: store.get('baseCost', '1'), baseLimit: store.get('baseLimit', '100'),
+    // what giving the item up means: 'white' a white base, 'item' another item like the pasted one (itemCost), 'never';
+    // chosen for one base (restartFor)
+    restart: store.get('restart', 'white'), itemCost: store.get('itemCost', ''), restartFor: store.get('restartFor', ''), profitOf: store.get('profitOf', ''), spent: store.get('spent', []),
     lastEval: null, pendingStep: null, opsOpen: false, buyPrice: store.get('buyPrice', ''), preview: store.get('preview', false), ack: {}, catMult: store.get('catMult', null), weightSource: store.get('weightSource', 'poe2db'), priceSource: store.get('priceSource', 'ee2'), myLeagues: [].concat(store.get('myLeagues', []) || []).filter((l) => l && typeof l.name === 'string' && l.name),
     sample: null,
     inGame: null, inGameOff: false, // the route whose steps the desktop program draws over the game; turned off in its tray menu
@@ -1618,7 +1631,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (!same && S.planArmed && pl && pl.goals && pl.steps && pl.steps.length && S.item && r.item.base === S.item.base && r.item.ilvl === S.item.ilvl) {
       const nx = nextOf(pl);
       if (nx && nx.names && !nx.error) {
-        const cost = nx.names.reduce((t, n) => t + (n === 'New base' ? (parseFloat(S.baseCost) || 0) : ((priceByName(n) || {}).ex || 0)), 0);
+        const cost = nx.names.reduce((t, n) => t + (n === 'New base' ? newBaseEx() : ((priceByName(n) || {}).ex || 0)), 0);
         S.pendingStep = { action: nx, names: nx.names, cost, goals: pl.goals };
       }
     }
@@ -3173,8 +3186,16 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   function nextOf(pl) { return pl.next || {}; }
   function routeInput() {
     return { ix: S.ix, item: S.item, targets: S.targets, locks: S.locks, priceOf: priceEx, baseCost: parseFloat(S.baseCost) || 0,
+      restart: restartMode(), itemCost: parseFloat(S.itemCost) || 0,
       weights: itemWeights(), essences: itemEssences(), catalystMult: catMult(), quality: S.quality };
   }
+  /** What giving the item up means for the item on the page (the choice belongs to one base). */
+  function restartMode() { return S.item && S.restartFor === S.item.base ? S.restart : 'white'; }
+  /** The route keeps to the pasted item or to items like it (the network's answer says so: a chosen mode, or a target on the item that no white base can get). */
+  function boundRoute() { return (S.route && S.route.bound) || null; }
+  /** What one "New base" of the route costs: a white base, or with a bound route another item like the pasted one. */
+  function newBaseEx() { const b = boundRoute(); return b ? (b.mode === 'item' ? parseFloat(S.itemCost) || 0 : 0) : parseFloat(S.baseCost) || 0; }
+  const newBaseName = () => (boundRoute() ? 'Another item like this' : 'New base');
   /** Does this item take catalysts (rings, amulets, jewels, and the bases whose implicit says so)? */
   function takesCatalysts(it) {
     const base = it && S.ix && S.ix.kb.bases[it.base];
@@ -3220,7 +3241,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const id = ++NWK.seq;
     const prices = {};
     for (const n of Object.keys(S.sidByName)) { const v = priceEx(n); if (v != null) prices[n] = v; }
-    const plain = { item: input.item, targets: input.targets, locks: input.locks, baseCost: input.baseCost, weights: input.weights, essences: input.essences, catalystMult: input.catalystMult, quality: input.quality };
+    const plain = { item: input.item, targets: input.targets, locks: input.locks, baseCost: input.baseCost, restart: input.restart, itemCost: input.itemCost, weights: input.weights, essences: input.essences, catalystMult: input.catalystMult, quality: input.quality };
     NWK.busy = true;
     return new Promise((resolve, reject) => {
       const fallBack = () => { dropNetWorker(); NWK.failed = true; here().then(resolve, reject); };
@@ -3334,7 +3355,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   }
   function pct(p) { return p >= 0.995 && p < 1 ? '>99%' : p > 0 && p < 0.01 ? '<1%' : Math.round(p * 100) + '%'; }
   function namesHtml(names) {
-    return names.map((n) => (n === 'New base' ? '' : icon(S.sidByName[n], n, 'sm'))).join('') + `<span>${esc(names.join(' + '))}</span>`;
+    return names.map((n) => (n === 'New base' ? '' : icon(S.sidByName[n], n, 'sm'))).join('') + `<span>${esc(names.map((n) => (n === 'New base' ? newBaseName() : n)).join(' + '))}</span>`;
   }
   /** What an essence adds on this item: its mod for certain, or one of several at random (game table EssenceMods). */
   function essenceAdds(a) {
@@ -3365,7 +3386,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   const ends = (a) => (a.ends != null ? a.ends : a.bases != null && a.op !== 'extraction' ? 1 - a.bases : null);
   function stepHelp(a, params) {
     switch (a.op) {
-      case 'newbase': return 'A mod missed the goals and fixing it would cost more: start again on a fresh white base.';
+      case 'newbase': return boundRoute() ? 'A mod missed the goals and fixing it would cost more: take another item like the one you started with.' : 'A mod missed the goals and fixing it would cost more: start again on a fresh white base.';
       case 'transmute': return 'Makes the item Magic with one random mod.';
       case 'augment': return 'Adds a mod to the open side of the Magic item.';
       case 'regal': return a.side ? `Makes the item Rare and adds a ${a.side}.` : 'Makes the item Rare and adds a random mod.';
@@ -3476,6 +3497,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       w.fracturedOther ? 'a fractured modifier that is not a target' : ''].filter(Boolean).join(', ');
     return html + `<div class="plan-card" id="planCard">
       <div class="next"><span class="mk">Next step</span>${nextHtml}</div>
+      ${r.bound ? `<p class="sub" style="margin:0">${r.bound.held.length ? `${esc(r.bound.held.join(', '))} ${r.bound.held.length > 1 ? 'are' : 'is'} on the item and no white base can get ${r.bound.held.length > 1 ? 'them' : 'it'}: ` : ''}${r.bound.mode === 'item' ? `where the route gives the item up, it takes another item like this one for ${money(parseFloat(S.itemCost) || 0)} (Plan options).` : 'the route never gives this item up and uses no step that can lose it. If you can buy another one like it, give its price under Plan options.'}</p>` : ''}
+      ${profitLine(r)}
       <div>
         <div class="steps-head"><span>Materials for the whole craft</span><span>Uses · Cost</span></div>
         <ul class="steps mats">${rows.map((st) => `<li><div class="st-names">${namesHtml(st.names)}</div>
@@ -3487,7 +3510,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
         <ul class="rules-list">${r.rules.map((x) => `<li><span class="share">${x.share >= 0.995 && !x.fresh ? 'now' : pct(x.share)}</span><span>${x.fresh ? 'On the new base: ' : ''}${when(x.when)}: <span class="then">${x.done ? 'done' : esc(x.names.join(' + ')) + (x.hide ? ' (leave hidden)' : '')}</span></span></li>`).join('')}</ul>
         <div class="metrics" style="margin-top:10px">
           <div><span class="mk" title="How far single crafts fall from the average">Spread</span><b>± ${money(r.sd)}</b></div>
-          <div><span class="mk" title="White bases the craft takes on average, the one in hand not counted">New bases</span><b>${usesText(r.bases)}</b></div>
+          <div><span class="mk" title="${r.bound ? 'Items like the pasted one that the craft takes on average, the one in hand not counted' : 'White bases the craft takes on average, the one in hand not counted'}">${r.bound ? 'More items' : 'New bases'}</span><b>${usesText(r.bases)}</b></div>
         </div>
         ${r.charge > 0 ? `<p class="sub" style="margin:8px 0 0">The route keeps to about ${baseLimit()} bases per item (Plan options). With more bases it would be cheaper.</p>` : ''}
         ${r.lite ? `<p class="sub" style="margin:8px 0 0">With this many targets the route ${r.lite === 1 ? 'leaves the Fracturing Orb out and uses essences and the Well of Souls only for the two hardest targets' : 'leaves the Fracturing Orb out and uses essences and the Well of Souls only for targets nothing else gives'}.</p>` : ''}
@@ -3510,12 +3533,14 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const nTargets = Object.values(S.targets).filter((t) => t && t.fam).length;
     // options, one row each
     const optSum = []
-      .concat([`white base ${S.baseCost || 0} ex`, `at most ${baseLimit()} bases`]).join(', ');
+      .concat([restartMode() === 'item' ? `another item like this ${S.itemCost || 0} ex` : restartMode() === 'never' ? 'this item only' : `white base ${S.baseCost || 0} ex`, `at most ${baseLimit()} bases`]).join(', ');
     let optHtml = `<details class="optrow" id="optPlan" ${S.optOpen ? 'open' : ''}><summary>${OPT_ICON}<b>Plan options</b><span class="sum">${esc(optSum)}</span></summary><div class="plan-settings">
       <label for="planBuy" title="Price of a finished item with your targets, seen on the official trade site">Buy instead <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBuy" inputmode="decimal" placeholder="price" value="${esc(S.buyPrice)}"></span></label>
       ${weightsDisagree() ? `<label for="planWsrc" title="poe2db and Craft of Exile agree on ${esc(coeAgreeText())}; on ${weightsDisagree()} tiers of this item class they give different roll weights. Pick whose to use.">Weights <select id="planWsrc"><option value="poe2db" ${S.weightSource !== 'coe' ? 'selected' : ''}>poe2db</option><option value="coe" ${S.weightSource === 'coe' ? 'selected' : ''}>Craft of Exile</option></select></label>` : ''}
       ${hasCatalyst(it) ? `<label for="planCat" title="How much Omen of Catalysing Exaltation raises the weight of ${esc(it.qualityType)} at 20% quality. The game gives no number; set your own estimate.">Catalyst boost <span class="price-in">×<input id="planCat" inputmode="decimal" value="${esc(catMult())}"></span></label>` : ''}
       <label for="planBase" title="Price of one white base of this type">White base <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planBase" inputmode="decimal" value="${esc(S.baseCost)}"></span></label>
+      <label for="planRestart" title="What the route does with an item that is not worth fixing. A white base: start again from nothing. Another item like this: you bought the item as it is and would buy the next one (give its price). Never: this item is finished whatever comes.">If given up <select id="planRestart">${[['white', 'a white base'], ['item', 'another item like this'], ['never', 'never give it up']].map(([v, t]) => `<option value="${v}" ${restartMode() === v ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+      ${restartMode() === 'item' ? `<label for="planItemCost" title="What another item like the one you pasted costs">Such an item <span class="price-in">${icon(EX, 'Exalted Orb', 'sm')}<input id="planItemCost" inputmode="decimal" placeholder="price" value="${esc(S.itemCost)}"></span></label>` : ''}
       <label for="planBases" title="White bases you will use for one finished item at most. Starting over on a fresh base is often far cheaper than fixing a wrong mod, but each try takes a base; with few bases the route repairs the item instead.">Bases per item <span class="price-in"><input id="planBases" inputmode="numeric" value="${esc(S.baseLimit)}"></span></label>
     </div></details>`;
     const lim = E.itemLimits(S.ix, it);
@@ -3596,7 +3621,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       const nx = nextOf(pl);
       if (!nx.names) return;
       if (b.id === 'reviewBtn') { openConfirm(pl, nx); return; }
-      const cost = nx.names.reduce((t, n) => t + (n === 'New base' ? (parseFloat(S.baseCost) || 0) : ((priceByName(n) || {}).ex || 0)), 0);
+      const cost = nx.names.reduce((t, n) => t + (n === 'New base' ? newBaseEx() : ((priceByName(n) || {}).ex || 0)), 0);
       S.pendingStep = { action: nx, names: nx.names, cost, goals: pl.goals };
       openPaste(true);
     }
@@ -3652,6 +3677,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (e.target.id === 'planBudgetUnit') { S.budgetUnit = e.target.value; store.set('budgetUnit', S.budgetUnit); schedulePlans(); if (!S.planArmed) renderPlan(); }
     if (e.target.id === 'planBase') { S.baseCost = e.target.value.trim(); store.set('baseCost', S.baseCost); schedulePlans(); }
     if (e.target.id === 'planBases') { S.baseLimit = e.target.value.trim(); store.set('baseLimit', S.baseLimit); schedulePlans(); }
+    if (e.target.id === 'planRestart') { S.restart = e.target.value; S.restartFor = S.item ? S.item.base : ''; store.set('restart', S.restart); store.set('restartFor', S.restartFor); schedulePlans(); renderPlan(); }
+    if (e.target.id === 'planItemCost') { S.itemCost = e.target.value.trim(); store.set('itemCost', S.itemCost); schedulePlans(); }
     if (e.target.id === 'planWsrc') { S.weightSource = e.target.value; store.set('weightSource', S.weightSource); previewMemo.clear(); schedulePlans(); renderPlan(); }
     if (e.target.id === 'planCat') { const v = parseFloat(String(e.target.value).replace(',', '.')); S.catMult = v >= 1 ? v : null; store.set('catMult', S.catMult); previewMemo.clear(); schedulePlans(); renderPlan(); }
     if (e.target.id === 'planBuy') { S.buyPrice = e.target.value.trim(); store.set('buyPrice', S.buyPrice); renderPlan(); }
@@ -3720,6 +3747,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     const body = $('#libBody');
     if (!S.lib) { body.innerHTML = '<p class="sub">The recipe library did not load. Reload the page.</p>'; return; }
     if (lib.tab === 'recipes') body.innerHTML = recipesHtml();
+    else if (lib.tab === 'profit') body.innerHTML = profitHtml();
     else if (lib.tab === 'check') body.innerHTML = checkHtml();
     else if (lib.tab === 'tests') body.innerHTML = testsHtml();
     else if (lib.tab === 'selftest') body.innerHTML = selftestHtml();
@@ -3751,6 +3779,151 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
           <span class="head-actions">${r.user ? `<button class="linkish" type="button" data-delrecipe="${esc(r.id)}">Delete</button>` : ''}${canUse ? `<button class="btn small" type="button" data-userecipe="${esc(r.id)}">Use as goals</button>` : ''}</span></div>
       </div>`;
     }).join('')}</div>`;
+  }
+  // ---- profit crafts: buy, craft, sell. The currency of one attempt is priced now; the sale prices are the
+  // source's, dated, or the player's own.
+  const divEx = () => (S.prices && S.prices.divine) || priceEx('Divine Orb') || 0;
+  function profitNums(r) {
+    const p = r.profit, div = divEx(), mid = (a) => (a[0] + a[1]) / 2;
+    const mine = (store.get('profitMy', {}) || {})[r.id] || {};
+    const num = (v) => { const x = parseFloat(String(v == null ? '' : v).replace(',', '.')); return isFinite(x) && x >= 0 ? x : null; };
+    const mats = (p.uses || []).reduce((t, u) => t + u.n * (priceEx(u.name) || 0), 0);
+    const missing = (p.uses || []).filter((u) => priceEx(u.name) == null).map((u) => u.name);
+    const quotedBuy = p.buy ? (p.buy.ex ? p.buy.ex : p.buy.div.map((x) => x * div)) : [0, 0];
+    const myBuy = num(mine.buy), mySell = num(mine.sell);
+    const buyEx = myBuy != null ? myBuy * div : mid(quotedBuy);
+    return { p, div, mats, missing, quotedBuy, buyEx, myBuy, mySell, mine };
+  }
+  /** Signed amount in Divine Orbs (or Exalted Orbs for small ones), coloured. */
+  function gain(ex) {
+    const div = divEx(), v = div > 0 && Math.abs(ex) >= div ? ex / div : ex, unit = div > 0 && Math.abs(ex) >= div ? 'div' : 'ex';
+    return `<b style="color:var(${ex >= 0 ? '--up' : '--down'})">${ex >= 0 ? '+' : '\u2212'}${fmt(Math.abs(v))} ${unit}</b>`;
+  }
+  function saidText(said) { const m = /^(\d{4})-(\d{2})(?:-(\d{2}))?$/.exec(said || ''); return m ? `${m[3] ? +m[3] + ' ' : ''}${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec'][+m[2] - 1]} ${m[1]}` : said || ''; }
+  /** Targets for an item that is not the one on the page (a recipe's bought item), as "Use as goals" makes them. */
+  function goalTargets(item, stats) {
+    const out = {}, lim = E.itemLimits(S.ix, Object.assign({}, item, { rarity: 'Rare' }));
+    for (const st of stats) {
+      const fam = E.resolveTemplateTarget(S.ix, item, st.stat);
+      if (!fam) return null;
+      const side = fam.side, mods = item.mods.filter((m) => m.slot === side), present = mods.find((m) => m.fam === fam.fam);
+      let slot = present ? side + '-' + mods.indexOf(present) : null;
+      for (let i = 0; i < lim[side] && !slot; i++) if (!mods[i] && !out[side + '-' + i]) slot = side + '-' + i;
+      if (!slot) return null;
+      const t = fam.tiers.find((y) => y.tier === st.minTier && y.ok) || fam.tiers.find((y) => y.ok);
+      out[slot] = { key: fam.key, fam: fam.fam, group: fam.group, label: fam.label, minTier: t ? t.tier : st.minTier, minValue: null, valueMode: false, required: st.required !== false };
+    }
+    return out;
+  }
+  // The goal crafts are solved with today's prices in a worker of their own, one after the other, when the tab is
+  // looked at; until an answer is there the card shows the number the library was built with, with its date.
+  const PWK = { w: null, queue: [], now: null, live: {} };
+  function profitLive(r, buyEx) {
+    const g = r.profit.goal;
+    if (!g || !g.item || typeof Worker === 'undefined') return null;
+    const key = [S.league, S.prices && (S.prices.hourTo || S.prices.updatedAt), Math.round(buyEx)].join('|');
+    const have = PWK.live[r.id];
+    if (have && have.key === key) return have;
+    const job = PWK.live[r.id] = { key, state: 'running', out: null };
+    PWK.queue = PWK.queue.filter((j) => j.id !== r.id).concat([{ id: r.id, key, g, buyEx }]);
+    setTimeout(profitPump, 0);
+    return job;
+  }
+  function profitPump() {
+    if (PWK.now || !PWK.queue.length) return;
+    netWorker(); // (makes the worker's source address)
+    if (!NWK.url) { PWK.queue = []; return; }
+    const j = PWK.queue.shift(), slot = PWK.live[j.id];
+    if (!slot || slot.key !== j.key) { profitPump(); return; }
+    const fail = () => { slot.state = 'error'; PWK.now = null; if (PWK.w) { try { PWK.w.terminate(); } catch (e) { /* gone */ } PWK.w = null; } profitPump(); };
+    try {
+      const item = E.parseItem(S.ix, j.g.item).item, targets = item && goalTargets(item, j.g.targets);
+      if (!targets) { fail(); return; }
+      if (!PWK.w) { PWK.w = new Worker(NWK.url); PWK.w.postMessage({ type: 'init', kb: S.ix.kb }); }
+      const d = S.weightsData, page = d && d.base_page[item.base], wp = page && d.pages[page];
+      const base = S.ix.kb.bases[item.base], list = (S.essences && S.essences[item.itemClass]) || [];
+      const prices = {};
+      for (const n of Object.keys(S.sidByName)) { const v = priceEx(n); if (v != null) prices[n] = v; }
+      PWK.now = j.id;
+      PWK.w.onerror = (e) => { if (e && e.preventDefault) e.preventDefault(); fail(); };
+      PWK.w.onmessage = (e) => {
+        const m = e.data;
+        if (!m || m.id !== j.id) return;
+        PWK.now = null;
+        if (m.type === 'done' && m.out && m.out.meanCost >= 0) { slot.state = 'done'; slot.out = { ex: m.out.meanCost, items: 1 + (m.out.bases || 0), hit: m.out.next && m.out.next.hit > 0 ? m.out.next.hit : null }; } else slot.state = 'error';
+        if (lib.tab === 'profit' && libDlg.open && !libDlg.querySelector('input:focus')) renderLib();
+        profitPump();
+      };
+      PWK.w.postMessage({ type: 'route', id: j.id, opts: { baseLimit: 100 }, prices,
+        input: { item, targets, locks: {}, baseCost: parseFloat(S.baseCost) || 0, restart: j.g.restart || 'never', itemCost: j.buyEx, weights: wp ? wp.weights : null,
+          essences: base ? P.essencesForBase(S.ix, base, list).concat(P.liquidFor(S.ix.kb, item.base)) : list, catalystMult: catMult() } });
+    } catch (e) { fail(); }
+  }
+  function profitHtml() {
+    const rs = (libNow().recipes || []).filter((r) => r.profit && (!r.league_scope.length || r.league_scope.includes(ruleName())));
+    if (!rs.length) return '<p class="sub">No profit crafts for this league yet.</p>';
+    const head = `<p style="margin:0 0 12px">Buy an item, craft it, sell it. The currency of one attempt is priced with today's exchange prices; what the item sells for is the creator's number with its date, because the assistant does not read the trade site. Put in what you see on trade and the profit is yours.</p>`;
+    return head + `<div class="lib-list">${rs.map((r) => {
+      const x = profitNums(r), p = x.p, div = x.div || 1;
+      const rng = (a, unit) => (a[0] === a[1] ? fmt(a[0]) : `${fmt(a[0])} to ${fmt(a[1])}`) + ' ' + unit;
+      const cost = x.buyEx + x.mats;
+      const g = p.goal, live = profitLive(r, x.buyEx);
+      // the route's cost: today's when the worker has answered, else the library's own number in Divine Orbs of its day
+      const pm = (S.lib.meta && S.lib.meta.profitModel) || {};
+      const m = live && live.state === 'done' ? live.out : g && g.model && pm.divine > 0 ? { ex: g.model.ex / pm.divine * div, items: g.model.items, hit: g.model.hit, old: pm.at } : null;
+      const stamp = m && m.old ? ` (at the prices of ${esc(saidText(m.old))}${live && live.state === 'running' ? '; today\'s is being worked out' : ''})` : '';
+      // (an outcome that is sold finished pays the finishing route as well)
+      const fin = (o) => (o.finish && m ? m.ex : 0);
+      // a craft of one try on a bought item (restart 'item'): the chance of the try is the craft network's own
+      const tryP = g && g.restart === 'item' && m && m.hit > 0 && (p.outcomes || []).length === 2 && p.outcomes.filter((o) => o.hit).length === 1 ? m.hit : null;
+      const chanceOf = (o) => (o.chance > 0 ? o.chance : tryP != null ? (o.hit ? tryP : 1 - tryP) : null);
+      const outs = (p.outcomes || []).map((o) => {
+        const lo = o.div[0] * div - cost - fin(o), hi = o.div[1] * div - cost - fin(o);
+        return `<tr><td>${esc(o.label)}${chanceOf(o) ? ` <span class="muted">(${pct(chanceOf(o))}${o.chance > 0 ? '' : ', the craft network\'s'})</span>` : ''}</td><td class="num">${rng(o.div, 'div')}</td><td class="num">${lo === hi ? gain(lo) : gain(lo) + ' to ' + gain(hi)}</td></tr>`;
+      }).join('');
+      const withChance = (p.outcomes || []).length > 0 && p.outcomes.every((o) => chanceOf(o) > 0);
+      const ev = withChance ? p.outcomes.reduce((t, o) => t + chanceOf(o) * ((o.div[0] + o.div[1]) / 2 * div - fin(o)), 0) - cost : null;
+      // crafting until it hits (the network's route from the bought item; items given up are sold as misses)
+      let until = '';
+      if (m) {
+        const hit = (p.outcomes || []).find((o) => o.hit), miss = (p.outcomes || []).find((o) => !o.hit);
+        const more = Math.max(0, m.items - 1);
+        if (g.restart === 'item' && hit) {
+          const back = miss ? more * (miss.div[0] + miss.div[1]) / 2 * div : 0;
+          const lo = hit.div[0] * div - x.buyEx - m.ex + back, hi = hit.div[1] * div - x.buyEx - m.ex + back;
+          until = `<li><b>Until it hits:</b> the craft network's route from the bought item costs about ${money(m.ex)} more${stamp} and takes ${fmt(m.items)} items on average${miss ? ' (the misses sold)' : ''}: ${gain(lo)} to ${gain(hi)} per finished item.</li>`;
+        } else until = `<li><b>Finishing it:</b> from the item as bought, the craft network's route to the targets costs about ${money(m.ex)}${stamp}${g.restart === 'never' ? ', never giving the item up' : ''}.</li>`;
+      }
+      const my = x.mySell != null ? `<li><b>With your prices:</b> ${gain(x.mySell * div - cost)} per ${esc(p.per || 'item')}.</li>` : '';
+      return `<div class="rcard">
+        <div class="rhead"><b>${esc(r.title)}</b><span class="head-actions"><span class="badge">${esc(r.classes.join(', '))}</span><span class="badge">Numbers of ${esc(saidText(p.said))}</span>${vBadge(r.verdict)}</span></div>
+        <ul class="rsmall trade"><li><b>Buy:</b> ${esc(r.trade.buy)}</li><li><b>Sell:</b> ${esc(r.trade.sell)}</li></ul>
+        <table class="ptable"><tbody>
+          <tr><td>Item (${x.myBuy != null ? 'your price' : 'the creator\'s price'})</td><td class="num">${x.myBuy != null ? fmt(x.myBuy) + ' div' : p.buy && p.buy.ex ? rng(p.buy.ex, 'ex') : p.buy ? rng(p.buy.div, 'div') : '\u2014'}</td><td class="num">${money(x.buyEx)}</td></tr>
+          <tr><td>Currency of one ${esc(p.per || 'item')}, today<div class="puses">${(p.uses || []).map((u) => `<span title="${esc(u.name)}: ${fmt(priceEx(u.name) || 0)} ex each">${icon(S.sidByName[u.name], u.name, 'sm')}${u.n !== 1 ? '\u00d7' + fmt(u.n) : ''}</span>`).join('')}</div></td><td></td><td class="num">${money(x.mats)}</td></tr>
+          ${outs ? `<tr class="phead"><td>Sells for (${esc(saidText(p.said))})</td><td class="num">Price</td><td class="num">Profit today</td></tr>${outs}` : ''}
+          ${ev != null ? `<tr><td>On average, by the chances</td><td></td><td class="num">${gain(ev)}</td></tr>` : ''}
+        </tbody></table>
+        <ul class="rsmall trade">${until}${my}${p.note ? `<li>${esc(p.note)}</li>` : ''}${x.missing.length ? `<li class="bad-note">No price today for ${esc(x.missing.join(', '))}: counted as 0.</li>` : ''}</ul>
+        <div class="pmine"><label>Your buy price <span class="price-in">${icon(DIV, 'Divine Orb', 'sm')}<input data-pbuy="${esc(r.id)}" inputmode="decimal" placeholder="div" value="${esc(x.mine.buy || '')}"></span></label>
+          <label>Your sale price <span class="price-in">${icon(DIV, 'Divine Orb', 'sm')}<input data-psell="${esc(r.id)}" inputmode="decimal" placeholder="div" value="${esc(x.mine.sell || '')}"></span></label>
+          ${g && g.item ? `<button class="btn small" type="button" data-loadcraft="${esc(r.id)}" title="Puts the bought item and the targets on the page and finds the route with today's prices">Load this craft</button>` : ''}</div>
+        ${r.steps.length ? `<details class="more"><summary>The creator's steps</summary><ol class="rsteps">${r.steps.map((st) => `<li>${st.names.length ? `<span class="rnames">${st.names.slice(0, 4).map((n) => icon(S.sidByName[n], n, 'sm')).join('')}</span>` : ''}${esc(st.text)}</li>`).join('')}</ol>
+          ${r.checkpoints.length ? `<ul class="rsmall">${r.checkpoints.map((c) => `<li>Checkpoint: ${esc(c)}</li>`).join('')}</ul>` : ''}${r.risks.length ? `<ul class="rsmall">${r.risks.map((c) => `<li>Risk: ${esc(c)}</li>`).join('')}</ul>` : ''}</details>` : ''}
+        <div class="rfoot"><span class="sub">${r.sources.map((y) => y.url ? `<a href="${esc(y.url)}" target="_blank" rel="noopener" style="color:var(--muted)">${esc(y.label)}</a> (${esc(y.tier)})` : `${esc(y.label)} (${esc(y.tier)})`).join(' \u00b7 ')}</span></div>
+      </div>`;
+    }).join('')}</div>`;
+  }
+  /** The profit of the craft that was loaded from the library, with the route's own cost (plan card). */
+  function profitLine(route) {
+    const r = S.profitOf && S.lib && S.item ? libNow().recipes.find((y) => y.id === S.profitOf) : null;
+    const g = r && r.profit && r.profit.goal;
+    if (!g || !g.entry || g.entry.base !== S.item.base || !route || !(route.meanCost >= 0)) return '';
+    const x = profitNums(r), div = x.div || 1, hit = (x.p.outcomes || []).find((o) => o.hit) || (x.p.outcomes || [])[0];
+    if (!hit && x.mySell == null) return `<p class="sub" style="margin:0">Profit craft: ${esc(r.title)}. Item ${money(x.buyEx)} + this route ${money(route.meanCost)}.</p>`;
+    const sell = x.mySell != null ? [x.mySell, x.mySell] : hit.div;
+    const lo = sell[0] * div - x.buyEx - route.meanCost, hi = sell[1] * div - x.buyEx - route.meanCost;
+    return `<p class="sub" style="margin:0">Profit craft: item ${money(x.buyEx)} + this route ${money(route.meanCost)}; sells for ${sell[0] === sell[1] ? fmt(sell[0]) : fmt(sell[0]) + ' to ' + fmt(sell[1])} div (${x.mySell != null ? 'your price' : 'the creator, ' + esc(saidText(x.p.said))}): ${lo === hi ? gain(lo) : gain(lo) + ' to ' + gain(hi)}${route.bound && route.bound.mode === 'item' ? ', items given up not sold' : ''}.</p>`;
   }
   function checkHtml() {
     const o = lib.out;
@@ -3867,6 +4040,15 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   }
   $('#libBody').addEventListener('click', (e) => { const b = e.target.closest('[data-libtab-go]'); if (b) { lib.tab = b.dataset.libtabGo; renderLib(); } });
   $('#libTabs').addEventListener('click', (e) => { const b = e.target.closest('[data-libtab]'); if (b) { lib.tab = b.dataset.libtab; renderLib(); } });
+  // the player's own buy and sale prices of a profit craft (kept in this browser)
+  $('#libBody').addEventListener('change', (e) => {
+    const t = e.target, id = t.dataset && (t.dataset.pbuy || t.dataset.psell);
+    if (!id) return;
+    const all = store.get('profitMy', {}) || {};
+    all[id] = Object.assign({}, all[id], t.dataset.pbuy ? { buy: t.value.trim() } : { sell: t.value.trim() });
+    store.set('profitMy', all);
+    renderLib();
+  });
   $('#libBody').addEventListener('input', (e) => {
     if (e.target.id === 'guideText') { lib.guide = e.target.value; store.set('guideText', lib.guide.slice(0, 20000)); }
     if (e.target.id === 'guidePatch') lib.patch = e.target.value.trim();
@@ -3899,6 +4081,19 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       return;
     }
     if (b.dataset.delrecipe) { await delDoc('userRecipes', b.dataset.delrecipe); renderLib(); return; }
+    if (b.dataset.loadcraft) {
+      const r = libNow().recipes.find((y) => y.id === b.dataset.loadcraft), g = r.profit.goal;
+      const res = ingest(g.item, 'Profit craft');
+      if (!res.ok) { lib.note = res.msg; renderLib(); return; }
+      const x = profitNums(r);
+      S.targets = {}; S.locks = {};
+      S.restart = g.restart || 'never'; S.restartFor = S.item.base; S.itemCost = String(Math.round(x.buyEx)); S.profitOf = r.id;
+      store.set('restart', S.restart); store.set('restartFor', S.restartFor); store.set('itemCost', S.itemCost); store.set('profitOf', S.profitOf);
+      libDlg.close();
+      applyStats(g.targets.map((t) => ({ label: t.stat, minTier: t.minTier, required: t.required })));
+      S.planArmed = true; S.planShow = true; schedulePlans();
+      return;
+    }
     if (b.dataset.delclaim) { await delDoc('userClaims', b.dataset.delclaim); renderLib(); return; }
     if (b.id === 'guideSave' && lib.out) {
       const src = guideSource() || { url: '', author: '', date: '', tier: 'D', patch: lib.patch || null };

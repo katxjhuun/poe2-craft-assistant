@@ -180,7 +180,8 @@ function scenario(base, n, plain) {
   const r = rng(7919 * (n + 1) + base.length * 31 + base.charCodeAt(0));
   const mk = (id, kind, mods, rarity, targets, extra) => {
     const item = E.parseItem(ix, renderItem(Object.assign({ base, cls: t.cls, rarity, ilvl: 82, mods }, extra && extra.quality ? { quality: extra.quality, qualityType: extra.qualityType } : null), r, 'adv').text).item;
-    return { id: `${base}|${id}`, base, cls: t.cls, kind, item, targets, qualityMode: (extra && extra.mode) || 'lock', seed: 1000 + n };
+    return Object.assign({ id: `${base}|${id}`, base, cls: t.cls, kind, item, targets, qualityMode: (extra && extra.mode) || 'lock', seed: 1000 + n },
+      extra && extra.restart ? { restart: extra.restart, itemCost: extra.itemCost || 0 } : null);
   };
   if (n < singles.length) {
     const f = singles[n];
@@ -230,13 +231,17 @@ function scenario(base, n, plain) {
     if (mode !== 'lock' && tags.length) extra = { mode, quality: mode === 'use' ? 20 : (n % 2 ? 0 : 10), qualityType: cap(tags[0]) + ' Modifiers' };
     else if (mode !== 'lock') extra = { mode };
   }
-  const tag = `set${picked.length}|${names[kind]}${extra ? '|quality ' + extra.mode : ''}|${n}`;
+  // Not from a white base: every fifth such set is a bought start (giving it up takes another item like it, for 40
+  // or 400 Exalted Orbs), and every fifteenth an item that is the only one (never given up; a set that cannot be
+  // had without risking the item counts as outside the network).
+  if (kind >= 1 && !plain && n % 5 === 2) extra = Object.assign({}, extra, n % 15 === 2 ? { restart: 'never' } : { restart: 'item', itemCost: n % 2 ? 40 : 400 });
+  const tag = `set${picked.length}|${names[kind]}${extra && extra.mode ? '|quality ' + extra.mode : ''}${extra && extra.restart ? '|' + (extra.restart === 'never' ? 'only item' : 'bought ' + extra.itemCost) : ''}|${n}`;
   if (kind === 0) return mk(tag, `${picked.length} targets, ${names[kind]}`, [], 'Normal', targets);
   if (kind === 1) {
     // one modifier: a target at its tier, or another one
     const p = picked.find((x) => !x.des);
     const mods = p && r() < 0.5 ? [{ id: p.f.ids[p.tier], side: p.f.side, tier: p.tier }] : junk(t, new Set(taken), r() < 0.5 ? { prefix: 1, suffix: 0 } : { prefix: 0, suffix: 1 }, r);
-    return mk(tag, `${picked.length} targets, ${names[kind]}`, mods, 'Magic', targets);
+    return mk(tag, `${picked.length} targets, ${names[kind]}`, mods, 'Magic', targets, extra);
   }
   const mods = [];
   const have = { prefix: 0, suffix: 0 };
@@ -277,7 +282,8 @@ function rivals(sc, input) {
 
 function runOne(sc, runs, withRivals, deep, limitMs) {
   const { ix, priceOf } = load();
-  const input = { ix, item: sc.item, targets: sc.targets, locks: {}, priceOf, baseCost: 1, weights: weightsFor(sc.base), essences: table(sc.base).essences, quality: sc.qualityMode };
+  const input = { ix, item: sc.item, targets: sc.targets, locks: {}, priceOf, baseCost: 1, weights: weightsFor(sc.base), essences: table(sc.base).essences, quality: sc.qualityMode,
+    restart: sc.restart, itemCost: sc.itemCost };
   const t0 = Date.now();
   // (a network that is not solved within ten minutes is given up: "out of time" in the report. In the second deep run
   // 9 of 64 processes did not end before their job's limit, and a process that is cut prints no report at all.)
