@@ -324,7 +324,7 @@
     for (const m of st0.mods) if (m.id && !m.unrevealed && !goals.some((g) => g.fam === m.fam)) { ownIds.push(m.id); for (const x of m.grp || []) OWN.add(x); }
     // its fractured modifier that is no target stays for the item's life: what it takes out of the pools is known
     // exactly (S.kf marks the items that come from the pasted one; a white base has none)
-    const FRAC = (() => { const m = st0.mods.find((x) => x.frac && x.id && kb.mods[x.id] && !goals.some((g) => g.fam === x.fam)); return m ? { id: m.id, si: m.side === 'prefix' ? 0 : 1, grp: m.grp || [], fam: m.fam } : null; })();
+    const FRAC = (() => { const m = st0.mods.find((x) => x.frac && x.id && kb.mods[x.id] && !goals.some((g) => g.fam === x.fam)); return m ? { id: m.id, si: m.side === 'prefix' ? 0 : 1, grp: m.grp || [], fam: m.fam, crafted: !!m.crafted } : null; })();
     const ownMatters = ctx.bone && goals.some((g) => g.kind === 'des') && OWN.size > 0
       && [0, 1].some((si) => P.desPoolFor(ctx, SIDES[si], 0, null).some((e) => e.grp.some((x) => OWN.has(x))));
     /** Do the tags of modifier `id` stop every natural tier of target i? */
@@ -763,7 +763,9 @@
     const limOf = (S, si) => (S.r === 2 ? LIM[si] + (si === 1 && (S.u & R_SERLE) ? 1 : 0) + (S.aw === si + 1 ? 1 : 0) : S.r === 1 ? 1 : 0);
     const open = (S, si) => Math.max(0, limOf(S, si) - slots(S, si));
     const done = (S) => { for (let i = 0; i < G; i++) if (!met(S.g[i])) return false; return true; };
-    const craftedUsed = (S) => { let n = (S.cx ? 1 : 0) + (S.cy ? 1 : 0) + (S.aw ? 1 : 0); for (let i = 0; i < G; i++) if (kindOf(S.g[i]) === CRAFTED) n++; return n; };
+    // (a crafted modifier that a Fracturing Orb locked still counts for "one crafted modifier per item": the pasted
+    // item's is known, S.kf; the network makes no other, see the Fracturing Orb's edge)
+    const craftedUsed = (S) => { let n = (S.cx ? 1 : 0) + (S.cy ? 1 : 0) + (S.aw ? 1 : 0) + (S.kf && FRAC && FRAC.crafted ? 1 : 0); for (let i = 0; i < G; i++) if (kindOf(S.g[i]) === CRAFTED) n++; return n; };
     const desUsed = (S) => { let n = (S.dj ? 1 : 0) + (S.du ? 1 : 0); for (let i = 0; i < G; i++) if (kindOf(S.g[i]) === DESECRATED) n++; return n; };
     /** A target the item does not have yet (nothing of it, or only its twin of another element). */
     const wanted = (x) => x === ABSENT || x === TWIN;
@@ -1909,14 +1911,15 @@
           push({ op: 'reveal', echoes }, echoes ? PR.echoes : 0, reveal(S1, si, 0, null, echoes).map(([q, i, status]) => [q, revealed(S1, si, i, status)]));
         }
       }
-      // Fracturing Orb: one of the modifiers that are not desecrated, each as likely; it needs four modifiers in all
-      if (PR.fracture != null && S.fg < 0 && !S.fj && slots(S, 0) + slots(S, 1) >= 4) {
+      // Fracturing Orb: one of the modifiers that are not desecrated, each as likely; it needs four modifiers in all.
+      // Not on an item with a crafted modifier nobody asked for: locked by the orb it would stay crafted and keep
+      // counting for the crafted limit, and a node cannot tell a fractured crafted modifier from another fractured
+      // one. (The fifth deep run's play was refused "Only one crafted modifier per item" 440 times on such items.)
+      if (PR.fracture != null && S.fg < 0 && !S.fj && !S.cx && !S.cy && slots(S, 0) + slots(S, 1) >= 4) {
         const outs = [];
         let n = 0;
         for (let i = 0; i < G; i++) if (there(S.g[i]) && kindOf(S.g[i]) !== DESECRATED) { const S2 = cp(S); S2.fg = i; outs.push([1, S2]); n++; }
         for (let si = 0; si < 2; si++) if (S.j[si]) { const S2 = cp(S); S2.j[si]--; S2.fj = si + 1; outs.push([S.j[si], S2]); n += S.j[si]; }
-        if (S.cx) { const S2 = cp(S); S2.fj = S.cx; S2.cx = 0; outs.push([1, S2]); n++; }
-        if (S.cy) { const S2 = cp(S); S2.fj = S.cy; S2.cy = 0; outs.push([1, S2]); n++; }
         if (n) push({ op: 'fracture' }, PR.fracture, outs.map(([w, S2]) => [w / n, S2]));
       }
     }
