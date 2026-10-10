@@ -32,7 +32,15 @@ scenarios that played at two to seven times their promise. No old route is cheap
   the crossbow here (21 of 300 crafts). Fixed: the lookup orders them, and where the node differs only in whose the
   crafted modifiers are, that node is taken.
 - **Permafrost Staff, four targets, another modifier fractured: played at x1.93** (26,508 promised; 376,761 detours,
-  527 items given up). Not solved yet: see below.
+  527 items given up). On a staff the Fire Damage prefix and the Freeze Buildup suffix keep each other out with
+  their tags; the way to both is a Cold Damage prefix (the Fire target's twin, turned by a Rune of Aldur later) with
+  Freeze Buildup beside it. Three things were wrong, each found by replaying the scenario here (22,050 promised,
+  41,131 +- 2,608 played): a rolled modifier that is in one target's way and keeps a target of the other side out
+  arrived with the first effect only; a twin of another element kept the other target out "on average" (a Lightning
+  Damage twin does for good, a Cold Damage twin does not); and an item with a modifier in the way of a target the
+  network does not follow fell back to the node that knows no blocker at all. Fixed in b16f324; the fully followed
+  network of that request needs 175,000 states (the limit is 200,000 now). With it: 22,604 promised, 20,652 +- 846
+  played over 200 crafts, no detour, no item given up.
 - **Too careful**: Aegis Quarterstaff with six targets from white x0.76, Freebooter Cap with four x0.79, Dueling Wand
   with five x0.83 (the last with 149,757 detours: the play found something cheaper than the route's step on items
   whose blockers the node does not follow).
@@ -60,7 +68,6 @@ scenarios that played at two to seven times their promise. No old route is cheap
 
 ## Still open
 
-- Permafrost Staff with four targets and a fractured modifier that is no target: x1.93 in the cloud.
 - Six targets: the blockers of two targets at most are followed; with five targets on a wand the play still finds
   cheaper steps than the route on some items.
 - Freebooter Cap with four targets and a fractured modifier that is no target: x0.79, no detour: the promise is too
@@ -68,4 +75,5 @@ scenarios that played at two to seven times their promise. No old route is cheap
 
 ## The next run
 
-Started after these fixes, with the thirteen slot bases, bought starts and only-items among the scenarios.
+Run [38076204253](https://github.com/katxjhuun/poe2-craft-assistant/actions/runs/38076204253), started 10 Oct 2026
+18:32 UTC on b16f324, with the thirteen slot bases, bought starts and only-items among the scenarios.
