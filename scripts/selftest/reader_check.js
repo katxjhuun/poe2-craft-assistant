@@ -46,8 +46,10 @@ function carried(base, b) {
 }
 
 /** Pack modifiers into items the game could show: distinct groups, the side limits, one crafted and one Desecrated. */
-function pack(ctx, mods, cls) {
-  const lim = cls === 'Jewel' ? 2 : 3;
+function pack(ctx, mods, cls, imp) {
+  // (the base's own slots: "-1 Prefix Modifier allowed" and the like)
+  const lim = { prefix: cls === 'Jewel' ? 2 : 3, suffix: cls === 'Jewel' ? 2 : 3 };
+  for (const t of imp || []) for (const l of t.split('\n')) { const m = /^([+-]\d+) (Prefix|Suffix) Modifiers? allowed$/.exec(l); if (m) lim[m[2].toLowerCase()] = Math.max(1, lim[m[2].toLowerCase()] + +m[1]); }
   const items = [];
   const left = mods.slice();
   while (left.length) {
@@ -58,13 +60,13 @@ function pack(ctx, mods, cls) {
       const tpl = E.template(km.txt);
       const blocks = (x, y) => { const at = E.addedTags(kb, [x.id]); return !!at && !!kb.mods[y.id].sw && E.tagBlocked(kb.mods[y.id], ctx.baseTags, at); };
       const tagged = it.mods.some((x) => blocks(x, m) || blocks(m, x));
-      if (it.n[m.side] >= lim || g.some((x) => it.grp.has(x)) || it.txt.has(tpl) || (m.des && it.des) || (m.crafted && it.crafted) || tagged || (m.rune && it.rune && it.rune !== m.rune)) { i++; continue; }
+      if (it.n[m.side] >= lim[m.side] || g.some((x) => it.grp.has(x)) || it.txt.has(tpl) || (m.des && it.des) || (m.crafted && it.crafted) || tagged || (m.rune && it.rune && it.rune !== m.rune)) { i++; continue; }
       it.mods.push(m); it.n[m.side]++; g.forEach((x) => it.grp.add(x)); it.txt.add(tpl);
       if (m.rune) it.rune = m.rune;
       if (m.des) it.des = 1;
       if (m.crafted) it.crafted = 1;
       left.splice(i, 1);
-      if (it.n.prefix >= lim && it.n.suffix >= lim) break;
+      if (it.n.prefix >= lim.prefix && it.n.suffix >= lim.suffix) break;
     }
     if (!it.mods.length) { // (a modifier that fits beside nothing: alone)
       const m = left.shift();
@@ -94,7 +96,7 @@ function check(base, b, mods, r) {
   for (const [mode, gone] of rune ? [['adv', 0], ['simple', 0], ['adv', 1], ['simple', 1]] : [['adv', 0], ['simple', 0]]) {
     // every second item: its first plain modifier is fractured, and the item is Corrupted
     const fi = tally.items % 2 ? mods.findIndex((m) => !m.des && !m.crafted) : -1;
-    const item = { base, cls: b.cls, rarity, ilvl: ILVL, runes: rune && !gone ? [rune] : [], corrupted: tally.items % 4 === 1,
+    const item = { base, cls: b.cls, rarity, ilvl: ILVL, runes: rune && !gone ? [rune] : [], corrupted: tally.items % 4 === 1, implicits: b.imp || [],
       mods: mods.map((m, k) => ({ id: m.id, side: m.side, tier: m.tier, des: m.des, crafted: m.crafted, frac: k === fi })) };
     const T = tally[mode + (gone ? ', rune gone' : '')];
     const tag = mode + (gone ? ' (rune gone)' : '');
@@ -107,6 +109,12 @@ function check(base, b, mods, r) {
       note(tag, 'header', base, '-', p ? `base ${p.base} / ${p.rarity} / ${p.ilvl}` : 'not read');
       continue;
     }
+    // the base's implicit lines are implicits, none of them a modifier, and what they say about the slots is read
+    const impLines = (b.imp || []).reduce((n, t) => n + t.split('\n').length, 0);
+    if (p.implicits.length !== impLines) { T.wrong++; note(tag, 'wrong', base, '-', `${impLines} implicit lines written, ${p.implicits.length} read`); }
+    const delta = { prefix: 0, suffix: 0 };
+    for (const t of b.imp || []) for (const l of t.split('\n')) { const m = /^([+-]\d+) (Prefix|Suffix) Modifiers? allowed$/.exec(l); if (m) delta[m[2].toLowerCase()] += +m[1]; }
+    if (p.slotDelta.prefix !== delta.prefix || p.slotDelta.suffix !== delta.suffix) { T.wrong++; note(tag, 'wrong', base, '-', `slot change ${JSON.stringify(p.slotDelta)}, is ${JSON.stringify(delta)}`); }
     const got = p.mods.slice();
     if (got.length !== mods.length && !got.some((x) => x.hybridAlt)) note(tag, 'count', base, mods.map((m) => m.id).join('+'), `${mods.length} modifiers written, ${got.length} read`);
     for (const m of item.mods.map((x, k) => Object.assign({}, mods[k], { frac: x.frac }))) {
@@ -159,7 +167,7 @@ for (const base of names) {
   let c;
   try { c = carried(base, b); } catch (e) { note('-', 'threw', base, '-', 'pool: ' + String(e.message || e).slice(0, 80)); continue; }
   const key = b.cls + '|' + b.sig + '|' + (b.imp || []).join(',');
-  const items = pack(c.ctx, c.mods, b.cls);
+  const items = pack(c.ctx, c.mods, b.cls, b.imp);
   if (!fullDone.has(key)) { fullDone.add(key); full++; for (const it of items) check(base, b, it, r); }
   else for (let i = 0; i < Math.min(4, items.length); i++) check(base, b, items[Math.floor(r() * items.length)], r);
   if (nb % 200 === 0) console.error(`${nb}/${names.length} bases, ${tally.parses} texts, ${Math.round((Date.now() - t0) / 1000)} s`);

@@ -26,7 +26,7 @@
 'use strict';
 const path = require('path');
 const fs = require('fs');
-const { ROOT, E, P, load, weightsFor, testBases, rng, renderItem } = require('./lib.js');
+const { ROOT, E, P, load, weightsFor, testBases, slotBases, rng, renderItem } = require('./lib.js');
 const NW = require(path.join(ROOT, 'app', 'network.js'));
 const { play } = require('./network_check.js');
 const { labelOf } = require('./scenarios.js');
@@ -41,7 +41,8 @@ function table(base) {
   if (tables.has(base)) return tables.get(base);
   const { ix, kb, W } = load();
   const cls = kb.bases[base].cls;
-  const white = E.parseItem(ix, renderItem({ base, cls, rarity: 'Normal', ilvl: 82, mods: [] }, rng(1), 'adv').text).item;
+  // (with the base's implicit lines, as the game copies an item: they say how many prefixes and suffixes it holds)
+  const white = E.parseItem(ix, renderItem({ base, cls, rarity: 'Normal', ilvl: 82, mods: [], implicits: kb.bases[base].imp || [] }, rng(1), 'adv').text).item;
   const essences = (W.essences || {})[cls] || [];
   const ctx = P.makeContext(ix, white, { weights: weightsFor(base), essences });
   const group = (list) => {
@@ -51,7 +52,7 @@ function table(base) {
   };
   const t = { base, cls, ctx, essences, nat: {}, des: {} };
   for (const side of SIDES) { t.nat[side] = group(P.sidePool(ctx, side, 0)); t.des[side] = ctx.bone ? group(P.desPoolFor(ctx, side, 0, null)) : []; }
-  t.lim = E.slotLimits({ rarity: 'Rare', slotDelta: { prefix: 0, suffix: 0 } }, cls);
+  t.lim = E.slotLimits({ rarity: 'Rare', slotDelta: white.slotDelta }, cls); // (the base's own: an Absent Amulet holds 2 + 2)
   tables.set(base, t);
   return t;
 }
@@ -179,7 +180,7 @@ function scenario(base, n, plain) {
   const desSingles = SIDES.flatMap((s) => t.des[s]);
   const r = rng(7919 * (n + 1) + base.length * 31 + base.charCodeAt(0));
   const mk = (id, kind, mods, rarity, targets, extra) => {
-    const item = E.parseItem(ix, renderItem(Object.assign({ base, cls: t.cls, rarity, ilvl: 82, mods }, extra && extra.quality ? { quality: extra.quality, qualityType: extra.qualityType } : null), r, 'adv').text).item;
+    const item = E.parseItem(ix, renderItem(Object.assign({ base, cls: t.cls, rarity, ilvl: 82, mods, implicits: kb.bases[base].imp || [] }, extra && extra.quality ? { quality: extra.quality, qualityType: extra.qualityType } : null), r, 'adv').text).item;
     return Object.assign({ id: `${base}|${id}`, base, cls: t.cls, kind, item, targets, qualityMode: (extra && extra.mode) || 'lock', seed: 1000 + n },
       extra && extra.restart ? { restart: extra.restart, itemCost: extra.itemCost || 0 } : null);
   };
@@ -319,7 +320,7 @@ if (require.main === module) {
   // --drawn: start after the single modifiers (they are the first scenarios of every base and were checked on their own)
   const drawn = process.argv.includes('--drawn');
   const firstDrawn = (base) => { const t = table(base); return t.nat.prefix.length + t.nat.suffix.length + t.des.prefix.length + t.des.suffix.length; };
-  const bases = testBases();
+  const bases = testBases().concat(slotBases().filter((b) => !testBases().includes(b)));
   const deadline = Date.now() + minutes * 60000;
   const jsonOut = arg('json', null);
   const out = [];

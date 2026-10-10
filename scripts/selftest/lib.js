@@ -78,7 +78,8 @@ function rollText(txt, r, advanced) {
 
 /**
  * Item text from a simulation-like state.
- * item: { base, cls, rarity, ilvl, name?, mods: [{id, side, tier, frac, des, crafted}], corrupted? }
+ * item: { base, cls, rarity, ilvl, name?, mods: [{id, side, tier, frac, des, crafted}], corrupted?, implicits? }
+ * (implicits: the base's implicit modifier texts, written as the game does: "-1 Prefix Modifier allowed" and the like)
  * mode: 'adv' (Alt+Ctrl+C with headers and ranges) or 'simple' (Ctrl+C with markers).
  */
 function renderItem(item, r, mode) {
@@ -92,6 +93,15 @@ function renderItem(item, r, mode) {
   // runes socketed during a walk (Medved's Tending, Astrid's Creativity, Serle's Triumph): their lines, so the parser knows
   const runeLines = (item.runes || []).flatMap((n) => ((((kb.augments[n] || {}).by_class || {})[item.cls] || {}).txt || []).map((t) => `${t} (rune)`));
   if (runeLines.length) out.push('--------', ...runeLines);
+  if (item.implicits && item.implicits.length) {
+    out.push('--------');
+    const ri = rng(4099); // (their own generator: the rolls of the modifiers below do not move)
+    for (const txt of item.implicits) {
+      const t = rollText(txt, ri, adv);
+      if (adv) out.push('{ Implicit Modifier }');
+      out.push(...t.lines.map((l) => (adv ? l : l + ' (implicit)')));
+    }
+  }
   const rolled = [];
   if (item.mods.length) {
     out.push('--------');
@@ -129,4 +139,10 @@ function testBases() {
   return [...byKey.values()].sort();
 }
 
-module.exports = { ROOT, E, P, load, weightsFor, essencesFor, classText, rng, roll, rollText, renderItem, testBases };
+/** The bases whose implicit changes how many prefixes and suffixes the item holds (Absent Amulet 2 + 2, Penumbra Ring 5 + 1 ...). */
+function slotBases() {
+  const { kb } = load();
+  return Object.keys(kb.bases).filter((n) => !/Flask|Charm/.test(kb.bases[n].cls) && (kb.bases[n].imp || []).some((t) => /Modifiers? allowed/.test(t))).sort();
+}
+
+module.exports = { ROOT, E, P, load, weightsFor, essencesFor, classText, rng, roll, rollText, renderItem, testBases, slotBases };

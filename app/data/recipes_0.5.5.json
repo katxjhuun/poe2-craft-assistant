@@ -1823,7 +1823,7 @@
        "required": true
       }
      ],
-     "item": "Item Class: Amulets\nRarity: Rare\nBought Item\nSolar Amulet\n--------\nItem Level: 80\n--------\n{ Prefix Modifier (Tier: 3) }\n+85(85-99) to maximum Life\n{ Suffix Modifier (Tier: 1) }\n+3 to Level of all Spell Skills",
+     "item": "Item Class: Amulets\nRarity: Rare\nBought Item\nSolar Amulet\n--------\nItem Level: 80\n--------\n{ Implicit Modifier }\n+11(10-15) to Spirit\n--------\n{ Prefix Modifier (Tier: 3) }\n+85(85-99) to maximum Life\n{ Suffix Modifier (Tier: 1) }\n+3 to Level of all Spell Skills",
      "model": {
       "ex": 5038,
       "items": 2.56,
@@ -2037,43 +2037,43 @@
        "required": true
       }
      ],
-     "item": "Item Class: Amulets\nRarity: Rare\nBought Item\nAbsent Amulet\n--------\nItem Level: 80\n--------\n{ Fractured Suffix Modifier (Tier: 1) }\n+3 to Level of all Projectile Skills",
+     "item": "Item Class: Amulets\nRarity: Rare\nBought Item\nAbsent Amulet\n--------\nItem Level: 80\n--------\n{ Implicit Modifier }\n-1 Prefix Modifier allowed\n-1 Suffix Modifier allowed\n--------\n{ Fractured Suffix Modifier (Tier: 1) }\n+3 to Level of all Projectile Skills",
      "model": {
-      "ex": 25084,
+      "ex": 18490,
       "items": 1,
       "hit": 0.0228,
       "uses": [
        {
         "name": "Chaos Orb",
-        "n": 233
-       },
-       {
-        "name": "Omen of Light",
-        "n": 1.88
+        "n": 236
        },
        {
         "name": "Essence of Hysteria",
-        "n": 1
+        "n": 2.91
        },
        {
         "name": "Preserved Collarbone",
-        "n": 3.87
-       },
-       {
-        "name": "Omen of Dextral Crystallisation",
-        "n": 2.3
-       },
-       {
-        "name": "Orb of Annulment",
-        "n": 1.88
+        "n": 3.91
        },
        {
         "name": "Omen of Abyssal Echoes",
-        "n": 3.87
+        "n": 3.91
        },
        {
-        "name": "Essence of the Abyss",
-        "n": 1.3
+        "name": "Omen of Sinistral Exaltation",
+        "n": 1
+       },
+       {
+        "name": "Omen of the Blackblooded",
+        "n": 3.91
+       },
+       {
+        "name": "Greater Exalted Orb",
+        "n": 1.97
+       },
+       {
+        "name": "Omen of Dextral Necromancy",
+        "n": 3.89
        }
       ]
      },
@@ -2245,7 +2245,7 @@
        "required": true
       }
      ],
-     "item": "Item Class: Rings\nRarity: Rare\nBought Item\nMnemonic Ring\n--------\nItem Level: 80\n--------\n{ Fractured Prefix Modifier }\n23(23-26)% increased Mana Cost Efficiency of Spells",
+     "item": "Item Class: Rings\nRarity: Rare\nBought Item\nMnemonic Ring\n--------\nItem Level: 80\n--------\n{ Implicit Modifier }\n4(4-6)% increased maximum Mana\n--------\n{ Fractured Prefix Modifier }\n23(23-26)% increased Mana Cost Efficiency of Spells",
      "model": {
       "ex": 8462,
       "items": 1,
@@ -2585,10 +2585,11 @@
    "desecrated_slot_use": "a two-resistance suffix",
    "target": [],
    "checkpoints": [
-    "Add up the resistances the belt would have and look that belt up before the collarbone is used."
+    "Add up the resistances the belt would have and look that belt up before the collarbone is used.",
+    "Two charm slots at least: a belt with one sells for less."
    ],
    "risks": [
-    "Early league only; later the collarbone costs more than such a belt sells for."
+    "Early league mostly; later the collarbone costs more than such a belt sells for."
    ],
    "id": "b12",
    "title": "Buy, craft, sell: belts with Life and three resistances",
@@ -2596,36 +2597,41 @@
     "Belt"
    ],
    "trade": {
-    "buy": "Magic belts with maximum Life (bought, or from the Genesis Tree).",
-    "sell": "The creator counts before the bone: the finished belt must pay the collarbone and leave about 50 Exalted Orbs.",
-    "quoted": "The Preserved Collarbone is the cost of the craft, not the base."
+    "buy": "Magic belts with maximum Life and one resistance, with two charm slots. One Divine Orb for the creator's belt; as a Magic base usually half of that.",
+    "sell": "With Life, the resistance, Chaos Resistance and a two-resistance suffix: three to four Divine Orbs, five to six on a wanted base; more in the first days of a league.",
+    "quoted": "Close to two Divine Orbs per belt with the base; the Preserved Collarbone and Omen of Abyssal Echoes were about 40 Exalted Orbs each. A second creator counts the same way: the finished belt must pay the collarbone and leave about 50 Exalted Orbs."
    },
    "steps": [
     {
-     "text": "A Greater resistance essence the belt does not have yet (fire, cold or lightning).",
+     "text": "A Greater resistance essence the belt does not have yet; Greater Essence of Ruin for Chaos Resistance sells best.",
      "names": [
+      "Greater Essence of Ruin",
       "Greater Essence of Insulation",
       "Greater Essence of Thawing",
       "Greater Essence of Grounding"
      ]
     },
     {
-     "text": "Omen of Dextral Necromancy, the cheapest lich omen, Omen of Abyssal Echoes and a Preserved Collarbone: every lich has four two-resistance suffixes on belts.",
+     "text": "Omen of Dextral Necromancy, a lich omen (Omen of the Sovereign for Ulaman's list) and a Preserved Collarbone on the third suffix; reveal with Omen of Abyssal Echoes and take the two-resistance modifier. It is nearly always among the first three; the Echoes are for the time it is not.",
      "names": [
       "Omen of Dextral Necromancy",
       "Omen of the Sovereign",
-      "Omen of Abyssal Echoes",
-      "Preserved Collarbone"
+      "Preserved Collarbone",
+      "Omen of Abyssal Echoes"
      ]
     },
     {
-     "text": "Exalted Orbs for what is open.",
+     "text": "Exalted Orbs for what is open. Rings go the same way and can have better prefixes (flat damage).",
      "names": [
       "Exalted Orb"
      ]
     }
    ],
    "sources": [
+    {
+     "label": "\"PoE2 0.5.5 - Craft your resistance BeltRings for half price on leaguestart\" (video transcript supplied by the player, patch 0.5.5)",
+     "tier": "C"
+    },
     {
      "label": "\"How I Make Currency EARLY With Simple Crafts  PoE2 0.5.5\" (video transcript supplied by the player, patch 0.5.5)",
      "tier": "C"
@@ -2635,14 +2641,14 @@
     "said": "2026-09",
     "per": "belt",
     "buy": {
-     "ex": [
-      1,
-      5
+     "div": [
+      0.5,
+      1
      ]
     },
     "uses": [
      {
-      "name": "Greater Essence of Thawing",
+      "name": "Greater Essence of Ruin",
       "n": 1
      },
      {
@@ -2666,8 +2672,257 @@
       "n": 2
      }
     ],
-    "outcomes": [],
-    "note": "No sale price in the source: enter what such a belt is listed for."
+    "outcomes": [
+     {
+      "label": "Life and three resistances",
+      "div": [
+       3,
+       6
+      ],
+      "hit": true
+     }
+    ],
+    "goal": {
+     "restart": "item",
+     "entry": {
+      "base": "Heavy Belt",
+      "ilvl": 80,
+      "rarity": "Magic",
+      "mods": [
+       {
+        "fam": "IncreasedLife",
+        "tier": 1
+       },
+       {
+        "fam": "LightningResistance",
+        "tier": 2
+       }
+      ]
+     },
+     "targets": [
+      {
+       "stat": "+# to maximum Life",
+       "minTier": 1,
+       "required": true
+      },
+      {
+       "stat": "+#% to Lightning Resistance",
+       "minTier": 2,
+       "required": true
+      },
+      {
+       "stat": "+#% to Chaos Resistance",
+       "minTier": 6,
+       "required": true
+      },
+      {
+       "stat": "+#% to Lightning and Chaos Resistances",
+       "minTier": 1,
+       "required": true
+      }
+     ],
+     "item": "Item Class: Belts\nRarity: Magic\nHeavy Belt\n--------\nItem Level: 80\n--------\n{ Implicit Modifier }\n23(20-30)% increased Stun Threshold\n--------\n{ Prefix Modifier (Tier: 1) }\n+150(150-174) to maximum Life\n{ Suffix Modifier (Tier: 2) }\n+36(36-40)% to Lightning Resistance",
+     "model": {
+      "ex": 1101,
+      "items": 2.16,
+      "hit": 1,
+      "uses": [
+       {
+        "name": "Preserved Collarbone",
+        "n": 2.16
+       },
+       {
+        "name": "New base",
+        "n": 1.16
+       },
+       {
+        "name": "Omen of Abyssal Echoes",
+        "n": 2.16
+       },
+       {
+        "name": "Omen of Dextral Necromancy",
+        "n": 2.16
+       },
+       {
+        "name": "Essence of Ruin",
+        "n": 2.16
+       },
+       {
+        "name": "Omen of the Sovereign",
+        "n": 2.16
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "id": "b13",
+   "title": "Buy, fix, sell: amulets whose fracture missed",
+   "classes": [
+    "Amulet"
+   ],
+   "league_scope": [
+    "Forbidden Rites",
+    "Runes of Aldur",
+    "Standard"
+   ],
+   "verdict": "plausible",
+   "source_tier": "C",
+   "min_ilvl": 65,
+   "crafted_slot_use": "Essence of the Breach for the quality, then Perfect Essence of Enhancement as the eraser",
+   "desecrated_slot_use": "the prefix that is missing",
+   "trade": {
+    "buy": "Rare amulets on which the Fracturing Orb landed on the wrong modifier: sellers list them for 10 to 35 Divine Orbs although they can still be crafted. Wanted beside the fractured one: skill levels, T1 Life, rarity, spell damage, cast speed.",
+    "sell": "Fixed with T1 Spirit: 400, 420, 400 and 440 Divine Orbs for bases bought at 20 to 35; one listed at 340 after about 170 spent, one judged \"at least 250\" after about 100.",
+    "quoted": "A desecration try costs about half a Divine Orb this way, 10 to 40 tries for T1 Spirit. The most from one base: 350 Divine Orbs of profit."
+   },
+   "target": [],
+   "steps": [
+    {
+     "text": "Quality first: Essence of the Breach where the crafted slot is free, then Reaver or Sibilant Catalysts.",
+     "names": [
+      "Essence of the Breach",
+      "Reaver Catalyst",
+      "Sibilant Catalyst"
+     ]
+    },
+    {
+     "text": "The missing prefix by desecration: Omen of Sinistral Necromancy, Omen of Abyssal Echoes and a Preserved Collarbone; take T1 Spirit when it is offered.",
+     "names": [
+      "Omen of Sinistral Necromancy",
+      "Omen of Abyssal Echoes",
+      "Preserved Collarbone"
+     ]
+    },
+    {
+     "text": "On a miss, no Omen of Light: Omen of Sinistral Crystallisation with Perfect Essence of Enhancement takes the Desecrated prefix away (the essence's own modifier goes in its place), and the next collarbone goes over that.",
+     "names": [
+      "Omen of Sinistral Crystallisation",
+      "Perfect Essence of Enhancement",
+      "Preserved Collarbone"
+     ]
+    }
+   ],
+   "checkpoints": [
+    "Keep the cost low: the base is cheap because its seller gave up, and the fix must stay cheaper than the price difference.",
+    "Look up what the caster or attack builds of the week wear before buying."
+   ],
+   "risks": [
+    "A fracture on a modifier nobody wants cannot be fixed: the base must be good apart from it.",
+    "The method gets better as Preserved Collarbones get cheaper, and worse the other way."
+   ],
+   "sources": [
+    {
+     "label": "\"1,000 DIVINES A DAY From Fixing Amulets  PoE2 0.5.5\" (video transcript supplied by the player, patch 0.5.5; the channel's intro is SaVeQ's)",
+     "tier": "C"
+    }
+   ],
+   "profit": {
+    "said": "2026-09",
+    "per": "desecration try",
+    "buy": {
+     "div": [
+      10,
+      35
+     ]
+    },
+    "uses": [
+     {
+      "name": "Omen of Sinistral Necromancy",
+      "n": 1
+     },
+     {
+      "name": "Omen of Abyssal Echoes",
+      "n": 1
+     },
+     {
+      "name": "Preserved Collarbone",
+      "n": 1
+     },
+     {
+      "name": "Omen of Sinistral Crystallisation",
+      "n": 1
+     },
+     {
+      "name": "Perfect Essence of Enhancement",
+      "n": 1
+     }
+    ],
+    "outcomes": [
+     {
+      "label": "Fixed with T1 Spirit",
+      "div": [
+       250,
+       440
+      ],
+      "hit": true,
+      "finish": true
+     }
+    ],
+    "note": "The table's currency is one try; the whole fix is the route the craft network gives for the loaded craft (its cost is taken off the sale price).",
+    "goal": {
+     "restart": "never",
+     "entry": {
+      "base": "Absent Amulet",
+      "ilvl": 80,
+      "rarity": "Rare",
+      "mods": [
+       {
+        "fam": "IncreasedLife",
+        "tier": 1,
+        "frac": true
+       },
+       {
+        "id": "GlobalMeleeSkillGemLevel3"
+       },
+       {
+        "fam": "ItemFoundRarityIncrease",
+        "tier": 1
+       }
+      ]
+     },
+     "targets": [
+      {
+       "stat": "+# to Level of all Melee Skills",
+       "minTier": 1,
+       "required": true
+      },
+      {
+       "stat": "+# to Spirit",
+       "minTier": 1,
+       "required": true
+      }
+     ],
+     "item": "Item Class: Amulets\nRarity: Rare\nBought Item\nAbsent Amulet\n--------\nItem Level: 80\n--------\n{ Implicit Modifier }\n-1 Prefix Modifier allowed\n-1 Suffix Modifier allowed\n--------\n{ Fractured Prefix Modifier (Tier: 1) }\n+120(120-149) to maximum Life\n{ Suffix Modifier (Tier: 1) }\n+3 to Level of all Melee Skills\n{ Suffix Modifier (Tier: 1) }\n15(15-18)% increased Rarity of Items found",
+     "model": {
+      "ex": 14850,
+      "items": 1,
+      "hit": 0.0122,
+      "uses": [
+       {
+        "name": "Preserved Collarbone",
+        "n": 43
+       },
+       {
+        "name": "Omen of Abyssal Echoes",
+        "n": 43
+       },
+       {
+        "name": "Perfect Essence of Enhancement",
+        "n": 42
+       },
+       {
+        "name": "Omen of Sinistral Necromancy",
+        "n": 43
+       },
+       {
+        "name": "Greater Exalted Orb",
+        "n": 1
+       }
+      ]
+     }
+    }
    }
   }
  ],

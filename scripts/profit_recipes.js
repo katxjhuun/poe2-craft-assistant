@@ -35,7 +35,7 @@ function entryItem(entry) {
     const pe = pool.get(id);
     return { id, side: km.gen === 'p' ? 'prefix' : 'suffix', tier: pe ? pe.tier : 0, frac: !!m.frac };
   });
-  const text = renderItem({ base: entry.base, cls: b.cls, rarity: entry.rarity, ilvl: entry.ilvl, name: 'Bought Item', mods }, rng(7), 'adv').text;
+  const text = renderItem({ base: entry.base, cls: b.cls, rarity: entry.rarity, ilvl: entry.ilvl, name: 'Bought Item', mods, implicits: b.imp || [] }, rng(7), 'adv').text;
   return { text, item: E.parseItem(ix, text).item, cls: b.cls };
 }
 

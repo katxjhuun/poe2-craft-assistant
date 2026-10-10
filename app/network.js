@@ -751,13 +751,21 @@
     const states = [], index = new Map(), acts = [];
     // a node's key as one number: the targets' statuses in base 9, then the small fields (it stays under 2^53)
     const FLK = NCLS > 1 ? 9 : 1; // (the two classes of the lowest levels, see LCUT)
-    const KEY_REST = 3 * 4 * 4 * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2 * FLK * 3 * 3 * 3;
+    // j, the modifiers of a side that nobody asked for: as many as a side holds at most. Three on most items; a
+    // base's implicit raises it (Tenebrous Amulet: one prefix and five suffixes), and so do Serle's Triumph and a
+    // jewel's allowance modifier. (The key had room for three: on a side of four or five, an item with four
+    // modifiers nobody asked for there was the node of another item, and the route's step for it was one the rules
+    // refuse; found on 10 Oct 2026 when the bases that change the slot counts were first played.)
+    const JMAX = Math.max(3, LIM[0], LIM[1]) + (SER || st0.xSuffix ? 1 : 0); // (a jewel: two and the allowance modifier's one)
+    const JK = JMAX + 1;
+    const KEY_REST = 3 * JK * JK * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2 * FLK * 3 * 3 * 3;
     const KEY_NUM = Math.pow(10, G) * KEY_REST < 9e15; // (the two parts fit one number exactly)
     const keyOf = (S) => {
       let a = 0;
       for (let i = 0; i < G; i++) a = a * 10 + S.g[i];
       let k = S.r;
-      k = k * 4 + S.j[0]; k = k * 4 + S.j[1]; k = k * 10 + (S.fg + 1); k = k * 3 + S.fj; k = k * 3 + S.cx; k = k * 3 + S.dj; k = k * 3 + S.du;
+      if (S.j[0] > JMAX || S.j[1] > JMAX) throw new Error('more modifiers on a side than a node can count');
+      k = k * JK + S.j[0]; k = k * JK + S.j[1]; k = k * 10 + (S.fg + 1); k = k * 3 + S.fj; k = k * 3 + S.cx; k = k * 3 + S.dj; k = k * 3 + S.du;
       k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw; k = k * 2 + S.kx; k = k * 2 + S.kf; k = k * FLK + S.fl; k = k * 3 + S.ct; k = k * 3 + S.cy; k = k * 3 + S.cu;
       return KEY_NUM ? a * KEY_REST + k : a + ':' + k;
     };
@@ -2648,26 +2656,33 @@
       get base() { return solution().money[n0]; },
       nodeOf(st) {
         // the node with what is known to be in the way, when the network has it (the pasted item and what follows from it)
-        let i = index.get(keyOf(nodeOf(st, true)));
-        if (i === undefined) i = index.get(keyOf(nodeOf(st, 2)));
-        if (i === undefined) i = index.get(keyOf(nodeOf(st, false)));
+        // (canon: two crafted modifiers nobody asked for have one order in a node; the item's reader names them in
+        // the item's order. Without it an item with two of them had no node whenever the reader's order was the
+        // other one: in the sixth deep run 2% of a crossbow's crafts left the network after an alloy with Astrid's
+        // Creativity, and a few crafts of twenty other scenarios.)
+        let i;
+        for (const known of [true, 2, false]) { i = index.get(keyOf(canon(nodeOf(st, known)))); if (i !== undefined) return i; }
         // A crafted modifier nobody asked for that the item's reader knows as a tool essence's own, where the edge
-        // that left it knew only "some crafted modifier" (an essence for a target that gave its other modifier): the
-        // node without whose it is. (In the fifth deep run 2% of a body armour's crafts had no node after a Perfect
-        // Essence of Seeking for that reason.)
-        if (i === undefined) for (const known of [true, 2, false]) {
-          const S = nodeOf(st, known);
-          if (!S.ct && !S.cu) continue;
-          S.ct = 0; S.cu = 0;
-          i = index.get(keyOf(canon(S)));
-          if (i !== undefined) break;
+        // that left it knew only "some crafted modifier" (an essence for a target that gave its other modifier), or
+        // the other way round: the node that differs only in whose the crafted modifiers are. (In the fifth deep run
+        // 2% of a body armour's crafts had no node after a Perfect Essence of Seeking for that reason.)
+        for (const known of [true, 2, false]) {
+          const S0 = nodeOf(st, known);
+          if (!S0.cx && !S0.cy) continue;
+          for (const a of [S0.ct, 0, 1, 2]) for (const b of [S0.cu, 0, 1, 2]) {
+            const S = cp(S0);
+            if (S.cx) S.ct = a;
+            if (S.cy) S.cu = b;
+            i = index.get(keyOf(canon(S)));
+            if (i !== undefined) return i;
+          }
         }
-        return i === undefined ? -1 : i;
+        return -1;
       },
       /** Is every target on this item (whatever else is on it, and whether the network has a node for it)? */
       finished: (st) => done(nodeOf(st, true)),
       /** For the checks: 0 the node was found with everything known, 1 without what a blocker's tags stop, 2 without blockers, -1 not at all. */
-      mapping(st) { return index.has(keyOf(nodeOf(st, true))) ? 0 : index.has(keyOf(nodeOf(st, 2))) ? 1 : index.has(keyOf(nodeOf(st, false))) ? 2 : -1; },
+      mapping(st) { return index.has(keyOf(canon(nodeOf(st, true)))) ? 0 : index.has(keyOf(canon(nodeOf(st, 2)))) ? 1 : index.has(keyOf(canon(nodeOf(st, false)))) ? 2 : -1; },
       done: (s) => done(states[s]),
       /** The step to use at node s: {a, names, cost, out}, or null when done or stuck. */
       step(s) { return pol[s] >= 0 ? Object.assign({ names: actNames(acts[s][pol[s]].a) }, acts[s][pol[s]]) : null; },

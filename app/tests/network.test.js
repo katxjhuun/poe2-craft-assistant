@@ -680,3 +680,25 @@ test('network: a bought start: giving the item up takes another item like it, at
   assert.equal(got.done, got.runs);
   assert.ok(Math.abs(got.mean - want) < Math.max(4 * got.se, 0.08 * want), `played ${got.mean} ±${got.se}, promised ${want}`);
 });
+
+test('network: a side that holds four or five modifiers: every count of them is a node of its own', () => {
+  // Tenebrous Amulet: one prefix, five suffixes (its implicit). The key of a node had room for three modifiers nobody
+  // asked for on a side: the item with four of them on the suffix side was the node of an item with one such prefix
+  // and none such suffix, and the route's step there (Omen of Greater Exaltation) is one the rules refuse on it.
+  const X = lockWorld(), base = 'Tenebrous Amulet';
+  const white = E.parseItem(X.D.ix, X.L.renderItem({ base, cls: 'Amulet', rarity: 'Normal', ilvl: 82, mods: [], implicits: kb.bases[base].imp }, X.L.rng(5), 'adv').text).item;
+  assert.deepEqual(white.slotDelta, { prefix: -2, suffix: 2 });
+  const res = X.tiers(base, 'suffix', /to all Elemental Resistances$/), crit = X.tiers(base, 'suffix', /increased Critical Damage Bonus$/);
+  const inp = X.input(white, { 'suffix-0': { fam: res.fam, group: 'suffix', minTier: 2, required: true, label: res.label }, 'suffix-1': { fam: crit.fam, group: 'suffix', minTier: 2, required: true, label: crit.label } });
+  const net = NW.build(inp);
+  const at = (jp, js) => net.states.findIndex((S) => S.r === 2 && S.j[0] === jp && S.j[1] === js && S.g[0] === 1 && S.g[1] === 0 && !S.cx && !S.cy && !S.dj && !S.du && S.fg < 0 && !S.fj);
+  const full = at(0, 4), other = at(1, 0);
+  assert.ok(full >= 0 && other >= 0 && full !== other, 'four other suffixes and one other prefix are two nodes');
+  // on the full suffix side no step adds two modifiers: one slot is open
+  assert.ok(!net.acts[full].some((e) => e.a.op === 'exalt' && e.a.greater));
+  assert.ok(net.acts[other].some((e) => e.a.op === 'exalt' && e.a.greater));
+  const got = X.play(net, inp, 300, 3, 20000, 60000), want = net.cost(net.start);
+  assert.equal(got.refused, 0);
+  assert.ok(got.detours < got.runs / 10, `${got.detours} detours`);
+  assert.ok(Math.abs(got.mean - want) < Math.max(4 * got.se, 0.08 * want), `played ${got.mean} ±${got.se}, promised ${want}`);
+});
