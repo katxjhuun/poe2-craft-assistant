@@ -86,8 +86,13 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
   const st0 = P.toState(ctx, input.item, input.locks);
   let sum = 0, sq = 0, done = 0, steps = 0, off = 0, refused = 0, detours = 0;
   // why a step was refused, and why another one was used in its place: reason -> how often
-  const whyOf = new Map(), detourWhy = new Map(), endWhy = new Map(), futileWhy = new Map();
-  let futile = 0;
+  const whyOf = new Map(), detourWhy = new Map(), endWhy = new Map(), gaveUpWhy = new Map();
+  let gaveUp = 0;
+  // a step that removes a modifier may remove the one that is in a target's way (a bone does on a full item)
+  const removes = (a, st) => a.op === 'chaos' || a.op === 'annul' || a.op === 'pessence' || a.op === 'liquid' || a.op === 'newbase' || a.op === 'extraction' || a.op === 'vaal'
+    || (a.op === 'bone' && (a.putrefy || a.mark || (!a.hide && open(st, 'prefix') + open(st, 'suffix') === 0)));
+  /** Can edge e of the node do nothing on this item: all it could add is among the targets kept out (blocked), and it removes nothing? */
+  const futileOn = (node, e, st, blocked) => { if (removes(e.a, st)) return false; const adds = net.adds(node, e.out); return adds.length > 0 && adds.every((i) => blocked.includes(i)); };
   // what an item looks like, in a few words (for the reasons a craft did not end)
   const look = (st) => { const c = (f) => st.mods.filter(f).length; return `${st.rarity} ${c((m) => m.side === 'prefix')}/${c((m) => m.side === 'suffix')}${c((m) => m.crafted) ? ' crafted ' + c((m) => m.crafted) : ''}${c((m) => m.des && !m.unrevealed) ? ' desecrated ' + c((m) => m.des && !m.unrevealed) : ''}${c((m) => m.unrevealed) ? ' hidden' : ''}${c((m) => m.frac) ? ' fractured' : ''}${st.aldur ? ' aldur' : ''}${(st.tags || []).length ? ' pool rune' : ''}${st.xCrafted ? ' astrid' : ''}${st.xSuffix ? ' serle' : ''}`; };
   const note = (m, a, text) => { const k = `${a.op}${a.item ? ' ' + a.item : ''}: ${text}`; m.set(k, (m.get(k) || 0) + 1); };
@@ -98,8 +103,8 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
     let st = { ...st0, mods: st0.mods.map((m) => ({ ...m })) };
     let cost = 0, k = 0, ok = false, lastA = null;
     from = -1;
-    // how often a node's step was used on the item in hand (see "futile" below)
-    const used = new Map();
+    // how often a node's step could do nothing on the item in hand (see "hidden" below)
+    const stuck = new Map();
     for (; k < maxSteps; k++) {
       // a locked item (Corrupted or Sanctified) is finished when every target is on it, else it is lost: a new base
       // (which the step that locked it has paid for)
@@ -121,27 +126,6 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
       if (net.done(node)) { ok = true; break; }
       let step = net.step(node);
       if (!step) { note(endWhy, lastA || { op: 'start' }, 'no step for ' + look(st)); break; }
-      // Futile: a step that should have added a target by now with all but one chance in ten thousand, and has not.
-      // In a network that does not follow every target's blockers, an item can hold a modifier in a target's way that
-      // its node does not know (a lower tier of the target): the route takes bone after bone, the Well never offers
-      // the target, and the craft never ends (4 of 500 on a ring). The page builds the route again from every pasted
-      // item and sees the modifier; the play, which keeps one network, gives the item up for a new base instead and
-      // counts it (the base is paid for).
-      if (step.a.op === 'newbase') used.clear();
-      else {
-        const h = net.hit(node);
-        if (h > 0) {
-          const c = (used.get(node) || 0) + 1;
-          used.set(node, c);
-          if (c >= 8 && Math.pow(1 - h, c) < 1e-4) {
-            futile++; note(futileWhy, step.a, `${c} uses on ${look(st)}`);
-            st = P.apply(ctx, st, { op: 'newbase' }, r).state; st.destroyed = false;
-            cost += net.price('New base') || 0;
-            used.clear(); from = -1;
-            continue;
-          }
-        }
-      }
       // A step the rules refuse on this very item, where the network's node does not know what is in a target's way
       // (not every target's blockers are followed in a large network): the player sees the item and takes the next
       // cheapest step the rules allow. Counted as a detour, with the reason; the cost shows what it does to the promise.
@@ -151,7 +135,32 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
           const alt = net.options(node).find((o) => !o.best && o.a.op !== 'lock' && !P.validate(ctx, st, o.a.pre || o.a));
           if (alt) { detours++; note(detourWhy, step.a, bad); step = alt; }
         }
+        // The same for a step that can do nothing on this very item: every target it could add is kept out by a
+        // modifier the node does not know (a lower tier of the target, one of its group, one whose tags stop it), and
+        // the step removes no modifier. The route would take bone after bone and the craft would never end (4 of 500
+        // on a ring whose "+# to all Attributes" was of too low a tier). The page builds the route again from every
+        // pasted item and sees the modifier; the play, which keeps one network, takes the node's next cheapest step
+        // that can still do something: one that removes a modifier, or adds another target, or a new base.
+        // Where that brings the item back to the same node again and again (the other step hides a Desecrated modifier
+        // that the next node cannot reveal usefully either), the item is given up for a new base at the sixth time:
+        // the page's route for such an item is at least as good as that.
+        const hidden = net.hiddenBlocks(st, node);
+        if (hidden.length && futileOn(node, step, st, hidden)) {
+          const why = 'a modifier the node does not know keeps ' + hidden.map((i) => net.goals[i].label).join(' + ') + ' out';
+          const c = (stuck.get(node) || 0) + 1;
+          stuck.set(node, c);
+          if (c > 5) {
+            gaveUp++; note(gaveUpWhy, step.a, why + ' (' + look(st) + ')');
+            st = P.apply(ctx, st, { op: 'newbase' }, r).state; st.destroyed = false;
+            cost += net.price('New base') || 0;
+            stuck.clear(); from = -1;
+            continue;
+          }
+          const alt = net.options(node).find((o) => !o.best && o.a.op !== 'lock' && !P.validate(ctx, st, o.a.pre || o.a) && !futileOn(node, o, st, hidden));
+          if (alt) { detours++; note(detourWhy, step.a, why); step = alt; }
+        }
       }
+      if (step.a.op === 'newbase') stuck.clear();
       let a = step.a;
       lastA = a;
       // (a step the simulator's rules refuse is a disagreement between the network and the rules: counted, and kept for the audit)
@@ -225,7 +234,7 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
   const mean = done ? sum / done : NaN;
   const sd = done > 1 ? Math.sqrt(Math.max(0, sq / done - mean * mean)) : 0;
   const top = (m) => [...m.entries()].sort((x, y) => y[1] - x[1]).slice(0, 3).map(([k, c]) => `${c}x ${k}`);
-  return { mean, se: done ? sd / Math.sqrt(done) : NaN, sd, done, steps: steps / Math.max(1, played), off, refused, runs: played, detours, why: top(whyOf), detourWhy: top(detourWhy), endWhy: top(endWhy), futile, futileWhy: top(futileWhy) };
+  return { mean, se: done ? sd / Math.sqrt(done) : NaN, sd, done, steps: steps / Math.max(1, played), off, refused, runs: played, detours, why: top(whyOf), detourWhy: top(detourWhy), endWhy: top(endWhy), gaveUp, gaveUpWhy: top(gaveUpWhy) };
 }
 
 function check(sc, runs, seed, tol) {

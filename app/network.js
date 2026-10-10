@@ -566,21 +566,27 @@
       for (const [i] of nat) if (!keep.has(i)) { goals[i].magicEss = goals[i].rareEss = null; goals[i].noWell = true; }
     }
     const floorOf = (op, tier) => { const fl = ctx.floors[op]; return !fl || tier === 'base' ? 0 : tier === 'greater' ? fl.Greater || 0 : fl.Perfect || 0; };
-    /** The orb tiers worth a node: priced, and a higher one only where its floor raises some target's share of the pool. */
+    /**
+     * The orb tiers worth an edge: the priced ones that no other tier beats. A tier is beaten by one that costs no more
+     * and gives every target at least its share of the pool (within 2%: a dearer orb for a hair more is not worth an
+     * edge at every node). The cheaper orb is not always the lower one: with Greater Orbs of Transmutation at 0.96 and
+     * plain ones at 1.51 the network rolled jewels with the plain orb, and the planner's old route with the Greater
+     * one was a third cheaper (Time-Lost Diamond, two targets: 4,081 against 6,551).
+     */
     function orbTiers(op) {
-      const out = [];
-      let best = null;
+      let keep = [];
       for (let t = 0; t < TIERS.length; t++) {
         const name = ORB[op][t], pr = price(name);
         if (pr == null) continue;
         const floor = floorOf(op, TIERS[t]);
         const share = goals.map((g, i) => { if (g.kind !== 'nat') return 0; const s = stats(g.si, floor, 1, R_POOL | R_ALDUR); return (s.ok[i] + s.nearW[i] + s.twin[i]) / (s.W || 1); });
-        if (best && !share.some((x, i) => x > best[i] * 1.02)) continue;
-        if (!best && t > 0 && !share.some((x) => x > 0)) continue;
-        out.push({ tier: TIERS[t], name, price: pr, floor });
-        best = best ? best.map((x, i) => Math.max(x, share[i])) : share;
+        const X = { tier: TIERS[t], name, price: pr, floor, share };
+        const beats = (A, B) => A.price <= B.price && !B.share.some((x, i) => x > A.share[i] * 1.02);
+        if (keep.some((Y) => beats(Y, X))) continue;
+        keep = keep.filter((Y) => !beats(X, Y));
+        keep.push(X);
       }
-      return out;
+      return keep.map(({ tier, name, price: pr, floor }) => ({ tier, name, price: pr, floor }));
     }
     const T = { transmute: orbTiers('transmute'), augment: orbTiers('augment'), regal: orbTiers('regal'), exalt: orbTiers('exalt'), chaos: orbTiers('chaos') };
     const PR = {
@@ -2617,6 +2623,17 @@
         let i = index.get(keyOf(nodeOf(st, true)));
         if (i === undefined) i = index.get(keyOf(nodeOf(st, 2)));
         if (i === undefined) i = index.get(keyOf(nodeOf(st, false)));
+        // A crafted modifier nobody asked for that the item's reader knows as a tool essence's own, where the edge
+        // that left it knew only "some crafted modifier" (an essence for a target that gave its other modifier): the
+        // node without whose it is. (In the fifth deep run 2% of a body armour's crafts had no node after a Perfect
+        // Essence of Seeking for that reason.)
+        if (i === undefined) for (const known of [true, 2, false]) {
+          const S = nodeOf(st, known);
+          if (!S.ct && !S.cu) continue;
+          S.ct = 0; S.cu = 0;
+          i = index.get(keyOf(canon(S)));
+          if (i !== undefined) break;
+        }
         return i === undefined ? -1 : i;
       },
       /** Is every target on this item (whatever else is on it, and whether the network has a node for it)? */
@@ -2662,6 +2679,32 @@
           lines: e.a.plan.slice(0, max || 10).map(([k, to, p]) => ({ names: actNames(list[k].a), to: to === RESTART ? 'lost' : done(states[to]) ? 'done' : describe(states[to]), share: p })),
           rest: e.a.rest > 1e-9 ? { names: e.a.cap === -2 ? ['Divine Orb'] : actNames(list[e.a.cap].a), burn: e.a.cap === -2, share: e.a.rest } : null,
         };
+      },
+      /**
+       * Targets that cannot come on this very item though its node has them as simply missing: a modifier nobody asked
+       * for that is of the target's family (another tier), of its group (on either side), or that stops it with its
+       * tags. The network follows the blockers of some targets only, and does not know what a fractured or a crafted
+       * modifier nobody asked for is; whoever holds the item sees it. -> target indices.
+       */
+      hiddenBlocks(st, s) {
+        const S = states[s], out = [];
+        for (let k = 0; k < G; k++) {
+          if (S.g[k] !== ABSENT) continue; // (met, under its value, in the way, a twin, kept out from the other side: the node knows)
+          const g = goals[k];
+          for (const m of st.mods) {
+            if (m.unrevealed || !m.fam || goals.some((q) => P.meets(m, q, q.tier) || P.nearMiss(m, q))) continue;
+            // (another target's twin is a status of that target: what it stops is counted with it)
+            if (goals.some((q, j) => S.g[j] === TWIN && conv[j] && m.id && conv[j].src.has(m.id))) continue;
+            if (m.fam === g.fam || (g.grp.length && (m.grp || []).some((x) => g.grp.includes(x))) || (m.id && kb.mods[m.id] && stops(m.id, k))) { out.push(k); break; }
+          }
+        }
+        return out;
+      },
+      /** The targets an edge of node s can add (out: the edge's outcomes). */
+      adds(s, out) {
+        const S = states[s], got = new Set();
+        for (let t = 1; t < out.length; t += 2) { if (out[t] === RESTART) continue; const T = states[out[t]]; for (let i = 0; i < G; i++) if (met(T.g[i]) && !met(S.g[i])) got.add(i); }
+        return [...got];
       },
       /** Chance that the step at node s adds a target the item does not have. */
       hit(s) {
@@ -2752,7 +2795,7 @@
         const total = (act) => { let c = act.cost; const o = act.out; for (let t = 0; t < o.length; t += 2) c += o[t] * (o[t + 1] === RESTART ? so.moneyBase : so.money[o[t + 1]]); return c; };
         // (not the omen at its best: that is no step a player can take)
         // (nor a lock's edge the route does not use: it is what earlier values made of it)
-        return acts[s].map((act, i) => ({ a: act.a, names: actNames(act.a), cost: act.cost, total: total(act), best: i === pol[s] })).filter((o) => !o.a.ideal && (o.best || o.a.op !== 'lock')).sort((a, b) => (b.best - a.best) || (a.total - b.total));
+        return acts[s].map((act, i) => ({ a: act.a, names: actNames(act.a), cost: act.cost, out: act.out, total: total(act), best: i === pol[s] })).filter((o) => !o.a.ideal && (o.best || o.a.op !== 'lock')).sort((a, b) => (b.best - a.best) || (a.total - b.total));
       },
       /** What buying a starting point is worth: the price up to which it beats rolling it from a white base. */
       entries() {

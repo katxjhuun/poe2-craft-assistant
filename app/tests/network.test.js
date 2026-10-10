@@ -590,3 +590,33 @@ test('network: what the third deep run found: a group mate across the sides, one
   assert.ok(amulet.acts.some((l) => l.some((e) => e.a.putrefy)), 'the omen is an edge');
   assert.ok(amulet.timing.expand < 6000, `built in ${amulet.timing.expand} ms`);
 });
+
+test('network: the cheaper orb tier is used, also when it is the higher one; an item is seen where its node is not', () => {
+  // Greater Orbs of Transmutation cost less than plain ones on the market of 10 Oct 2026. The network kept a higher
+  // tier only where its floor raised a target's share, so it rolled with the dearer plain orb.
+  const cheap = (n) => (n === 'Greater Orb of Transmutation' ? 0.05 : priceOf(n));
+  const input = inputFor(boots(WHITE), [['prefix', /increased Movement Speed$/, 6]], { priceOf: cheap });
+  const net = NW.build(input), dear = NW.build(inputFor(boots(WHITE), [['prefix', /increased Movement Speed$/, 6]]));
+  assert.deepEqual(net.step(net.start).names, ['Greater Orb of Transmutation']);
+  assert.ok(net.cost(net.start) < dear.cost(dear.start));
+  // a dearer higher tier that raises no target's share is still no edge
+  assert.ok(!dear.acts[dear.start].some((e) => e.a.op === 'transmute' && e.a.tier === 'perfect'));
+
+  // What an item holds that its node does not know: with no blockers followed, a Life prefix of too low a tier is "one
+  // more prefix" for the node, and an Exalted Orb for Life can do nothing on that item. The play asks the item.
+  const loose = NW.build(inputFor(boots(WHITE), [MS, LIFE, FIRE], { track: 0, whittle: 'none' }));
+  const ctx = loose.ctx;
+  const low = P.sidePool(ctx, 'prefix', 0).filter((e) => /to maximum Life$/.test(kb.mods[e.id].txt)).sort((a, b) => b.tier - a.tier)[0];
+  const st = P.toState(ctx, boots(WHITE), {});
+  st.rarity = 'Rare';
+  st.mods.push({ id: low.id, fam: low.fam, side: 'prefix', lvl: low.lvl, grp: low.grp, tier: low.tier, frac: false, des: false, crafted: false, lock: false });
+  const node = loose.nodeOf(st);
+  assert.ok(node >= 0);
+  const life = loose.goals.findIndex((g) => /Life/.test(g.label));
+  assert.deepEqual(loose.hiddenBlocks(st, node), [life], 'the low Life tier keeps the Life target out, and the node does not say so');
+  const exalt = loose.acts[node].find((e) => e.a.op === 'exalt' && e.a.side === 'prefix') || loose.acts[node].find((e) => e.a.op === 'exalt');
+  assert.ok(loose.adds(node, exalt.out).includes(life), 'the node takes an Exalted Orb to add Life');
+  // with the blockers followed the same item is a node that knows
+  const tight = NW.build(inputFor(boots(WHITE), [MS, LIFE, FIRE], { track: 8, whittle: 'none' }));
+  assert.deepEqual(tight.hiddenBlocks(st, tight.nodeOf(st)), []);
+});
