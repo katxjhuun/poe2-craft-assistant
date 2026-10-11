@@ -151,7 +151,7 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit) {
           const why = 'a modifier the node does not know keeps ' + hidden.map((i) => net.goals[i].label).join(' + ') + ' out';
           const c = (stuck.get(node) || 0) + 1;
           stuck.set(node, c);
-          if (c > 5) {
+          if (c > 5 && !(net.bound && net.bound.mode === 'never')) {
             gaveUp++; note(gaveUpWhy, step.a, why + ' (' + look(st) + ')');
             st = another(st); st.destroyed = false;
             cost += net.price('New base') || 0;

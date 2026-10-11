@@ -3498,6 +3498,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     return html + `<div class="plan-card" id="planCard">
       <div class="next"><span class="mk">Next step</span>${nextHtml}</div>
       ${r.bound ? `<p class="sub" style="margin:0">${r.bound.held.length ? `${esc(r.bound.held.join(', '))} ${r.bound.held.length > 1 ? 'are' : 'is'} on the item and no white base can get ${r.bound.held.length > 1 ? 'them' : 'it'}: ` : ''}${r.bound.mode === 'item' ? `where the route gives the item up, it takes another item like this one for ${money(parseFloat(S.itemCost) || 0)} (Plan options).` : 'the route never gives this item up and uses no step that can lose it. If you can buy another one like it, give its price under Plan options.'}</p>` : ''}
+      ${r.settled === false ? '<p class="sub" style="margin:0">The numbers of this route are rough: the craft repairs the item in long loops and their cost did not settle in the time a route may take. The next step is still the best one found.</p>' : ''}
       ${profitLine(r)}
       <div>
         <div class="steps-head"><span>Materials for the whole craft</span><span>Uses · Cost</span></div>

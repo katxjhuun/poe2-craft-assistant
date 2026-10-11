@@ -25,7 +25,8 @@ const [base, kStr, runsStr, secStr, rowsStr] = process.argv.slice(2);
 const t = SW.table(base);
 const singles = t.nat.prefix.length + t.nat.suffix.length + t.des.prefix.length + t.des.suffix.length;
 let sc = null;
-if (/^id:/.test(kStr)) { for (let n = 0; n < 600 && !sc; n++) { let x = null; try { x = SW.scenario(base, n, true); } catch (e) { x = null; } if (x && x.id === kStr.slice(3)) sc = x; } }
+// (an id of the sweep: among the plain drawn sets first, then among those with special requests, bought starts and only-items)
+if (/^id:/.test(kStr)) { for (const plain of [true, false]) for (let n = 0; n < 600 && !sc; n++) { let x = null; try { x = SW.scenario(base, n, plain); } catch (e) { x = null; } if (x && x.id === kStr.slice(3)) sc = x; } }
 else if (/^fams:/.test(kStr)) {
   const targets = {};
   kStr.slice(5).split(',').forEach((x, k) => {
@@ -36,7 +37,7 @@ else if (/^fams:/.test(kStr)) {
   sc = { id: base + '|' + kStr, kind: 'named families, white', seed: 7, targets, item: E.parseItem(ix, renderItem({ base, cls: t.cls, rarity: 'Normal', ilvl: 82, mods: [] }, rng(7), 'adv').text).item };
 } else sc = SW.scenario(base, /^n/.test(kStr) ? singles + +kStr.slice(1) : singles + 6 * (+kStr) + 5);
 if (!sc) { console.log('no such scenario'); process.exit(1); }
-const input = { ix, item: sc.item, targets: sc.targets, locks: {}, priceOf, baseCost: 1, weights: weightsFor(base), essences: t.essences, quality: sc.qualityMode };
+const input = { ix, item: sc.item, targets: sc.targets, locks: {}, priceOf, baseCost: 1, weights: weightsFor(base), essences: t.essences, quality: sc.qualityMode, restart: sc.restart, itemCost: sc.itemCost };
 const net = NW.route(input);
 const s = net.start, want = net.cost(s);
 console.log(sc.id, '|', sc.kind);

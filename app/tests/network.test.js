@@ -702,3 +702,53 @@ test('network: a side that holds four or five modifiers: every count of them is 
   assert.ok(got.detours < got.runs / 10, `${got.detours} detours`);
   assert.ok(Math.abs(got.mean - want) < Math.max(4 * got.se, 0.08 * want), `played ${got.mean} ±${got.se}, promised ${want}`);
 });
+
+test('network: the cost a route is reported with is the rule set\'s own, also where the item is never given up', () => {
+  // A route that never gives the item up repairs it in loops that cross the solver's blocks; the reported money was
+  // solved apart, from nothing, with the usual passes, and came out a quarter low on a jewel (65,346 for 87,464; the
+  // seventh deep run). It starts from the rule set's values now and is checked against its own equations.
+  const item = ringWith(['{ Prefix Modifier (Tier: 6) }', '+40(38-49) to maximum Mana', '{ Suffix Modifier (Tier: 3) }', '+25(21-25)% to Fire Resistance', '{ Suffix Modifier (Tier: 5) }', '+12(9-12) to Strength']);
+  const input = inputFor(item, [['prefix', /^\+\(\d+-\d+\) to maximum Life$/, 3], ['suffix', /to Cold Resistance$/, 3], ['suffix', /to Lightning Resistance$/, 3]], { restart: 'never' });
+  const net = NW.build(input);
+  assert.equal(net.bound.mode, 'never');
+  assert.ok(net.settled, 'settled: ' + JSON.stringify(net.timing));
+  assert.ok(net.moneyOff <= 1e-6);
+  // the model played by its own chances gives its promise
+  const r = P.rngFrom(77);
+  let sum = 0, sq = 0;
+  const n = 4000;
+  for (let k = 0; k < n; k++) {
+    let s = net.start, c = 0;
+    for (let i = 0; i < 100000 && !net.done(s); i++) {
+      const step = net.step(s);
+      c += step.cost;
+      let u = r(), to = step.out[step.out.length - 1];
+      for (let t = 0; t < step.out.length; t += 2) { u -= step.out[t]; if (u <= 0) { to = step.out[t + 1]; break; } }
+      s = to < 0 ? net.n0 : to;
+    }
+    sum += c; sq += c * c;
+  }
+  const mean = sum / n, se = Math.sqrt((sq / n - mean * mean) / n), want = net.cost(net.start);
+  assert.ok(Math.abs(mean - want) < 4 * se, `by its own chances ${mean} ±${se}, promised ${want}`);
+  // the answer for the page carries the flag
+  assert.equal(NW.answer(input, {}).settled, true);
+});
+
+test('network: two targets that keep each other out by their tags: the rune that can bring both is found', () => {
+  // On a wand the Fire Damage prefix and a Chaos spell level suffix keep each other out. Passion of Aldur (the first
+  // rune that serves a target) would need a Cold or Lightning Damage prefix next to the Chaos level, and those keep
+  // each other out as well: the network promised that path and no craft of forty ended (the seventh deep run).
+  // Betrayal of Aldur turns a Fire spell level into the Chaos one next to a fractured Fire Damage.
+  const X = lockWorld(), base = 'Dueling Wand';
+  const fire = X.tiers(base, 'prefix', /^\(\d+-\d+\)% increased Fire Damage$/), chaos = X.tiers(base, 'suffix', /to Level of all Chaos Spell Skills$/);
+  const inp = X.input(X.item(base, 'Normal'), { 'prefix-0': { fam: fire.fam, group: 'prefix', minTier: 3, required: true, label: fire.label }, 'suffix-0': { fam: chaos.fam, group: 'suffix', minTier: 3, required: true, label: chaos.label } });
+  const net = NW.route(inp);
+  assert.ok(!net.impossible, JSON.stringify(net.impossible));
+  const mats = net.materials(net.start).filter((m) => m.uses > 0.01).map((m) => m.name);
+  assert.ok(mats.includes('Betrayal of Aldur') && mats.includes('Fracturing Orb'), mats.join(', '));
+  assert.ok(!mats.includes('Passion of Aldur'));
+  const got = X.play(net, inp, 150, 3, 200000, 90000), want = net.cost(net.start);
+  assert.equal(got.done, got.runs, 'every craft ends');
+  assert.equal(got.refused, 0);
+  assert.ok(Math.abs(got.mean - want) < Math.max(4 * got.se, 0.1 * want), `played ${got.mean} ±${got.se}, promised ${want}`);
+});

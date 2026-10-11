@@ -211,12 +211,17 @@
       }
     }
     // Runes of Aldur: one rune an item, so the one that serves the most targets
+    // (input.aldurSkip: runes to leave out. The rune that serves the most targets is not always one a route can use:
+    // on a wand with Fire Damage and a Chaos spell level as targets, Passion of Aldur would need a Cold or Lightning
+    // Damage prefix next to the Chaos level, and those keep each other out; Betrayal of Aldur turns a Fire spell
+    // level into the Chaos one next to a fractured Fire Damage. routeFit asks again without a rune that led nowhere.)
     let ALD = null;
+    const aldurAll = [];
     {
       let best = null;
       for (const [rune, to] of Object.entries(P.ALDUR_ELEMENT)) {
         const pr = price(rune), cls = ((kb.augments[rune] || {}).by_class || {})[ctx.cls];
-        if (pr == null || !cls) continue;
+        if (pr == null || !cls || (input.aldurSkip || []).includes(rune)) continue;
         const per = new Array(G).fill(null);
         let n = 0;
         for (let i = 0; i < G; i++) {
@@ -235,6 +240,7 @@
         }
         // a target the rune would itself turn into something else cannot stay next to it
         const harms = goals.map((g) => (ix.famMods.get(g.fam) || []).some((id) => { const t = ctx.pool.has(id) ? P.aldurTwin(ctx, id, to) : null; return !!t && t !== id; }));
+        if (n) aldurAll.push(rune);
         if (n && (!best || n > best.n)) best = { rune, to, price: pr, per, n, harms };
       }
       if (best) { ALD = best; for (let i = 0; i < G; i++) if (best.per[i]) conv[i] = { via: 'aldur', to: best.to, item: best.rune, price: best.price, src: best.per[i] }; }
@@ -687,16 +693,21 @@
       if (!n.cy) n.cu = 0;
       else if (n.cx * 3 + n.ct < n.cy * 3 + n.cu) { const a = n.cx, b = n.ct; n.cx = n.cy; n.ct = n.cu; n.cy = a; n.cu = b; } // (one order for the two)
       if (n.fl) { if (n.fl >= 3 && nSide(n, 0) === 0) n.fl %= 3; if (n.fl % 3 && nSide(n, 1) === 0) n.fl -= n.fl % 3; }
-      // xg (bit of a side): a modifier of that side that is in a target's way there also keeps targets of the other
-      // side out with its tags. When no such modifier is left on the side, what it kept out is free again; a bit
-      // with nothing kept out says nothing.
+      // xg: while a modifier that is in a target's way, or a twin, is on a side, the targets of the other side it
+      // keeps out stay out (XBLOCKED whenever they are not there); when no such modifier is left on that side, they
+      // are free again.
       if (n.xg) for (let si = 0; si < 2; si++) {
-        if (!((n.xg >> si) & 1)) continue;
-        let holder = false, held = false;
-        for (let i = 0; i < G; i++) { if (goals[i].si === si) { if (n.g[i] === BLOCKED || n.g[i] === TWIN) holder = true; } else if (n.g[i] === XBLOCKED && !fracBlocks.has(i)) held = true; }
-        if (holder && held) continue;
-        n.xg &= ~(1 << si);
-        if (!holder) for (let i = 0; i < G; i++) if (goals[i].si !== si && n.g[i] === XBLOCKED && !fracBlocks.has(i) && !n.j[si]) n.g[i] = ABSENT;
+        let holder = false;
+        for (let i = 0; i < G; i++) if (goals[i].si === si && (n.g[i] === BLOCKED || n.g[i] === TWIN)) { holder = true; break; }
+        for (let k = 0; k < G; k++) {
+          if (goals[k].si === si || !xHeld(n, k)) continue;
+          // (a target that is on the item is not kept out; should it be lost while the holder stays, the node will
+          // not know that it cannot come back: rare, and the states this saves are many)
+          if (met(n.g[k]) || near(n.g[k])) { n.xg &= ~(1 << xbit[k]); continue; }
+          if (holder) { if (n.g[k] === ABSENT) n.g[k] = XBLOCKED; continue; }
+          n.xg &= ~(1 << xbit[k]);
+          if (n.g[k] === XBLOCKED && !fracBlocks.has(k) && !n.j[si]) n.g[k] = ABSENT;
+        }
       }
       return n;
     };
@@ -789,7 +800,23 @@
     // refuse; found on 10 Oct 2026 when the bases that change the slot counts were first played.)
     const JMAX = Math.max(3, LIM[0], LIM[1]) + (SER || st0.xSuffix ? 1 : 0); // (a jewel: two and the allowance modifier's one)
     const JK = JMAX + 1;
-    const KEY_REST = 3 * JK * JK * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2 * FLK * 3 * 3 * 3 * 4;
+    // xg: the targets that a modifier of the other side keeps out with its tags or its group while it is itself a
+    // status there (in a target's way, or a target's twin): a bit per target that can be kept out that way at all
+    // (xbit). It is kept whatever the target's status is at the moment: a twin that arrived while the target was
+    // blocked by something else still keeps it out when that something is gone. (A bit per side that only said
+    // "someone holds a cross-block" forgot that: a wand's route promised a Chaos spell level next to a Cold Damage
+    // twin of the Fire Damage target, which the twin's tags never let roll, and no craft of forty ended; the
+    // seventh deep run.)
+    const xbit = new Int32Array(G).fill(-1);
+    let XN = 0;
+    for (let k = 0; k < G; k++) {
+      const g = goals[k];
+      const can = P.sidePool(ctx, SIDES[1 - g.si], 0).some((e) => (!e.rune && stops(e.id, k)) || (g.grp.length && e.fam !== g.fam && (e.grp || []).some((x) => g.grp.includes(x))));
+      if (can) xbit[k] = XN++;
+    }
+    const XK = 1 << XN;
+    const xHeld = (S, k) => xbit[k] >= 0 && ((S.xg >> xbit[k]) & 1) === 1;
+    const KEY_REST = 3 * JK * JK * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2 * FLK * 3 * 3 * 3 * XK;
     const KEY_NUM = Math.pow(10, G) * KEY_REST < 9e15; // (the two parts fit one number exactly)
     const keyOf = (S) => {
       let a = 0;
@@ -797,7 +824,7 @@
       let k = S.r;
       if (S.j[0] > JMAX || S.j[1] > JMAX) throw new Error('more modifiers on a side than a node can count');
       k = k * JK + S.j[0]; k = k * JK + S.j[1]; k = k * 10 + (S.fg + 1); k = k * 3 + S.fj; k = k * 3 + S.cx; k = k * 3 + S.dj; k = k * 3 + S.du;
-      k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw; k = k * 2 + S.kx; k = k * 2 + S.kf; k = k * FLK + S.fl; k = k * 3 + S.ct; k = k * 3 + S.cy; k = k * 3 + S.cu; k = k * 4 + S.xg;
+      k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw; k = k * 2 + S.kx; k = k * 2 + S.kf; k = k * FLK + S.fl; k = k * 3 + S.ct; k = k * 3 + S.cy; k = k * 3 + S.cu; k = k * XK + S.xg;
       return KEY_NUM ? a * KEY_REST + k : a + ':' + k;
     };
     const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad, aw: S.aw, kx: S.kx, kf: S.kf, fl: S.fl, ct: S.ct, cy: S.cy, cu: S.cu, xg: S.xg });
@@ -937,10 +964,8 @@
           let rest = s.low[i];
           const lx = TRACK ? s.lowX[i] : null;
           if (lx) for (const [m, w] of lx) {
-            let live = 0;
-            for (let k = 0; k < G; k++) if (((m >> k) & 1) && S.g[k] === ABSENT) live |= 1 << k;
-            const ww = live ? Math.min(rest, w) : 0;
-            if (ww > 0) { ws.push([ww, i, BLOCKED, false, live]); rest -= ww; }
+            const ww = Math.min(rest, w);
+            if (ww > 0) { ws.push([ww, i, BLOCKED, false, m]); rest -= ww; }
           }
           if (rest > 0) put(rest, i, BLOCKED, false);
         };
@@ -961,10 +986,8 @@
             let rest = s.twin[i];
             const tx = TRACK ? s.twinX[i] : null;
             if (tx) for (const [m, w] of tx) {
-              let live = 0;
-              for (let k = 0; k < G; k++) if (((m >> k) & 1) && S.g[k] === ABSENT) live |= 1 << k;
-              const ww = live ? Math.min(rest, w) : 0;
-              if (ww > 0) { ws.push([ww * beta, i, TWIN, false, live]); rest -= ww; }
+              const ww = Math.min(rest, w);
+              if (ww > 0) { ws.push([ww * beta, i, TWIN, false, m]); rest -= ww; }
             }
             if (rest > 0) put(rest * beta, i, TWIN, false);
           }
@@ -1029,12 +1052,12 @@
       else if (i < 0) n.j[si]++;
       else n.g[i] = status || NATURAL;
       if (junk >= 0 && NCLS > 1 && cls != null) setCls(n, junk, had ? Math.min(clsAt(n, junk), cls) : cls);
-      if (xm && i >= 0) for (let k = 0; k < G; k++) if (((xm >> k) & 1) && n.g[k] === ABSENT) { n.g[k] = XBLOCKED; n.xg |= 1 << goals[i].si; }
+      if (xm && i >= 0) for (let k = 0; k < G; k++) if (((xm >> k) & 1) && xbit[k] >= 0) { n.xg |= 1 << xbit[k]; if (n.g[k] === ABSENT) n.g[k] = XBLOCKED; }
       return n;
     }
     /** The modifiers a removal can take: [{w, k, i, si}] (w: how many of them). pred(side, desecrated). */
     /** Does a plain other modifier of side si keep a target of the other side out (XBLOCKED, and not by the fractured one)? */
-    const xOn = (S, si) => { if (!S.j[si] || ((S.xg >> si) & 1)) return false; for (let i = 0; i < G; i++) if (S.g[i] === XBLOCKED && goals[i].si !== si && !fracBlocks.has(i)) return true; return false; };
+    const xOn = (S, si) => { if (!S.j[si]) return false; for (let i = 0; i < G; i++) if (S.g[i] === XBLOCKED && goals[i].si !== si && !fracBlocks.has(i) && !xHeld(S, i)) return true; return false; };
     /** The plain others of a side as removal units: the one that keeps a target out ('jx') apart from the rest. */
     function plain(S, si) {
       if (!xOn(S, si)) return [{ w: S.j[si], k: 'j', si }];
@@ -1057,7 +1080,7 @@
       if (u.k !== 'du' && u.k !== 'aw' && !(u.k === 'g' && S.g[u.i] !== BLOCKED)) n.kx = 0;
       if (u.k === 'g') n.g[u.i] = ABSENT;
       else if (u.k === 'j') n.j[u.si]--;
-      else if (u.k === 'jx') { n.j[u.si]--; for (let i = 0; i < G; i++) if (n.g[i] === XBLOCKED && goals[i].si !== u.si && !fracBlocks.has(i)) n.g[i] = ABSENT; }
+      else if (u.k === 'jx') { n.j[u.si]--; for (let i = 0; i < G; i++) if (n.g[i] === XBLOCKED && goals[i].si !== u.si && !fracBlocks.has(i) && !xHeld(n, i)) n.g[i] = ABSENT; }
       else n[u.k] = 0;
       return canon(n);
     }
@@ -1917,7 +1940,8 @@
         const is = [];
         for (let i = 0; i < G; i++) if (S.g[i] === TWIN && conv[i] && conv[i].via === 'aldur' && S.fg !== i) is.push(i);
         let harm = false;
-        for (let k = 0; k < G; k++) if (ALD.harms[k] && (met(S.g[k]) || near(S.g[k])) && !is.includes(k)) harm = true;
+        // (a fractured modifier stays what it is)
+        for (let k = 0; k < G; k++) if (ALD.harms[k] && (met(S.g[k]) || near(S.g[k])) && !is.includes(k) && S.fg !== k) harm = true;
         const sk = is.length && !harm ? socket(S) : null;
         if (sk) {
           const S1 = sk.S;
@@ -2063,9 +2087,11 @@
         if (!m.id || !kb.mods[m.id] || m.unrevealed) continue;
         if (role.get(m) === 1 || (known === 2 && role.get(m) === 2)) continue;
         const si = m.side === 'prefix' ? 0 : 1, tags = !!kb.mods[m.id].at;
-        for (let k = 0; k < G; k++) if (S.g[k] === ABSENT && goals[k].si !== si && ((tags && stops(m.id, k)) || (goals[k].grp.length && m.fam !== goals[k].fam && (m.grp || []).some((x) => goals[k].grp.includes(x))))) {
-          S.g[k] = XBLOCKED;
-          if (role.get(m) === 2 || role.get(m) === 3) S.xg |= 1 << si; // (held by a modifier that is in a target's way on its own side, or by a twin: see canon)
+        const holder = role.get(m) === 2 || role.get(m) === 3; // (in a target's way on its own side, or a twin: see canon)
+        for (let k = 0; k < G; k++) {
+          if (goals[k].si === si || !((tags && stops(m.id, k)) || (goals[k].grp.length && m.fam !== goals[k].fam && (m.grp || []).some((x) => goals[k].grp.includes(x))))) continue;
+          if (holder && xbit[k] >= 0) S.xg |= 1 << xbit[k];
+          if (S.g[k] === ABSENT) S.g[k] = XBLOCKED;
         }
       }
       return S;
@@ -2146,6 +2172,11 @@
     // 600 a quiver's route of 25,000 white bases was valued a fifth too low, its values not yet settled.
     // After them the values of the nodes a route reaches are settled by accelerated sweeps (see anderson).
     const EXACT_PASSES = input.passes || 200;
+    // The numbers a route is reported with (its money, its spread, its materials) are solved for the final rule set
+    // only, so they may take the passes they need. A route that never gives the item up (restart 'never') repairs
+    // it in loops that cross the blocks, and such loops settle slowly: with 200 passes a jewel's cost was reported
+    // as 65,346 where the rule set's own value, and the play, said 87,464 (the seventh deep run, 11 Oct 2026).
+    const REPORT_PASSES = Math.max(EXACT_PASSES, 20000);
     /**
      * The fixed point of `sweep` (it turns the vector X into the next one in place), for when the passes over the
      * blocks ran out before the values settled. A loop that crosses blocks (a target is lost and rolled again,
@@ -2161,6 +2192,7 @@
       const M = 10, dX = [], dF = [];
       const start = Float64Array.from(X);
       let x = Float64Array.from(X), xPrev = null, fPrev = null, done = false, sweeps = 0, best = Infinity, bestAt = 0;
+      let low = Infinity, lowX = null; // the sweep result that moved least, and how much
       // (a rule set that never finishes somewhere has no values to settle on: when eighty sweeps bring nothing, stop)
       for (let it = 0; it < 800 && !done && it - bestAt <= 80; it++) {
         if (late()) break;
@@ -2174,6 +2206,7 @@
         const floor = 1e-14 * big + 1e-300;
         for (let i = 0; i < N; i++) { const g = X[i]; f[i] = g - x[i]; if (mask && !mask[i]) continue; const a = Math.abs(f[i]); if (a > 1e-300) { const e = a / (Math.abs(g) + floor); if (e > err) err = e; } }
         if (err <= 1e-10) { done = true; break; }
+        if (err < low) { low = err; lowX = Float64Array.from(X); }
         if (err < best * 0.5) { best = err; bestAt = it; }
         if (fPrev) {
           const a = new Float64Array(N), b = new Float64Array(N);
@@ -2206,7 +2239,7 @@
         xPrev = x; fPrev = f; x = next;
       }
       timing.sweeps = (timing.sweeps || 0) + sweeps;
-      if (done) timing.settledBy = (timing.settledBy || 0) + 1; else { timing.gaveUp = (timing.gaveUp || 0) + 1; X.set(start); }
+      if (done) timing.settledBy = (timing.settledBy || 0) + 1; else { timing.gaveUp = (timing.gaveUp || 0) + 1; X.set(lowX || start); }
       return done;
     }
     /** maxPasses, tol: a rough answer is enough while the rule set still changes a lot (see solve). */
@@ -2236,7 +2269,10 @@
       // a block is solved again only while something it reads has changed
       const dirty = new Uint8Array(blocks.length).fill(1);
       let left = blocks.length;
+      // (past the usual passes only for ten seconds: then the accelerated sweeps take over)
+      const tEnd = Date.now() + 10000;
       for (let pass = 0; pass < maxPasses && left > 0; pass++) {
+        if (pass >= EXACT_PASSES && (pass & 31) === 0 && (Date.now() > tEnd || late())) break;
         for (let bi = 0; bi < blocks.length; bi++) {
           if (!dirty[bi]) continue;
           dirty[bi] = 0; left--;
@@ -2310,7 +2346,9 @@
       const dirty = new Uint8Array(blocks.length);
       dirty[blockOf[s0]] = 1;
       let left = 1;
-      for (let pass = 0; pass < 600 && left > 0; pass++) {
+      const tEnd = Date.now() + 10000;
+      for (let pass = 0; pass < REPORT_PASSES && left > 0; pass++) {
+        if (pass >= 600 && (pass & 31) === 0 && (Date.now() > tEnd || late())) break;
         // (the blocks in the order opposite to evaluate's: what flows into a block comes from the blocks before it)
         for (let bi = blocks.length - 1; bi >= 0; bi--) {
           if (!dirty[bi]) continue;
@@ -2529,19 +2567,23 @@
         for (let s = 0; s < N; s++) V[s] = Math.min(BIG, Av[s] + (1 - Fv[s]) * x);
         luStale.fill(1); timing.unsettled = 0;
       };
+      // (deep: the rule set stood still on values that were not settled yet: they get the passes they need, and
+      // the rule set is looked at again with them; once)
+      let deep = 0, deepNow = false;
       for (let it = 0; it < 400; it++, rounds++) {
         if (late()) { timedOut = true; break; }
         const locking = lockArmed && exact !== false && LOCK < baseCost + charge + x;
         if (locking) rough = false;
         const d = new Float64Array(N);
         for (let s = 0; s < N; s++) if (pol[s] >= 0) d[s] = costOf(acts[s][pol[s]]);
-        const passes = !rough ? EXACT_PASSES : last > N / 20 ? 3 : last > N / 300 ? 8 : 24;
+        const passes = !rough ? (deepNow ? REPORT_PASSES : EXACT_PASSES) : last > N / 20 ? 3 : last > N / 300 ? 8 : 24;
+        deepNow = false;
         const [A, F] = evaluate([{ d, bnd: 0, stuck: BIG, x0: Av }, { bnd: 0, term: 1, x0: Av ? Fv : null }], passes, rough ? 1e-7 : 1e-11);
         if (!holdX) x = F[n0] > 1e-250 ? A[n0] / F[n0] : BIG;
         for (let s = 0; s < N; s++) V[s] = Math.min(BIG, A[s] + (1 - F[s]) * x);
         Fv = F; Av = A;
         if (locking) {
-          if (timing.unsettled && unsolved() > 1e-7) { if (snap) back(snap); break; }
+          if (timing.unsettled && unsolved() > 1e-7) { if (deep < 1) { deep++; deepNow = true; continue; } if (snap) back(snap); break; }
           // (no cheaper than the last round, for the item and for a white base: the search is over)
           if (snap && !(x < snap.x * (1 - 1e-7)) && !(V[start] < snap.v * (1 - 1e-7))) { if (x > snap.x || V[start] > snap.v) back(snap); break; }
           snap = take();
@@ -2577,7 +2619,13 @@
         }
         last = changed;
         if (exact === false && changed <= N / 2000) break;
-        if (!changed) { if (!rough || roughOnly) break; rough = false; }
+        if (!changed) {
+          if (rough && !roughOnly) { rough = false; continue; }
+          // A route that repairs the item in loops across the blocks (one that never gives it up) settles slowly:
+          // the rule set must not be judged final on values that are not its own.
+          if (!rough && exact !== false && !locking && deep < 1 && timing.unsettled && unsolved() > 1e-7) { deep++; deepNow = true; continue; }
+          break;
+        }
       }
     }
     /**
@@ -2662,7 +2710,7 @@
     if (!done(startS) && !(V[start] < BIG / 1000)) {
       // (an item that is the only one: every way to the targets can lose a modifier that must stay)
       if (NONEW) return { impossible: [{ label: goals.map((g) => g.label).join(' + '), why: 'every way to these targets can lose a modifier that must stay, and no white base can take this item\'s place. Give the price of another item like this one (Plan options, "If given up") and the route can take the risk' }] };
-      return { impossible: [{ label: goals.map((g) => g.label).join(' + '), why: 'no currency with a price brings this item to all of these targets' }] };
+      return { impossible: [{ label: goals.map((g) => g.label).join(' + '), why: 'no currency with a price brings this item to all of these targets' }], aldurOthers: ALD ? aldurAll.filter((r) => r !== ALD.rune) : [], aldur: ALD ? ALD.rune : null };
     }
 
     // ---- what the rule set uses: every currency's expected count, and how far the cost spreads
@@ -2677,7 +2725,7 @@
       // money only: the cost and its second moment (M = c^2 + 2 c E[V'] + E[M']) leave the charge on bases out
       const cost = new Float64Array(N);
       for (let s = 0; s < N; s++) if (pol[s] >= 0) cost[s] = acts[s][pol[s]].cost;
-      const X = evaluate([{ d: cost, bnd: 0 }]);
+      const X = evaluate([{ d: cost, bnd: 0, x0: Av && Av.length === N ? Av : null }], REPORT_PASSES);
       // Every currency's count from a node: the visits to each node from it until the item is finished or given up
       // (visitsFrom: one solve), times what the step there uses. (A solve per currency, thirty of them, took most of
       // an answer's time on a large network.)
@@ -2703,9 +2751,25 @@
         for (let t = 0; t < o.length; t += 2) next += o[t] * (o[t + 1] === RESTART ? moneyBase : money[o[t + 1]]);
         d2[s] = act.cost * act.cost + 2 * act.cost * next;
       }
-      const M = evaluate([{ d: d2, bnd: 0 }])[0];
+      const M = evaluate([{ d: d2, bnd: 0 }], REPORT_PASSES)[0];
       const m2 = (s) => M[s] + (1 - Fv[s]) * (Fv[n0] > 1e-250 ? M[n0] / Fv[n0] : 0);
-      sol = { names, uses: (s, k) => whole(k, s), money, moneyBase, m2 };
+      // how far the reported money is from its own equations on the nodes the route reaches (relative, at worst)
+      let off = 0;
+      {
+        const seen = new Uint8Array(N), q = [start];
+        seen[start] = 1;
+        if (!seen[n0]) { seen[n0] = 1; q.push(n0); }
+        while (q.length) {
+          const k = q.pop();
+          if (pol[k] < 0) continue;
+          const act = acts[k][pol[k]], o = act.out;
+          let v = act.cost;
+          for (let t = 0; t < o.length; t += 2) { const to = o[t + 1]; if (to === RESTART) v += o[t] * moneyBase; else { v += o[t] * money[to]; if (!seen[to]) { seen[to] = 1; q.push(to); } } }
+          const r = Math.abs(v - money[k]) / Math.max(1, Math.abs(money[k]));
+          if (r > off) off = r;
+        }
+      }
+      sol = { names, uses: (s, k) => whole(k, s), money, moneyBase, m2, off };
       return sol;
     }
     const usesOf = (s, name) => { const so = solution(), k = so.names.indexOf(name); return k < 0 ? 0 : so.uses(s, k); };
@@ -2716,7 +2780,9 @@
       track: followed.filter(Boolean).length, classes: NCLS, whittle: WBEST ? 'best' : WNONE ? 'none' : 'levels', wellRank, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
       get rounds() { return rounds; },
       /** Did the last valuation settle (see anderson)? A route whose values did not is not to be trusted. */
-      get settled() { return !timing.unsettled || unsolved() <= 1e-7; },
+      // (the rule set's values, and the money the route is reported with)
+      get settled() { return unsolved() <= 1e-7 && solution().off <= 1e-6; },
+      get moneyOff() { return solution().off; },
       get base() { return solution().money[n0]; },
       nodeOf(st) {
         // the node with what is known to be in the way, when the network has it (the pasted item and what follows from it)
@@ -3046,15 +3112,23 @@
   function route(input) { return routeFit(input, 0).net; }
   /** The same, with the charge on white bases fitted to a limit of bases per finished item: {net, charge}. */
   function routeFit(input, baseLimit) {
+    const first = routeFit1(input, baseLimit), n = first.net;
+    if (n && n.impossible && n.aldur && (n.aldurOthers || []).length) {
+      const again = routeFit(Object.assign({}, input, { aldurSkip: (input.aldurSkip || []).concat([n.aldur]) }), baseLimit);
+      if (again.net && !again.net.impossible && !again.net.unsupported && !again.net.blocked) return again;
+    }
+    return first;
+  }
+  function routeFit1(input, baseLimit) {
     const nT = Object.values(input.targets || {}).filter((t) => t && t.fam).length, many = nT >= 7;
     const fit = (net) => (baseLimit > 0 && !net.done(net.start) ? net.fitBases(net.start, +baseLimit) : 0);
     const bad = (net) => net.unsupported || net.impossible || net.blocked;
-    // (200,000 states for the fully followed network: a staff with two targets that keep each other out by their
-    // tags needs 175,000, about 1.5 GB and a minute and a half; with fewer it followed two of three targets and
-    // played at one and a half times its promise)
+    // (230,000 states for the fully followed network: a staff with two targets that keep each other out by their
+    // tags needs 207,000, about 1.8 GB and a minute and a half; with fewer it followed two of three targets and
+    // played at 1.2 to 1.5 times its promise)
     // [lite, targets followed at most, states at most]. Up to five targets fit with all of them followed; with six the
     // two with the largest groups are (a try that does not fit is time lost, so none is made that is known not to).
-    const tries = many ? [[1, 0, 150000], [2, 0, 1000000]] : (nT <= 5 ? [[0, 8, 200000]] : []).concat(nT > FOLLOW6 ? [[0, FOLLOW6, 160000]] : [], [[0, 0, 150000], [1, 0, 400000], [2, 0, 1000000]]);
+    const tries = many ? [[1, 0, 150000], [2, 0, 1000000]] : (nT <= 5 ? [[0, 8, 230000]] : []).concat(nT > FOLLOW6 ? [[0, FOLLOW6, 160000]] : [], [[0, 0, 150000], [1, 0, 400000], [2, 0, 1000000]]);
     /** The largest network that fits, with the omen as `whittle` says. */
     const full = (whittle, hint) => {
       let n = null;
@@ -3074,7 +3148,8 @@
      */
     const withLevels = (from, hint) => {
       const base = from.N / Math.pow(1.4, from.track), seen = new Set(), plans = [];
-      for (const classes of [3, 2]) for (const track of [from.track, Math.min(from.track, 2), 0]) {
+      const tracks = [from.track, Math.min(from.track, 2), 0];
+      for (const classes of [3, 2]) for (const track of tracks) {
         const k = classes + '|' + track;
         if (seen.has(k)) continue;
         seen.add(k);
@@ -3104,7 +3179,7 @@
       if (!bad(pre)) {
         let hint = 0, uses = pre.usesIdeal();
         if (baseLimit > 0 && !pre.done(pre.start)) { hint = fit(pre) > 0 ? pre.giveUp : 0; uses = uses || pre.usesIdeal(); }
-        const from = { N: pre.N, track: pre.track };
+        const from = { N: pre.N, track: pre.track, only: !!(pre.bound && pre.bound.mode === 'never') };
         pre = null;
         const got = uses ? withLevels(from, hint) : null;
         return got || done(full('none', hint));
@@ -3116,7 +3191,7 @@
     // (a route that uses the omen is solved again: fitting the base limit to this network first would be time lost)
     let hint = 0;
     if (!net.usesIdeal()) { const c = fit(net); if (!net.usesIdeal()) return { net, charge: c }; hint = c > 0 ? net.giveUp : 0; }
-    const from = { N: net.N, track: net.track };
+    const from = { N: net.N, track: net.track, only: !!(net.bound && net.bound.mode === 'never') };
     net = null;
     return withLevels(from, hint) || done(full('none', hint));
   }
@@ -3160,7 +3235,7 @@
     const seen = new Set();
     return {
       net: true, label: 'Route', goals: net.goals.map(plain), params: null, nodes: net.N, lite: net.lite, track: net.track, ms: Date.now() - t0, timing: net.timing,
-      meanCost: net.cost(s), sd: net.sd(s), budget: B, p: B > 0 ? net.within(s, B) : null, bases: net.bases(s), charge, bound: net.bound,
+      meanCost: net.cost(s), sd: net.sd(s), budget: B, p: B > 0 ? net.within(s, B) : null, bases: net.bases(s), charge, bound: net.bound, settled: net.settled,
       next: done ? { done: true } : step ? Object.assign({}, step.a, { names: well(step.names), hit: net.hit(s) }, step.a.op === 'lock' ? { look: net.lockList(s, 10), plan: null, also: null } : null, sanctNow != null ? { ends: sanctNow } : step.a.bases != null && step.a.op !== 'extraction' ? { ends: 1 - step.a.bases } : null)
         : { fail: 'No currency brings this item to the targets.' },
       // the materials of the whole craft
