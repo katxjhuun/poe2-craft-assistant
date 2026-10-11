@@ -64,4 +64,5 @@ new kind "only item" (the item is never given up), and one is a mistake that the
 
 ## The next run
 
-Started after these fixes: see the run list of the repository.
+Run [38106479469](https://github.com/katxjhuun/poe2-craft-assistant/actions/runs/38106479469), started 11 Oct 2026
+02:51 UTC on a0722c7.
