@@ -144,4 +144,5 @@ given up (settled now). Every disagreement of the three sweeps is of one kind, s
 
 ## The next run
 
-Started after these changes: see the run list of the repository (the eleventh run).
+Run [38244603317](https://github.com/katxjhuun/poe2-craft-assistant/actions/runs/38244603317), started 12 Oct 2026
+11:44 UTC on commit 6952592 (these changes).
