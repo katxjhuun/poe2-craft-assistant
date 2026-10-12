@@ -432,7 +432,9 @@ test('network: Desecrated targets alone are made with Omen of Putrefaction, as p
   const net = NW.route(inp), s = net.start;
   assert.ok(net.settled);
   assert.ok(net.materials(s).some((x) => x.name === 'Omen of Putrefaction'), 'six reveals for the price of a bone and an omen');
-  const got = X.play(net, inp, 400, 3, 5000, 60000);
+  // (2,500 crafts: one costs about as much again as the average, so 400 of them are 5% apart, and at the prices of
+  // 12 Oct 2026 they came out 14% over a promise that 3,000 crafts confirm to 2%)
+  const got = X.play(net, inp, 2500, 3, 5000, 60000);
   assert.equal(got.refused, 0);
   assert.equal(got.done, got.runs);
   assert.ok(Math.abs(got.mean / net.cost(s) - 1) < 0.12, `${got.mean} vs ${net.cost(s)}`);
@@ -751,4 +753,113 @@ test('network: two targets that keep each other out by their tags: the rune that
   assert.equal(got.done, got.runs, 'every craft ends');
   assert.equal(got.refused, 0);
   assert.ok(Math.abs(got.mean - want) < Math.max(4 * got.se, 0.1 * want), `played ${got.mean} ±${got.se}, promised ${want}`);
+});
+
+test("network: the pasted item's fractured modifier takes its group out of every pool, also out of a target's twins", () => {
+  // A shield with a fractured Fire Resistance wants Chaos Resistance. Another element's resistance is that target's
+  // twin (a Void Flux turns it): on a white base three elements roll, next to the fractured Fire Resistance two.
+  // The network counted three, and promised 6/7 of what the craft costs (the tenth deep run, x1.17).
+  const X = lockWorld(), base = 'Golden Targe';
+  const fire = X.tiers(base, 'suffix', /to Fire Resistance$/), chaos = X.tiers(base, 'suffix', /to Chaos Resistance$/);
+  // (its lowest tier: one that a Void Flux would turn into the wanted Chaos Resistance is the target's twin itself)
+  const low = Math.max(...Object.keys(fire.ids).map(Number));
+  const it = X.item(base, 'Rare', [{ id: fire.ids[low], side: 'suffix', tier: low, frac: true }]);
+  const targets = { 'suffix-0': { fam: chaos.fam, group: 'suffix', minTier: 3, required: true, label: chaos.label } };
+  const net = NW.build(Object.assign(X.input(it, targets, null, { restart: 'item', itemCost: 400 }), { lite: 0, track: 8, maxStates: 60000, whittle: 'none' }));
+  assert.ok(!net.unsupported && !net.impossible);
+  const on = net.poolStats(1, 0, 1, 0, 0, 0, 1), off = net.poolStats(1, 0, 1, 0, 0, 0, 0);
+  assert.ok(off.pool.some((e) => e.fam === fire.fam), 'a white base rolls Fire Resistance');
+  assert.ok(!on.pool.some((e) => e.fam === fire.fam), 'the pasted item does not roll a second one');
+  if (off.twin[0] > 0) assert.ok(Math.abs(on.twin[0] / off.twin[0] - 2 / 3) < 0.03, `twins: ${on.twin[0]} of ${off.twin[0]}`);
+  // the item as pasted is such a node, a white base is not
+  assert.equal(net.states[net.start].kf, 1);
+});
+
+test('network: Omen of Catalysing Exaltation boosts the roll, not the modifiers that were on the item before it', () => {
+  // An amulet with 20% Defences quality and an unknown prefix wants "% increased Evasion Rating". With the omen the
+  // three defence families are nearly all of the prefix pool. The prefix already on the item was rolled without the
+  // omen, so it is seldom one of them; weighed with the boost it was taken for "% Energy Shield" or "% Armour" nine
+  // times in ten, those left the pool, and the target was promised at 43% where it rolls at 32% (x1.18 on a bought
+  // start, the ninth and tenth deep runs).
+  const X = lockWorld(), base = 'Dusk Amulet';
+  const eva = X.tiers(base, 'prefix', /% increased Evasion Rating$/), acc = X.tiers(base, 'prefix', /to Accuracy Rating$/), crit = X.tiers(base, 'suffix', /% increased Critical Hit Chance$/);
+  const low = (t) => Math.max(...Object.keys(t.ids).map(Number));
+  const it = X.item(base, 'Rare', [{ id: acc.ids[low(acc)], side: 'prefix', tier: low(acc) }, { id: crit.ids[low(crit)], side: 'suffix', tier: low(crit) }], { quality: 20, qualityType: 'Defences Modifiers' });
+  const targets = { 'prefix-0': { fam: eva.fam, group: 'prefix', minTier: 1, required: true, label: eva.label } };
+  const inp = X.input(it, targets, null, { quality: 'use' });
+  const net = NW.build(Object.assign({}, inp, { lite: 0, track: 8, maxStates: 60000, whittle: 'none' }));
+  assert.ok(!net.unsupported && !net.impossible);
+  if (!net.catalyst) return; // (the prices of the day lack the omen: nothing to compare)
+  const st0 = P.toState(net.ctx, it, {}), node = net.nodeOf(st0);
+  const e = net.acts[node].find((x) => x.a.op === 'exalt' && x.a.catalyse && x.a.side === 'prefix' && x.a.tier === 'base');
+  assert.ok(e, 'the omen is an edge of the pasted item');
+  let model = 0;
+  for (let t = 0; t < e.out.length; t += 2) { const d = net.describe(e.out[t + 1]); if (d.has.length || d.inWay.length) model += e.out[t]; }
+  const r = X.L.rng(5), n = 6000;
+  let hit = 0;
+  for (let k = 0; k < n; k++) {
+    const st = Object.assign({}, st0, { mods: st0.mods.map((m) => Object.assign({}, m)) });
+    if (P.apply(net.ctx, st, e.a, r).state.mods.some((m) => m.fam === eva.fam)) hit++;
+  }
+  assert.ok(Math.abs(model - hit / n) < 0.05, `the Evasion family: ${model} in the network, ${hit / n} in ${n} uses`);
+});
+
+test('network: a route that never gives the item up has settled values (its rule set is solved part by part)', () => {
+  // A ring that is the only one, four targets: valued by a few passes a round, the rule set went round in circles for
+  // all 400 rounds and the page said "the numbers are rough" (5% over what the rule set costs; the tenth deep run).
+  const X = lockWorld(), id = 'Gloam Ring|set4|rare, other modifiers|only item|2';
+  let sc = null;
+  for (let n = 0; n < 600 && !sc; n++) { let x = null; try { x = X.SW.scenario('Gloam Ring', n, false); } catch (err) { x = null; } if (x && x.id === id) sc = x; }
+  assert.ok(sc, 'the scenario of the sweep');
+  const inp = { ix: X.D.ix, item: sc.item, targets: sc.targets, locks: {}, priceOf: X.D.priceOf, baseCost: 1, weights: X.L.weightsFor(sc.base), essences: X.SW.table(sc.base).essences, quality: sc.qualityMode, restart: sc.restart, itemCost: sc.itemCost };
+  const net = NW.route(inp);
+  if (net.impossible || net.unsupported) return; // (the prices of the day leave no route: nothing to settle)
+  assert.equal(net.bound.mode, 'never');
+  assert.ok(net.settled, 'the values are the rule set\'s own');
+  // the values satisfy their own equations on every node the route reaches
+  const seen = new Set([net.start]), q = [net.start];
+  let worst = 0;
+  while (q.length) {
+    const k = q.pop();
+    if (net.done(k)) continue;
+    const step = net.step(k);
+    if (!step) continue;
+    let v = step.cost;
+    for (let t = 0; t < step.out.length; t += 2) { const to = step.out[t + 1]; assert.ok(to >= 0, 'no new base on this route'); v += step.out[t] * net.cost(to); if (!seen.has(to)) { seen.add(to); q.push(to); } }
+    worst = Math.max(worst, Math.abs(v - net.cost(k)) / Math.max(1, net.cost(k)));
+  }
+  assert.ok(worst < 1e-7, `residual ${worst}`);
+});
+
+test("network: a target's twin thins the pools with its own tags", () => {
+  // A wand wants Chaos Damage and Freeze Buildup. A Cold Damage prefix is the Chaos target's twin (a Rune of Aldur
+  // turns it), and beside it no Ignite or Shock suffix rolls: the network rolled them, as modifiers in Freeze
+  // Buildup's way, 16% of the suffixes where the simulator has none (Dueling Wand x0.79 to x0.86 in the deep runs).
+  // The step's outcomes in the network against the simulator's, node by node.
+  const X = lockWorld(), base = 'Dueling Wand';
+  const chaos = X.tiers(base, 'prefix', /% increased Chaos Damage$/), cold = X.tiers(base, 'prefix', /% increased Cold Damage$/), freeze = X.tiers(base, 'suffix', /% increased Freeze Buildup$/);
+  const top = (t) => Math.min(...Object.keys(t.ids).map(Number));
+  const it = X.item(base, 'Magic', [{ id: cold.ids[top(cold)], side: 'prefix', tier: top(cold) }]);
+  const targets = {
+    'prefix-0': { fam: chaos.fam, group: 'prefix', minTier: 1, required: true, label: chaos.label },
+    'suffix-0': { fam: freeze.fam, group: 'suffix', minTier: 1, required: true, label: freeze.label },
+  };
+  const net = NW.build(Object.assign({}, X.input(X.item(base, 'Normal'), targets), { lite: 0, track: 8, maxStates: 120000, whittle: 'none' }));
+  assert.ok(!net.unsupported && !net.impossible);
+  const st0 = P.toState(net.ctx, it, {}), node = net.nodeOf(st0);
+  assert.ok(node >= 0);
+  if (!net.describe(node).twin.length) return; // (the prices of the day lack the rune: the Cold prefix is no twin)
+  const e = net.acts[node].find((x) => x.a.op === 'augment');
+  assert.ok(e, 'an Orb of Augmentation is an edge there');
+  const model = new Map();
+  for (let t = 0; t < e.out.length; t += 2) model.set(e.out[t + 1], e.out[t]);
+  const r = X.L.rng(9), n = 4000, sim = new Map();
+  for (let k = 0; k < n; k++) {
+    const st = Object.assign({}, st0, { mods: st0.mods.map((m) => Object.assign({}, m)) });
+    const to = net.nodeOf(P.apply(net.ctx, st, e.a, r).state);
+    sim.set(to, (sim.get(to) || 0) + 1 / n);
+  }
+  let apart = 0;
+  for (const k of new Set([...model.keys(), ...sim.keys()])) apart += Math.abs((model.get(k) || 0) - (sim.get(k) || 0)) / 2;
+  assert.ok(apart < 0.05, `the outcomes are ${apart} apart`);
 });

@@ -337,8 +337,62 @@
     });
     const tagIdx = [];
     for (let i = 0; i < G && tagIdx.length < 12; i++) if (goalTags[i]) tagIdx.push(i);
-    /** Which of the tag-giving targets are on the item (a bit each). */
-    const tagMask = (S) => { let m = 0; for (let k = 0; k < tagIdx.length; k++) { const x = S.g[tagIdx[k]]; if (x !== ABSENT && x !== BLOCKED && x !== TWIN && x !== XBLOCKED) m |= 1 << k; } return m; };
+    // tagSets: the tags behind every bit of a tag mask: first the tag-giving targets', then those of a target's twin
+    // (see twinBit), added as they come up.
+    const tagSets = tagIdx.map((i) => goalTags[i]);
+    // A target's twin is a modifier too, and its tags thin the pools like any other's. Which twin it is the node
+    // does not say, but what it keeps out does: on a wand that wants Chaos Damage (its twins: Fire, Cold or Lightning
+    // Damage, for a Rune of Aldur) and Freeze Buildup, a twin beside which Freeze Buildup can still roll is the
+    // Cold one, and beside that no Ignite or Shock suffix rolls. The network rolled them all the same, as modifiers
+    // in Freeze Buildup's way: 16% of the suffixes where the play has none, and a promise a fifth over what the craft
+    // costs (the eighth to the tenth deep run). The tags all twins of the kind share are applied; none when the
+    // twin is not the only modifier of its side that can keep a target out.
+    const twinKinds = new Array(G).fill(null), twinBits = new Map();
+    const twinBit = (S, k) => {
+      const si = goals[k].si;
+      for (let i = 0; i < G; i++) if (i !== k && goals[i].si === si && (S.g[i] === BLOCKED || S.g[i] === TWIN)) return -1;
+      // what the node knows of the twin: the targets of the other side it keeps out (1), lets roll (0), or says nothing about
+      let pat = '';
+      for (let j = 0; j < G; j++) {
+        if (goals[j].si === si || xbit[j] < 0) continue;
+        pat += S.g[j] === ABSENT ? '0' : S.g[j] === XBLOCKED && xHeld(S, j) ? '1' : '-';
+      }
+      const key = k + '|' + pat;
+      let b = twinBits.get(key);
+      if (b !== undefined) return b;
+      b = -1;
+      if (!twinKinds[k]) {
+        twinKinds[k] = [];
+        for (const e of P.sidePool(ctx, SIDES[si], 0)) {
+          if (!conv[k].src.has(e.id)) continue;
+          let xm = '';
+          for (let j = 0; j < G; j++) { if (goals[j].si === si || xbit[j] < 0) continue; const g = goals[j]; xm += stops(e.id, j) || (g.grp.length && e.fam !== g.fam && e.grp.some((x) => g.grp.includes(x))) ? '1' : '0'; }
+          twinKinds[k].push({ xm, at: kb.mods[e.id].at || [] });
+        }
+      }
+      let tags = null;
+      for (const t of twinKinds[k]) {
+        let fits = true;
+        for (let c = 0; c < pat.length; c++) if (pat[c] !== '-' && pat[c] !== t.xm[c]) { fits = false; break; }
+        if (!fits) continue;
+        tags = tags ? new Set([...tags].filter((x) => t.at.includes(x))) : new Set(t.at);
+        if (!tags.size) break;
+      }
+      if (tags && tags.size) {
+        const same = (a) => a.size === tags.size && [...a].every((x) => tags.has(x));
+        b = tagSets.findIndex(same);
+        if (b < 0 && tagSets.length < 12) b = tagSets.push(tags) - 1;
+      }
+      twinBits.set(key, b);
+      return b;
+    };
+    /** Which of the tag-giving targets are on the item (a bit each), and the tags of a target's twin where they are known. */
+    const tagMask = (S) => {
+      let m = 0;
+      for (let k = 0; k < tagIdx.length; k++) { const x = S.g[tagIdx[k]]; if (x !== ABSENT && x !== BLOCKED && x !== TWIN && x !== XBLOCKED) m |= 1 << k; }
+      if (TRACK) for (let k = 0; k < G; k++) if (S.g[k] === TWIN && conv[k]) { const b = twinBit(S, k); if (b >= 0) m |= 1 << b; }
+      return m;
+    };
     const stopMemo = new Map();
     const fracBlocks = new Set(); // (filled from the pasted item, see nodeOf)
     // the pasted item's own other modifiers (not of a target's family): their groups, and whether those keep a
@@ -381,19 +435,28 @@
      * -> { W, ok, low, nearW, twin, block }: per goal the weight that meets it, that lands under its value, that is in
      * its way, and that is its twin of another element.
      */
-    function stats(si, floor, mult, bits, tm, pm) {
+    function stats(si, floor, mult, bits, tm, pm, kf) {
       mult = mult > 1 ? mult : 1;
       bits = (bits || 0) & (R_POOL | R_ALDUR);
-      tm = tm || 0; pm = pm || 0;
+      tm = tm || 0; pm = pm || 0; kf = kf && FRAC ? 1 : 0;
       let fi = statFloors.indexOf(floor), mi = statMults.indexOf(mult);
       if (fi < 0) fi = statFloors.push(floor) - 1;
       if (mi < 0) mi = statMults.push(mult) - 1;
       // (tm: at most 12 bits, pm: one bit per target)
-      const key = ((((fi * 16 + mi) * 2 + si) * 16 + bits) * 4096 + tm) * 1024 + pm;
+      const key = (((((fi * 16 + mi) * 2 + si) * 16 + bits) * 4096 + tm) * 1024 + pm) * 2 + kf;
       let s = statCache.get(key);
       if (s) return s;
       let pool = P.sidePool(ctx, SIDES[si], floor);
       if (POOL && (bits & R_POOL)) pool = pool.concat(P.runeSide(ctx, POOL.tag, SIDES[si], floor));
+      if (kf) {
+        // kf: the pasted item's fractured modifier is on the item (it is no target). Nothing of its groups rolls, on
+        // either side, and nothing its tags stop: out of the pool before anything is counted, also what would have
+        // been a target, its twin or in its way. (Only the modifiers nobody asked for lost that weight before: a
+        // shield with a fractured Fire Resistance was promised a twin of its Chaos Resistance target, another
+        // element's resistance for a Void Flux, from three elements where two can roll; x1.17, the tenth deep run.)
+        const at = kb.mods[FRAC.id].at, added = at ? new Set(at) : null;
+        pool = pool.filter((e) => !((FRAC.si === si && e.fam === FRAC.fam) || e.grp.some((x) => FRAC.grp.includes(x)) || (added && !e.rune && E.tagBlocked(kb.mods[e.id], ctx.baseTags, added))));
+      }
       if (pm) {
         // pm: the targets of this side that are on the item (or have a modifier of their group in their way). What
         // is of their groups cannot roll, and no other modifier on the item can be of them either: they are out
@@ -405,7 +468,7 @@
       }
       if (tm) {
         const added = new Set();
-        for (let k = 0; k < tagIdx.length; k++) if (tm & (1 << k)) for (const t of goalTags[tagIdx[k]]) added.add(t);
+        for (let k = 0; k < tagSets.length; k++) if (tm & (1 << k)) for (const t of tagSets[k]) added.add(t);
         pool = pool.filter((e) => e.rune || !E.tagBlocked(kb.mods[e.id], ctx.baseTags, added)); // (a rune's pool is not stopped: planner.rollMod)
       }
       let W = 0;
@@ -426,6 +489,9 @@
       // later) with Freeze Buildup beside it. A Lightning Damage twin keeps Freeze Buildup out for good: which twin
       // it is decides, and an average over the twins promised two thirds of the real cost there.
       const twinX = new Array(G).fill(null);
+      // lowLv[i]: the levels of what is in target i's way, by weight (the class of such a modifier's level, see lowCls)
+      const lowLv = new Array(G).fill(null);
+      const lv = (i, e, w) => { const l = e.lvl || kb.mods[e.id].lvl || 1, m = lowLv[i] || (lowLv[i] = new Map()); m.set(l, (m.get(l) || 0) + w); };
       for (let q = 0; q < pool.length; q++) {
         const e = pool[q];
         const w = mult > 1 && (kb.mods[e.id].mt || []).includes(CAT.tag) ? e.w * mult : e.w;
@@ -439,14 +505,14 @@
           // item, whatever the side: a belt's Thorns prefix keeps the Desecrated "Thorns Critical Hit Chance" suffix off)
           if (g.si !== si) { if ((!e.rune && stops(e.id, i)) || (g.grp.length && e.fam !== g.fam && e.grp.some((x) => g.grp.includes(x)))) { cross[i] += w; xm |= 1 << i; } continue; }
           if (g.kind === 'nat' && e.fam === g.fam) {
-            if (g.minValue != null) { const p = reach(e.id, g); if (p < 0) { low[i] += w; role(i, 3, w); } else { ok[i] += w * p; nearW[i] += w * (1 - p); role(i, 0, w * p, w * (1 - p)); } }
-            else if (!g.tier || e.tier <= g.tier) { ok[i] += w; role(i, 0, w); } else { low[i] += w; role(i, 3, w); }
+            if (g.minValue != null) { const p = reach(e.id, g); if (p < 0) { low[i] += w; role(i, 3, w); lv(i, e, w); } else { ok[i] += w * p; nearW[i] += w * (1 - p); role(i, 0, w * p, w * (1 - p)); } }
+            else if (!g.tier || e.tier <= g.tier) { ok[i] += w; role(i, 0, w); } else { low[i] += w; role(i, 3, w); lv(i, e, w); }
           } else if (conv[i] && conv[i].src.has(e.id)) {
             // (a Rune of Aldur transforms what is on the item when it is socketed: with it in, another element's
             // modifier that rolls later stays what it is, one more modifier nobody asked for)
             if (!(conv[i].via === 'aldur' && (bits & R_ALDUR))) { twin[i] += w; role(i, 2, w); }
-          } else if (g.grp.length && e.grp.some((x) => g.grp.includes(x))) { low[i] += w; role(i, 3, w); } // of the target's group: it keeps the target out
-          else if (!e.rune && stops(e.id, i)) { low[i] += w; role(i, 3, w); } // its tags keep the target out
+          } else if (g.grp.length && e.grp.some((x) => g.grp.includes(x))) { low[i] += w; role(i, 3, w); lv(i, e, w); } // of the target's group: it keeps the target out
+          else if (!e.rune && stops(e.id, i)) { low[i] += w; role(i, 3, w); lv(i, e, w); } // its tags keep the target out
         }
         if (roles && roles.length > 1) multi.push(roles);
         // (the status a modifier gets is its first: what meets a target or is its twin is not "in the way" here)
@@ -507,9 +573,37 @@
         }
       }
       const NMAX = 7;
-      const left = new Float64Array(NMAX + 1), across = new Float64Array(NMAX + 1).fill(1);
+      let left = new Float64Array(NMAX + 1), across = new Float64Array(NMAX + 1).fill(1);
       left[0] = J;
-      {
+      // With Omen of Catalysing Exaltation the roll is weighed with a boost (mult), but the modifiers already on the
+      // item were rolled without it: what they are, and so what they take from the pool, goes by the plain weights
+      // (plain: this pool without the boost; its entries are the same, in the same order). Weighed with the boost
+      // they were nearly always "of the catalyst's type": on an amulet with Defences quality the model took an
+      // unknown prefix for % Energy Shield or % Armour nine times in ten, took those out of the pool, and promised
+      // the Evasion target at 43% where it rolls at 32% (x1.18, the ninth and tenth deep runs).
+      const plain = mult > 1 ? stats(si, floor, 1, bits, tm, pm, kf) : null;
+      // sv[n][q]: the chance that entry q is still in the pool next to n modifiers nobody asked for (kept for the
+      // boosted pools of the same entries: made when one asks)
+      let svs = null;
+      const survs = () => {
+        if (svs) return svs;
+        const surv = new Float64Array(pool.length).fill(1), L0 = new Float64Array(NMAX + 1);
+        L0[0] = J;
+        svs = [Float64Array.from(surv)];
+        for (let n = 1; n <= NMAX; n++) {
+          const L = L0[n - 1];
+          let f = 0;
+          if (L > 0) for (const q of own) { surv[q] *= Math.max(0, 1 - Math.min(1, gw[q] / L) - tw[q] / J); f += ws[q] * surv[q]; }
+          L0[n] = f;
+          svs.push(Float64Array.from(surv));
+        }
+        return svs;
+      };
+      if (plain) {
+        const sv = plain.survs();
+        for (let n = 1; n <= NMAX; n++) { let f = 0; for (const q of own) f += ws[q] * sv[n][q]; left[n] = f; }
+        across = plain.across;
+      } else {
         const surv = new Float64Array(pool.length).fill(1);
         const sx = other ? new Float64Array(other.length).fill(1) : null;
         const X0 = other ? other.reduce((x, o) => x + o.w, 0) : 0;
@@ -525,8 +619,35 @@
       // the prefixes on body armour and boots). Whether a modifier of it is on the item is followed as two cases
       // instead of an average: with one the pool is small and the targets of that group cannot roll, without one the
       // pool is large. leftR[n]: what is left of the rest next to n modifiers that are not of that group.
-      let big = null, leftR = null;
-      {
+      let big = null, leftR = null, svRs = null, restOf = null;
+      // (svR: as sv, among the entries that are not of the dominant group)
+      const survsR = () => {
+        if (svRs || !restOf) return svRs;
+        const surv = new Float64Array(pool.length).fill(1), L0 = new Float64Array(NMAX + 1);
+        L0[0] = J - big.w;
+        svRs = [Float64Array.from(surv)];
+        for (let n = 1; n <= NMAX; n++) {
+          const L = L0[n - 1];
+          let f = 0;
+          if (L > 0) for (const q of restOf) { surv[q] *= Math.max(0, 1 - Math.min(1, gw[q] / L) - tw[q] / J); f += ws[q] * surv[q]; }
+          L0[n] = f;
+          svRs.push(Float64Array.from(surv));
+        }
+        return svRs;
+      };
+      if (plain) {
+        // the dominant group is the one the modifiers on the item see: the plain pool's, weighed with the boost here
+        if (plain.big) {
+          const inB = (e) => (e.grp || []).includes(plain.big.key);
+          let w = 0, mineW = 0;
+          for (const q of own) if (inB(pool[q])) w += ws[q];
+          for (let q = 0; q < pool.length; q++) if (claimed(pool[q]) && inB(pool[q])) mineW += ws[q];
+          big = { key: plain.big.key, w, mineW, has: plain.big.has };
+          const sv = plain.survsR();
+          leftR = new Float64Array(NMAX + 1);
+          for (let n = 0; n <= NMAX; n++) { let f = 0; for (const q of own) if (!inB(pool[q])) f += ws[q] * sv[n][q]; leftR[n] = f; }
+        }
+      } else {
         const gsum = new Map();
         for (const q of own) for (const x of pool[q].grp || []) gsum.set(x, (gsum.get(x) || 0) + ws[q]);
         let best = null;
@@ -539,6 +660,7 @@
           for (let i = 0; i < G; i++) if (goals[i].si === si && goals[i].kind === 'nat' && goals[i].grp.includes(best[0])) has.add(i);
           big = { key: best[0], w: best[1], mineW, has };
           const rest = own.filter((q) => !inB(pool[q])), JR = J - best[1];
+          restOf = rest;
           leftR = new Float64Array(NMAX + 1);
           leftR[0] = JR;
           const surv = new Float64Array(pool.length).fill(1);
@@ -552,7 +674,7 @@
       }
       const anon = new Uint8Array(pool.length);
       for (const q of own) anon[q] = 1;
-      s = { W, ok, low, lowX, twinX, nearW, twin, cross, crossJ, multi, J, left, across, fracTake, big, leftR, pool, ws, anon, takes: new Map() };
+      s = { W, ok, low, lowX, lowLv, twinX, nearW, twin, cross, crossJ, multi, J, left, across, fracTake: kf ? 0 : fracTake, big, leftR, pool, ws, anon, takes: new Map(), plain, survs, survsR };
       statCache.set(key, s);
       return s;
     }
@@ -723,6 +845,23 @@
       }
       return d;
     }
+    /**
+     * The class of the level of a modifier in target i's way, as the pool s rolls it: the chance of each class. Such a
+     * modifier has its own levels (a "+# to Strength" in the way of a Desecrated "+# to Strength and Intelligence"
+     * has no tier of level 75), and was given the levels of any modifier of its side: an arrival in the highest
+     * class that the play never saw.
+     */
+    const lowCls = (s, i) => {
+      const memo = s.lowC || (s.lowC = new Array(G).fill(undefined));
+      if (memo[i] === undefined) {
+        const m = s.lowLv[i];
+        let d = null, tot = 0;
+        if (m) { d = new Float64Array(NCLS); for (const [l, w] of m) { d[clsOf(l)] += w; tot += w; } }
+        if (tot > 0) for (let c = 0; c < NCLS; c++) d[c] /= tot; else d = null;
+        memo[i] = d;
+      }
+      return memo[i];
+    };
     /** One more modifier nobody asked for whose level is known (an essence's own): the class follows. */
     const junkAt = (n, si, lvl) => { const had = nSide(n, si) > 0; n.j[si]++; if (NCLS > 1) { const c = clsOf(lvl || 1); setCls(n, si, had ? Math.min(clsAt(n, si), c) : c); } };
     // ---- essences as tools (what crafters do instead of Omen of Light, 0.5.5):
@@ -908,15 +1047,18 @@
       const NM = s.left.length - 1;
       const n = Math.min(unknown(S, si), NM), m = unknown(S, 1 - si);
       // the other side's modifiers stop a share of this side's pool with their tags
-      const share = m ? stats(1 - si, floor, 1, S.u, tm, presentMask(S, 1 - si)).across[Math.min(m, NM)] : 1;
+      const share = m ? stats(1 - si, floor, 1, S.u, tm, presentMask(S, 1 - si), S.kf).across[Math.min(m, NM)] : 1;
       if (!s.big) return { NM, n, share, f: (S.kf && s.J > 0 ? Math.max(0, 1 - s.fracTake / s.J) : 1) * knownLeft(S, si, s, s.J), q: 1, fracIn: false };
       // the pasted item's fractured modifier is of the dominant group: that group is known to be on the item
       const fracIn = !!(S.kf && FRAC.si === si && FRAC.grp.includes(s.big.key));
       const JR = s.J - s.big.w;
       const f = (S.kf && !fracIn && JR > 0 ? Math.max(0, 1 - s.fracTake / JR) : 1) * knownLeft(S, si, s, JR);
-      // q: none of the n modifiers is of the dominant group (each was drawn from what the ones before it left)
+      // q: none of the n modifiers is of the dominant group (each was drawn from what the ones before it left; by the
+      // plain weights when this pool is boosted: they were rolled without the omen)
       let q = fracIn ? 0 : 1;
-      for (let k = 0; k < n && q > 0; k++) q *= s.leftR[k] * f / (s.big.w + s.leftR[k] * f);
+      const b = s.plain && s.plain.big ? s.plain : s, JB = b.J - b.big.w;
+      const fb = b === s ? f : (S.kf && !fracIn && JB > 0 ? Math.max(0, 1 - b.fracTake / JB) : 1) * knownLeft(S, si, b, JB);
+      for (let k = 0; k < n && q > 0; k++) q *= b.leftR[k] * fb / (b.big.w + b.leftR[k] * fb);
       return { NM, n, share, f, q, fracIn };
     }
     /** The pool of side si on item S as cases: [{p, pool, big}] (big: the dominant group can still roll). */
@@ -940,9 +1082,9 @@
       // (a followed target: its blockers on its own side are states. ownIsCase: the target is of the dominant group;
       // whether a modifier of that group is on the item is a case)
       const n = ownIsCase || followed[i] ? 0 : unknown(S, g.si);
-      if (n) { const s0 = stats(g.si, floor || 0, 1, S.u, tm, presentMask(S, g.si)); if (s0.W > 0) p *= Math.pow(1 - Math.min(1, s0.low[i] / s0.W), n); }
+      if (n) { const s0 = stats(g.si, floor || 0, 1, S.u, tm, presentMask(S, g.si), S.kf); if (s0.W > 0) p *= Math.pow(1 - Math.min(1, s0.low[i] / s0.W), n); }
       const m = TRACK ? 0 : unknown(S, 1 - g.si); // (with blockers followed, one of the other side is a state too)
-      if (m) { const sx = stats(1 - g.si, floor || 0, 1, S.u, tm, presentMask(S, 1 - g.si)); if (sx.W > 0 && sx.cross[i] > 0) p *= Math.pow(1 - Math.min(1, sx.cross[i] / sx.W), m); }
+      if (m) { const sx = stats(1 - g.si, floor || 0, 1, S.u, tm, presentMask(S, 1 - g.si), S.kf); if (sx.W > 0 && sx.cross[i] > 0) p *= Math.pow(1 - Math.min(1, sx.cross[i] / sx.W), m); }
       // another target's twin of another element on the item may stop this one with its tags
       for (let k = 0; k < G; k++) if (S.g[k] === TWIN && twinStops[k] && !(TRACK && goals[k].si !== g.si)) p *= 1 - twinStops[k][i];
       return p;
@@ -952,7 +1094,7 @@
       const tm = tagMask(S), sides = [];
       for (let si = 0; si < 2; si++) {
         if (!(mask & (1 << si))) continue;
-        const s = stats(si, floor, mult, S.u, tm, presentMask(S, si));
+        const s = stats(si, floor, mult, S.u, tm, presentMask(S, si), S.kf);
         const cs = cases(S, si, s, floor, tm).filter((c) => c.pool > 0);
         if (!cs.length) continue;
         // what can roll for a target on this side: [weight, target, status, of the dominant group]
@@ -1011,7 +1153,7 @@
         // a modifier of this side that stops a wanted target of the other side: [share of the anonymous ones, target]
         const xs = [];
         if (TRACK && s.J > 0) for (let k = 0; k < G; k++) if (goals[k].si !== si && S.g[k] === ABSENT && s.crossJ[k] > 0) xs.push([Math.min(1, s.crossJ[k] / s.J), k]);
-        sides.push({ si, cs, ws, xs });
+        sides.push({ si, cs, ws, xs, s });
       }
       if (!sides.length) return [];
       const acc = new Map();
@@ -1034,7 +1176,10 @@
           add(pc * rest * left / total, -1, sd.si, 0);
         }
       }
-      return [...acc.values()].map(([p, i, si, status]) => [p / sum, i, si, status]);
+      // (with the classes of levels: what is in a target's way comes with the levels of its own tiers)
+      const sOf = [null, null];
+      if (NCLS > 1) for (const sd of sides) sOf[sd.si] = sd.s;
+      return [...acc.values()].map(([p, i, si, status]) => [p / sum, i, si, status, NCLS > 1 && i >= 0 && (status & 15) === BLOCKED ? lowCls(sOf[si], i) : null]);
     }
     /** cls: the class of the new modifier's level, when it is one nobody asked for or one in a target's way (see LCUT). */
     function addRolled(S, i, si, status, cls) {
@@ -1143,7 +1288,7 @@
     function clear(S, i) {
       const g = goals[i];
       if (g.kind !== 'nat' || followed[i]) return 1;
-      const s0 = stats(g.si, 0, 1, S.u, tagMask(S), presentMask(S, g.si)), n = others(S, g.si);
+      const s0 = stats(g.si, 0, 1, S.u, tagMask(S), presentMask(S, g.si), S.kf), n = others(S, g.si);
       return n && s0.W > 0 ? Math.pow(1 - Math.min(1, s0.low[i] / s0.W), n) : 1;
     }
     /**
@@ -1335,7 +1480,7 @@
       // modifiers nobody knows on this side (the pasted item's own are known while S.kx: the lists are cut already)
       // (S.pd: of those, the desecrated-only ones of an Omen of Putrefaction: they take list entries, not base modifiers)
       const unk = S.kx ? 0 : Math.max(0, unknown(S, si) - (S.pd || 0));
-      const s = stats(si, floor, 1, S.u & R_ALDUR, tagMask(S), presentMask(S, si)); // (the Well of Souls does not offer a rune's pool: open test t33)
+      const s = stats(si, floor, 1, S.u & R_ALDUR, tagMask(S), presentMask(S, si), S.kf); // (the Well of Souls does not offer a rune's pool: open test t33)
       const tm = tagMask(S), tm0 = tm;
       const want = [];
       for (let i = 0; i < G; i++) {
@@ -1347,7 +1492,7 @@
           const gone = S.px ? 0 : S.pd || 0;
           // (xb: the chance that no modifier of the other side is of the target's group; with the sides followed that is a state)
           let xb = 1;
-          if (!TRACK) { const m = unknown(S, 1 - si); if (m) { const sx = stats(1 - si, floor || 0, 1, S.u, tm0, presentMask(S, 1 - si)); if (sx.W > 0 && sx.cross[i] > 0) xb = Math.pow(1 - Math.min(1, sx.cross[i] / sx.W), m); } }
+          if (!TRACK) { const m = unknown(S, 1 - si); if (m) { const sx = stats(1 - si, floor || 0, 1, S.u, tm0, presentMask(S, 1 - si), S.kf); if (sx.W > 0 && sx.cross[i] > 0) xb = Math.pow(1 - Math.min(1, sx.cross[i] / sx.W), m); } }
           if (c || cl) want.push({ i, des: true, c, cl, hit, grp: g.grp, xb, share: pv[i], all: listFor(ex, hit, si, unk, g.grp, gone), lich: ll ? listFor(ll, hit, si, unk, g.grp, gone) : null });
         } else if (g.kind === 'nat' && !g.noWell && s.ok[i] + s.nearW[i] > 0) {
           const beta = unblocked(S, i, floor, !!(s.big && s.big.has.has(i)));
@@ -1661,16 +1806,16 @@
         list.push({ a: same(a), cost, out });
       };
       /** A rolled modifier's node: one nobody asked for, or one in a target's way, arrives with the class of its level (a node per class under the item's). */
-      const arrive = (S1, p, i, si, status, floor, out) => {
+      const arrive = (S1, p, i, si, status, floor, out, dist) => {
         if (NCLS > 1 && (i < 0 || (status & 15) === BLOCKED)) {
           const sj = i >= 0 ? goals[i].si : si;
-          const d = clsDist(sj, floor), top = nSide(S1, sj) > 0 ? clsAt(S1, sj) : NCLS - 1;
+          const d = dist || clsDist(sj, floor), top = nSide(S1, sj) > 0 ? clsAt(S1, sj) : NCLS - 1;
           let rest = 0;
           for (let c = 0; c < NCLS; c++) { if (c >= top) rest += d[c]; else if (d[c] > 0) out.push([p * d[c], addRolled(S1, i, si, status, c)]); }
           if (rest > 0) out.push([p * rest, addRolled(S1, i, si, status, top)]);
         } else out.push([p, addRolled(S1, i, si, status)]);
       };
-      const rolled = (S1, mask, floor, pre, mult) => { const out = []; for (const [p, i, si, status] of roll(S1, mask, floor, mult)) arrive(S1, p * (pre == null ? 1 : pre), i, si, status, floor, out); return out; };
+      const rolled = (S1, mask, floor, pre, mult) => { const out = []; for (const [p, i, si, status, d] of roll(S1, mask, floor, mult)) arrive(S1, p * (pre == null ? 1 : pre), i, si, status, floor, out, d); return out; };
       /** Several random modifiers one after the other (Orb of Alchemy, Omen of Greater Exaltation): [[chance, state]]. */
       const rolledN = (S1, count, maskOf, floor) => {
         let dist = new Map([[keyOf(S1), [1, S1]]]);
@@ -1681,7 +1826,7 @@
             const outs = roll(Sa, maskOf(Sa), floor);
             if (!outs.length) { put(p, Sa); continue; }
             const got = [];
-            for (const [q, i, si, status] of outs) arrive(Sa, p * q, i, si, status, floor, got);
+            for (const [q, i, si, status, d] of outs) arrive(Sa, p * q, i, si, status, floor, got, d);
             for (const [q, S2] of got) put(q, S2);
           }
           dist = next;
@@ -2213,7 +2358,41 @@
     const bmap = new Map();
     for (let s = 0; s < N; s++) { const k = blockKey(states[s]); if (!bmap.has(k)) bmap.set(k, []); bmap.get(k).push(s); }
     const metN = (S) => { let n = 0; for (let i = 0; i < G; i++) if (met(S.g[i])) n++; return n; };
-    const blocks = [...bmap.values()].sort((a, b) => (states[b[0]].r - states[a[0]].r) || (metN(states[b[0]]) - metN(states[a[0]])));
+    const coarse = [...bmap.values()].sort((a, b) => (states[b[0]].r - states[a[0]].r) || (metN(states[b[0]]) - metN(states[a[0]])));
+    // Such a block is solved part by part: its strongly connected parts over every edge, whatever the rule set (a
+    // quality applied, a modifier of the pasted item gone, an omen's charge spent: much inside a block only goes one
+    // way), each after the parts it leads to. That is the block solved exactly, as before, at the sum of the parts'
+    // squares instead of the square of their sum: on boots with four or five targets less than half the work.
+    const blocks = [];
+    {
+      const group = new Int32Array(N), idx = new Int32Array(N).fill(-1), low = new Int32Array(N), open = new Uint8Array(N);
+      const ca = new Int32Array(N), ct = new Int32Array(N), stack = new Int32Array(N), call = new Int32Array(N);
+      coarse.forEach((b, bi) => { for (const k of b) group[k] = bi; });
+      let sp = 0, cp = 0, cnt = 0;
+      const enter = (k) => { idx[k] = low[k] = cnt++; stack[sp++] = k; open[k] = 1; call[cp++] = k; ca[k] = 0; ct[k] = 1; };
+      // (Tarjan's algorithm without recursion: a part is complete, and written down, once everything it leads to is)
+      for (const b of coarse) for (const root of b) {
+        if (idx[root] >= 0) continue;
+        enter(root);
+        while (cp) {
+          const v = call[cp - 1], list = acts[v], bi = group[v];
+          let w = -1;
+          while (ca[v] < list.length) {
+            const o = list[ca[v]].out;
+            if (ct[v] >= o.length) { ca[v]++; ct[v] = 1; continue; }
+            const c = o[ct[v]];
+            ct[v] += 2;
+            if (c === RESTART || group[c] !== bi) continue;
+            if (idx[c] < 0) { w = c; break; }
+            if (open[c] && idx[c] < low[v]) low[v] = idx[c];
+          }
+          if (w >= 0) { enter(w); continue; }
+          cp--;
+          if (cp) { const u = call[cp - 1]; if (low[v] < low[u]) low[u] = low[v]; }
+          if (low[v] === idx[v]) { const part = []; for (;;) { const k = stack[--sp]; open[k] = 0; part.push(k); if (k === v) break; } blocks.push(part); }
+        }
+      }
+    }
     const blockOf = new Int32Array(N), local = new Int32Array(N);
     blocks.forEach((b, bi) => b.forEach((s, li) => { blockOf[s] = bi; local[s] = li; }));
     const pol = new Int32Array(N).fill(-1);
@@ -2226,25 +2405,129 @@
     const readers = blocks.map(() => new Set());
     for (let s = 0; s < N; s++) for (const act of acts[s]) { const o = act.out; for (let t = 1; t < o.length; t += 2) if (o[t] !== RESTART && blockOf[o[t]] !== blockOf[s]) readers[blockOf[o[t]]].add(blockOf[s]); }
     const readerList = readers.map((x) => [...x]);
-    // a block's matrix changes only when its part of the rule set does: its factors are kept until then
+    // A block's part of the rule set, ready to be solved. Under one rule set a node has one edge, and with those edges
+    // alone the block falls into strongly connected parts that are far smaller than the block: on a bracer that is
+    // never given up, 3,085 blocks of up to 1,562 nodes are 39,484 parts of up to 102, and their squares add up to a
+    // sixtieth (a block was one full matrix before: two thirds of that request's minute went into solving them).
+    // Kept: the parts in the order in which each comes after those it leads to, the factors of the parts with more
+    // than one node, and the block's edges between its parts. It changes only when the block's part of the rule set
+    // does, and is kept until then.
     const luCache = blocks.map(() => null), luStale = new Uint8Array(blocks.length);
     function luOf(bi) {
       const b = blocks[bi], m = b.length, c = luCache[bi];
       if (c && !luStale[bi]) { let same = true; for (let li = 0; li < m; li++) if (c.pol[li] !== pol[b[li]]) { same = false; break; } if (same) return c; }
       luStale[bi] = 0;
-      const A = new Float64Array(m * m), mine = new Int32Array(m);
+      const mine = new Int32Array(m), at0 = new Int32Array(m + 1);
+      // the rule set's edges that stay in the block, by the node's place in it
+      let ne = 0;
       for (let li = 0; li < m; li++) {
-        const s = b[li];
-        mine[li] = pol[s];
-        A[li * m + li] = 1;
-        if (pol[s] < 0) continue;
-        const o = acts[s][pol[s]].out;
-        for (let t = 0; t < o.length; t += 2) if (o[t + 1] !== RESTART && blockOf[o[t + 1]] === bi) A[li * m + local[o[t + 1]]] -= GAMMA * o[t];
+        const k = b[li];
+        mine[li] = pol[k];
+        at0[li] = ne;
+        if (pol[k] < 0) continue;
+        const o = acts[k][pol[k]].out;
+        for (let t = 1; t < o.length; t += 2) if (o[t] !== RESTART && blockOf[o[t]] === bi) ne++;
       }
-      return (luCache[bi] = { A, perm: luFactor(A, m), pol: mine });
+      at0[m] = ne;
+      const to0 = new Int32Array(ne), p0 = new Float64Array(ne);
+      for (let li = 0, e = 0; li < m; li++) {
+        const k = b[li];
+        if (pol[k] < 0) continue;
+        const o = acts[k][pol[k]].out;
+        for (let t = 0; t < o.length; t += 2) if (o[t + 1] !== RESTART && blockOf[o[t + 1]] === bi) { to0[e] = local[o[t + 1]]; p0[e++] = GAMMA * o[t]; }
+      }
+      // its strongly connected parts (Tarjan's algorithm without recursion): written down sinks first
+      const sub = new Int32Array(m), nodes = new Int32Array(m), posIn = new Int32Array(m), starts = [0];
+      if (m === 1) nodes[0] = 0;
+      else {
+        const idx = new Int32Array(m).fill(-1), lowl = new Int32Array(m), open = new Uint8Array(m), cur = new Int32Array(m), stack = new Int32Array(m), call = new Int32Array(m);
+        let sp = 0, cq = 0, cnt = 0, w0 = 0;
+        const enter = (v) => { idx[v] = lowl[v] = cnt++; stack[sp++] = v; open[v] = 1; call[cq++] = v; cur[v] = at0[v]; };
+        for (let r0 = 0; r0 < m; r0++) {
+          if (idx[r0] >= 0) continue;
+          enter(r0);
+          while (cq) {
+            const v = call[cq - 1], end = at0[v + 1];
+            let w = -1;
+            while (cur[v] < end) { const x = to0[cur[v]++]; if (idx[x] < 0) { w = x; break; } if (open[x] && idx[x] < lowl[v]) lowl[v] = idx[x]; }
+            if (w >= 0) { enter(w); continue; }
+            cq--;
+            if (cq) { const u = call[cq - 1]; if (lowl[v] < lowl[u]) lowl[u] = lowl[v]; }
+            if (lowl[v] === idx[v]) {
+              const q = starts.length - 1;
+              let x, a = 0;
+              do { x = stack[--sp]; open[x] = 0; sub[x] = q; posIn[x] = a++; nodes[w0++] = x; } while (x !== v);
+              starts.push(w0);
+            }
+          }
+        }
+      }
+      if (m === 1) starts.push(1);
+      const n = starts.length - 1, start = Int32Array.from(starts), one = new Float64Array(n).fill(1), lus = new Array(n).fill(null);
+      // the edges between the parts; those inside a part are its matrix
+      const eAt = new Int32Array(m + 1);
+      let nx = 0;
+      for (let li = 0; li < m; li++) { eAt[li] = nx; for (let e = at0[li]; e < at0[li + 1]; e++) if (sub[to0[e]] !== sub[li]) nx++; }
+      eAt[m] = nx;
+      const eTo = new Int32Array(nx), eP = new Float64Array(nx);
+      for (let li = 0, x = 0; li < m; li++) for (let e = at0[li]; e < at0[li + 1]; e++) if (sub[to0[e]] !== sub[li]) { eTo[x] = to0[e]; eP[x++] = p0[e]; }
+      for (let q = 0; q < n; q++) {
+        const s0 = start[q], k = start[q + 1] - s0;
+        if (k === 1) { const li = nodes[s0]; let self = 0; for (let e = at0[li]; e < at0[li + 1]; e++) if (to0[e] === li) self += p0[e]; one[q] = 1 - self; continue; }
+        const A = new Float64Array(k * k);
+        for (let a = 0; a < k; a++) {
+          const li = nodes[s0 + a];
+          A[a * k + a] = 1;
+          for (let e = at0[li]; e < at0[li + 1]; e++) if (sub[to0[e]] === q) A[a * k + posIn[to0[e]]] -= p0[e];
+        }
+        lus[q] = { A, perm: luFactor(A, k) };
+      }
+      return (luCache[bi] = { pol: mine, n, start, nodes, one, lus, eAt, eTo, eP, iAt: null, iFrom: null, iP: null });
+    }
+    /** The block's own equations for K right-hand sides: R (a node's K numbers side by side, m nodes) becomes x. */
+    function blockSolve(bi, R, K) {
+      const c = luOf(bi), nodes = c.nodes, start = c.start, eAt = c.eAt, eTo = c.eTo, eP = c.eP;
+      for (let q = 0; q < c.n; q++) {
+        const s0 = start[q], k = start[q + 1] - s0;
+        if (k === 1) {
+          const li = nodes[s0], d = c.one[q];
+          for (let kk = 0; kk < K; kk++) { let v = R[li * K + kk]; for (let e = eAt[li], e1 = eAt[li + 1]; e < e1; e++) v += eP[e] * R[eTo[e] * K + kk]; R[li * K + kk] = v / d; }
+          continue;
+        }
+        for (let a = 0; a < k; a++) {
+          const li = nodes[s0 + a];
+          for (let kk = 0; kk < K; kk++) { let v = R[li * K + kk]; for (let e = eAt[li], e1 = eAt[li + 1]; e < e1; e++) v += eP[e] * R[eTo[e] * K + kk]; subT[a * K + kk] = v; }
+        }
+        const f = c.lus[q];
+        luSolve(f.A, f.perm, subT, k, K, subY);
+        for (let a = 0; a < k; a++) { const li = nodes[s0 + a]; for (let kk = 0; kk < K; kk++) R[li * K + kk] = subT[a * K + kk]; }
+      }
+    }
+    /** The same for the transposed equations (see visitsFrom): R (m numbers) becomes y. */
+    function blockSolveT(bi, R) {
+      const c = luOf(bi), nodes = c.nodes, start = c.start, m = blocks[bi].length;
+      if (!c.iAt) {
+        const at = new Int32Array(m + 1);
+        for (let e = 0; e < c.eTo.length; e++) at[c.eTo[e] + 1]++;
+        for (let li = 0; li < m; li++) at[li + 1] += at[li];
+        const from = new Int32Array(c.eTo.length), pr = new Float64Array(c.eTo.length), fill = at.slice(0, m);
+        for (let li = 0; li < m; li++) for (let e = c.eAt[li]; e < c.eAt[li + 1]; e++) { const x = fill[c.eTo[e]]++; from[x] = li; pr[x] = c.eP[e]; }
+        c.iAt = at; c.iFrom = from; c.iP = pr;
+      }
+      const iAt = c.iAt, iFrom = c.iFrom, iP = c.iP;
+      // (the parts in the opposite order: what flows into a part comes from the parts that lead to it)
+      for (let q = c.n - 1; q >= 0; q--) {
+        const s0 = start[q], k = start[q + 1] - s0;
+        if (k === 1) { const li = nodes[s0]; let v = R[li]; for (let e = iAt[li], e1 = iAt[li + 1]; e < e1; e++) v += iP[e] * R[iFrom[e]]; R[li] = v / c.one[q]; continue; }
+        for (let a = 0; a < k; a++) { const li = nodes[s0 + a]; let v = R[li]; for (let e = iAt[li], e1 = iAt[li + 1]; e < e1; e++) v += iP[e] * R[iFrom[e]]; subT[a] = v; }
+        const f = c.lus[q];
+        luSolveT(f.A, f.perm, subT, k, subY);
+        for (let a = 0; a < k; a++) R[nodes[s0 + a]] = subT[a];
+      }
     }
     let maxBlock = 0;
     for (const b of blocks) if (b.length > maxBlock) maxBlock = b.length;
+    const subT = new Float64Array(maxBlock * 4), subY = new Float64Array(maxBlock * 4); // (room for a part of a block: blockSolve)
     // How many times the blocks are gone through for exact values, at most. A loop that crosses blocks (a target is
     // lost and rolled again) settles by its chance per turn, so a craft of very many turns needs many passes: with
     // 600 a quiver's route of 25,000 white bases was valued a fifth too low, its values not yet settled.
@@ -2255,6 +2538,18 @@
     // it in loops that cross the blocks, and such loops settle slowly: with 200 passes a jewel's cost was reported
     // as 65,346 where the rule set's own value, and the play, said 87,464 (the seventh deep run, 11 Oct 2026).
     const REPORT_PASSES = Math.max(EXACT_PASSES, 20000);
+    /**
+     * Will passes whose largest change went from `before` to `now` in eight passes bring it under `tol` within `room`
+     * more passes? A loop that crosses the blocks settles by its chance per turn; where that is nearly one (an item
+     * that is never given up is repaired for as long as it takes), two hundred passes change little, and they were
+     * all made before the accelerated sweeps took over: 37 of the 56 seconds a four-target request of that kind
+     * took to solve, and 33 more for the numbers of its report.
+     */
+    const tooSlow = (before, now, tol, room) => {
+      if (!(before > 0) || !(now > tol)) return false;
+      const rate = Math.pow(now / before, 1 / 8);
+      return rate >= 1 || Math.log(tol / now) / Math.log(rate) > room;
+    };
     /**
      * The fixed point of `sweep` (it turns the vector X into the next one in place), for when the passes over the
      * blocks ran out before the values settled. A loop that crosses blocks (a target is lost and rolled again,
@@ -2320,11 +2615,171 @@
       if (done) timing.settledBy = (timing.settledBy || 0) + 1; else { timing.gaveUp = (timing.gaveUp || 0) + 1; X.set(lowX || start); }
       return done;
     }
+    // ---- a rule set's values without passes
+    // The passes over the blocks settle a loop that crosses blocks by its chance per turn. A route that never gives the
+    // item up repairs it in such loops for as long as it takes: its values did not settle, and worse, its rule set
+    // never did either. Valued by a few passes a round it went round in circles for all 400 rounds (300 of 11,000
+    // nodes changing their edge every time), and the page said "the numbers are rough": a ring's cost was reported 5%
+    // over what its own rule set costs (the tenth deep run).
+    // Under one rule set the network falls into strongly connected parts (every node has one edge), and they are
+    // small: of 73,000 nodes on boots the largest has 412. Each part is solved exactly, after the parts it leads
+    // to. Nothing is iterated, so nothing has to settle, and a round of the search is a true step of it.
+    // all: the whole network (what exact values are made with, when no part is too large for it), else the nodes a
+    // route reaches (when the passes have not settled them). A part's factors are kept while its nodes and their
+    // edges stay the same, so a round pays for the parts that changed.
+    const DIRECT_MAX = 2000;
+    let directAll = null, directOf = null, directWait = 0;
+    function directSetup(all, limit, onlyKept) {
+      let mask = null, n = N;
+      if (!all) { mask = reached(); n = 0; for (let k = 0; k < N; k++) if (mask[k]) n++; }
+      const c = all ? directAll : directOf;
+      if (c && c.nodes.length === n) {
+        let same = true;
+        for (let q = 0; q < n; q++) { const k = c.nodes[q]; if ((mask && !mask[k]) || pol[k] !== c.pols[q]) { same = false; break; } }
+        if (same && (c.ok || limit <= c.limit)) return c;
+      }
+      if (onlyKept) return null;
+      const nodes = new Int32Array(n), pols = new Int32Array(n);
+      for (let k = 0, q = 0; k < N; k++) if (!mask || mask[k]) { nodes[q] = k; pols[q++] = pol[k]; }
+      const made = { ok: false, limit, nodes, pols, comps: null, compOf: null, pos: null, lus: null, one: null, byMin: null, inAt: null, inSrc: null, inVal: null, maxPart: 0 };
+      if (all) directAll = made; else directOf = made;
+      // the strongly connected parts of the rule set's own graph (Tarjan's algorithm without recursion): a part is
+      // written down once everything it leads to is, which is the order they are solved in
+      const idx = new Int32Array(N).fill(-1), lowl = new Int32Array(N), open = new Uint8Array(N), cur = new Int32Array(N);
+      const stack = new Int32Array(n), call = new Int32Array(n), compOf = new Int32Array(N).fill(-1), pos = new Int32Array(N), comps = [];
+      let sp = 0, cq = 0, cnt = 0, big = 0;
+      const enter = (k) => { idx[k] = lowl[k] = cnt++; stack[sp++] = k; open[k] = 1; call[cq++] = k; cur[k] = 1; };
+      for (let q = 0; q < n; q++) {
+        if (idx[nodes[q]] >= 0) continue;
+        enter(nodes[q]);
+        while (cq) {
+          const v = call[cq - 1], o = pol[v] >= 0 ? acts[v][pol[v]].out : null;
+          let w = -1;
+          if (o) while (cur[v] < o.length) { const to = o[cur[v]]; cur[v] += 2; if (to === RESTART) continue; if (idx[to] < 0) { w = to; break; } if (open[to] && idx[to] < lowl[v]) lowl[v] = idx[to]; }
+          if (w >= 0) { enter(w); continue; }
+          cq--;
+          if (cq) { const u = call[cq - 1]; if (lowl[v] < lowl[u]) lowl[u] = lowl[v]; }
+          if (lowl[v] === idx[v]) {
+            const at = comps.length;
+            let m = 0, k;
+            do { k = stack[--sp]; open[k] = 0; compOf[k] = at; m++; } while (k !== v);
+            // (its nodes in the order of their numbers: the same part has the same matrix the next time)
+            const part = stack.slice(sp, sp + m);
+            if (m > 1) part.sort();
+            for (let li = 0; li < m; li++) pos[part[li]] = li;
+            comps.push(part);
+            if (m > big) big = m;
+          }
+        }
+      }
+      made.maxPart = big;
+      if (big > DIRECT_MAX) return made;
+      // the factors: kept from the last time for a part that is as it was
+      const prev = c && c.byMin ? c.byMin : null, byMin = new Map();
+      const lus = new Array(comps.length).fill(null), one = new Float64Array(comps.length).fill(1);
+      let work = 0;
+      const fresh = [];
+      for (let ci = 0; ci < comps.length; ci++) {
+        const part = comps[ci], m = part.length;
+        if (m === 1) {
+          const k = part[0];
+          if (pol[k] >= 0) { const o = acts[k][pol[k]].out; let self = 0; for (let t = 0; t < o.length; t += 2) if (o[t + 1] === k) self += GAMMA * o[t]; one[ci] = 1 - self; }
+          continue;
+        }
+        const old = prev ? prev.get(part[0]) : null;
+        let kept = !!old && old.part.length === m;
+        if (kept) for (let li = 0; li < m; li++) if (old.part[li] !== part[li] || old.pp[li] !== pol[part[li]]) { kept = false; break; }
+        if (kept) { lus[ci] = old; byMin.set(part[0], old); continue; }
+        work += m * m * m;
+        fresh.push(ci);
+      }
+      if (work > limit) return made;
+      for (const ci of fresh) {
+        const part = comps[ci], m = part.length, A = new Float64Array(m * m), pp = new Int32Array(m);
+        for (let li = 0; li < m; li++) {
+          const k = part[li];
+          pp[li] = pol[k];
+          A[li * m + li] = 1;
+          if (pol[k] < 0) continue;
+          const o = acts[k][pol[k]].out;
+          for (let t = 0; t < o.length; t += 2) { const to = o[t + 1]; if (to !== RESTART && compOf[to] === ci) A[li * m + pos[to]] -= GAMMA * o[t]; }
+        }
+        lus[ci] = { A, perm: luFactor(A, m), part, pp };
+        byMin.set(part[0], lus[ci]);
+      }
+      made.comps = comps; made.compOf = compOf; made.pos = pos; made.lus = lus; made.one = one; made.byMin = byMin; made.ok = true;
+      return made;
+    }
+    /** x = d + P x part by part (X, rhs as in evaluate; all, limit as in directSetup). False: not done, X is as it was. */
+    function direct(X, rhs, all, limit) {
+      const c = directSetup(all, limit);
+      if (!c.ok) return false;
+      const K = rhs.length, n = c.nodes.length, was = new Float64Array(n * K);
+      for (let k = 0; k < K; k++) for (let q = 0; q < n; q++) was[k * n + q] = X[k][c.nodes[q]];
+      const R = new Float64Array(Math.max(1, c.maxPart)), Y = new Float64Array(Math.max(1, c.maxPart));
+      let fine = true;
+      for (let k = 0; k < K && fine; k++) {
+        const r = rhs[k], d = r.d, Xk = X[k], bnd = r.bnd || 0, term = r.term || 0, stuck = r.stuck || 0;
+        for (let ci = 0; ci < c.comps.length && fine; ci++) {
+          const part = c.comps[ci], m = part.length;
+          for (let li = 0; li < m; li++) {
+            const k2 = part[li];
+            if (pol[k2] < 0) { R[li] = pol[k2] === -1 ? term : stuck; continue; }
+            const o = acts[k2][pol[k2]].out;
+            let v = d ? d[k2] : 0;
+            for (let t = 0; t < o.length; t += 2) { const to = o[t + 1]; if (to === RESTART) v += GAMMA * o[t] * bnd; else if (c.compOf[to] !== ci) v += GAMMA * o[t] * Xk[to]; }
+            R[li] = v;
+          }
+          if (m === 1) R[0] /= c.one[ci]; else { const f = c.lus[ci]; luSolve(f.A, f.perm, R, m, 1, Y); }
+          for (let li = 0; li < m; li++) { const v = R[li]; if (!(Math.abs(v) < Infinity)) { fine = false; break; } Xk[part[li]] = v; }
+        }
+      }
+      if (!fine) { for (let k = 0; k < K; k++) for (let q = 0; q < n; q++) X[k][c.nodes[q]] = was[k * n + q]; return false; }
+      timing.direct = (timing.direct || 0) + 1;
+      return true;
+    }
+    /** The expected visits from node s0 (see visitsFrom) with the same parts. nu: zeros. False: not done. */
+    function directVisits(s0, nu, onlyKept) {
+      let c = directSetup(true, 3e9, onlyKept);
+      if (!c || !c.ok) c = directSetup(false, 6e9, onlyKept);
+      if (!c || !c.ok || c.compOf[s0] < 0) return false;
+      if (!c.inAt) {
+        // the rule set's edges by the node they point at
+        const at = new Int32Array(N + 1);
+        const each = (fn) => { for (let q = 0; q < c.nodes.length; q++) { const k = c.nodes[q]; if (pol[k] < 0) continue; const o = acts[k][pol[k]].out; for (let t = 0; t < o.length; t += 2) if (o[t + 1] !== RESTART) fn(k, o[t + 1], GAMMA * o[t]); } };
+        each((k, to) => { at[to + 1]++; });
+        for (let k = 0; k < N; k++) at[k + 1] += at[k];
+        const src = new Int32Array(at[N]), val = new Float64Array(at[N]), fill = at.slice(0, N);
+        each((k, to, p) => { const q = fill[to]++; src[q] = k; val[q] = p; });
+        c.inAt = at; c.inSrc = src; c.inVal = val;
+      }
+      const R = new Float64Array(Math.max(1, c.maxPart)), Y = new Float64Array(Math.max(1, c.maxPart));
+      // (the parts in the opposite order: what flows into a part comes from the parts that lead to it)
+      for (let ci = c.comps.length - 1; ci >= 0; ci--) {
+        const part = c.comps[ci], m = part.length;
+        let any = false;
+        for (let li = 0; li < m; li++) { const t = part[li]; let v = t === s0 ? 1 : 0; for (let q = c.inAt[t], e = c.inAt[t + 1]; q < e; q++) if (c.compOf[c.inSrc[q]] !== ci) v += c.inVal[q] * nu[c.inSrc[q]]; R[li] = v; if (v) any = true; }
+        if (!any) continue; // (nothing flows in: no visits)
+        if (m === 1) R[0] /= c.one[ci]; else { const f = c.lus[ci]; luSolveT(f.A, f.perm, R, m, Y); }
+        for (let li = 0; li < m; li++) { if (!(Math.abs(R[li]) < Infinity)) { for (let q = 0; q < c.nodes.length; q++) nu[c.nodes[q]] = 0; return false; } nu[part[li]] = R[li]; }
+      }
+      return true;
+    }
     /** maxPasses, tol: a rough answer is enough while the rule set still changes a lot (see solve). */
     function evaluate(rhs, maxPasses, tol) {
       const K = rhs.length;
       maxPasses = maxPasses || EXACT_PASSES; tol = tol || 1e-11;
       const X = rhs.map((r) => { if (r.x0) return Float64Array.from(r.x0); const a = new Float64Array(N); if (r.term) for (let s = 0; s < N; s++) if (pol[s] === -1) a[s] = r.term; return a; });
+      // exact values: the whole network part by part, when its parts are small (see directSetup)
+      // At once where that is cheap (a tenth of a second of factors), in the rough rounds too: a round valued exactly
+      // is a true step of the search. Where it is not, the passes come first (a pass is cheap, see luOf), and the
+      // parts are factored only when the passes will not settle the values. (Where a part was too large the rough
+      // rounds do not look again for a while: looking costs a walk over the network.)
+      const sure = maxPasses >= EXACT_PASSES;
+      if (sure || directWait <= 0) {
+        if (direct(X, rhs, true, sure ? 2e8 : 1e8)) { timing.passes = 0; timing.unsettled = 0; return X; }
+        if (!sure) directWait = 6;
+      } else directWait--;
       // the rule set's edges that leave their block, as flat rows (what stays inside a block is in its factors)
       const row = new Int32Array(N + 1);
       let nnz = 0;
@@ -2349,8 +2804,15 @@
       let left = blocks.length;
       // (past the usual passes only for ten seconds: then the accelerated sweeps take over)
       const tEnd = Date.now() + 10000;
+      // (exact: the usual passes did not settle, and the nodes a route reaches were solved directly)
+      let exact = false, tried = false;
+      // (most: the largest change of each pass, for tooSlow)
+      const most = [];
       for (let pass = 0; pass < maxPasses && left > 0; pass++) {
+        if (pass === EXACT_PASSES) { tried = true; if ((exact = direct(X, rhs, true, 3e9) || direct(X, rhs, false, 6e9))) break; }
         if (pass >= EXACT_PASSES && (pass & 31) === 0 && (Date.now() > tEnd || late())) break;
+        if (sure && pass >= 16 && pass < EXACT_PASSES && (pass & 7) === 0 && tooSlow(most[pass - 9], most[pass - 1], tol, EXACT_PASSES - pass)) break;
+        let big = 0;
         for (let bi = 0; bi < blocks.length; bi++) {
           if (!dirty[bi]) continue;
           dirty[bi] = 0; left--;
@@ -2365,8 +2827,7 @@
               R[li * K + k] = v;
             }
           }
-          const f = luOf(bi);
-          luSolve(f.A, f.perm, R, m, K, Y);
+          blockSolve(bi, R, K);
           let delta = 0;
           for (let k = 0; k < K; k++) {
             const Xk = X[k];
@@ -2376,13 +2837,16 @@
               Xk[b[li]] = v;
             }
           }
+          if (delta > big) big = delta;
           if (delta > tol) { const rl = readerList[bi]; for (let i = 0; i < rl.length; i++) if (!dirty[rl[i]]) { dirty[rl[i]] = 1; left++; } }
         }
+        most.push(big);
         timing.passes = pass + 1;
       }
       // (blocks that were still changing when the passes ran out: the values are not settled; see anderson)
-      timing.unsettled = left;
-      if (left > 0 && maxPasses >= EXACT_PASSES) {
+      timing.unsettled = exact ? 0 : left;
+      if (!exact && left > 0 && sure && !tried && (direct(X, rhs, true, 3e9) || direct(X, rhs, false, 6e9))) { exact = true; timing.unsettled = 0; }
+      if (!exact && left > 0 && maxPasses >= EXACT_PASSES) {
         const R1 = new Float64Array(maxBlock), Y1 = new Float64Array(maxBlock), mask = reached();
         for (let k = 0; k < K; k++) {
           const r = rhs[k], d = r.d, Xk = X[k], bnd = r.bnd || 0, term = r.term || 0, stuck = r.stuck || 0;
@@ -2396,8 +2860,7 @@
                 for (let t = row[s], e = row[s + 1]; t < e; t++) v += val[t] * Xk[col[t]];
                 R1[li] = v;
               }
-              const f = luOf(bi);
-              luSolve(f.A, f.perm, R1, m, 1, Y1);
+              blockSolve(bi, R1, 1);
               for (let li = 0; li < m; li++) Xk[b[li]] = R1[li];
             }
           });
@@ -2421,31 +2884,40 @@
       const next = blocks.map(() => new Set());
       each((s, s2, p, bi) => { const q = fill[s2]++; src[q] = s; val[q] = p; next[bi].add(blockOf[s2]); });
       const nu = new Float64Array(N), R = new Float64Array(maxBlock), Y = new Float64Array(maxBlock);
+      // (the rule set's values needed the direct solve: so do its visits, and the parts are there)
+      if (directVisits(s0, nu, true)) return nu;
       const dirty = new Uint8Array(blocks.length);
       dirty[blockOf[s0]] = 1;
       let left = 1;
       const tEnd = Date.now() + 10000;
+      const most = [];
+      let asked = false;
       for (let pass = 0; pass < REPORT_PASSES && left > 0; pass++) {
+        if (pass === EXACT_PASSES) { asked = true; const nu2 = new Float64Array(N); if (directVisits(s0, nu2)) return nu2; }
         if (pass >= 600 && (pass & 31) === 0 && (Date.now() > tEnd || late())) break;
+        // (the first passes carry the visits from block to block; then: will they settle? see tooSlow)
+        if (pass >= 48 && pass < 600 && (pass & 7) === 0 && tooSlow(most[pass - 9], most[pass - 1], 1e-11, 600 - pass)) break;
+        let big = 0;
         // (the blocks in the order opposite to evaluate's: what flows into a block comes from the blocks before it)
         for (let bi = blocks.length - 1; bi >= 0; bi--) {
           if (!dirty[bi]) continue;
           dirty[bi] = 0; left--;
           const b = blocks[bi], m = b.length;
           for (let li = 0; li < m; li++) { const t = b[li]; let v = t === s0 ? 1 : 0; for (let q = at[t], e = at[t + 1]; q < e; q++) v += val[q] * nu[src[q]]; R[li] = v; }
-          const f = luOf(bi);
-          luSolveT(f.A, f.perm, R, m, Y);
+          blockSolveT(bi, R);
           let delta = 0;
           for (let li = 0; li < m; li++) { const v = R[li], old = nu[b[li]], ch = Math.abs(v - old); if (ch > 1e-300) { const dv = ch / (Math.abs(v) + 1e-300); if (dv > delta) delta = dv; } nu[b[li]] = v; }
+          if (delta > big) big = delta;
           if (delta > 1e-11) for (const bj of next[bi]) if (!dirty[bj]) { dirty[bj] = 1; left++; }
         }
+        most.push(big);
       }
+      if (left > 0 && !asked) { const nu2 = new Float64Array(N); if (directVisits(s0, nu2)) return nu2; }
       if (left > 0) anderson(nu, null, () => {
         for (let bi = blocks.length - 1; bi >= 0; bi--) {
           const b = blocks[bi], m = b.length;
           for (let li = 0; li < m; li++) { const t = b[li]; let v = t === s0 ? 1 : 0; for (let q = at[t], e = at[t + 1]; q < e; q++) v += val[q] * nu[src[q]]; R[li] = v; }
-          const f = luOf(bi);
-          luSolveT(f.A, f.perm, R, m, Y);
+          blockSolveT(bi, R);
           for (let li = 0; li < m; li++) nu[b[li]] = R[li];
         }
       });
@@ -2648,6 +3120,11 @@
       // (deep: the rule set stood still on values that were not settled yet: they get the passes they need, and
       // the rule set is looked at again with them; once)
       let deep = 0, deepNow = false;
+      // (fewest: the fewest nodes that changed their edge in a rough round, and in which round. Rough values can send
+      // the rule set round in circles; twenty rounds without a new low, and the rounds are valued exactly.)
+      let fewest = Infinity, fewestAt = 0;
+      // (flat: exact rounds in a row that made neither the item nor a white base cheaper; ending: the last one)
+      let flat = 0, flatV = Infinity, flatX = Infinity, ending = false;
       for (let it = 0; it < 400; it++, rounds++) {
         if (late()) { timedOut = true; break; }
         const locking = lockArmed && exact !== false && LOCK < baseCost + charge + x;
@@ -2660,6 +3137,7 @@
         if (!holdX) x = F[n0] > 1e-250 ? A[n0] / F[n0] : BIG;
         for (let s = 0; s < N; s++) V[s] = Math.min(BIG, A[s] + (1 - F[s]) * x);
         Fv = F; Av = A;
+        if (ending) break;
         if (locking) {
           if (timing.unsettled && unsolved() > 1e-7) { if (deep < 1) { deep++; deepNow = true; continue; } if (snap) back(snap); break; }
           // (no cheaper than the last round, for the item and for a white base: the search is over)
@@ -2696,6 +3174,15 @@
           else if (best !== pol[s]) { pol[s] = best; changed++; }
         }
         last = changed;
+        // Exact rounds that bring nothing: the item's cost and a white base's stand still (to 1e-7) while nodes go on
+        // changing their edge, between edges worth the same or at nodes no route reaches (on a coat that is never
+        // given up: 250 such rounds, most of its two minutes). Four in a row, and the search ends with one more
+        // valuation, so that the values are the final rule set's own.
+        if (!rough && !locking && changed) {
+          if (V[start] < flatV * (1 - 1e-7) || x < flatX * (1 - 1e-7)) { flatV = Math.min(flatV, V[start]); flatX = Math.min(flatX, x); flat = 0; }
+          else if (++flat >= 4) { ending = true; continue; }
+        }
+        if (rough && changed) { if (changed < fewest) { fewest = changed; fewestAt = it; } else if (it - fewestAt >= 20) { if (roughOnly) break; rough = false; } }
         if (exact === false && changed <= N / 2000) break;
         if (!changed) {
           if (rough && !roughOnly) { rough = false; continue; }

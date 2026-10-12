@@ -153,6 +153,21 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   onlarsız kural seti kabaca oturduktan sonra devreye girer (yoksa çözücü hiç bitmeyen bir kural setinde kalabiliyordu).
   Düğümün engeli bilmediği yerde kuralların reddettiği adımda oynatma, kuralların izin verdiği sıradaki en ucuz adımı
   alır ve bunu nedeniyle birlikte "sapma" olarak sayar.
+- **Onuncu derin taramanın bulduğu (12 Ekim 2026, `reports/network-sweep-2026-10-12b.md`).** Çözücü: bloklar, her
+  kenar üzerinden güçlü bağlı parçalarına bölünür (aynı kesin çözüm, yarıdan az iş); bir kural seti, kendi grafiğinin
+  güçlü bağlı parçaları küçükse (2.000 düğüme kadar) geçiş yapılmadan, parça parça ve kesin çözülür. Eşyadan hiç
+  vazgeçmeyen rotalarda kural seti birkaç geçişle değerlenince 400 tur boyunca dönüp duruyor, sayfa "sayılar kaba"
+  diyordu; artık oturuyor (Gloam Ring: 152.885 vaat, 152.013 ± 8.412 oynanan, 12 sn yerine 5,6 sn). Geçişler,
+  hızlarına göre zamanında oturmayacaksa hemen hızlandırılmış süpürmelere bırakır. Bir blok artık tek bir dolu
+  matris değildir: kural setinin kendi kenarlarıyla çok daha küçük parçalara ayrılır (1.562 düğümlük bloklar en çok
+  102'lik parçalara). Beş hedefli bot isteği 69 sn yerine 23 sn, hiç vazgeçilmeyen dört hedefli bilezik 340 sn
+  yerine 34 sn; yerelde on dakikada çözülemeyen 7 istek kalmadı. Havuzlar: yapıştırılan eşyanın hedef
+  olmayan fractured modu, grubunu bütün havuzlardan çıkarır (hedefin "ikiz"lerinden de: Golden Targe 1,17 kat →
+  13.566 vaat, 13.723 ± 566 oynanan). Omen of Catalysing Exaltation yalnız yeni gelen modu ağırlıklandırır, eşyada
+  zaten duran bilinmeyen modları değil (Dusk Amulet 1,18 kat → 141.245'e karşı 142.601 ± 5.948). Bir hedefin ikizi
+  de kendi etiketleriyle havuzu inceltir (Dueling Wand: vaat 14.122 → 11.650, oynanan 11.446 ± 282). Bir hedefin
+  önündeki mod, kendi tier'larının seviyesiyle gelir. Bulut günün fiyatlarını kullanır: yereldeki kopya iki hafta
+  eskiyse aynı senaryonun vaadi tutmaz (`python scripts/fetch_prices.py`).
 - Rune of Aldur, takıldıktan sonra gelen modu dönüştürmez (oyuncu 8 Ekim 2026'da doğruladı: iddia k61).
 - Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler).
 

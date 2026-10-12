@@ -364,6 +364,10 @@ if (require.main === module) {
     '| Class | Scenarios | Agree | Do not | Outside | Errors |', '|---|---|---|---|---|---|',
     ...[...byCls.entries()].sort().map(([c, v]) => `| ${c} | ${v.n} | ${v.ok} | ${v.bad} | ${v.skip} | ${v.err} |`), '',
     'Outside the network: ' + ([...skipWhy.entries()].map(([k, v]) => `${k} (${v})`).join(', ') || 'none'), '');
+  // which requests the ten minutes were not enough for, and which took longest: what a player waits for
+  const late = skipped.filter((r) => r.skipped === 'out of time'), solved = out.filter((r) => r.ms > 0 && r.skipped !== 'out of time').sort((a, b) => b.ms - a.ms);
+  if (late.length) lines.push('Not solved within ten minutes: ' + late.map((r) => r.id).join('; '), '');
+  if (solved.length) lines.push(`Time to solve: median ${Math.round(solved[solved.length >> 1].ms / 1000)} s; longest: ` + solved.slice(0, 3).map((r) => `${r.id} ${Math.round(r.ms / 1000)} s${r.nodes ? ' (' + r.nodes + ' nodes)' : ''}`).join('; '), '');
   if (bad.length) lines.push('### Promise and play disagree', '', ...bad.sort((a, b) => Math.abs(b.ratio - 1) - Math.abs(a.ratio - 1)).slice(0, 25).map((r) => `- ${r.id}: promised ${r.network.toFixed(1)}, played ${isFinite(r.played) ? r.played.toFixed(1) : '—'} (x${isFinite(r.ratio) ? r.ratio.toFixed(2) : '—'}), ${r.nodes} nodes${r.off ? ', ' + r.off + ' runs left the network' : ''}${r.refused ? ', ' + r.refused + ' steps the rules refuse (' + (r.why || []).join('; ') + ')' : ''}${r.detours ? ', ' + r.detours + ' detours' : ''}${r.gaveUp ? ', ' + r.gaveUp + ' items given up' : ''}${r.settled === false ? ', values not settled' : ''}${r.done < r.runs ? ', ' + (r.runs - r.done) + ' unfinished' + ((r.endWhy || []).length ? ' (' + r.endWhy.join('; ') + ')' : '') : ''}`), '');
   // steps the rules refused on the item in hand, where another step was taken (the node did not know what was in a target's way)
   const detoured = out.filter((r) => r.detours > 0);
