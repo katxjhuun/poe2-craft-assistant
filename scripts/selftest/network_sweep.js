@@ -298,6 +298,8 @@ function runOne(sc, runs, withRivals, deep, limitMs) {
   const want = net.cost(s);
   if (!(want < 1e12)) return Object.assign(out, { skipped: 'no route with the priced materials' });
   const stepsGuess = net.materials(s).reduce((x, m) => x + m.uses, 0);
+  // (the ten minutes ran out while the route's numbers were made: they were cut short)
+  if (net.outOfTime && net.outOfTime()) return Object.assign(out, { skipped: 'out of time' });
   const n = deep ? runs : Math.max(120, Math.min(runs, Math.round(6e5 / Math.max(1, stepsGuess))));
   // a craft of thousands of uses, played 100,000 times, takes hours: such a scenario stops after 40 minutes and says how far it got
   // (near the end of the run the limit is what is left of it, so the process ends on time and its report is written)

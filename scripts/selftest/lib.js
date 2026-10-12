@@ -37,6 +37,12 @@ function load() {
   const league = snap.leagues['forbidden-rites'];
   const priceByName = {};
   for (const r of Object.values(league.items)) if (r[2] != null) priceByName[r[0]] = r[2];
+  // POE2_PRICES: a list [[name, Exalted Orbs], ...] instead of the newest prices: the prices of a cloud run, read from its
+  // log (prices_from_log.js), so that a scenario of the run is replayed with the promise the run made
+  if (process.env.POE2_PRICES) {
+    for (const k of Object.keys(priceByName)) delete priceByName[k];
+    for (const [n, p] of JSON.parse(require('fs').readFileSync(process.env.POE2_PRICES, 'utf8'))) priceByName[n] = p;
+  }
   cache = { kb, ix, W, snap, lib, league, priceByName, priceOf: (n) => (priceByName[n] != null ? priceByName[n] : null) };
   return cache;
 }

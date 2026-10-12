@@ -168,6 +168,16 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   de kendi etiketleriyle havuzu inceltir (Dueling Wand: vaat 14.122 → 11.650, oynanan 11.446 ± 282). Bir hedefin
   önündeki mod, kendi tier'larının seviyesiyle gelir. Bulut günün fiyatlarını kullanır: yereldeki kopya iki hafta
   eskiyse aynı senaryonun vaadi tutmaz (`python scripts/fetch_prices.py`).
+- **On birinci derin taramanın bulduğu (12 Ekim 2026, `reports/network-sweep-2026-10-12c.md`).** 64 sürecin hepsi
+  rapor verdi; on dakikada çözülemeyen istek 30'dan 3'e indi. Flux, hedefin ikizini değil eşyadaki öteki
+  elementlerin bütün dirençlerini çevirir: kimsenin istemediği düşük bir direnç, hedefin ailesinden ikinci bir mod
+  olur. Fracturing Orb onu kilitlerse hedef kaybolduğunda eşya çıkmaza girer (hiç vazgeçilmeyen bir halkada 100.000
+  craft'ın 205'i hiç bitmedi, oynanan maliyet vaadin 8 katı çıktı). Düğüm artık "hedefin ailesinden ikinci bir mod
+  olabilir" bilgisini taşır (`fz`): o durumda Fracturing Orb kenar değildir ve hedef kaybolunca ikinci mod yolunu
+  keser (600 craft'ın 600'ü biter: 154.073 vaat, 161.275 ± 9.184 oynanan). Süresi çözüm sırasında dolan istek
+  "süre yetmedi" sayılır, yarım sayılarla bildirilmez. Bulut koşusunun fiyat işi fiyatları günlüğüne yazar
+  (`scripts/selftest/prices_from_log.js`, `POE2_PRICES`): koşunun bir senaryosu aynı fiyatlarla yerelde tekrar
+  oynatılabilir. Oynatma, çok uzun süren craft'ları takıldıkları düğümlerle saklayabilir (`play(..., { keep })`).
 - Rune of Aldur, takıldıktan sonra gelen modu dönüştürmez (oyuncu 8 Ekim 2026'da doğruladı: iddia k61).
 - Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler).
 

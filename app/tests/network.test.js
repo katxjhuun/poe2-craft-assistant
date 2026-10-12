@@ -863,3 +863,40 @@ test("network: a target's twin thins the pools with its own tags", () => {
   for (const k of new Set([...model.keys(), ...sim.keys()])) apart += Math.abs((model.get(k) || 0) - (sim.get(k) || 0)) / 2;
   assert.ok(apart < 0.05, `the outcomes are ${apart} apart`);
 });
+
+test('network: a Flux turns every resistance of the other elements; no Fracturing Orb while a second one of the target may be on the item', () => {
+  // A ring that is never given up wants Cold Resistance. A Glacial Flux turns the Fire Resistance twin into it, and a
+  // low Lightning Resistance nobody asked for into a low Cold Resistance beside it. A Fracturing Orb that picks that
+  // one leaves a modifier of the target's family in its way for good once the target is lost: 205 of 100,000 crafts
+  // went on with Chaos Orbs for ever (the eleventh deep run, x8.2).
+  const X = lockWorld(), base = 'Gloam Ring';
+  const cold = X.tiers(base, 'suffix', /to Cold Resistance$/), fire = X.tiers(base, 'suffix', /to Fire Resistance$/), mana = X.tiers(base, 'prefix', /to maximum Mana$/), life = X.tiers(base, 'prefix', /to maximum Life$/), dex = X.tiers(base, 'suffix', /to Dexterity$/);
+  const top = (t) => Math.min(...Object.keys(t.ids).map(Number)), low = (t) => Math.max(...Object.keys(t.ids).map(Number));
+  const mod = (t, tier) => ({ id: t.ids[tier], side: t.side, tier });
+  const targets = {
+    'suffix-0': { fam: cold.fam, group: 'suffix', minTier: 2, required: true, label: cold.label },
+    'prefix-0': { fam: mana.fam, group: 'prefix', minTier: 1, required: true, label: mana.label },
+  };
+  const never = { restart: 'never' };
+  const plain = X.item(base, 'Rare', [mod(cold, top(cold)), mod(dex, low(dex)), mod(life, low(life)), mod(mana, low(mana))]);
+  const net = NW.build(Object.assign({}, X.input(plain, targets, null, never), { lite: 0, track: 8, maxStates: 120000, whittle: 'none' }));
+  assert.ok(!net.unsupported && !net.impossible);
+  const at = (it) => net.nodeOf(P.toState(net.ctx, it, {}));
+  const has = (node, op) => net.acts[node].some((x) => x.a.op === op);
+  if (!has(at(plain), 'fracture')) return; // (the prices of the day lack the orb: nothing to compare)
+  // the same item with a second, low Cold Resistance where the Dexterity was
+  const twice = X.item(base, 'Rare', [mod(cold, top(cold)), mod(cold, low(cold)), mod(life, low(life)), mod(mana, low(mana))]);
+  const n2 = at(twice);
+  assert.ok(n2 >= 0, 'an item with two of the family is a node');
+  if (net.describe(n2).secondOf) assert.ok(!has(n2, 'fracture'), 'no Fracturing Orb beside a second modifier of the target');
+  // the Flux says so itself, by the chance that a modifier nobody asked for was a resistance it turns
+  const twin = X.item(base, 'Rare', [mod(fire, top(fire)), mod(dex, low(dex)), mod(life, low(life)), mod(mana, low(mana))]);
+  const n3 = at(twin), e = net.acts[n3].find((x) => x.a.op === 'flux');
+  if (!e) return; // (no Flux at the prices of the day)
+  let withSecond = 0;
+  for (let t = 0; t < e.out.length; t += 2) {
+    const d = net.describe(e.out[t + 1]);
+    if (d.secondOf) { withSecond += e.out[t]; assert.ok(!has(e.out[t + 1], 'fracture')); assert.equal(d.secondOf, cold.label); }
+  }
+  assert.ok(withSecond > 0.01 && withSecond < 0.9, `the Flux leaves a second Cold Resistance ${withSecond} of the time`);
+});

@@ -91,6 +91,17 @@ jobs:
           restore-keys: cx-
       - name: Fetch prices
         run: python scripts/fetch_prices.py --budget 240
+      # The prices as text in the log: a scenario of this run can be replayed with them later, on any computer, without
+      # downloading the run's files (scripts/selftest/prices_from_log.js reads them back; POE2_PRICES uses them).
+      - name: Prices as text
+        run: |
+          python3 - <<'PY'
+          import json
+          d = json.load(open('.kb_cache/out/league-forbidden-rites.json'))
+          rows = [[r[0], r[2]] for r in d['items'].values() if r[2] is not None]
+          for i in range(0, len(rows), 60):
+              print('PRICES ' + json.dumps(rows[i:i + 60], separators=(',', ':')))
+          PY
       - uses: actions/upload-artifact@v7
         with:
           name: prices

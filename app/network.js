@@ -323,6 +323,17 @@
       return goals.map((g, i) => first.includes(i));
     })();
     const TRACKED = followed.some(Boolean);
+    // A Flux turns every resistance of the other elements on the item, not the target's twin alone: a low Lightning
+    // Resistance nobody asked for becomes a low Cold Resistance beside the Cold Resistance the twin became. While the
+    // target is on the item that second one is one more modifier nobody asked for. A Fracturing Orb can pick it,
+    // though, and when the target is lost later, a fractured modifier of its family stands in its way for good: a
+    // ring that is never given up went on with Chaos Orbs for ever (205 of 100,000 crafts, and the crafts that got
+    // out of it late put the played cost at 8 times the promise; the eleventh deep run).
+    // fz: such a second modifier may be on the item, 1 + the place of its target among FZT (0: none). A Flux sets it
+    // by the chance that a modifier nobody asked for was one it turns; a pasted item says it itself. With it the
+    // Fracturing Orb is no edge, and the target lost leaves the second one in its way.
+    const FZT = [];
+    for (let i = 0; i < G; i++) if (conv[i] && conv[i].via === 'flux') FZT.push(i);
     let CAT = null;
     // ---- tags a modifier gives the item (game data adds_tags): modifiers whose spawn rule answers 0 to such a tag
     // cannot roll while it is there (a Fire spell damage prefix keeps the Cold one off a wand). Known for the targets
@@ -815,6 +826,7 @@
       if (!n.cy) n.cu = 0;
       else if (n.cx * 3 + n.ct < n.cy * 3 + n.cu) { const a = n.cx, b = n.ct; n.cx = n.cy; n.ct = n.cu; n.cy = a; n.cu = b; } // (one order for the two)
       if (n.fl) { if (n.fl >= 3 && nSide(n, 0) === 0) n.fl %= 3; if (n.fl % 3 && nSide(n, 1) === 0) n.fl -= n.fl % 3; }
+      if (n.fz) { const k = FZT[n.fz - 1]; if (!n.j[goals[k].si] || !(met(n.g[k]) || near(n.g[k]))) n.fz = 0; }
       // xg: while a modifier that is in a target's way, or a twin, is on a side, the targets of the other side it
       // keeps out stay out (XBLOCKED whenever they are not there); when no such modifier is left on that side, they
       // are free again.
@@ -955,7 +967,20 @@
     }
     const XK = 1 << XN;
     const xHeld = (S, k) => xbit[k] >= 0 && ((S.xg >> xbit[k]) & 1) === 1;
-    const KEY_REST = 3 * JK * JK * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2 * FLK * 3 * 3 * 3 * XK;
+    const dupMemo = new Map();
+    /** Of the modifiers nobody asked for on target k's side: the share that a Flux for k turns into a modifier of k's family that does not meet k. */
+    const dupShare = (k) => {
+      let v = dupMemo.get(k);
+      if (v === undefined) {
+        const g = goals[k], s = stats(g.si, 0, 1, 0, 0, 0, 0);
+        let w = 0;
+        for (let q = 0; q < s.pool.length; q++) { const e = s.pool[q]; if (s.anon[q] && /^(Fire|Cold|Lightning)Resistance$/.test(e.fam) && e.fam !== g.fam && !conv[k].src.has(e.id)) w += s.ws[q]; }
+        v = s.J > 0 ? Math.min(1, w / s.J) : 0;
+        dupMemo.set(k, v);
+      }
+      return v;
+    };
+    const KEY_REST = 3 * JK * JK * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2 * FLK * 3 * 3 * 3 * XK * (FZT.length + 1);
     const KEY_NUM = Math.pow(10, G) * KEY_REST < 9e15; // (the two parts fit one number exactly)
     const keyOf = (S) => {
       let a = 0;
@@ -963,10 +988,10 @@
       let k = S.r;
       if (S.j[0] > JMAX || S.j[1] > JMAX) throw new Error('more modifiers on a side than a node can count');
       k = k * JK + S.j[0]; k = k * JK + S.j[1]; k = k * 10 + (S.fg + 1); k = k * 3 + S.fj; k = k * 3 + S.cx; k = k * 3 + S.dj; k = k * 3 + S.du;
-      k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw; k = k * 2 + S.kx; k = k * 2 + S.kf; k = k * FLK + S.fl; k = k * 3 + S.ct; k = k * 3 + S.cy; k = k * 3 + S.cu; k = k * XK + S.xg;
+      k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw; k = k * 2 + S.kx; k = k * 2 + S.kf; k = k * FLK + S.fl; k = k * 3 + S.ct; k = k * 3 + S.cy; k = k * 3 + S.cu; k = k * XK + S.xg; k = k * (FZT.length + 1) + S.fz;
       return KEY_NUM ? a * KEY_REST + k : a + ':' + k;
     };
-    const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad, aw: S.aw, kx: S.kx, kf: S.kf, fl: S.fl, ct: S.ct, cy: S.cy, cu: S.cu, xg: S.xg });
+    const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad, aw: S.aw, kx: S.kx, kf: S.kf, fl: S.fl, ct: S.ct, cy: S.cy, cu: S.cu, xg: S.xg, fz: S.fz });
     function idOf(S) {
       canon(S);
       const k = keyOf(S);
@@ -1229,8 +1254,11 @@
       // of the network: 44% of a bought amulet's crafts left it, the ninth deep run.)
       const own = !OWNK || (u.k === 'j' || u.k === 'jx' ? OWNK.j[u.si] : u.k === 'g' ? OWNK.b : u.k === 'dj' ? OWNK.dj : u.k === 'cx' || u.k === 'cy' ? OWNK.c : true);
       if (own && u.k !== 'du' && u.k !== 'aw' && !(u.k === 'g' && S.g[u.i] !== BLOCKED)) n.kx = 0;
-      if (u.k === 'g') n.g[u.i] = ABSENT;
-      else if (u.k === 'j') n.j[u.si]--;
+      if (u.k === 'g') {
+        // (fz: a second modifier of the target's family is on the item; with the target gone it is in the target's way)
+        if (S.fz && FZT[S.fz - 1] === u.i && (met(S.g[u.i]) || near(S.g[u.i])) && n.j[goals[u.i].si] > 0) { n.g[u.i] = BLOCKED; n.j[goals[u.i].si]--; n.fz = 0; }
+        else n.g[u.i] = ABSENT;
+      } else if (u.k === 'j') n.j[u.si]--;
       else if (u.k === 'jx') { n.j[u.si]--; for (let i = 0; i < G; i++) if (n.g[i] === XBLOCKED && goals[i].si !== u.si && !fracBlocks.has(i) && !xHeld(n, i)) n.g[i] = ABSENT; }
       else n[u.k] = 0;
       return canon(n);
@@ -1604,7 +1632,7 @@
       }
       return turnedMemo.get(key);
     }
-    const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FSN, ad: AD0, aw: 0, kx: 0, kf: 0, fl: 0, ct: 0, cy: 0, cu: 0, xg: 0 };
+    const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FSN, ad: AD0, aw: 0, kx: 0, kf: 0, fl: 0, ct: 0, cy: 0, cu: 0, xg: 0, fz: 0 };
     const RESTART = -1; // edge target: a fresh white base (its value is solved as one number, see solve)
     let hasLost = false; // (some node has a step that locks the item: see lostArmed)
     // (a finished item that is locked: one node for all of them)
@@ -2102,6 +2130,16 @@
         push({ op: 'liquid', item: em.item }, em.price, outs);
       }
       // another element's modifier becomes the target: a Flux for resistances, a Rune of Aldur for the rest
+      /** What a Flux for target k leaves: with the chance that a modifier nobody asked for on k's side was turned into a low one of k's family, the node that says so (fz). */
+      const turned = (outs, k) => {
+        const res = [], si = goals[k].si, rho = dupShare(k);
+        for (const [p, Sa] of outs) {
+          const pi = rho > 0 && Sa.j[si] > 0 && met(Sa.g[k]) ? 1 - Math.pow(1 - rho, Sa.j[si]) : 0;
+          if (pi > 0) { const Sb = cp(Sa); Sb.fz = 1 + FZT.indexOf(k); res.push([p * pi, Sb]); }
+          if (pi < 1) res.push([p * (1 - pi), Sa]);
+        }
+        return res;
+      };
       const fluxes = new Map();
       for (let i = 0; i < G; i++) if (S.g[i] === TWIN && conv[i] && conv[i].via === 'flux' && S.fg !== i) { if (!fluxes.has(conv[i].to)) fluxes.set(conv[i].to, []); fluxes.get(conv[i].to).push(i); }
       for (const [to, is] of fluxes) {
@@ -2129,7 +2167,7 @@
           }
           outs = next;
         }
-        push({ op: 'flux', to }, conv[is[0]].price, outs);
+        push({ op: 'flux', to }, conv[is[0]].price, turned(outs, is[0]));
       }
       // A resistance that is one target's twin is nearly always another resistance target's twin too: the player
       // picks the Flux. (An item is the node of the first target its twin serves; the route knew only that target's
@@ -2155,7 +2193,7 @@
           A.g[i] = ABSENT; A.g[j] = NATURAL;
           const outs = [[q, A]];
           if (q < 1) { const B = cp(S); B.g[i] = ABSENT; junkAt(B, goals[i].si, goalLvl[i]); outs.push([1 - q, B]); }
-          push({ op: 'flux', to }, conv[j].price, outs);
+          push({ op: 'flux', to }, conv[j].price, turned(outs, j));
         }
       }
       if (ALD && !(S.u & R_ALDUR)) {
@@ -2244,7 +2282,8 @@
       // Not on an item with a crafted modifier nobody asked for: locked by the orb it would stay crafted and keep
       // counting for the crafted limit, and a node cannot tell a fractured crafted modifier from another fractured
       // one. (The fifth deep run's play was refused "Only one crafted modifier per item" 440 times on such items.)
-      if (PR.fracture != null && S.fg < 0 && !S.fj && !S.cx && !S.cy && slots(S, 0) + slots(S, 1) >= 4) {
+      // Nor while a second modifier of a target's family may be on it (fz): fractured, it is in that target's way for good.
+      if (PR.fracture != null && S.fg < 0 && !S.fj && !S.cx && !S.cy && !S.fz && slots(S, 0) + slots(S, 1) >= 4) {
         const outs = [];
         let n = 0;
         for (let i = 0; i < G; i++) if (there(S.g[i]) && kindOf(S.g[i]) !== DESECRATED) { const S2 = cp(S); S2.fg = i; outs.push([1, S2]); n++; }
@@ -2299,6 +2338,12 @@
         else { S.j[si]++; lowest[si] = Math.min(lowest[si], m.lvl || 1); }
       }
       if (NCLS > 1) for (let si = 0; si < 2; si++) if (nSide(S, si) > 0) setCls(S, si, clsOf(lowest[si] === Infinity ? 1 : lowest[si]));
+      // a second modifier of the family of a target that is on the item (a Flux made it; see fz)
+      if (FZT.length) for (const m of st.mods) {
+        if (m.frac || m.unrevealed || m.des || m.crafted || role.has(m)) continue;
+        const q = FZT.findIndex((k) => (met(S.g[k]) || near(S.g[k])) && goals[k].side === m.side && m.fam === goals[k].fam);
+        if (q >= 0) { S.fz = q + 1; break; }
+      }
       if (known && ownMatters && ownIds.every((id) => st.mods.some((m) => m.id === id))) S.kx = 1;
       if (known && FRAC && S.fj === FRAC.si + 1 && st.mods.some((m) => m.frac && m.id === FRAC.id)) S.kf = 1;
       // a modifier whose tags stop a target of the other side (known for the pasted item; rolled ones are averaged or
@@ -3340,6 +3385,8 @@
     const usesOf = (s, name) => { const so = solution(), k = so.names.indexOf(name); return k < 0 ? 0 : so.uses(s, k); };
     const net = {
       ctx, goals, states, acts, pol, start, n0, N, timing, lite,
+      /** The time the caller gave (input.deadline) is over: what was solved after it was cut short and is not to be shown. */
+      outOfTime: () => timedOut || late(),
       // (bound: a restart is not a white base: another item like the pasted one, or none; held: the targets that no white base can get)
       bound: BOUND ? { mode: NONEW ? 'never' : 'item', held: raw.filter((g) => g.held).map((g) => g.label), cost: baseCost } : null,
       track: followed.filter(Boolean).length, classes: NCLS, whittle: WBEST ? 'best' : WNONE ? 'none' : 'levels', wellRank, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
@@ -3356,7 +3403,13 @@
         // other one: in the sixth deep run 2% of a crossbow's crafts left the network after an alloy with Astrid's
         // Creativity, and a few crafts of twenty other scenarios.)
         let i;
-        for (const known of [true, 3, 2, false]) { i = index.get(keyOf(canon(nodeOf(st, known)))); if (i !== undefined) return i; }
+        for (const known of [true, 3, 2, false]) {
+          const S0 = canon(nodeOf(st, known));
+          i = index.get(keyOf(S0));
+          if (i !== undefined) return i;
+          // (a second modifier of a target's family that no Flux edge of the network led to: the node without the word)
+          if (S0.fz) { S0.fz = 0; i = index.get(keyOf(S0)); if (i !== undefined) return i; }
+        }
         // A crafted modifier nobody asked for that the item's reader knows as a tool essence's own, where the edge
         // that left it knew only "some crafted modifier" (an essence for a target that gave its other modifier), or
         // the other way round: the node that differs only in whose the crafted modifiers are. (In the fifth deep run
@@ -3588,6 +3641,8 @@
       if (S.aw) junk[awSide(S)]++;
       return { rarity: ['Normal', 'Magic', 'Rare'][S.r], has, miss, inWay, across, low, twin, runes, allowance: S.aw ? SIDES[S.aw - 1] : null, otherPrefixes: junk[0], otherSuffixes: junk[1], hidden: S.du ? SIDES[S.du - 1] : null,
         fracturedOther: S.fj ? SIDES[S.fj - 1] : null, desecratedOther: S.dj ? SIDES[S.dj - 1] : null,
+        // a second modifier of this target's family may be on the item (a Flux made it; see fz)
+        secondOf: S.fz ? goals[FZT[S.fz - 1]].label : null,
         // the lowest level among the modifiers nobody asked for (Omen of Whittling takes the lowest of all): from, under
         lowestOther: NCLS > 1 ? [0, 1].map((si) => { const c = clsAt(S, si); return nSide(S, si) > 0 ? { side: SIDES[si], from: c > 0 ? LCUT[c - 1] : null, under: c < NCLS - 1 ? LCUT[c] : null } : null; }).filter(Boolean) : [] };
     }
@@ -3677,12 +3732,16 @@
   function route(input) { return routeFit(input, 0).net; }
   /** The same, with the charge on white bases fitted to a limit of bases per finished item: {net, charge}. */
   function routeFit(input, baseLimit) {
+    // (a deadline that passed while the base limit was fitted: the solves after it were cut short, and their numbers
+    // are no route's. In the eleventh deep run such networks were reported with "values not settled", a body armour
+    // at six times what it played at.)
+    const timely = (x) => (x.net && x.net.outOfTime && x.net.outOfTime() ? { net: { unsupported: 'out of time', states: x.net.N }, charge: 0 } : x);
     const first = routeFit1(input, baseLimit), n = first.net;
     if (n && n.impossible && n.aldur && (n.aldurOthers || []).length) {
       const again = routeFit(Object.assign({}, input, { aldurSkip: (input.aldurSkip || []).concat([n.aldur]) }), baseLimit);
-      if (again.net && !again.net.impossible && !again.net.unsupported && !again.net.blocked) return again;
+      if (again.net && !again.net.impossible && !again.net.unsupported && !again.net.blocked) return timely(again);
     }
-    return first;
+    return timely(first);
   }
   function routeFit1(input, baseLimit) {
     const nT = Object.values(input.targets || {}).filter((t) => t && t.fam).length, many = nT >= 7;

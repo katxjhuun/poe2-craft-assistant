@@ -99,6 +99,8 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
   // a step that removes a modifier may remove the one that is in a target's way (a bone does on a full item)
   // a new start: a white base, or with a bound route (net.bound) another item like the pasted one
   const another = (st) => (net.bound ? P.toState(ctx, input.item, input.locks) : P.apply(ctx, st, { op: 'newbase' }, r).state);
+  const KEEP = opts && opts.keep > 0 ? [] : null;
+  const words = (st) => st.rarity + ' ' + st.mods.map((m) => `${m.side[0]}:${m.unrevealed ? '(hidden)' : m.fam}${m.tier ? ' T' + m.tier : ''}${m.frac ? '(F)' : ''}${m.des ? '(D)' : ''}${m.crafted ? '(C)' : ''}`).join(', ');
   const AGAIN = opts && opts.again && net.N <= 90000 && !net.goals.some((g) => g.minValue != null) ? opts.again : null;
   const again = new Map();
   let solves = 0, valued = 0;
@@ -144,6 +146,8 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
     let st = { ...st0, mods: st0.mods.map((m) => ({ ...m })) };
     let cost = 0, k = 0, ok = false, lastA = null;
     from = -1;
+    // (opts.keep: the crafts of more than that many uses are kept, with the nodes they spent them at)
+    const spent = KEEP ? new Map() : null, turns = KEEP ? [] : null;
     // how often a node's step could do nothing on the item in hand (see "hidden" below)
     const stuck = new Map();
     for (; k < maxSteps; k++) {
@@ -156,6 +160,9 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
         from = -1;
       }
       const node = net.nodeOf(st);
+      if (spent) spent.set(node, (spent.get(node) || 0) + 1);
+      // (what a Fracturing Orb or a Flux, the steps that change what a modifier is for good, did to the item)
+      if (turns && lastA && (lastA.op === 'fracture' || lastA.op === 'flux') && turns.length < 40 && turns[turns.length - 1] !== k) { turns.push(k); turns.push(`use ${k} ${lastA.op}${lastA.to ? ' ' + lastA.to : ''} -> ${words(st)}`); }
       // (for the audit: how much of the item the network knew: everything, not what a blocker's tags stop, not the blockers)
       if (audit && net.mapping && node >= 0) { const lv = net.mapping(st); (audit.maps = audit.maps || [0, 0, 0])[lv < 0 ? 2 : lv]++; }
       if (audit && from >= 0) { const rec = audit.get(from) || { n: 0, to: new Map() }; rec.n++; rec.to.set(node, (rec.to.get(node) || 0) + 1); audit.set(from, rec); }
@@ -274,12 +281,14 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
     }
     if (ok) { done++; sum += cost; sq += cost * cost; }
     else if (k >= maxSteps) note(endWhy, lastA || { op: 'start' }, `not finished within ${maxSteps} uses`);
+    if (spent && k > opts.keep && KEEP.length < 12) KEEP.push({ uses: k, ended: ok, cost, turns: turns.filter((x) => typeof x === 'string'), at: [...spent.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4),
+      item: st.rarity + ' ' + st.mods.map((m) => `${m.side[0]}:${m.unrevealed ? '(hidden)' : m.fam}${m.tier ? ' T' + m.tier : ''}${m.frac ? '(F)' : ''}${m.des ? '(D)' : ''}${m.crafted ? '(C)' : ''}`).join(', ') });
     steps += k;
   }
   const mean = done ? sum / done : NaN;
   const sd = done > 1 ? Math.sqrt(Math.max(0, sq / done - mean * mean)) : 0;
   const top = (m) => [...m.entries()].sort((x, y) => y[1] - x[1]).slice(0, 3).map(([k, c]) => `${c}x ${k}`);
-  return { mean, se: done ? sd / Math.sqrt(done) : NaN, sd, done, steps: steps / Math.max(1, played), off, refused, runs: played, detours, why: top(whyOf), detourWhy: top(detourWhy), endWhy: top(endWhy), gaveUp, gaveUpWhy: top(gaveUpWhy), valued, solves };
+  return { mean, se: done ? sd / Math.sqrt(done) : NaN, sd, done, steps: steps / Math.max(1, played), off, refused, runs: played, detours, why: top(whyOf), detourWhy: top(detourWhy), endWhy: top(endWhy), gaveUp, gaveUpWhy: top(gaveUpWhy), valued, solves, kept: KEEP };
 }
 
 function check(sc, runs, seed, tol) {
