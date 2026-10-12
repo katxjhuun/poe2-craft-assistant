@@ -81,4 +81,5 @@ right is not known yet. Not changed; it needs its own look.
 
 ## The next run
 
-Started after these changes: see the run list of the repository (the twelfth run).
+Run [38288605560](https://github.com/katxjhuun/poe2-craft-assistant/actions/runs/38288605560), started 12 Oct 2026
+18:05 UTC on commit 1ec6c90 (these changes). Its price job prints the prices it uses.
