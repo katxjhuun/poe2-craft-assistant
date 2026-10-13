@@ -198,6 +198,17 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   adım sayısı 573.933'ten 701'e iner. Yüz milyon Exalted Orb'u aşan maliyet taramada "ulaşılamaz" sayılır (altı
   hedefli bir zırhta 4,1 milyar "vaat": bir beyaz base'in milyarda bir şansına bölünen maliyetin basamakları
   bilinemez).
+- **Bir slot için birkaç stattan biri ("or", 13 Ekim 2026).** Hedef satırındaki stat listesinin yanında "or"
+  kutusu vardır. İşaretlenince satırın altında küçük stat listeleri ve bir Add düğmesi açılır; o slot için seçilen
+  statlardan herhangi biri eşyadaysa slot dolmuş sayılır. Ağda bir slotun statları tek bir grubun hedefleridir
+  (`ORG`, `goals[i].oi`): biri eşyadayken ötekiler istenmez (`ALT` durumu), ikincisi de gelirse kimsenin istemediği
+  bir mod olur, grup tek slot ister. Beyaz bir yüzükte Fire Resistance T1 + Mana T2 208,5 ex; Fire ya da Cold ya da
+  Lightning + Mana 181,2 ex (oynanan 179,9 ± 4,4); Mana ya da Life ile 114,8 ex (oynanan 113,4 ± 2,5). Tarama her
+  on ikinci senaryoda böyle bir istek çeker. Kayıtlı şablonlar yalnız slotun kendi statını saklar.
+- **On dördüncü derin taramanın bulduğu (13 Ekim 2026, `reports/network-sweep-2026-10-13c.md`).** İlk kez hiçbir
+  senaryoda maliyet %15'ten fazla sapmıyor (761 senaryonun 729'u uyuşuyor). Fracturing Orb bir hedefin ikizini
+  kilitleyince, hedefin kendisi yanına geldiğinde ağ hedefi "fractured" sayıyordu ve eşyanın düğümü yoktu (bir
+  çekiçte 1.572 craft ağdan çıktı): ikiz artık kimsenin istemediği fractured bir moddur.
 - Rune of Aldur, takıldıktan sonra gelen modu dönüştürmez (oyuncu 8 Ekim 2026'da doğruladı: iddia k61).
 - Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler).
 

@@ -55,9 +55,11 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
   // (a target by value: an option whose tier can have the value, as the network counts it; the value is rolled when
   // the modifier is taken, and one under the wanted value is lifted afterwards)
   const fitsGoal = (e, g) => e.side === g.side && (g.minValue != null ? e.fam === g.fam && P.reaches(ctx, e.id, g) : P.meets({ fam: e.fam, tier: e.tier, des: true }, g, g.tier));
-  const wanted = () => (opts) => {
+  const wanted = (st) => (opts) => {
     for (const g of goals) {
       if (g.kind === 'nat' && g.noWell) continue;
+      // (one of several stats for a slot: with one of them on the item the others are no targets)
+      if (g.oi >= 0 && st && st.mods.some((m) => goals.some((h) => h.oi === g.oi && P.meets(m, h, h.tier)))) continue;
       const o = opts.find((e) => fitsGoal(e, g));
       if (o) return o;
     }

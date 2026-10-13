@@ -1348,8 +1348,17 @@
    */
   function goalsFromTargets(ctx, targets) {
     const goals = [], unsupported = [];
+    // One of several stats for a slot (the player's "or"): the slot's own stat and its alternatives are goals of one
+    // group (og: the slot), and one of them on the item fills the slot. An alternative is of the slot's side, and
+    // required as the slot is.
+    const list = [];
     for (const [key, t] of Object.entries(targets || {})) {
       if (!t || !t.fam) continue;
+      const alts = t.or && Array.isArray(t.alts) ? t.alts.filter((x, n) => x && x.fam && x.fam !== t.fam && t.alts.findIndex((y) => y && y.fam === x.fam) === n) : [];
+      list.push([key, t, alts.length ? key : null]);
+      alts.forEach((x, n) => list.push([key + '~' + n, Object.assign({}, x, { required: t.required }), key]));
+    }
+    for (const [key, t, og] of list) {
       const slotSide = key.split('-')[0];
       if (t.group === 'prefix' || t.group === 'suffix' || t.group === 'desecrated' || t.group === 'rune') {
         const des = t.group === 'desecrated';
@@ -1365,15 +1374,19 @@
         const minValue = t.minValue > 0 ? +t.minValue : null;
         if (minValue != null) ctx.needValues = true;
         goals.push({ key, fam: t.fam, side, des, grp, tier: minValue != null ? null : t.minTier || null, minValue, required: !!t.required, label: t.label, lich, ess: essencesFor(ctx, t.fam),
-          rune: rp ? rp.tag : null, runeItem: rp ? rp.rune : null });
+          rune: rp ? rp.tag : null, runeItem: rp ? rp.rune : null, og });
       } else if ((t.group === 'essence' || t.group === 'alloy' || t.group === 'liquid') && essencesFor(ctx, t.fam).length) {
         const rec = essencesFor(ctx, t.fam)[0];
         const m = ctx.kb.mods[rec.mod];
         goals.push({ key, fam: t.fam, side: m.gen === 'p' ? 'prefix' : 'suffix', des: false, grp: m.grp, tier: null, required: !!t.required,
-          label: t.label, lich: null, ess: essencesFor(ctx, t.fam), essenceOnly: true });
-      } else unsupported.push(t.label);
+          label: t.label, lich: null, ess: essencesFor(ctx, t.fam), essenceOnly: true, og });
+      } else unsupported.push({ label: t.label, og });
     }
     goals.sort((a, b) => (b.required - a.required));
+    // (a stat of a slot's group that nothing gives is left out while another stat of the slot is a goal)
+    const none = unsupported.filter((u) => u.og == null || !goals.some((g) => g.og === u.og)).map((u) => u.label);
+    unsupported.length = 0;
+    unsupported.push(...none);
     return { goals, unsupported };
   }
 

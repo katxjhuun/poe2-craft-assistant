@@ -6,7 +6,7 @@
  * target or not), with an unwanted Desecrated one, and with catalyst quality in each of the three quality modes.
  * Every sixth drawn scenario is one of the special requests in turn: a target by value, a resistance target on an item
  * that has another element's, a modifier of a rune's pool, four suffixes (Serle's Triumph), five modifiers on a jewel,
- * two crafted-only modifiers (Astrid's Creativity).
+ * two crafted-only modifiers (Astrid's Creativity). Every twelfth is a slot that takes one of several stats ("or").
  *
  * For each scenario:
  *   1. the network is solved and its promised cost is compared with the simulator (planner.js) playing its rules;
@@ -93,6 +93,18 @@ function special(t, which, n, r, mk) {
     return out;
   };
   const tierOf = (f, low) => f.tiers[Math.min(f.tiers.length - 1, low + Math.floor(r() * 2))];
+  if (which === 6) {
+    // one of several stats for a slot (the player's "or"): two or three stats of one side for one slot, and one or
+    // two more targets
+    const side = r() < 0.5 ? 'prefix' : 'suffix', other = side === 'prefix' ? 'suffix' : 'prefix';
+    const group = pickFam(side, 2 + (r() < 0.4 ? 1 : 0));
+    if (group.length < 2) return null;
+    const rest = pickFam(other, 1).concat(r() < 0.5 ? pickFam(side, 1, group.flatMap((f) => f.grp)) : []);
+    const targets = {};
+    targets[side + '-0'] = Object.assign(target(group[0], tierOf(group[0], 0)), { or: true, alts: group.slice(1).map((f) => target(f, tierOf(f, 0))) });
+    rest.forEach((f, k) => { targets[f.side + '-' + (k + 1)] = target(f, tierOf(f, 1)); });
+    return mk(`or${group.length}|${group.map((f) => f.fam).join('+')}|${n}`, 'one of several stats for a slot, white', [], 'Normal', targets);
+  }
   if (which === 0) {
     // a target by value: at least a share of the best tier's range; white, or Rare with the modifier rolled as it comes
     const all = SIDES.flatMap((sd) => t.nat[sd]);
@@ -197,6 +209,8 @@ function scenario(base, n, plain) {
   n -= desSingles.length;
   // every sixth: a special request, in turn (a base without that case gets a drawn set instead)
   if (n % 6 === 5 && !plain) { const sp = special(t, Math.floor(n / 6) % 6, n, r, mk); if (sp) return sp; }
+  // every twelfth: one of several stats for a slot (since 13 Oct 2026; the drawn set that index had is not made any more)
+  if (n % 12 === 8 && !plain) { const sp = special(t, 6, n, r, mk); if (sp) return sp; }
   // a drawn set of two to six targets (jewels: up to four), tiers within three of the best
   const maxK = Math.min(6, t.lim.prefix + t.lim.suffix);
   const k = 2 + (n % Math.max(1, maxK - 1));

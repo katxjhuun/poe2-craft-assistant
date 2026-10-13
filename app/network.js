@@ -30,8 +30,11 @@
   const ABSENT = 0, NATURAL = 1, CRAFTED = 2, DESECRATED = 3;
   const BLOCKED = 4;  // not there, and a modifier of its group is in the way
   const XBLOCKED = 9; // not there, and a modifier of the other side keeps it out with its tags (it takes no slot here)
+  // One of several stats may fill a slot (the player's "or": see ORG in build). While one of them is on the item, the
+  // others are ALT: not there, and not wanted.
+  const ALT = 10;
   /** A modifier sits on the target's side for it: the target, a lower value, its twin or one of its group. */
-  const there = (x) => x !== 0 && x !== XBLOCKED;
+  const there = (x) => x !== 0 && x !== XBLOCKED && x !== ALT;
   const NEAR = 4;     // added to NATURAL, CRAFTED, DESECRATED: 5, 6, 7
   const TWIN = 8;     // not there, but the same modifier of another element is: a Flux or a Rune of Aldur turns it into the target
   const met = (x) => x >= 1 && x <= 3;
@@ -62,7 +65,7 @@
         const c = P.makeContext(ix, item, { weights: input.weights || null, essences: input.essences || [] }), s = P.toState(c, item, input.locks);
         let gs = P.goalsFromTargets(c, input.targets).goals;
         if (gs.some((g) => g.required)) gs = gs.filter((g) => g.required);
-        if (gs.length) out.finished = gs.every((g) => s.mods.some((m) => P.meets(m, g, g.tier)));
+        if (gs.length) out.finished = gs.every((g) => s.mods.some((m) => P.meets(m, g, g.tier)) || (g.og != null && gs.some((h) => h !== g && h.og === g.og && s.mods.some((m) => P.meets(m, h, h.tier)))));
       } catch (e) { /* an item the planner cannot read: blocked, no more is said */ }
       return out;
     }
@@ -103,6 +106,11 @@
       // (a modifier the base does not roll has no tier of the base's: the one on the item is the target as it is)
       else if (g.minValue == null && st0.mods.some((m) => m.id && !m.tier && m.fam === g.fam && (!g.des || m.des))) { g.held = true; g.tier = null; g.eff = null; }
     }
+    // (one of several stats for a slot: a stat that cannot be had is left out while another of its slot can)
+    {
+      const bad = new Set(raw.filter((g) => !g.held && g.og != null && P.goalFeasible(ctx, st0, g)));
+      if (bad.size) raw = raw.filter((g) => !(bad.has(g) && raw.some((h) => h.og === g.og && !bad.has(h))));
+    }
     const cannot = raw.filter((g) => !g.held).map((g) => ({ label: g.label, why: P.goalFeasible(ctx, st0, g) })).filter((x) => x.why);
     if (cannot.length) return { impossible: cannot };
 
@@ -129,6 +137,16 @@
       goals.push({ fam: m.fam, side: m.side, si: m.side === 'prefix' ? 0 : 1, kind: m.des && !ctx.pool.has(m.id) ? 'des' : 'nat', grp: m.grp || [], tier: m.tier || null,
         des: false, label: 'kept modifier', kept: true, ess: [], lich: null, minValue: null });
     }
+    // ---- one of several stats for a slot (the player's "or"): the goals of one slot are a group, and one of them on
+    // the item fills the slot. ORG: the groups (goal numbers); goals[i].oi: the group of goal i, -1 for none.
+    const ORG = [];
+    {
+      const by = new Map();
+      goals.forEach((g, i) => { g.oi = -1; if (g.og != null && !g.kept) { if (!by.has(g.og)) by.set(g.og, []); by.get(g.og).push(i); } });
+      for (const m of by.values()) if (m.length > 1) { for (const i of m) goals[i].oi = ORG.length; ORG.push(m); }
+    }
+    /** The slots the targets of side si ask for: a group asks for one. */
+    const sideNeed = (si) => { const seen = new Set(); let n = 0; for (const g of goals) { if (g.si !== si) continue; if (g.oi >= 0) { if (seen.has(g.oi)) continue; seen.add(g.oi); } n++; } return n; };
     const G = goals.length;
     if (G > 8) return { unsupported: 'too many targets' };
     const jewel = ctx.cls === 'Jewel';
@@ -249,7 +267,7 @@
     // ---- runes that change what the item can hold or roll, and the sockets for them
     // (a rune the pasted item came with is there without a price; socketing it into a new base needs one)
     const AST = (() => { const n = P.runeFor(ctx, /additional Crafted Modifier/i); return n && ctx.craftedCap < 2 && (price(n) != null || st0.xCrafted) && (goals.filter((g) => g.magicEss || g.rareEss).length >= 2 || (!(input.lite | 0) && ctx.bone && priceOf('Essence of the Abyss') != null)) ? { item: n, price: price(n) } : null; })();
-    const SER = (() => { const n = P.runeFor(ctx, /Suffix Modifiers? allowed/i); return n && (price(n) != null || st0.xSuffix) && goals.filter((g) => g.si === 1).length > LIM[1] ? { item: n, price: price(n) } : null; })();
+    const SER = (() => { const n = P.runeFor(ctx, /Suffix Modifiers? allowed/i); return n && (price(n) != null || st0.xSuffix) && sideNeed(1) > LIM[1] ? { item: n, price: price(n) } : null; })();
     const pooled = goals.filter((g) => g.rune);
     if (new Set(pooled.map((g) => g.rune)).size > 1) return { impossible: pooled.map((g) => ({ label: g.label, why: 'needs its own rune, and an item takes one such rune' })) };
     const POOL = pooled.length ? { tag: pooled[0].rune, item: pooled[0].runeItem, price: price(pooled[0].runeItem) } : null;
@@ -261,7 +279,7 @@
     // adds "+1 Suffix Modifier allowed" as a prefix or "+1 Prefix Modifier allowed" as a suffix: with it a side takes
     // a third modifier, which stays when the allowance is removed again (rules R_JEWEL_SLOTS, R_NO_SPACE; recipe c15).
     const EMO = [];
-    const over = [0, 1].map((si) => goals.filter((g) => g.si === si).length > LIM[si]);
+    const over = [0, 1].map((si) => sideNeed(si) > LIM[si]);
     if (jewel) {
       const by = new Map();
       for (const r of ctx.essences) if (r.liquid && kb.mods[r.mod]) { if (!by.has(r.item)) by.set(r.item, []); by.get(r.item).push(r.mod); }
@@ -278,7 +296,7 @@
     const allowance = [0, 1].map((si) => EMO.some((e) => e.outs.some((o) => o.cap === si)));
     if (over[0] && over[1]) return { impossible: goals.map((g) => ({ label: g.label, why: 'three targets on both sides: a jewel takes a third modifier on one side only' })) };
     for (let si = 0; si < 2; si++) {
-      const n = goals.filter((g) => g.si === si).length, room = LIM[si] + (si === 1 && SER ? 1 : 0) + (allowance[si] ? 1 : 0);
+      const n = sideNeed(si), room = LIM[si] + (si === 1 && SER ? 1 : 0) + (allowance[si] ? 1 : 0);
       if (n > room) return { impossible: goals.filter((g) => g.si === si).map((g) => ({ label: g.label, why: `${n} ${SIDES[si]} targets, and the item holds ${room}` })) };
     }
     const RUNES = !!(AST || SER || POOL || ALD);
@@ -400,7 +418,7 @@
     /** Which of the tag-giving targets are on the item (a bit each), and the tags of a target's twin where they are known. */
     const tagMask = (S) => {
       let m = 0;
-      for (let k = 0; k < tagIdx.length; k++) { const x = S.g[tagIdx[k]]; if (x !== ABSENT && x !== BLOCKED && x !== TWIN && x !== XBLOCKED) m |= 1 << k; }
+      for (let k = 0; k < tagIdx.length; k++) { const x = S.g[tagIdx[k]]; if (x !== ABSENT && x !== BLOCKED && x !== TWIN && x !== XBLOCKED && x !== ALT) m |= 1 << k; }
       if (TRACK) for (let k = 0; k < G; k++) if (S.g[k] === TWIN && conv[k]) { const b = twinBit(S, k); if (b >= 0) m |= 1 << b; }
       return m;
     };
@@ -821,6 +839,26 @@
     const ownOn = (S, si, kind) => (S.cx === si + 1 && S.ct === kind) || (S.cy === si + 1 && S.cu === kind);
     const addCrafted = (n, si, kind) => { if (!n.cx) { n.cx = si + 1; n.ct = kind; } else if (!n.cy) { n.cy = si + 1; n.cu = kind; } else n.j[si]++; };
     const canon = (n) => {
+      // One of several stats for a slot: while one of them is on the item (the fractured one first), the others are
+      // not wanted (ALT), and a modifier one of them has on the item (met as well, under its value, a twin, in its
+      // way) is one more modifier nobody asked for. With none of them there, they are all wanted again.
+      for (let q = 0; q < ORG.length; q++) {
+        const grp = ORG[q];
+        let keep = -1;
+        for (const i of grp) if (met(n.g[i]) && (keep < 0 || n.fg === i)) keep = i;
+        for (const i of grp) {
+          if (i === keep) continue;
+          const x = n.g[i];
+          if (keep < 0) { if (x === ALT) n.g[i] = ABSENT; continue; }
+          if (x === ALT) continue;
+          if (there(x)) {
+            if (n.fg === i) { n.fg = -1; if (!n.fj) n.fj = goals[i].si + 1; else junkAt(n, goals[i].si, goalLvl[i]); }
+            else junkAt(n, goals[i].si, goalLvl[i]);
+          }
+          n.g[i] = ALT;
+          if (xbit[i] >= 0) n.xg &= ~(1 << xbit[i]);
+        }
+      }
       if (!n.cx && n.cy) { n.cx = n.cy; n.ct = n.cu; n.cy = 0; }
       if (!n.cx) n.ct = 0;
       if (!n.cy) n.cu = 0;
@@ -981,10 +1019,10 @@
       return v;
     };
     const KEY_REST = 3 * JK * JK * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2 * FLK * 3 * 3 * 3 * XK * (FZT.length + 1);
-    const KEY_NUM = Math.pow(10, G) * KEY_REST < 9e15; // (the two parts fit one number exactly)
+    const KEY_NUM = Math.pow(11, G) * KEY_REST < 9e15; // (the two parts fit one number exactly)
     const keyOf = (S) => {
       let a = 0;
-      for (let i = 0; i < G; i++) a = a * 10 + S.g[i];
+      for (let i = 0; i < G; i++) a = a * 11 + S.g[i];
       let k = S.r;
       if (S.j[0] > JMAX || S.j[1] > JMAX) throw new Error('more modifiers on a side than a node can count');
       k = k * JK + S.j[0]; k = k * JK + S.j[1]; k = k * 10 + (S.fg + 1); k = k * 3 + S.fj; k = k * 3 + S.cx; k = k * 3 + S.dj; k = k * 3 + S.du;
@@ -1009,7 +1047,9 @@
     }
     const limOf = (S, si) => (S.r === 2 ? LIM[si] + (si === 1 && (S.u & R_SERLE) ? 1 : 0) + (S.aw === si + 1 ? 1 : 0) : S.r === 1 ? 1 : 0);
     const open = (S, si) => Math.max(0, limOf(S, si) - slots(S, si));
-    const done = (S) => { for (let i = 0; i < G; i++) if (!met(S.g[i])) return false; return true; };
+    /** Target i asks for nothing more: it is on the item, or another stat of its slot is (see ORG). */
+    const filled = (S, i) => { if (met(S.g[i]) || S.g[i] === ALT) return true; const oi = goals[i].oi; if (oi < 0) return false; for (const j of ORG[oi]) if (met(S.g[j])) return true; return false; };
+    const done = (S) => { for (let i = 0; i < G; i++) if (!filled(S, i)) return false; return true; };
     // (a crafted modifier that a Fracturing Orb locked still counts for "one crafted modifier per item": the pasted
     // item's is known, S.kf; the network makes no other, see the Fracturing Orb's edge)
     const craftedUsed = (S) => { let n = (S.cx ? 1 : 0) + (S.cy ? 1 : 0) + (S.aw ? 1 : 0) + (S.kf && FRAC && FRAC.crafted ? 1 : 0); for (let i = 0; i < G; i++) if (kindOf(S.g[i]) === CRAFTED) n++; return n; };
@@ -1273,7 +1313,13 @@
       let junk = -1; // the side that gets one more modifier its class is about
       if (i >= 0) {
         // the twin stays on the item as another modifier (of the target's own tier, so of about its level)
-        if (n.g[i] === TWIN && status !== TWIN) junkAt(n, goals[i].si, goalLvl[i]);
+        // (A fractured twin is a fractured modifier nobody asked for then. It was counted as a plain one and the
+        // target as the fractured modifier: the item, whose fractured modifier is the twin, was no node. 1,572 of a
+        // hammer's crafts left the network that way in the fourteenth deep run.)
+        if (n.g[i] === TWIN && status !== TWIN) {
+          if (n.fg === i && !n.fj) { n.fg = -1; n.fj = goals[i].si + 1; }
+          else junkAt(n, goals[i].si, goalLvl[i]);
+        }
         if (status === BLOCKED) junk = goals[i].si;
       } else junk = si;
       const had = junk >= 0 && nSide(n, junk) > 0;
@@ -1703,7 +1749,7 @@
       return out;
     }
     const afterMemo = new Map();
-    const missing = (S) => { let n = 0; for (let i = 0; i < G; i++) if (!met(S.g[i])) n++; return n; };
+    const missing = (S) => { let n = 0; const seen = new Set(); for (let i = 0; i < G; i++) { if (filled(S, i)) continue; const oi = goals[i].oi; if (oi >= 0) { if (seen.has(oi)) continue; seen.add(oi); } n++; } return n; };
     /** Chance that the item is finished after exactly n such swaps (it is not asked in between). */
     function after(S, n) {
       if (!n) return done(S) ? 1 : 0;
@@ -1812,7 +1858,7 @@
       const other = desList(1, floor, null);
       const ids = (x) => (x && x.size ? [...x].sort().join(',') : '');
       const key = (S2) => keyOf(S2) + '|' + (S2.pd || 0) + '|' + ids(S2.px) + '|' + ids(S2.py) + '|' + (S2.pw === undefined ? '' : S2.pw);
-      const lacks = (S2, si) => { let n = 0; for (let i = 0; i < G; i++) if (goals[i].si === si && !met(S2.g[i])) n++; return n; };
+      const lacks = (S2, si) => { let n = 0; const seen = new Set(); for (let i = 0; i < G; i++) { if (goals[i].si !== si || filled(S2, i)) continue; const oi = goals[i].oi; if (oi >= 0) { if (seen.has(oi)) continue; seen.add(oi); } n++; } return n; };
       const merged = (list, change) => { const m = new Map(); for (const [p, Sa] of list) { change(Sa); const k = key(Sa), old = m.get(k); if (old) old[0] += p; else m.set(k, [p, Sa]); } return m; };
       let dist = new Map([[key(base), [1, base]]]), first = true;
       for (let si = 0; si < 2; si++) {
@@ -2480,7 +2526,7 @@
     // A + (1 - F) x, with A the cost until the item is done or given up and F the chance that it gets done, and
     // x = A(N0) / F(N0). The rule set starts as "add while a target can come, else a new base", which always ends, and
     // is improved node by node until no node has a cheaper edge.
-    const blockKey = (S) => (S.r < 2 ? 'early' : S.g.join('') + '|' + S.fg + '|' + S.fj);
+    const blockKey = (S) => (S.r < 2 ? 'early' : S.g.join(',') + '|' + S.fg + '|' + S.fj);
     const bmap = new Map();
     for (let s = 0; s < N; s++) { const k = blockKey(states[s]); if (!bmap.has(k)) bmap.set(k, []); bmap.get(k).push(s); }
     const metN = (S) => { let n = 0; for (let i = 0; i < G; i++) if (met(S.g[i])) n++; return n; };
@@ -3707,6 +3753,7 @@
         const how = (S.fg === i ? ' (fractured)' : '') + (kindOf(x) === CRAFTED ? ' (crafted)' : kindOf(x) === DESECRATED ? ' (desecrated)' : '');
         if (met(x)) has.push(g.label + how);
         else if (near(x)) { has.push(g.label + how); low.push(g.label); }
+        else if (x === ALT) continue; // (another stat of its slot is on the item)
         else {
           miss.push(g.label);
           if (x === BLOCKED) { inWay.push(g.label + (S.fg === i ? ' (fractured)' : '')); junk[g.si]++; }
@@ -3825,7 +3872,7 @@
     return timely(first);
   }
   function routeFit1(input, baseLimit) {
-    const nT = Object.values(input.targets || {}).filter((t) => t && t.fam).length, many = nT >= 7;
+    const nT = Object.values(input.targets || {}).filter((t) => t && t.fam).reduce((n, t) => n + 1 + (t.or && Array.isArray(t.alts) ? t.alts.filter((a) => a && a.fam && a.fam !== t.fam).length : 0), 0), many = nT >= 7;
     const fit = (net) => (baseLimit > 0 && !net.done(net.start) ? net.fitBases(net.start, +baseLimit) : 0);
     const bad = (net) => net.unsupported || net.impossible || net.blocked;
     // (230,000 states for the fully followed network: a staff with two targets that keep each other out by their

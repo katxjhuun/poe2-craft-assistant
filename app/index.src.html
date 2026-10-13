@@ -322,6 +322,16 @@ details.notes[open] summary { margin-bottom: 6px; }
 .combo input.set.g-desecrated { color: var(--g-magic); border-color: #3A5418; }
 .combo input.set.g-crafted { color: var(--g-crafted); }
 .srow-opts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.orbox { display: inline-flex; align-items: center; gap: 4px; flex: none; font-size: 13.5px; color: var(--muted); cursor: pointer; user-select: none; }
+.orbox input { margin: 0; accent-color: var(--accent); }
+.orbox.on { color: var(--text); }
+.alts { display: grid; gap: 6px; padding-left: 22px; border-left: 2px solid var(--line-2); margin-left: 6px; }
+.alt-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.alt-row .or-word { color: var(--faint); font-size: 13px; flex: none; }
+.alt-row .combo { flex: 2 1 180px; }
+.alt-row .combo input { padding: 4px 8px; font-size: 14.5px; }
+.alt-row select { background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r); padding: 3px 6px; font-size: 13.5px; flex: 1 1 120px; min-width: 0; max-width: 100%; }
+.alts .alt-add { justify-self: start; }
 .srow-opts select { background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r); padding: 4px 6px; font-size: 14px; max-width: 100%; flex: 1; min-width: 0; }
 .ok-note { color: var(--up); font-size: 14px; }
 .bad-note { color: var(--err); font-size: 14px; }
@@ -1011,6 +1021,15 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   /** Short message for screen readers (polite live region). */
   function announce(msg) { const el = $('#live'); el.textContent = ''; setTimeout(() => { el.textContent = msg; }, 30); }
   /** Is this target met by the mod in its slot: a minimum value when one is set, else the minimum tier. */
+  /** The slot of a target key: "prefix-0" for the slot itself and for its alternatives ("prefix-0~1"). */
+  const slotOf = (key) => String(key).split('~')[0];
+  /** The target a key names: the slot's own stat, or one of its alternatives (the "or" list). */
+  function targetAt(key) {
+    const [slot, n] = String(key).split('~'), t = S.targets[slot];
+    return n === undefined ? t : t && t.alts ? t.alts[+n] : null;
+  }
+  /** The stats a slot takes: its own and, with "or" on, its alternatives. */
+  const slotStats = (t) => (t && t.fam ? [t].concat(t.or && Array.isArray(t.alts) ? t.alts.filter((a) => a && a.fam) : []) : []);
   function targetMet(m, t) {
     if (!m || !t || m.fam !== t.fam) return false;
     if (t.minValue > 0) return !!(m.values && m.values.length && Math.abs(m.values[0]) >= t.minValue);
@@ -2912,7 +2931,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (t && t.fam) {
       const fam = optionsFor(side, key).find((o) => o.key === t.key);
       const tiers = fam ? fam.tiers : [];
-      done = targetMet(m, t);
+      done = slotStats(t).some((x) => targetMet(m, x));
       const byValue = t.minValue > 0 || !!t.valueMode;
       // highest first number any allowed tier can roll (for the value box)
       const reach = Math.max(0, ...tiers.filter((x) => x.ok && x.txt).map((x) => { const r = E.templateRanges(x.txt.split('\n')[0])[0]; return r ? Math.max(Math.abs(r[0]), Math.abs(r[1])) : 0; }));
@@ -2938,12 +2957,27 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       <div class="srow-cur">${cur}</div>
       <div class="srow-target"><span class="arrow" aria-hidden="true">→</span>
         <div class="combo"><input id="combo-${key}" class="${t && t.fam ? 'set ' + groupCls(t.group) : ''}" data-combo="${key}" data-side="${side}" autocomplete="off" role="combobox" aria-expanded="${!!(S.open && S.open.key === key)}" aria-controls="dd-${key}" aria-label="Target stat for ${side} ${i + 1}" placeholder="${m ? 'Replace with…' : 'Target stat'}" value="${esc(value)}"><div class="dd" id="dd-${key}" role="listbox" hidden></div></div>
+        ${t && t.fam ? `<label class="orbox ${t.or ? 'on' : ''}" title="Take one of several stats for this slot: any of them on the item fills it"><input type="checkbox" data-or="${key}" ${t.or ? 'checked' : ''}>or</label>` : ''}
         ${t && t.fam ? `<button type="button" class="icon-btn" data-untarget="${key}" title="Remove target" aria-label="Remove target"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>` : ''}
-      </div>${opts}</div>`;
+      </div>${opts}${t && t.fam && t.or ? altsHtml(side, key, t) : ''}</div>`;
+  }
+  /** The other stats a slot takes ("or"): a small stat list each, with its lowest tier, and a button for one more. */
+  function altsHtml(side, key, t) {
+    const all = optionsFor(side, key), alts = Array.isArray(t.alts) ? t.alts : [];
+    const rows = alts.map((a, n) => {
+      const k = key + '~' + n, fam = a && a.fam ? all.find((o) => o.key === a.key) : null, tiers = fam ? fam.tiers : [];
+      const value = S.open && S.open.key === k ? S.open.query : (a && a.label) || '';
+      return `<div class="alt-row"><span class="or-word">or</span>
+        <div class="combo"><input id="combo-${k}" class="${a && a.fam ? 'set ' + groupCls(a.group) : ''}" data-combo="${k}" data-side="${side}" autocomplete="off" role="combobox" aria-expanded="${!!(S.open && S.open.key === k)}" aria-controls="dd-${k}" aria-label="Another stat for ${side} ${+key.split('-')[1] + 1}" placeholder="Another stat for this slot" value="${esc(value)}"><div class="dd" id="dd-${k}" role="listbox" hidden></div></div>
+        ${a && a.fam ? `<select data-tier="${k}" aria-label="Minimum tier">${tiers.map((x) => `<option value="${x.tier || ''}" ${x.tier === a.minTier ? 'selected' : ''} ${x.ok ? '' : 'disabled'}>${x.via ? esc(x.via) : x.tier ? 'T' + x.tier + ' or better' : 'Any tier'} · ${esc(x.txt.replace(/\n/g, ' / '))}</option>`).join('')}</select>` : ''}
+        <button type="button" class="icon-btn" data-unalt="${k}" title="Remove this stat" aria-label="Remove this stat"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>`;
+    }).join('');
+    return `<div class="alts">${rows}<button type="button" class="btn small alt-add" data-addalt="${key}">Add</button></div>`;
   }
 
   const optCache = new Map();
   function optionsFor(side, key) {
+    key = slotOf(key);
     const m = modAt(side, +key.split('-')[1]);
     // one rune pool per item: with a target from one pool in another row, the other pools are not offered
     const runePool = chosenRunePool(key);
@@ -2990,6 +3024,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   /** Chance that the next random modifier of the slot's side is this stat (poe2db weights, or equal ones). */
   const shareMemo = new Map();
   function sharesFor(key) {
+    key = slotOf(key);
     const m = modAt(key.split('-')[0], +key.split('-')[1]);
     const k = [S.histIdx, S.text.length, key, m ? m.modId : ''].join('|');
     if (!shareMemo.has(k)) {
@@ -3018,8 +3053,20 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (!o || !o.ok) return;
     const key = S.open.key;
     const best = o.tiers.find((t) => t.ok);
-    S.targets[key] = { key: o.key, fam: o.fam, group: o.group, label: o.label, minTier: best ? best.tier : null, required: true };
-    if (o.rune) S.targets[key].rune = o.rune;
+    if (key.includes('~')) {
+      // one more stat for the slot ("or"): not the slot's own again, and not one that is on its list already
+      const [slot, n] = key.split('~'), t = S.targets[slot];
+      if (!t || !Array.isArray(t.alts)) { S.open = null; renderStats(); return; }
+      if (o.fam === t.fam || t.alts.some((a, k) => k !== +n && a && a.fam === o.fam)) { S.open = null; renderStats(); announce('That stat is on this slot already.'); return; }
+      t.alts[+n] = { key: o.key, fam: o.fam, group: o.group, label: o.label, minTier: best ? best.tier : null };
+      if (o.rune) t.alts[+n].rune = o.rune;
+    } else {
+      const was = S.targets[key];
+      S.targets[key] = { key: o.key, fam: o.fam, group: o.group, label: o.label, minTier: best ? best.tier : null, required: true };
+      if (o.rune) S.targets[key].rune = o.rune;
+      // (the slot's other stats stay when its own stat is changed)
+      if (was && was.or) { S.targets[key].or = true; S.targets[key].alts = (was.alts || []).filter((a) => !(a && a.fam === o.fam)); }
+    }
     S.recent = [o.key, ...S.recent.filter((r) => r !== o.key)].slice(0, 6);
     store.set('recent', S.recent);
     saveTargets();
@@ -3069,7 +3116,22 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       if (v) applyTemplate(v);
       return;
     }
+    if (e.target.dataset.or) {
+      const t = S.targets[e.target.dataset.or];
+      if (!t) return;
+      t.or = e.target.checked;
+      // (the first small list is there at once; what was chosen before comes back when the box is ticked again)
+      if (t.or && !(Array.isArray(t.alts) && t.alts.length)) t.alts = [{}];
+      saveTargets(); renderStats(); renderItem(); renderPlan(); schedulePlans();
+      if (t.or) { const k = e.target.dataset.or + '~' + t.alts.findIndex((a) => !(a && a.fam)); const inp = document.getElementById('combo-' + k); if (inp) inp.focus(); }
+      return;
+    }
     const tk = e.target.dataset.tier;
+    if (tk && tk.includes('~')) {
+      const a = targetAt(tk);
+      if (a) { a.minTier = +e.target.value || null; saveTargets(); renderStats(); renderItem(); renderPlan(); schedulePlans(); }
+      return;
+    }
     if (tk) {
       const t = S.targets[tk];
       if (e.target.value === 'v') {
@@ -3093,6 +3155,22 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (b.dataset.lock) { S.locks[b.dataset.lock] = !S.locks[b.dataset.lock]; saveTargets(); renderStats(); renderPlan(); schedulePlans(); }
     else if (b.dataset.req) { const t = S.targets[b.dataset.req]; t.required = !t.required; saveTargets(); renderStats(); renderPlan(); schedulePlans(); }
     else if (b.dataset.untarget) { delete S.targets[b.dataset.untarget]; saveTargets(); renderStats(); renderItem(); renderPlan(); schedulePlans(); }
+    else if (b.dataset.addalt) {
+      const t = S.targets[b.dataset.addalt];
+      if (!t) return;
+      t.alts = Array.isArray(t.alts) ? t.alts : [];
+      let n = t.alts.findIndex((a) => !(a && a.fam));
+      if (n < 0) n = t.alts.push({}) - 1;
+      saveTargets(); renderStats();
+      const inp = document.getElementById('combo-' + b.dataset.addalt + '~' + n);
+      if (inp) inp.focus();
+    }
+    else if (b.dataset.unalt) {
+      const [slot, n] = b.dataset.unalt.split('~'), t = S.targets[slot];
+      if (!t || !Array.isArray(t.alts)) return;
+      t.alts.splice(+n, 1);
+      saveTargets(); renderStats(); renderItem(); renderPlan(); schedulePlans();
+    }
     else if (b.id === 'tplCancel') { S.tplMode = null; renderStats(); }
     else if (b.id === 'tplSaveBtn') {
       const stats = Object.values(S.targets).filter((t) => t && t.fam).map((t) => ({ label: t.label, minTier: t.minTier || null, minValue: t.minValue || null, required: !!t.required }));

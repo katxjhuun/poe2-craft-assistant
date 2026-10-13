@@ -954,3 +954,81 @@ test('network: a Fracturing Orb can lock a modifier that keeps a target out; the
   assert.ok(!only.unsupported && !only.impossible);
   assert.ok(!edge(only), 'no Fracturing Orb on an item that is never given up while a modifier may be in a target\'s way');
 });
+
+test('network: one of several stats fills a slot (the player\'s "or")', () => {
+  // A ring's first suffix may be Fire or Cold Resistance, its first prefix Mana or Life. Either stat of a slot on the
+  // item fills it; the others of the slot are not wanted then, and one of them that is on the item as well is one more
+  // modifier nobody asked for.
+  const X = lockWorld(), base = 'Dusk Ring';
+  const fire = X.tiers(base, 'suffix', /to Fire Resistance$/), cold = X.tiers(base, 'suffix', /to Cold Resistance$/), mana = X.tiers(base, 'prefix', /to maximum Mana$/), life = X.tiers(base, 'prefix', /to maximum Life$/);
+  const T = (f, tier, more) => Object.assign({ fam: f.fam, group: f.side, minTier: tier, required: true, label: f.label }, more);
+  const both = { 'suffix-0': T(fire, 1, { or: true, alts: [T(cold, 1)] }), 'prefix-0': T(mana, 2, { or: true, alts: [T(life, 2)] }) };
+  const one = { 'suffix-0': T(fire, 1), 'prefix-0': T(mana, 2) };
+  const white = X.item(base, 'Normal');
+  const inp = X.input(white, both), net = NW.route(inp), alone = NW.route(X.input(white, one));
+  assert.ok(!net.impossible && !net.unsupported && net.settled);
+  assert.equal(net.goals.length, 4);
+  assert.deepEqual(net.goals.map((g) => g.oi).sort(), [0, 0, 1, 1], 'two slots, two stats each');
+  assert.ok(net.cost(net.start) < 0.9 * alone.cost(alone.start), `one of two stats a slot is cheaper: ${net.cost(net.start)} against ${alone.cost(alone.start)}`);
+  const got = X.play(net, inp, 1200, 3, 200000, 90000);
+  assert.equal(got.refused, 0);
+  assert.equal(got.off, 0);
+  assert.equal(got.done, got.runs);
+  assert.ok(Math.abs(got.mean / net.cost(net.start) - 1) < 0.1, `played ${got.mean} +-${got.se}, promised ${net.cost(net.start)}`);
+  // either stat finishes the slot, and both on the item do as well
+  const top = (f) => Math.min(...Object.keys(f.ids).map(Number));
+  const mod = (f, tier) => ({ id: f.ids[tier], side: f.side, tier });
+  const done = (mods) => net.finished(P.toState(net.ctx, X.item(base, 'Rare', mods), {}));
+  assert.ok(done([mod(cold, top(cold)), mod(life, top(life))]), 'the second stat of each slot');
+  assert.ok(done([mod(fire, top(fire)), mod(cold, top(cold)), mod(mana, top(mana))]), 'two stats of one slot on the item');
+  assert.ok(!done([mod(fire, top(fire)), mod(cold, top(cold))]), 'the other slot is empty');
+  // the node of an item with two stats of one slot: the second is a modifier nobody asked for
+  const d = net.describe(net.nodeOf(P.toState(net.ctx, X.item(base, 'Rare', [mod(fire, top(fire)), mod(cold, top(cold))]), {})));
+  assert.equal(d.has.length, 1);
+  assert.equal(d.otherSuffixes, 1);
+  assert.deepEqual(d.miss.slice().sort(), [life.label, mana.label].sort(), 'only the other slot is missing, by either of its stats');
+  // a stat that is given twice for a slot counts once, and a slot with "or" off takes its own stat only
+  const twice = NW.route(X.input(white, { 'suffix-0': T(fire, 1, { or: true, alts: [T(fire, 1), T(cold, 1), T(cold, 2)] }) }));
+  assert.equal(twice.goals.length, 2);
+  const off = NW.route(X.input(white, { 'suffix-0': T(fire, 1, { or: false, alts: [T(cold, 1)] }) }));
+  assert.equal(off.goals.length, 1);
+});
+
+test('network: a fractured twin stays a fractured modifier when the target itself rolls beside it', () => {
+  // A ring wants Cold Resistance and carries a fractured Fire Resistance of the top tier: the target's twin (a Flux
+  // would turn it, but a fractured modifier is not turned). When the Cold Resistance rolls beside it, the item has the
+  // target and a fractured modifier nobody asked for. The network took the target for the fractured one, and the
+  // item, as the reader sees it, was no node (1,572 of a hammer's crafts left the network, the fourteenth deep run).
+  const X = lockWorld(), base = 'Dusk Ring';
+  const cold = X.tiers(base, 'suffix', /to Cold Resistance$/), fire = X.tiers(base, 'suffix', /to Fire Resistance$/), mana = X.tiers(base, 'prefix', /to maximum Mana$/), life = X.tiers(base, 'prefix', /to maximum Life$/);
+  const top = (t) => Math.min(...Object.keys(t.ids).map(Number)), low = (t) => Math.max(...Object.keys(t.ids).map(Number));
+  const it = X.item(base, 'Rare', [{ id: fire.ids[top(fire)], side: 'suffix', tier: top(fire), frac: true }, { id: life.ids[low(life)], side: 'prefix', tier: low(life) }]);
+  const targets = {
+    'suffix-0': { fam: cold.fam, group: 'suffix', minTier: 1, required: true, label: cold.label },
+    'prefix-0': { fam: mana.fam, group: 'prefix', minTier: 1, required: true, label: mana.label },
+  };
+  const net = NW.build(Object.assign({}, X.input(it, targets, null, { restart: 'item', itemCost: 50 }), { lite: 0, track: 8, maxStates: 120000, whittle: 'none' }));
+  assert.ok(!net.unsupported && !net.impossible);
+  const d0 = net.describe(net.start);
+  if (!d0.twin.length) return; // (no Flux at the prices of the day: the Fire Resistance is no twin)
+  const e = net.acts[net.start].find((x) => x.a.op === 'exalt');
+  assert.ok(e, 'an Exalted Orb is an edge of the pasted item');
+  let seen = 0;
+  for (let t = 0; t < e.out.length; t += 2) {
+    if (e.out[t + 1] < 0) continue;
+    const d = net.describe(e.out[t + 1]);
+    const c = d.has.find((x) => x.startsWith(cold.label));
+    if (!c) continue;
+    seen++;
+    assert.ok(!/fractured/.test(c), 'the rolled Cold Resistance is not the fractured modifier');
+    assert.equal(d.fracturedOther, 'suffix', 'the Fire Resistance is: a fractured modifier nobody asked for');
+  }
+  assert.ok(seen > 0, 'the target can roll beside its fractured twin');
+  // and the item as the reader sees it then is one of those nodes
+  const both = X.item(base, 'Rare', [{ id: fire.ids[top(fire)], side: 'suffix', tier: top(fire), frac: true }, { id: cold.ids[top(cold)], side: 'suffix', tier: top(cold) }, { id: life.ids[low(life)], side: 'prefix', tier: low(life) }]);
+  const n2 = net.nodeOf(P.toState(net.ctx, both, {}));
+  assert.ok(n2 >= 0, 'that item is a node');
+  let reached = false;
+  for (let t = 0; t < e.out.length; t += 2) if (e.out[t + 1] === n2) reached = true;
+  assert.ok(reached, 'and the Exalted Orb leads to it');
+});
