@@ -70,4 +70,5 @@ prices), so for the first time every scenario below was replayed here with the p
 
 ## The next run
 
-Started after these changes: see the run list of the repository (the thirteenth run).
+Run [38330594005](https://github.com/katxjhuun/poe2-craft-assistant/actions/runs/38330594005), started 13 Oct 2026
+01:07 UTC on commit b16123d (these changes): the first with the play that takes the next step first.
