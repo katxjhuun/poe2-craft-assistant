@@ -61,4 +61,5 @@ up, up to 2,537 of 100,000 crafts.
 
 ## The next run
 
-Started after these changes: see the run list of the repository (the fourteenth run).
+Run [38383028909](https://github.com/katxjhuun/poe2-craft-assistant/actions/runs/38383028909), started 13 Oct 2026
+10:23 UTC on commit e9656b4 (these changes).
