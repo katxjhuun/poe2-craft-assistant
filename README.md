@@ -226,6 +226,11 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   senaryoda maliyet %15'ten fazla sapmıyor (761 senaryonun 729'u uyuşuyor). Fracturing Orb bir hedefin ikizini
   kilitleyince, hedefin kendisi yanına geldiğinde ağ hedefi "fractured" sayıyordu ve eşyanın düğümü yoktu (bir
   çekiçte 1.572 craft ağdan çıktı): ikiz artık kimsenin istemediği fractured bir moddur.
+- **On beşinci derin tarama (13 Ekim 2026, `reports/network-sweep-2026-10-14.md`).** "or" istekli ilk tarama: 897
+  senaryo, 860'ı oynandı, 828'i uyuşuyor (%96,3), hata yok. Maliyeti %15'ten fazla sapan üç senaryo: dört hedefli
+  beyaz bir Warlord Cuirass (53.602 vaat, 76.513 oynanan: engelleyici takip etmeyen ağ) ve iki "or" isteği (x1,16
+  ve x1,18; bu taramanın kodu "or" statlarını hedef sayıyordu ve mod grubu kuralını bilmiyordu). Sonraki tarama
+  139b9e4 ile başladı.
 - Rune of Aldur, takıldıktan sonra gelen modu dönüştürmez (oyuncu 8 Ekim 2026'da doğruladı: iddia k61).
 - Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler).
 
