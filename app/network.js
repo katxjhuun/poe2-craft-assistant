@@ -1067,12 +1067,55 @@
       if (S.dj === si + 1 && DJD[si]) g *= Math.max(0, 1 - knownTake(s, si, 1) / J0);
       return g;
     }
+    /**
+     * The share of the other side's pool that is left next to n base modifiers of side si taken at the Well of Souls
+     * when a reveal offers no target: [n] -> share. The player is told to take the highest of the options then (the
+     * play does), which is not "one by its weight": on a staff the highest prefixes stop no suffix with their tags,
+     * where a prefix by weight stops a fifth of them. Counted by weight, three such prefixes made the suffix pool a
+     * fifth smaller and a suffix target's share a quarter larger: with the desecrated-only modifiers counted as
+     * unknown ones (see mix), an Omen of Putrefaction for a staff's Critical Spell Damage Bonus was promised at 0.40%
+     * a use where it finishes 0.26% of the time (x1.20, the twelfth deep run).
+     */
+    const wellMemo = new Map();
+    function wellAcross(si, floor) {
+      const key = si * 1000 + floor;
+      let out = wellMemo.get(key);
+      if (out) return out;
+      const a = stats(si, floor, 1, 0, 0, 0, 0), b = stats(1 - si, floor, 1, 0, 0, 0, 0), NM = a.left.length - 1;
+      // the chance that entry q is the one taken: the highest level among d options drawn by weight (d: three where
+      // the side has no desecrated-only modifier, else the base options beside one)
+      const d = desList(si, floor, null).length ? 2 : 3;
+      const byLvl = new Map();
+      let J = 0;
+      for (let q = 0; q < a.pool.length; q++) if (a.anon[q]) { const l = a.pool[q].lvl || kb.mods[a.pool[q].id].lvl || 1; byLvl.set(l, (byLvl.get(l) || 0) + a.ws[q]); J += a.ws[q]; }
+      const top = new Map(); // level -> the chance that the highest option is of it, per unit of weight at it
+      { let under = 0; for (const l of [...byLvl.keys()].sort((x, y) => x - y)) { const w = byLvl.get(l); top.set(l, J > 0 ? (Math.pow((under + w) / J, d) - Math.pow(under / J, d)) / w : 0); under += w; } }
+      // what each entry of the other side loses to the tags of the one taken
+      const stop = new Float64Array(b.pool.length);
+      for (let q = 0; q < a.pool.length; q++) {
+        if (!a.anon[q] || a.pool[q].rune) continue;
+        const at = kb.mods[a.pool[q].id].at;
+        if (!at) continue;
+        const p = top.get(a.pool[q].lvl || kb.mods[a.pool[q].id].lvl || 1) * a.ws[q], added = new Set(at);
+        if (!(p > 0)) continue;
+        for (let o = 0; o < b.pool.length; o++) if (b.anon[o] && !b.pool[o].rune && E.tagBlocked(kb.mods[b.pool[o].id], ctx.baseTags, added)) stop[o] += p;
+      }
+      out = new Float64Array(NM + 1).fill(1);
+      if (b.J > 0) for (let n = 1; n <= NM; n++) { let f = 0; for (let o = 0; o < b.pool.length; o++) if (b.anon[o]) f += b.ws[o] * Math.pow(Math.max(0, 1 - stop[o]), n); out[n] = f / b.J; }
+      wellMemo.set(key, out);
+      return out;
+    }
     /** What the cases of a side's pool share: the tags of the other side, the pasted item's fractured modifier, the dominant group. */
     function mix(S, si, s, floor, tm) {
       const NM = s.left.length - 1;
-      const n = Math.min(unknown(S, si), NM), m = unknown(S, 1 - si);
+      // (S.pd: the desecrated-only modifiers an Omen of Putrefaction's earlier reveals left on this side. They take
+      // entries off the Well's list, not base modifiers out of the pool: counted as modifiers nobody knows, each of
+      // them made the pool a sixth smaller and the target's share that much larger.)
+      const n = Math.min(Math.max(0, unknown(S, si) - (S.pd || 0)), NM), m = unknown(S, 1 - si);
       // the other side's modifiers stop a share of this side's pool with their tags
-      const share = m ? stats(1 - si, floor, 1, S.u, tm, presentMask(S, 1 - si), S.kf).across[Math.min(m, NM)] : 1;
+      // (S.pw: under an Omen of Putrefaction the other side was filled at the Well first, with that many base
+      // modifiers taken by the rule for a reveal without a target: see wellAcross)
+      const share = S.pw !== undefined ? wellAcross(1 - si, floor)[Math.min(S.pw, NM)] : m ? stats(1 - si, floor, 1, S.u, tm, presentMask(S, 1 - si), S.kf).across[Math.min(m, NM)] : 1;
       if (!s.big) return { NM, n, share, f: (S.kf && s.J > 0 ? Math.max(0, 1 - s.fracTake / s.J) : 1) * knownLeft(S, si, s, s.J), q: 1, fracIn: false };
       // the pasted item's fractured modifier is of the dominant group: that group is known to be on the item
       const fracIn = !!(S.kf && FRAC.si === si && FRAC.grp.includes(s.big.key));
@@ -1752,7 +1795,7 @@
       //  - what a prefix takes off the suffixes' list (S.py) is all that the second side is told of the first.
       const other = desList(1, floor, null);
       const ids = (x) => (x && x.size ? [...x].sort().join(',') : '');
-      const key = (S2) => keyOf(S2) + '|' + (S2.pd || 0) + '|' + ids(S2.px) + '|' + ids(S2.py);
+      const key = (S2) => keyOf(S2) + '|' + (S2.pd || 0) + '|' + ids(S2.px) + '|' + ids(S2.py) + '|' + (S2.pw === undefined ? '' : S2.pw);
       const lacks = (S2, si) => { let n = 0; for (let i = 0; i < G; i++) if (goals[i].si === si && !met(S2.g[i])) n++; return n; };
       const merged = (list, change) => { const m = new Map(); for (const [p, Sa] of list) { change(Sa); const k = key(Sa), old = m.get(k); if (old) old[0] += p; else m.set(k, [p, Sa]); } return m; };
       let dist = new Map([[key(base), [1, base]]]), first = true;
@@ -1771,7 +1814,7 @@
             for (const [q, i, status] of reveal(Sa, si, floor, null, echoes && first)) {
               if (i >= 0) {
                 const S2 = addRolled(Sa, i, si, status);
-                S2.pd = Sa.pd || 0; S2.px = Sa.px; S2.py = Sa.py;
+                S2.pd = Sa.pd || 0; S2.px = Sa.px; S2.py = Sa.py; S2.pw = Sa.pw;
                 if (lacks(S2, si) <= room - 1) put(p * q, S2);
                 continue;
               }
@@ -1782,7 +1825,7 @@
               for (const [pm, off, grp] of taken) {
                 const S2 = cp(Sa);
                 S2.j[si]++;
-                S2.pd = (Sa.pd || 0) + (off ? 1 : 0); S2.px = Sa.px; S2.py = Sa.py;
+                S2.pd = (Sa.pd || 0) + (off ? 1 : 0); S2.px = Sa.px; S2.py = Sa.py; S2.pw = Sa.pw;
                 if (off) {
                   if (follow) { S2.px = new Set(Sa.px || []); for (const id of off) S2.px.add(id); }
                   // (no group twice on an item, whatever the side: the other side's list loses its entries of these groups)
@@ -1799,7 +1842,7 @@
           if (dist.size > 3000) dist = merged(dist.values(), (Sa) => { Sa.px = null; });
         }
         // the other side: none of its modifiers is on the item yet; its list is without what the first side took off it
-        dist = merged([...dist.values()].filter(([, Sa]) => lacks(Sa, si) <= open(Sa, si)), (Sa) => { Sa.pd = 0; Sa.px = Sa.py && Sa.py.size ? Sa.py : null; Sa.py = null; });
+        dist = merged([...dist.values()].filter(([, Sa]) => lacks(Sa, si) <= open(Sa, si)), (Sa) => { Sa.pw = Math.max(0, Sa.j[si] - (Sa.pd || 0)); Sa.pd = 0; Sa.px = Sa.py && Sa.py.size ? Sa.py : null; Sa.py = null; });
       }
       let p = 0;
       for (const [q, Sa] of dist.values()) if (done(Sa)) p += q;
@@ -2077,9 +2120,13 @@
         const named = ABYSS.mods[v] ? v : open(S, 1 - v) > 0 ? 1 - v : -1;
         if (named < 0) continue;
         const land = [];
-        for (const u of us) {
-          const S1 = removeUnit(S, u), sides = [0, 1].filter((si) => ABYSS.mods[si] && open(S1, si) > 0);
-          for (const si of sides) land.push([u.w / tw / sides.length, si, S1]);
+        // (without: the modifier that goes may have been the lowest of its side, and the side's class of levels rises
+        // then. It was left as it stood: an amulet with six targets kept its lowest suffix under level 60 after this
+        // step every time, where the play had it over 60 half of the time, and the Omen of Whittling loops that
+        // follow cost more from there; x1.5 to x1.7 in three deep runs.)
+        for (const u of us) for (const [q0, S1] of without(S, u, false)) {
+          const sides = [0, 1].filter((si) => ABYSS.mods[si] && open(S1, si) > 0);
+          for (const si of sides) land.push([q0 * u.w / tw / sides.length, si, S1]);
         }
         if (!land.length) continue;
         const pre = { op: 'pessence', item: ABYSS.item, mod: ABYSS.mods[named], side: SIDES[v] };

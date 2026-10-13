@@ -80,6 +80,7 @@ if (audit.refused && audit.refused.length) {
   for (const x of audit.refused) { const k = JSON.stringify(x.a) + x.why; if (seenR.has(k) || seenR.size >= 5) continue; seenR.add(k); console.log(`   ${JSON.stringify(x.a)}: ${x.why}
       on ${x.item}`); }
 }
+if (audit.locked) console.log(`items locked by a step (Corrupted or Sanctified): ${audit.locked.n}, finished ${audit.locked.fin}, lost with a target's modifier under its tier or value ${audit.locked.under}; the lost ones by target (M met, u under, - not there): ${[...audit.locked.fams.entries()].sort((x, y) => y[1] - x[1]).slice(0, 6).map(([k, n]) => k + ' ' + n).join(', ')}`);
 if (audit.maps && (audit.maps[1] || audit.maps[2])) console.log(`items the network placed without what a blocker's tags stop: ${audit.maps[1]}, without their blockers: ${audit.maps[2]}, of ${audit.maps[0] + audit.maps[1] + audit.maps[2]}`);
 // crafts that left the network: the node, the step and the item the network has no node for
 if (audit.offs && audit.offs.length) {

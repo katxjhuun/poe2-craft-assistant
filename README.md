@@ -178,6 +178,16 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   "süre yetmedi" sayılır, yarım sayılarla bildirilmez. Bulut koşusunun fiyat işi fiyatları günlüğüne yazar
   (`scripts/selftest/prices_from_log.js`, `POE2_PRICES`): koşunun bir senaryosu aynı fiyatlarla yerelde tekrar
   oynatılabilir. Oynatma, çok uzun süren craft'ları takıldıkları düğümlerle saklayabilir (`play(..., { keep })`).
+- **On ikinci derin taramanın bulduğu (13 Ekim 2026, `reports/network-sweep-2026-10-13.md`).** Koşunun fiyatları
+  günlüğünden okundu; senaryolar ilk kez koşunun kendi vaadiyle yerelde tekrar oynatıldı. En uzak sapmalar ölçümün
+  kendisindendi: oynatma, düğümün bilmediği bir eşyada craft'ı "küçük ağla yeniden çözülen rotanın vaadi"yle
+  bitiriyordu, bunu ilk fırsatta yapıyordu ve küçük ağda Omen of Whittling yok (bir yayda craft'ların %87'si böyle
+  bitti: 1,26 kat; aynı vaat kısayolsuz 2.500 craft'ta 1,00 kat). Oynatma artık önce sıradaki adımı dener; yalnız
+  aynı düğüme altı kez dönen eşyada, o da eşyadan vazgeçmekten ucuzsa, yeniden çözülen rotayla bitirir. Gerçek iki
+  hata: Omen of Putrefaction'da Well'den alınan modlar "bilinmeyen mod" sayılıyordu (staff'ta kullanım başına %0,40
+  vaat, %0,26 oynanan; şimdi 2.068'e karşı 2.067 ± 38) ve "Essence of the Abyss + Mark üzerine kemik" adımı bir
+  modu silerken tarafın seviye sınıfını yükseltmiyordu (altı hedefli amulet). Kilitleyen adımların sonucu artık
+  oynatma kaydında tutulur (`network_gap.js` kilitlenen eşyaların dökümünü yazar).
 - Rune of Aldur, takıldıktan sonra gelen modu dönüştürmez (oyuncu 8 Ekim 2026'da doğruladı: iddia k61).
 - Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler).
 

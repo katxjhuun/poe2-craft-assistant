@@ -154,7 +154,13 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
       // a locked item (Corrupted or Sanctified) is finished when every target is on it, else it is lost: a new base
       // (which the step that locked it has paid for)
       if (st.corrupted || st.sanctified) {
-        if (net.finished && net.finished(st)) { ok = true; break; }
+        const fin = !!(net.finished && net.finished(st));
+        // (for the audit: where the locking step led, finished or lost; it was the one step whose outcome was not kept,
+        // and a Putrefaction that finished less often than promised showed in no node's share of the gap)
+        if (audit && from >= 0) { const rec = audit.get(from) || { n: 0, to: new Map() }; rec.n++; const to = fin ? Math.max(-2, net.nodeOf(st)) : net.n0; rec.to.set(to, (rec.to.get(to) || 0) + 1); audit.set(from, rec); }
+        // (and what the locked items were: finished, with a target's family under its tier or value, with every target's family but not all met, the rest)
+        if (audit) { const L = (audit.locked = audit.locked || { n: 0, fin: 0, under: 0, fams: new Map() }); L.n++; if (fin) L.fin++; else { const k = goals.map((g) => (st.mods.some((m) => P.meets(m, g, g.tier)) ? 'M' : st.mods.some((m) => m.fam === g.fam) ? 'u' : '-')).join(''); L.fams.set(k, (L.fams.get(k) || 0) + 1); if (k.includes('u')) L.under++; } }
+        if (fin) { ok = true; break; }
         st = another(st);
         st.corrupted = false; st.sanctified = false; st.destroyed = false;
         from = -1;
@@ -195,12 +201,21 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
         const hidden = net.hiddenBlocks(st, node);
         if (hidden.length && futileOn(node, step, st, hidden)) {
           const why = 'a modifier the node does not know keeps ' + hidden.map((i) => net.goals[i].label).join(' + ') + ' out';
-          // (the page would solve again from this item: the craft ends here with what that route promises)
-          const v2 = valueAgain(st, node, hidden);
-          if (v2 != null) { cost += v2; valued++; ok = true; break; }
           const c = (stuck.get(node) || 0) + 1;
           stuck.set(node, c);
-          if (c > 5 && !(net.bound && net.bound.mode === 'never')) {
+          const never = !!(net.bound && net.bound.mode === 'never');
+          if (c > 5) {
+            // The page would solve again from this item. Where the play's one network has come back to the same node
+            // six times, the craft ends with what the route solved again from the item promises, when that is less
+            // than giving the item up. (That route is the small network's, without Omen of Whittling: an upper bound.
+            // It was taken at the first such step, before any other step was tried: in the twelfth deep run 87% of a
+            // bow's crafts ended that way and "played" at x1.26 of a promise that the play without it meets, x1.00
+            // over 2,500 crafts; an amulet at x1.52 with 54% of its crafts.)
+            const v2 = valueAgain(st, node, hidden);
+            const fresh = never ? Infinity : (net.price('New base') || 0) + net.cost(net.n0);
+            if (v2 != null && v2 <= fresh) { cost += v2; valued++; ok = true; break; }
+          }
+          if (c > 5 && !never) {
             gaveUp++; note(gaveUpWhy, step.a, why + ' (' + look(st) + ')');
             st = another(st); st.destroyed = false;
             cost += net.price('New base') || 0;

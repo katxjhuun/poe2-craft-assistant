@@ -900,3 +900,25 @@ test('network: a Flux turns every resistance of the other elements; no Fracturin
   }
   assert.ok(withSecond > 0.01 && withSecond < 0.9, `the Flux leaves a second Cold Resistance ${withSecond} of the time`);
 });
+
+test('network: Omen of Putrefaction for a base modifier: what was taken at the Well is no modifier "nobody knows"', () => {
+  // A staff wants "(53-59)% increased Critical Spell Damage Bonus" at 58 or more, and the omen is cheap. Its reveals
+  // fill the prefixes first, then the suffixes. The network counted what those reveals left on the item as
+  // modifiers nobody knows: three prefixes by weight stop a fifth of the suffixes with their tags (the highest
+  // option, which the player is told to take, stops none), and every desecrated-only suffix made the pool a sixth
+  // smaller. The target's share grew with each: 0.40% a use promised, 0.26% played (x1.20, the twelfth deep run).
+  const X = lockWorld(), base = 'Permafrost Staff';
+  const crit = X.tiers(base, 'suffix', /% increased Critical Spell Damage Bonus$/);
+  const targets = { 'suffix-0': { fam: crit.fam, group: 'suffix', minValue: 58, required: true, label: crit.label } };
+  // (prices that leave the omen as the way: an Exalted Orb is the unit, everything the omen's loop needs is a hundredth)
+  const over = { 'Omen of Putrefaction': 0.01, 'Preserved Jawbone': 0.01, 'Regal Orb': 0.01, 'Orb of Transmutation': 0.01, 'Greater Orb of Transmutation': 5, 'Perfect Orb of Transmutation': 50,
+    'Orb of Augmentation': 0.01, 'Omen of Abyssal Echoes': 1000, 'Ancient Jawbone': 1000, 'Gnawed Jawbone': 1000, 'Orb of Alchemy': 1000 };
+  const inp = X.input(X.item(base, 'Normal'), targets, over);
+  const net = NW.route(inp), s = net.start;
+  assert.ok(!net.impossible && !net.unsupported);
+  if (!net.materials(s).some((x) => x.name === 'Omen of Putrefaction')) return; // (another way is cheaper at these prices: nothing to compare)
+  const got = X.play(net, inp, 1500, 3, 400000, 150000);
+  assert.equal(got.refused, 0);
+  assert.equal(got.done, got.runs);
+  assert.ok(Math.abs(got.mean / net.cost(s) - 1) < 0.1, `played ${got.mean} +-${got.se}, promised ${net.cost(s)}`);
+});
