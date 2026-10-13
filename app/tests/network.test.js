@@ -922,3 +922,35 @@ test('network: Omen of Putrefaction for a base modifier: what was taken at the W
   assert.equal(got.done, got.runs);
   assert.ok(Math.abs(got.mean / net.cost(s) - 1) < 0.1, `played ${got.mean} +-${got.se}, promised ${net.cost(s)}`);
 });
+
+test('network: a Fracturing Orb can lock a modifier that keeps a target out; the route counts it, and never risks an only item', () => {
+  // A ring wants "Adds # to # Cold damage to Attacks" at tier 3 and Strength. Where the network does not follow a
+  // target's blockers, a modifier nobody asked for may be a lower tier of that target; fractured, it keeps the target
+  // out for good. The orb's edge took it for any other modifier: an item that is never given up was fractured that
+  // way and crafted on for ever (up to 2,537 of 100,000 crafts of such scenarios, the thirteenth deep run).
+  const X = lockWorld(), base = 'Dusk Ring';
+  const cold = X.tiers(base, 'prefix', /^Adds .* Cold damage to Attacks$/i), str = X.tiers(base, 'suffix', /to Strength$/), life = X.tiers(base, 'prefix', /to maximum Life$/), mana = X.tiers(base, 'prefix', /to maximum Mana$/), dex = X.tiers(base, 'suffix', /to Dexterity$/), int = X.tiers(base, 'suffix', /to Intelligence$/);
+  const low = (t) => Math.max(...Object.keys(t.ids).map(Number));
+  const mod = (t, tier) => ({ id: t.ids[tier], side: t.side, tier });
+  const targets = {
+    'prefix-0': { fam: cold.fam, group: 'prefix', minTier: 3, required: true, label: cold.label },
+    'suffix-0': { fam: str.fam, group: 'suffix', minTier: 3, required: true, label: str.label },
+  };
+  const it = X.item(base, 'Rare', [mod(life, low(life)), mod(mana, low(mana)), mod(dex, low(dex)), mod(int, low(int))]);
+  const build = (extra, track) => NW.build(Object.assign({}, X.input(it, targets, null, extra), { lite: 0, track, maxStates: 120000, whittle: 'none' }));
+  const edge = (net) => net.acts[net.start].find((x) => x.a.op === 'fracture');
+  // every blocker followed: a modifier nobody asked for is known to be in no target's way
+  const all = build(null, 8), e0 = edge(all);
+  if (!e0) return; // (the prices of the day lack the orb: nothing to compare)
+  assert.ok(!e0.a.bases, 'with the blockers followed the orb loses nothing');
+  // no blocker followed: a share of the orb's uses is the item lost
+  const none = build(null, 0), e1 = edge(none);
+  assert.ok(e1 && e1.a.bases > 0.001 && e1.a.bases < 0.5, `the lost share: ${e1 && e1.a.bases}`);
+  let back = 0;
+  for (let t = 0; t < e1.out.length; t += 2) if (e1.out[t + 1] === -1) back += e1.out[t];
+  assert.ok(Math.abs(back - e1.a.bases) < 1e-9, 'that share leads to a new base');
+  // the same item as the only one: the orb is no edge
+  const only = build({ restart: 'never' }, 0);
+  assert.ok(!only.unsupported && !only.impossible);
+  assert.ok(!edge(only), 'no Fracturing Orb on an item that is never given up while a modifier may be in a target\'s way');
+});

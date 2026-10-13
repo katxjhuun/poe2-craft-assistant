@@ -102,7 +102,7 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
   const KEEP = opts && opts.keep > 0 ? [] : null;
   const words = (st) => st.rarity + ' ' + st.mods.map((m) => `${m.side[0]}:${m.unrevealed ? '(hidden)' : m.fam}${m.tier ? ' T' + m.tier : ''}${m.frac ? '(F)' : ''}${m.des ? '(D)' : ''}${m.crafted ? '(C)' : ''}`).join(', ');
   const AGAIN = opts && opts.again && net.N <= 90000 && !net.goals.some((g) => g.minValue != null) ? opts.again : null;
-  const again = new Map();
+  const again = new Map(), againMet = new Map(); // (by kind; by how many targets are on the item)
   let solves = 0, valued = 0;
   const valueAgain = (st, node, hidden) => {
     if (!AGAIN) return null;
@@ -111,7 +111,11 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
     const got = again.get(key), mean = got && got.n ? got.sum / got.n : null;
     if (got && got.n >= AGAIN.per) return mean;
     // (an item the writer below cannot put into text as it is: runes that change the rules, a hidden modifier, quality)
-    if (solves >= AGAIN.max || st.aldur || st.xCrafted || st.xSuffix || (st.tags || []).length || st.catQ || st.mods.some((m) => !m.id || m.unrevealed)) return mean;
+    if (st.aldur || st.xCrafted || st.xSuffix || (st.tags || []).length || st.catQ || st.mods.some((m) => !m.id || m.unrevealed)) return mean;
+    // No more routes to solve for this scenario: a kind that was never solved is valued as the kinds with as many
+    // targets on the item were, on average. (Without that an item of a new kind had no end where the item is never
+    // given up: in the thirteenth deep run up to 2,537 of 100,000 crafts of such a scenario went on for ever.)
+    if (solves >= AGAIN.max) { if (mean != null) return mean; const m = againMet.get(key.split('|')[0].split('1').length - 1); return m && m.n ? m.sum / m.n : null; }
     solves++;
     let v = null;
     try {
@@ -130,6 +134,7 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
     const rec = got || { n: 0, sum: 0 };
     rec.n++; rec.sum += v;
     again.set(key, rec);
+    { const nm = key.split('|')[0].split('1').length - 1, m = againMet.get(nm) || { n: 0, sum: 0 }; m.n++; m.sum += v; againMet.set(nm, m); }
     return v;
   };
   const removes = (a, st) => a.op === 'chaos' || a.op === 'annul' || a.op === 'pessence' || a.op === 'liquid' || a.op === 'newbase' || a.op === 'extraction' || a.op === 'vaal'
@@ -296,7 +301,7 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
     }
     if (ok) { done++; sum += cost; sq += cost * cost; }
     else if (k >= maxSteps) note(endWhy, lastA || { op: 'start' }, `not finished within ${maxSteps} uses`);
-    if (spent && k > opts.keep && KEEP.length < 12) KEEP.push({ uses: k, ended: ok, cost, turns: turns.filter((x) => typeof x === 'string'), at: [...spent.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4),
+    if (spent && k > opts.keep && KEEP.length < 12) KEEP.push({ uses: k, ended: ok, cost, state: { rarity: st.rarity, mods: st.mods.map((m) => ({ ...m })) }, turns: turns.filter((x) => typeof x === 'string'), at: [...spent.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4),
       item: st.rarity + ' ' + st.mods.map((m) => `${m.side[0]}:${m.unrevealed ? '(hidden)' : m.fam}${m.tier ? ' T' + m.tier : ''}${m.frac ? '(F)' : ''}${m.des ? '(D)' : ''}${m.crafted ? '(C)' : ''}`).join(', ') });
     steps += k;
   }

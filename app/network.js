@@ -1139,6 +1139,22 @@
       return out;
     }
     /**
+     * Chance that one modifier nobody asked for on side si keeps a missing natural target out whose blockers the
+     * network does not follow (what `unblocked` counts for every such modifier, here for the one a Fracturing Orb picks).
+     */
+    function hiddenWay(S, si) {
+      const tm = tagMask(S), s = stats(si, 0, 1, S.u, tm, presentMask(S, si), S.kf);
+      if (!(s.W > 0)) return 0;
+      let keep = 1;
+      for (let i = 0; i < G; i++) {
+        const g = goals[i];
+        if (g.kind !== 'nat' || !wanted(S.g[i])) continue;
+        if (g.si === si) { if (!followed[i] && s.low[i] > 0) keep *= 1 - Math.min(1, s.low[i] / s.W); }
+        else if (!TRACK && s.cross[i] > 0) keep *= 1 - Math.min(1, s.cross[i] / s.W);
+      }
+      return 1 - keep;
+    }
+    /**
      * Chance that none of the modifiers nobody asked for keeps natural target i out: none of its own side is of its
      * group or stops it with its tags, and none of the other side stops it.
      */
@@ -2332,10 +2348,28 @@
       // Nor while a second modifier of a target's family may be on it (fz): fractured, it is in that target's way for good.
       if (PR.fracture != null && S.fg < 0 && !S.fj && !S.cx && !S.cy && !S.fz && slots(S, 0) + slots(S, 1) >= 4) {
         const outs = [];
-        let n = 0;
+        let n = 0, gone = 0;
         for (let i = 0; i < G; i++) if (there(S.g[i]) && kindOf(S.g[i]) !== DESECRATED) { const S2 = cp(S); S2.fg = i; outs.push([1, S2]); n++; }
-        for (let si = 0; si < 2; si++) if (S.j[si]) { const S2 = cp(S); S2.j[si]--; S2.fj = si + 1; outs.push([S.j[si], S2]); n += S.j[si]; }
-        if (n) push({ op: 'fracture' }, PR.fracture, outs.map(([w, S2]) => [w / n, S2]));
+        // A modifier nobody asked for may be one that keeps a missing target out, where the network does not follow
+        // that target's blockers (a lower tier of its family, one of its group, one whose tags stop it). Fractured,
+        // it does so for good: the item cannot be finished any more. The orb's edge took such a modifier for any
+        // other, and an item that is never given up was fractured that way and crafted on for ever (a ring with a
+        // fractured "Adds # to # Cold damage to Attacks" of tier 5 under the wanted tier 3; up to 2,537 of 100,000
+        // crafts of such scenarios in the thirteenth deep run). The share of the orb's uses that does this is the
+        // item lost: a new base where there is one, and no edge at all where the item is never given up.
+        for (let si = 0; si < 2; si++) if (S.j[si]) {
+          const q = hiddenWay(S, si);
+          const S2 = cp(S);
+          S2.j[si]--; S2.fj = si + 1;
+          if (q < 1) outs.push([S.j[si] * (1 - q), S2]);
+          gone += S.j[si] * q;
+          n += S.j[si];
+        }
+        if (n && !(gone > 0 && NONEW)) {
+          const r = gone / n;
+          if (r > 1e-9) { hasLost = true; outs.push([gone, RESTART]); push({ op: 'fracture', bases: r, also: [['New base', r]] }, PR.fracture + r * baseCost, outs.map(([w, S2]) => [w / n, S2])); }
+          else push({ op: 'fracture' }, PR.fracture, outs.map(([w, S2]) => [w / n, S2]));
+        }
       }
     }
 

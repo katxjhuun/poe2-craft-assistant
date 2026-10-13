@@ -297,6 +297,10 @@ function runOne(sc, runs, withRivals, deep, limitMs) {
   if (net.done(s)) return Object.assign(out, { skipped: 'already done' });
   const want = net.cost(s);
   if (!(want < 1e12)) return Object.assign(out, { skipped: 'no route with the priced materials' });
+  // (a hundred million Exalted Orbs and more: no craft, and no number either. A chance of a white base in a billion
+  // is not known to the digits such a value needs; a body armour with six targets was "promised" at four billion
+  // with values that did not settle, the thirteenth deep run.)
+  if (!(want < 1e8)) return Object.assign(out, { skipped: 'out of reach: over a hundred million Exalted Orbs' });
   const stepsGuess = net.materials(s).reduce((x, m) => x + m.uses, 0);
   // (the ten minutes ran out while the route's numbers were made: they were cut short)
   if (net.outOfTime && net.outOfTime()) return Object.assign(out, { skipped: 'out of time' });

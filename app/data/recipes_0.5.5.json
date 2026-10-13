@@ -15,8 +15,8 @@
    "rejected": "Contradicts game text or the 0.5 rules, or comes from PoE1."
   },
   "profitModel": {
-   "at": "2026-09-27",
-   "divine": 492
+   "at": "2026-10-12",
+   "divine": 761
   }
  },
  "recipes": [
@@ -1825,37 +1825,41 @@
      ],
      "item": "Item Class: Amulets\nRarity: Rare\nBought Item\nSolar Amulet\n--------\nItem Level: 80\n--------\n{ Implicit Modifier }\n+11(10-15) to Spirit\n--------\n{ Prefix Modifier (Tier: 3) }\n+85(85-99) to maximum Life\n{ Suffix Modifier (Tier: 1) }\n+3 to Level of all Spell Skills",
      "model": {
-      "ex": 5038,
-      "items": 2.56,
+      "ex": 6423,
+      "items": 2.45,
       "hit": 0.2555,
       "uses": [
        {
         "name": "New base",
-        "n": 1.56
+        "n": 1.45
        },
        {
         "name": "Preserved Collarbone",
-        "n": 4.01
+        "n": 3.9
        },
        {
-        "name": "Omen of Abyssal Echoes",
-        "n": 4.01
+        "name": "Orb of Annulment",
+        "n": 1.37
        },
        {
         "name": "Chaos Orb",
-        "n": 5.11
+        "n": 3.12
+       },
+       {
+        "name": "Omen of Abyssal Echoes",
+        "n": 3.9
        },
        {
         "name": "Omen of the Blackblooded",
-        "n": 4.01
+        "n": 3.9
        },
        {
         "name": "Omen of Dextral Necromancy",
-        "n": 3.93
+        "n": 3.84
        },
        {
         "name": "Exalted Orb",
-        "n": 0.56
+        "n": 0.67
        }
       ]
      },
@@ -2039,7 +2043,7 @@
      ],
      "item": "Item Class: Amulets\nRarity: Rare\nBought Item\nAbsent Amulet\n--------\nItem Level: 80\n--------\n{ Implicit Modifier }\n-1 Prefix Modifier allowed\n-1 Suffix Modifier allowed\n--------\n{ Fractured Suffix Modifier (Tier: 1) }\n+3 to Level of all Projectile Skills",
      "model": {
-      "ex": 18490,
+      "ex": 21270,
       "items": 1,
       "hit": 0.0228,
       "uses": [
@@ -2064,16 +2068,16 @@
         "n": 1
        },
        {
-        "name": "Omen of the Blackblooded",
-        "n": 3.91
-       },
-       {
         "name": "Greater Exalted Orb",
         "n": 1.97
        },
        {
-        "name": "Omen of Dextral Necromancy",
-        "n": 3.89
+        "name": "Omen of the Blackblooded",
+        "n": 3.91
+       },
+       {
+        "name": "Omen of Greater Exaltation",
+        "n": 1
        }
       ]
      },
@@ -2247,41 +2251,41 @@
      ],
      "item": "Item Class: Rings\nRarity: Rare\nBought Item\nMnemonic Ring\n--------\nItem Level: 80\n--------\n{ Implicit Modifier }\n4(4-6)% increased maximum Mana\n--------\n{ Fractured Prefix Modifier }\n23(23-26)% increased Mana Cost Efficiency of Spells",
      "model": {
-      "ex": 8462,
+      "ex": 7978,
       "items": 1,
       "hit": 0.03,
       "uses": [
        {
         "name": "Chaos Orb",
-        "n": 68
+        "n": 60
        },
        {
         "name": "Preserved Collarbone",
-        "n": 11
-       },
-       {
-        "name": "Omen of Abyssal Echoes",
-        "n": 11
+        "n": 14
        },
        {
         "name": "Essence of Hysteria",
         "n": 0.85
        },
        {
+        "name": "Omen of Abyssal Echoes",
+        "n": 14
+       },
+       {
         "name": "Omen of Sinistral Exaltation",
-        "n": 3.7
+        "n": 1
        },
        {
         "name": "Greater Exalted Orb",
-        "n": 4.96
+        "n": 4.06
        },
        {
         "name": "Perfect Essence of the Mind",
-        "n": 2.55
+        "n": 4.97
        },
        {
         "name": "Omen of Sinistral Necromancy",
-        "n": 11
+        "n": 14
        }
       ]
      },
@@ -2723,20 +2727,24 @@
      ],
      "item": "Item Class: Belts\nRarity: Magic\nHeavy Belt\n--------\nItem Level: 80\n--------\n{ Implicit Modifier }\n23(20-30)% increased Stun Threshold\n--------\n{ Prefix Modifier (Tier: 1) }\n+150(150-174) to maximum Life\n{ Suffix Modifier (Tier: 2) }\n+36(36-40)% to Lightning Resistance",
      "model": {
-      "ex": 1101,
+      "ex": 1078,
       "items": 2.16,
       "hit": 1,
       "uses": [
-       {
-        "name": "Preserved Collarbone",
-        "n": 2.16
-       },
        {
         "name": "New base",
         "n": 1.16
        },
        {
+        "name": "Preserved Collarbone",
+        "n": 2.16
+       },
+       {
         "name": "Omen of Abyssal Echoes",
+        "n": 2.16
+       },
+       {
+        "name": "Omen of the Sovereign",
         "n": 2.16
        },
        {
@@ -2744,11 +2752,7 @@
         "n": 2.16
        },
        {
-        "name": "Essence of Ruin",
-        "n": 2.16
-       },
-       {
-        "name": "Omen of the Sovereign",
+        "name": "Greater Essence of Ruin",
         "n": 2.16
        }
       ]
@@ -2896,25 +2900,25 @@
      ],
      "item": "Item Class: Amulets\nRarity: Rare\nBought Item\nAbsent Amulet\n--------\nItem Level: 80\n--------\n{ Implicit Modifier }\n-1 Prefix Modifier allowed\n-1 Suffix Modifier allowed\n--------\n{ Fractured Prefix Modifier (Tier: 1) }\n+120(120-149) to maximum Life\n{ Suffix Modifier (Tier: 1) }\n+3 to Level of all Melee Skills\n{ Suffix Modifier (Tier: 1) }\n15(15-18)% increased Rarity of Items found",
      "model": {
-      "ex": 14850,
+      "ex": 8303,
       "items": 1,
       "hit": 0.0122,
       "uses": [
        {
         "name": "Preserved Collarbone",
-        "n": 43
-       },
-       {
-        "name": "Omen of Abyssal Echoes",
-        "n": 43
-       },
-       {
-        "name": "Perfect Essence of Enhancement",
         "n": 42
        },
        {
+        "name": "Omen of Abyssal Echoes",
+        "n": 42
+       },
+       {
+        "name": "Perfect Essence of Enhancement",
+        "n": 41
+       },
+       {
         "name": "Omen of Sinistral Necromancy",
-        "n": 43
+        "n": 42
        },
        {
         "name": "Greater Exalted Orb",

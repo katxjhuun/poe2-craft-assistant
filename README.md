@@ -188,6 +188,16 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   vaat, %0,26 oynanan; şimdi 2.068'e karşı 2.067 ± 38) ve "Essence of the Abyss + Mark üzerine kemik" adımı bir
   modu silerken tarafın seviye sınıfını yükseltmiyordu (altı hedefli amulet). Kilitleyen adımların sonucu artık
   oynatma kaydında tutulur (`network_gap.js` kilitlenen eşyaların dökümünü yazar).
+- **On üçüncü derin taramanın bulduğu (13 Ekim 2026, `reports/network-sweep-2026-10-13b.md`).** Düzeltilmiş
+  ölçümle 786 senaryodan yalnız birinde maliyet %15'ten fazla sapıyor (önceki koşularda 6-9). Ölçümün gizlediği
+  şey ortaya çıktı: hiç vazgeçilmeyen eşyada bitmeyen craft'lar (100.000'de 2.537'ye kadar). Neden: ağın bir
+  hedefin engelleyicilerini izlemediği yerde, "kimsenin istemediği" bir mod o hedefin düşük tier'ı, grubundan biri
+  ya da etiketiyle onu durduran bir mod olabilir; Fracturing Orb onu kilitlerse hedef bir daha gelmez. Orb'un
+  kenarı artık bu payı eşyanın kaybı sayar (yeni base), hiç vazgeçilmeyen eşyada ise böyle bir ihtimal varken hiç
+  kenar değildir. Dusk Ring: 3.000 craft'ın 3.000'ü biter (114.058 vaat, 111.363 ± 2.231 oynanan), kullanılamayan
+  adım sayısı 573.933'ten 701'e iner. Yüz milyon Exalted Orb'u aşan maliyet taramada "ulaşılamaz" sayılır (altı
+  hedefli bir zırhta 4,1 milyar "vaat": bir beyaz base'in milyarda bir şansına bölünen maliyetin basamakları
+  bilinemez).
 - Rune of Aldur, takıldıktan sonra gelen modu dönüştürmez (oyuncu 8 Ekim 2026'da doğruladı: iddia k61).
 - Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler).
 

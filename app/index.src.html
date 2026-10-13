@@ -3383,7 +3383,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
   // (the route counts the Desecrated modifier of a miss as one that blocks nothing)
   const NO_TARGET_PICK = ' If none of the three is a goal, take one that is not of a missing goal\u2019s kind (a lower tier or a hybrid of it would keep the goal out).';
   /** The chance that a step which locks the item finishes it (the step in hand: for this item's own values), or null. */
-  const ends = (a) => (a.ends != null ? a.ends : a.bases != null && a.op !== 'extraction' ? 1 - a.bases : null);
+  const ends = (a) => (a.ends != null ? a.ends : a.bases != null && a.op !== 'extraction' && a.op !== 'fracture' ? 1 - a.bases : null);
   function stepHelp(a, params) {
     switch (a.op) {
       case 'newbase': return boundRoute() ? 'A mod missed the goals and fixing it would cost more: take another item like the one you started with.' : 'A mod missed the goals and fixing it would cost more: start again on a fresh white base.';
@@ -3410,7 +3410,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
         if (a.hide) return 'Adds a hidden Desecrated modifier and leaves it unrevealed for now: it counts as a modifier, and a Fracturing Orb never picks it.';
         if (a.mark) return `First Essence of the Abyss${a.pre && a.pre.side ? ', aimed at the ' + a.pre.side + 'es by the omen' : ''}: it replaces one modifier with "Bears the Mark of the Abyssal Lord". Then the bone: its Desecrated modifier takes the Mark's place, so nothing else is removed. Reveal it at the Well of Souls and pick 1 of 3${a.lich ? ' (with the lich omen, only the modifiers of that lich)' : ''}${a.echoes ? '; Abyssal Echoes lets you reroll the three once' : ''}. Keep the one the goals ask for.${NO_TARGET_PICK}`;
         return `Adds a hidden Desecrated ${a.side || 'prefix or suffix (the side is set now, at random)'}. Reveal it at the Well of Souls and pick 1 of 3: base modifiers of that side and desecrated-only ones${a.lich ? ' (with the lich omen, only that lich\'s)' : ''}${a.echoes ? '; Abyssal Echoes lets you reroll the three once' : ''}. Keep the one the goals ask for.${NO_TARGET_PICK}`;
-      case 'fracture': return 'Locks one random mod for good (never a hidden Desecrated one). It cannot be undone; the route uses it where locking a target pays for the misses.';
+      case 'fracture': return 'Locks one random mod for good (never a hidden Desecrated one). It cannot be undone; the route uses it where locking a target pays for the misses.' + (a.bases > 0.0005 ? ` About ${p1(a.bases)} of uses lock a mod that keeps a goal out for good (a lower tier of it, or one of its group): the item is given up then, and the route counts the new base.` : '');
       case 'divine':
         if (a.sanctify) return `With Omen of Sanctification the Divine Orb multiplies every value by a random 78% to 122% (a fractured modifier keeps its value) and Sanctifies the item: it cannot be changed again.${ends(a) != null ? ` The values the goals ask for are there afterwards in ${p1(ends(a))} of uses; otherwise the item is lost and the craft starts again on a new base.` : ''}`;
         return 'Rerolls the values of every mod except fractured ones; the mods themselves stay.';
