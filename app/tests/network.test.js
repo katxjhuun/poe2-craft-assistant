@@ -1032,3 +1032,83 @@ test('network: a fractured twin stays a fractured modifier when the target itsel
   for (let t = 0; t < e.out.length; t += 2) if (e.out[t + 1] === n2) reached = true;
   assert.ok(reached, 'and the Exalted Orb leads to it');
 });
+
+test('network: alternatives never send a request to the smaller networks, and more than eight stats still have a route', () => {
+  // The player's staff of 13 Oct 2026: five slots, two of them with an alternative, were solved as a request of seven
+  // targets in the smaller network (225,216 where the slots' own five stats cost 41,219). "Many targets" goes by the
+  // slots. And nine stats in all had no route ("too many targets"): the last alternatives of the longest list are
+  // left out until the network holds the request.
+  const X = lockWorld(), base = 'Dusk Ring';
+  const S = (re) => X.tiers(base, 'suffix', re), Pf = (re) => X.tiers(base, 'prefix', re);
+  const fire = S(/to Fire Resistance$/), cold = S(/to Cold Resistance$/), light = S(/to Lightning Resistance$/), chaos = S(/to Chaos Resistance$/);
+  const mana = Pf(/to maximum Mana$/), life = Pf(/to maximum Life$/), str = S(/to Strength$/), dex = S(/to Dexterity$/), int = S(/to Intelligence$/);
+  const low = (f) => Math.max(...Object.keys(f.ids).map(Number));
+  const T = (f, more) => Object.assign({ fam: f.fam, group: f.side, minTier: low(f), required: true, label: f.label }, more);
+  const white = X.item(base, 'Normal');
+  const plain = NW.answer(X.input(white, { 'suffix-0': T(fire), 'prefix-0': T(mana), 'suffix-1': T(str) }), {});
+  assert.ok(plain.meanCost > 0 && !plain.lite);
+  // three slots, seven stats
+  const seven = NW.answer(X.input(white, { 'suffix-0': T(fire, { or: true, alts: [T(cold), T(light)] }), 'prefix-0': T(mana, { or: true, alts: [T(life)] }), 'suffix-1': T(str, { or: true, alts: [T(dex)] }) }), {});
+  assert.ok(!seven.unsupported && !seven.impossible, 'seven stats in three slots have a route');
+  assert.ok(!seven.lite, 'in the full network');
+  // (alternatives stay as far as the network follows every natural stat's blockers: the rest is left out, and named)
+  const nat = (a) => a.goals.filter((g) => g.kind === 'nat').length;
+  assert.equal(seven.track, nat(seven), 'every natural stat has its blockers followed');
+  assert.equal(seven.goals.length + seven.orLeft.length, 7);
+  assert.ok(seven.goals.length > 3, 'some alternatives are followed');
+  assert.ok(seven.meanCost <= plain.meanCost * 1.001, `no dearer than the slots' own stats: ${seven.meanCost} against ${plain.meanCost}`);
+  // and the simulator plays it at its promise (two slots of one side with three and two stats)
+  const inp7 = X.input(white, { 'suffix-0': T(fire, { or: true, alts: [T(cold), T(light)] }), 'prefix-0': T(mana, { or: true, alts: [T(life)] }), 'suffix-1': T(str, { or: true, alts: [T(dex)] }) });
+  const net7 = NW.route(inp7), got = X.play(net7, inp7, 1500, 5, 200000, 90000);
+  assert.equal(got.refused, 0);
+  assert.equal(got.off, 0);
+  assert.equal(got.done, got.runs);
+  assert.ok(Math.abs(got.mean / net7.cost(net7.start) - 1) < 0.1, `played ${got.mean} +-${got.se}, promised ${net7.cost(net7.start)}`);
+  // three slots, nine stats: one is left out
+  const nine = NW.answer(X.input(white, { 'suffix-0': T(fire, { or: true, alts: [T(cold), T(light), T(chaos)] }), 'prefix-0': T(mana, { or: true, alts: [T(life)] }), 'suffix-1': T(str, { or: true, alts: [T(dex), T(int)] }) }), {});
+  assert.ok(!nine.unsupported && !nine.impossible, 'nine stats in three slots have a route');
+  assert.ok(nine.goals.length <= 8);
+  assert.equal(nine.goals.length + nine.orLeft.length, 9);
+  assert.equal(nine.orLeft[0], chaos.label);
+  assert.equal(nine.track, nat(nine));
+  assert.ok(!nine.orNone);
+  assert.ok(!nine.goals.some((g) => g.fam === chaos.fam), 'the last stat of the longest list is the one left out');
+  assert.ok(nine.meanCost <= plain.meanCost * 1.001, `no dearer than the slots' own stats: ${nine.meanCost} against ${plain.meanCost}`);
+});
+
+test('network: two stats of one modifier group are never asked of one item', () => {
+  // A staff's natural Cast Speed and the Cast Speed hybrid of an alloy are of one modifier group: the game adds no
+  // modifier whose group the item has. As two targets the network priced them (673 promised, and no craft ever
+  // finished); as an "or" stat beside the alloy the route chased the Cast Speed (592 promised, 4,070 played). Two
+  // slots that nothing else fills are a request no item meets; an "or" stat of another slot's group is left out.
+  const X = lockWorld(), base = 'Chiming Staff', white = X.item(base, 'Normal');
+  const ess = X.input(white, {}).essences, ctx = X.ctxOf(base);
+  // an alloy (or essence) whose modifier shares its group with a natural family of the base that is not its own
+  let pair = null;
+  for (const r of ess) {
+    const m = kb.mods[r.mod];
+    for (const side of ['prefix', 'suffix']) for (const e of P.sidePool(ctx, side, 0)) {
+      if (pair || e.fam === m.fam || !e.grp.some((x) => m.grp.includes(x))) continue;
+      pair = { crafted: { fam: m.fam, group: r.alloy ? 'alloy' : 'essence', required: true, label: m.txt.split('\n').join(' ') }, nat: { fam: e.fam, group: side, minTier: e.tier, required: true, label: kb.mods[e.id].txt.split('\n')[0] }, side };
+    }
+  }
+  if (!pair) return; // (no such pair in the data of the day)
+  const other = P.sidePool(ctx, pair.side, 0).find((e) => e.fam !== pair.nat.fam && !e.grp.some((x) => kb.mods[ess.find((r) => kb.mods[r.mod].fam === pair.crafted.fam).mod].grp.includes(x)));
+  const third = { fam: other.fam, group: pair.side, minTier: other.tier, required: true, label: kb.mods[other.id].txt.split('\n')[0] };
+  const slotA = pair.side + '-0', slotB = (kb.mods[ess.find((r) => kb.mods[r.mod].fam === pair.crafted.fam).mod].gen === 'p' ? 'prefix' : 'suffix') + '-1';
+  const two = NW.answer(X.input(white, { [slotA]: pair.nat, [slotB]: pair.crafted }), {});
+  assert.ok(two.impossible && two.impossible.length === 2, 'two slots of one modifier group: not possible');
+  assert.match(two.impossible[0], /one modifier group/);
+  const plain = NW.route(X.input(white, { [slotA]: third, [slotB]: pair.crafted }));
+  const inp = X.input(white, { [slotA]: Object.assign({}, third, { or: true, alts: [pair.nat] }), [slotB]: pair.crafted });
+  const or = NW.route(inp);
+  assert.ok(!or.impossible && !or.unsupported);
+  assert.equal(or.goals.length, 2, 'the "or" stat of the other slot\'s group is no goal');
+  assert.equal(or.orLeft.length, 1);
+  assert.match(or.orLeft[0], /one modifier group/);
+  assert.ok(or.orNone);
+  assert.ok(Math.abs(or.cost(or.start) / plain.cost(plain.start) - 1) < 1e-6, 'the route of the slots\' own stats');
+  const got = X.play(or, inp, 300, 3, 200000, 90000);
+  assert.equal(got.done, got.runs, 'and every craft of it ends');
+  assert.ok(Math.abs(got.mean / or.cost(or.start) - 1) < 0.15, `played ${got.mean} +-${got.se}, promised ${or.cost(or.start)}`);
+});

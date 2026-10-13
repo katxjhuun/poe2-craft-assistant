@@ -205,6 +205,23 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   bir mod olur, grup tek slot ister. Beyaz bir yüzükte Fire Resistance T1 + Mana T2 208,5 ex; Fire ya da Cold ya da
   Lightning + Mana 181,2 ex (oynanan 179,9 ± 4,4); Mana ya da Life ile 114,8 ex (oynanan 113,4 ± 2,5). Tarama her
   on ikinci senaryoda böyle bir istek çeker. Kayıtlı şablonlar yalnız slotun kendi statını saklar.
+- **"or" rotayı pahalılaştırmaz; Orb of Extraction'ın ne olduğu yazılıdır (oyuncunun 13 Ekim 2026 testi).** Beş
+  slotlu, hepsi T1 bir Chiming Staff isteği sayfada 268.867 ex çıktı (11.152 durum), aynı beş stat tek başına
+  41.219 ex (168.450 durum). Sebep: "or" alternatifleri hedef sayılıp istek "yedi hedefli" diye küçük ağlara
+  gönderiliyordu. Üç düzeltme (`orFit`): (1) "çok hedef" slotlara göre sayılır; (2) sekizden fazla stat artık "too
+  many targets" değil, sığmayan alternatif bırakılır (en uzun listenin son statı önce) ve sayfa hangilerinin
+  bırakıldığını yazar; (3) beş slota kadar alternatifler yalnız ağ her doğal statın engelleyicisini takip
+  edebildiği sürece kalır: önce o ağın durumları sayılır (`sizeOnly`, hiçbir şey çözülmez). Ölçü: engelleyici
+  takip etmeyen ağ bu asada iki alternatifle 35.241 ex vaat eder, simülatör 49.422 ± 2.491 oynar (alternatifsiz
+  43.615 vaat, 68.864 ± 4.316 oynanan); her engelleyiciyi takip eden ağ 44.265 vaat eder, 41.693 ± 1.570 oynanır.
+  Aynı mod grubundan iki stat bir eşyada birlikte olamaz (asada doğal Cast Speed ile Transcendent Alloy'un Cast Speed
+  hibridi): ağ bunu iki hedef olarak 673 ex'e fiyatlıyordu ve hiçbir craft bitmiyordu, "or" statı olarak 592 vaat
+  edip 4.070 oynuyordu. Artık başka dolduranı olmayan iki slot "mümkün değil" (sebebiyle), başka slotun grubundan
+  bir "or" statı ise rotadan çıkarılır ve sayfada sebebiyle yazılır (`orClash`).
+  Ayrıca üç ve iki statlı iki slot aynı taraftayken ağ "bitti" durumunu kurarken çöküyordu (`FINISHED`). Malzeme
+  listesi adım sırası değildir: bunu artık liste söyler, Orb of Extraction satırı da "yalnız vazgeçilen eşyada:
+  eşya yok olur, Astrid's Creativity bir sonraki base için geri gelir" der. Test kaydı artık "or" statlarını, eşyadan
+  vazgeçme biçimini ve ağın türünü de saklar (kayıtta olmadıkları için bu test olduğu gibi yeniden çözülemedi).
 - **On dördüncü derin taramanın bulduğu (13 Ekim 2026, `reports/network-sweep-2026-10-13c.md`).** İlk kez hiçbir
   senaryoda maliyet %15'ten fazla sapmıyor (761 senaryonun 729'u uyuşuyor). Fracturing Orb bir hedefin ikizini
   kilitleyince, hedefin kendisi yanına geldiğinde ağ hedefi "fractured" sayıyordu ve eşyanın düğümü yoktu (bir

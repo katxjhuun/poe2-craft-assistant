@@ -111,6 +111,33 @@
       const bad = new Set(raw.filter((g) => !g.held && g.og != null && P.goalFeasible(ctx, st0, g)));
       if (bad.size) raw = raw.filter((g) => !(bad.has(g) && raw.some((h) => h.og === g.og && !bad.has(h))));
     }
+    // Two stats of one modifier group are never on one item together: the game adds no modifier whose group the item
+    // has (a natural Cast Speed and the Transcendent Alloy's Cast Speed hybrid on a staff). As the stats of two slots
+    // they were priced all the same: 673 promised for the two as targets, and no craft ever finished; as an "or" stat
+    // beside the alloy 592 promised and 4,070 played (the route chased the Cast Speed). Of two such stats, the one
+    // whose slot has another stat is left out (the later one first; orClash names it); two slots with nothing else
+    // to fill them are a request no item meets.
+    const orClash = [];
+    {
+      const slot = (g) => (g.og != null ? g.og : g.key);
+      const shares = (a, b) => (a.grp || []).some((x) => (b.grp || []).includes(x));
+      const onItem = (g) => st0.mods.some((m) => m.id && P.meets(m, g, g.eff));
+      const flat = (g) => String(g.label).replace(/\n/g, ', ');
+      for (let again = true; again;) {
+        again = false;
+        find: for (let i = 0; i < raw.length; i++) for (let j = i + 1; j < raw.length; j++) {
+          const a = raw[i], b = raw[j];
+          if (slot(a) === slot(b) || !shares(a, b) || (onItem(a) && onItem(b))) continue;
+          const spare = (g) => g.og != null && raw.some((h) => h !== g && h.og === g.og);
+          const out = spare(b) ? b : spare(a) ? a : null;
+          if (!out) return { impossible: [[a, b], [b, a]].map(([g, o]) => ({ label: g.label, why: `of one modifier group with "${flat(o)}": an item has one modifier of a group, so the two are never on it together` })) };
+          orClash.push(`${flat(out)} (never on an item together with ${flat(out === a ? b : a)}: one modifier group)`);
+          raw = raw.filter((g) => g !== out);
+          again = true;
+          break find;
+        }
+      }
+    }
     const cannot = raw.filter((g) => !g.held).map((g) => ({ label: g.label, why: P.goalFeasible(ctx, st0, g) })).filter((x) => x.why);
     if (cannot.length) return { impossible: cannot };
 
@@ -1741,7 +1768,9 @@
     const RESTART = -1; // edge target: a fresh white base (its value is solved as one number, see solve)
     let hasLost = false; // (some node has a step that locks the item: see lostArmed)
     // (a finished item that is locked: one node for all of them)
-    const FINISHED = (() => { const n = cp(N0); n.r = 2; for (let i = 0; i < G; i++) n.g[i] = goals[i].kind === 'des' ? DESECRATED : NATURAL; return n; })();
+    // (of the stats of one slot, the first is the one on the finished item: with all of them there, the others were
+    // modifiers nobody asked for, more of them than a side holds when two slots of a side have three and two stats)
+    const FINISHED = (() => { const n = cp(N0); n.r = 2; for (let i = 0; i < G; i++) n.g[i] = goals[i].oi >= 0 && ORG[goals[i].oi][0] !== i ? ALT : goals[i].kind === 'des' ? DESECRATED : NATURAL; return n; })();
     /** "A random modifier goes and a random one comes" (no minimum modifier level): [[chance, node]]. */
     function swapped(S) {
       const us = units(S, () => true).filter((u) => openMask(removeUnit(S, u)) !== 0), tw = us.reduce((x, u) => x + u.w, 0), out = [];
@@ -2516,6 +2545,8 @@
       expand(q);
     }
     const N = states.length;
+    // (input.sizeOnly: does the network fit? Its states are counted and nothing is solved: orFit.)
+    if (input.sizeOnly) return { sizeOnly: true, states: N };
     timing.expand = Date.now() - tick; tick = Date.now();
     // (the tables that only the edges were made from: hundreds of megabytes on a large network)
     statCache.clear(); afterMemo.clear(); putMemo.clear(); offMemo.clear(); stepPool.clear(); edgePool.clear();
@@ -3515,7 +3546,7 @@
       /** The time the caller gave (input.deadline) is over: what was solved after it was cut short and is not to be shown. */
       outOfTime: () => timedOut || late(),
       // (bound: a restart is not a white base: another item like the pasted one, or none; held: the targets that no white base can get)
-      bound: BOUND ? { mode: NONEW ? 'never' : 'item', held: raw.filter((g) => g.held).map((g) => g.label), cost: baseCost } : null,
+      bound: BOUND ? { mode: NONEW ? 'never' : 'item', held: raw.filter((g) => g.held).map((g) => g.label), cost: baseCost } : null, orClash,
       track: followed.filter(Boolean).length, classes: NCLS, whittle: WBEST ? 'best' : WNONE ? 'none' : 'levels', wellRank, catalyst: CAT ? { tag: CAT.tag, name: CAT.name } : null,
       get rounds() { return rounds; },
       /** Did the last valuation settle (see anderson)? A route whose values did not is not to be trusted. */
@@ -3864,15 +3895,89 @@
     // are no route's. In the eleventh deep run such networks were reported with "values not settled", a body armour
     // at six times what it played at.)
     const timely = (x) => (x.net && x.net.outOfTime && x.net.outOfTime() ? { net: { unsupported: 'out of time', states: x.net.N }, charge: 0 } : x);
-    const first = routeFit1(input, baseLimit), n = first.net;
+    const first = orFit(input, baseLimit), n = first.net;
     if (n && n.impossible && n.aldur && (n.aldurOthers || []).length) {
       const again = routeFit(Object.assign({}, input, { aldurSkip: (input.aldurSkip || []).concat([n.aldur]) }), baseLimit);
       if (again.net && !again.net.impossible && !again.net.unsupported && !again.net.blocked) return timely(again);
     }
     return timely(first);
   }
-  function routeFit1(input, baseLimit) {
-    const nT = Object.values(input.targets || {}).filter((t) => t && t.fam).reduce((n, t) => n + 1 + (t.or && Array.isArray(t.alts) ? t.alts.filter((a) => a && a.fam && a.fam !== t.fam).length : 0), 0), many = nT >= 7;
+  /** The first network of a request with four stats or more (routeFit1): no blocker followed, Omen of Whittling at its best. */
+  const preOf = (input) => build(Object.assign({}, input, { lite: 0, track: 0, maxStates: 150000, whittle: 'best' }));
+  /**
+   * One of several stats for a slot ("or") must never cost more than the slot's own stat alone, and never leave the
+   * request without a route. The alternatives are goals of the network and make it larger, so they are followed as
+   * far as the network holds them, and the rest is left out (the last alternative of the longest list first, of
+   * equally long lists the last slot's):
+   * - The network holds eight stats. A request with more had no route at all ("too many targets").
+   * - Up to five slots are solved with the blockers of every natural stat followed, and so must the request with its
+   *   alternatives be. The player's staff of 13 Oct 2026, five slots at tier 1 and two alternatives: taken for a
+   *   request of seven targets it went to the smaller networks, 225,216 where the slots' own five stats cost 41,219.
+   *   With no blocker followed its network fits and promises 35,241, and the simulator plays that route at 49,422
+   *   +- 2,491 (the five stats alone that way: 43,615 promised, 68,864 +- 4,316 played): a route that does not know
+   *   which modifier keeps a target out promises what it cannot keep. So the states of the followed network are
+   *   counted first (nothing is solved), and alternatives are left out until it fits.
+   * - Six slots are solved with fewer blockers followed anyway; their alternatives stay while the full network
+   *   fits. Where only a smaller network holds the request, the request without any alternative is solved as well
+   *   (each slot's own stat fills the slot, so its route is a route of the request) and the cheaper one is given.
+   * - An alternative of one modifier group with a stat of another slot is never on an item with it: build leaves it
+   *   out (net.orClash).
+   * net.orLeft: the labels of the alternatives the route leaves out; net.orNone: it follows none of them.
+   */
+  function orFit(input, baseLimit) {
+    const real = (t) => (t && t.fam && t.or && Array.isArray(t.alts) ? t.alts.filter((a) => a && a.fam && a.fam !== t.fam) : []);
+    const count = (tg) => Object.values(tg || {}).reduce((n, t) => n + real(t).length, 0);
+    const all = count(input.targets);
+    if (!all) return routeFit1(input, baseLimit);
+    const slots = Object.values(input.targets).filter((t) => t && t.fam).length, out = [];
+    let targets = input.targets;
+    const drop = () => {
+      let at = null, most = 0;
+      for (const [k, t] of Object.entries(targets)) { const n = real(t).length; if (n && n >= most) { most = n; at = k; } }
+      const list = real(targets[at]), gone = list[list.length - 1], keep = list.slice(0, -1);
+      out.push(String(gone.label || gone.fam).replace(/\n/g, ', '));
+      targets = Object.assign({}, targets, { [at]: Object.assign({}, targets[at], { or: keep.length > 0, alts: keep }) });
+    };
+    const now = () => Object.assign({}, input, { targets });
+    const large = (x) => x && (x.unsupported === 'too many targets' || x.unsupported === 'too many item states');
+    const strict = slots <= 5;
+    let first = null;
+    for (;;) {
+      const some = count(targets) > 0;
+      if (strict) {
+        if (some && large(build(Object.assign({}, now(), { lite: 0, track: 8, maxStates: 230000, whittle: 'none', sizeOnly: true })))) { drop(); continue; }
+        first = routeFit1(now(), baseLimit, null, some);
+      } else {
+        // (four stats or more: routeFit1 starts with this network, so one that fits is no time lost)
+        const pre = slots < 7 && slots + count(targets) >= 4 ? preOf(now()) : null;
+        if (some && large(pre)) { drop(); continue; }
+        first = routeFit1(now(), baseLimit, pre);
+      }
+      if (some && first.net && first.net.unsupported === 'too many targets') { drop(); continue; }
+      break;
+    }
+    const n = first.net, solved = (x) => x && !x.unsupported && !x.impossible && !x.blocked;
+    const mark = (x, none) => { if (solved(x)) { x.orLeft = (x.orClash || []).concat(out); x.orNone = none || !x.goals.some((g) => g.oi >= 0); } };
+    mark(n, !count(targets));
+    // only a smaller network holds it (seven slots or more are solved in those anyway: their own stats alone too)
+    if (!count(targets) || slots >= 7 || !n || n.blocked || n.impossible) return first;
+    if (n.unsupported ? n.unsupported !== 'too many item states' : !(n.lite > 0)) return first;
+    const rest = [];
+    for (const t of Object.values(targets)) for (const a of real(t)) rest.push(String(a.label || a.fam).replace(/\n/g, ', '));
+    const plainT = {};
+    for (const [k, t] of Object.entries(targets)) plainT[k] = real(t).length ? Object.assign({}, t, { or: false, alts: [] }) : t;
+    const plain = routeFit1(Object.assign({}, input, { targets: plainT }), baseLimit), p = plain.net;
+    if (!solved(p)) return first;
+    if (solved(n) && !((p.lite | 0) < (n.lite | 0) && p.cost(p.start) < n.cost(n.start))) return first;
+    out.push(...rest);
+    mark(p, true);
+    return plain;
+  }
+  function routeFit1(input, baseLimit, pre0, followed) {
+    // (nT counts a slot's alternatives too: they are goals of the network, and its size goes by them. "Many" goes by
+    // the slots. followed: orFit counted the states of the network with every blocker followed, and it fits.)
+    const slots = Object.values(input.targets || {}).filter((t) => t && t.fam);
+    const nT = slots.reduce((n, t) => n + 1 + (t.or && Array.isArray(t.alts) ? t.alts.filter((a) => a && a.fam && a.fam !== t.fam).length : 0), 0), many = slots.length >= 7;
     const fit = (net) => (baseLimit > 0 && !net.done(net.start) ? net.fitBases(net.start, +baseLimit) : 0);
     const bad = (net) => net.unsupported || net.impossible || net.blocked;
     // (230,000 states for the fully followed network: a staff with two targets that keep each other out by their
@@ -3880,7 +3985,7 @@
     // played at 1.2 to 1.5 times its promise)
     // [lite, targets followed at most, states at most]. Up to five targets fit with all of them followed; with six the
     // two with the largest groups are (a try that does not fit is time lost, so none is made that is known not to).
-    const tries = many ? [[1, 0, 150000], [2, 0, 1000000]] : (nT <= 5 ? [[0, 8, 230000]] : []).concat(nT > FOLLOW6 ? [[0, FOLLOW6, 160000]] : [], [[0, 0, 150000], [1, 0, 400000], [2, 0, 1000000]]);
+    const tries = many ? [[1, 0, 150000], [2, 0, 1000000]] : (nT <= 5 || followed ? [[0, 8, 230000]] : []).concat(nT > FOLLOW6 ? [[0, FOLLOW6, 160000]] : [], [[0, 0, 150000], [1, 0, 400000], [2, 0, 1000000]]);
     /** The largest network that fits, with the omen as `whittle` says. */
     const full = (whittle, hint) => {
       let n = null;
@@ -3929,7 +4034,7 @@
       // followed) says whether the omen is worth having, also under the base limit, where more is repaired. If it is,
       // the levels are followed in as large a network as fits; if not, the large network is solved without the omen.
       // (The small one is let go before the next is built: both at once were more than a process's memory.)
-      let pre = build(Object.assign({}, input, { lite: 0, track: 0, maxStates: 150000, whittle: 'best' }));
+      let pre = pre0 || preOf(input);
       if (!bad(pre)) {
         let hint = 0, uses = pre.usesIdeal();
         if (baseLimit > 0 && !pre.done(pre.start)) { hint = fit(pre) > 0 ? pre.giveUp : 0; uses = uses || pre.usesIdeal(); }
@@ -4003,7 +4108,7 @@
     const plain = (g) => { const o = {}; for (const k of Object.keys(g)) { const v = g[k]; if (v == null || typeof v !== 'object' || (Array.isArray(v) && v.every((e) => e == null || typeof e !== 'object'))) o[k] = v; } return o; };
     const seen = new Set();
     return {
-      net: true, label: 'Route', goals: net.goals.map(plain), params: null, nodes: net.N, lite: net.lite, track: net.track, ms: Date.now() - t0, timing: net.timing,
+      net: true, label: 'Route', goals: net.goals.map(plain), params: null, nodes: net.N, lite: net.lite, track: net.track, orLeft: (net.orLeft || []).slice(), orNone: !!net.orNone, ms: Date.now() - t0, timing: net.timing,
       meanCost: net.cost(s), sd: net.sd(s), budget: B, p: B > 0 ? net.within(s, B) : null, bases: net.bases(s), charge, bound: net.bound, settled: net.settled,
       next: done ? { done: true } : step ? Object.assign({}, step.a, { names: well(step.names), hit: instead ? null : net.hit(s) }, instead ? { instead } : null, step.a.op === 'lock' ? { look: net.lockList(s, 10), plan: null, also: null } : null, sanctNow != null ? { ends: sanctNow } : step.a.bases != null && step.a.op !== 'extraction' ? { ends: 1 - step.a.bases } : null)
         : { fail: 'No currency brings this item to the targets.' },
