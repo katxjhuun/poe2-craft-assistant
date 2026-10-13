@@ -58,4 +58,5 @@ the row, with an Add button for more; any one of the slot's stats on the item fi
 
 ## The next run
 
-Started after these changes: see the run list of the repository (the fifteenth run).
+Run [38431521706](https://github.com/katxjhuun/poe2-craft-assistant/actions/runs/38431521706), started 13 Oct 2026
+16:33 UTC on commit 5ff3104 (these changes): the first with requests that take one of several stats for a slot.
