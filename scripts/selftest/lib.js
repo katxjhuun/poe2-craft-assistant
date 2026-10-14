@@ -12,7 +12,8 @@ let cache = null;
  */
 function latestPrices() {
   const fs = require('fs');
-  const out = path.join(ROOT, '.kb_cache', 'out');
+  // (POE2_OUT: another price folder, e.g. the main checkout's .kb_cache/out from a git worktree, which has none)
+  const out = process.env.POE2_OUT || path.join(ROOT, '.kb_cache', 'out');
   try {
     const meta = JSON.parse(fs.readFileSync(path.join(out, 'meta.json'), 'utf8'));
     const leagues = {};
