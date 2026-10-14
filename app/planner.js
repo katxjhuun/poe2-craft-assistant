@@ -1165,8 +1165,10 @@
         if (!side) break;
         const draw = () => revealOptions(ctx, st, side, floor, a.lich || null, rng);
         let opts = draw();
-        let choice = pick ? pick(opts, false) : null;
-        if (a.echoes && !choice) { opts = draw(); choice = pick ? pick(opts, true) : null; }
+        // (the item as it is at the reveal goes along, as with Omen of Putrefaction: on a full item the bone has taken a
+        // modifier away by then, perhaps the one that filled a slot of several stats)
+        let choice = pick ? pick(opts, false, st, side) : null;
+        if (a.echoes && !choice) { opts = draw(); choice = pick ? pick(opts, true, st, side) : null; }
         if (!choice) choice = opts.slice().sort((x, y) => y.lvl - x.lvl)[0] || null;
         if (choice) { addRolled(ctx, st, choice, { des: true }, rng); added.push(st.mods[st.mods.length - 1]); }
         break;

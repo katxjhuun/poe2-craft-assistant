@@ -250,8 +250,8 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
           const why = (c.a.pre && P.validate(ctx, s2, c.a.pre)) || null;
           if (c.a.pre) s2 = P.apply(ctx, s2, c.a.pre, r).state;
           const why2 = why || P.validate(ctx, s2, c.a);
-          const pick = wanted(s2);
-          s2 = P.apply(ctx, s2, c.a, r, (opts) => pick(opts) || dull(opts)).state;
+          const s1 = s2;
+          s2 = P.apply(ctx, s2, c.a, r, (opts, again, at) => wanted(at || s1)(opts) || dull(opts)).state;
           seen.push([c.k, s2, why2, c.a]);
         }
         const use = net.lockUse(node, seen);
@@ -293,10 +293,14 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
       } else {
         if (a.pre) { refuse(a.pre); st = P.apply(ctx, st, a.pre, r).state; }
         refuse(a);
-        const pick = wanted(st);
         // (with Abyssal Echoes the first three options are declined when no target is among them: `again` is the reroll)
+        // (what is a target is read off the item as it is at that reveal, `at`: an Omen of Putrefaction has taken
+        // away the item's modifiers by then. Read off the item before the step, a slot of several stats that had
+        // one of them looked filled, and its stats were never taken: from such items not one craft in the
+        // fifteenth and sixteenth deep runs was finished that way, where the network counts 12.3% (Drakeskin
+        // Boots, x1.18).)
         if (a.op === 'newbase' && net.bound) st = another(st);
-        else st = P.apply(ctx, st, a, r, (opts, again, at, side) => pick(opts) || (a.echoes && !again ? null : a.putrefy ? spare(opts, at, side, a.quality === 'Ancient' ? 40 : 0) : dull(opts))).state;
+        else st = P.apply(ctx, st, a, r, (opts, again, at, side) => wanted(at || st)(opts) || (a.echoes && !again ? null : a.putrefy ? spare(opts, at, side, a.quality === 'Ancient' ? 40 : 0) : dull(opts))).state;
         // (an Orb of Extraction destroys the item: the craft goes on with a new base, which the step's cost includes)
         if (a.op === 'extraction') { st = another(st); st.destroyed = false; }
       }

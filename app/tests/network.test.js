@@ -1112,3 +1112,36 @@ test('network: two stats of one modifier group are never asked of one item', () 
   assert.equal(got.done, got.runs, 'and every craft of it ends');
   assert.ok(Math.abs(got.mean / or.cost(or.start) - 1) < 0.15, `played ${got.mean} +-${got.se}, promised ${or.cost(or.start)}`);
 });
+
+test('network: an item with two stats of one slot is the node a roll leads to, and another element is a twin of the target that needs it', () => {
+  // A slot of Cold Resistance or Chaos Resistance or Intelligence, and a Lightning Resistance target. The reader took
+  // an item with Intelligence and Cold Resistance for one node and a roll from the Intelligence for another; and a
+  // Fire Resistance beside the Intelligence for the twin of the slot's Chaos Resistance (so for nobody's), where a
+  // roll makes it the Lightning Resistance's twin. A body armour played at 1.16 times its promise, the sixteenth deep run.
+  const X = lockWorld(), base = 'Dusk Ring';
+  const S = (re) => X.tiers(base, 'suffix', re);
+  const cold = S(/to Cold Resistance$/), chaos = S(/to Chaos Resistance$/), int = S(/to Intelligence$/), light = S(/to Lightning Resistance$/), fire = S(/to Fire Resistance$/);
+  const mana = X.tiers(base, 'prefix', /to maximum Mana$/);
+  const top = (t) => Math.min(...Object.keys(t.ids).map(Number)), low = (t) => Math.max(...Object.keys(t.ids).map(Number));
+  const T = (f, tier, more) => Object.assign({ fam: f.fam, group: f.side, minTier: tier, required: true, label: f.label }, more);
+  const targets = { 'suffix-0': T(cold, low(cold), { or: true, alts: [T(chaos, low(chaos)), T(int, low(int))] }), 'suffix-1': T(light, 2), 'prefix-0': T(mana, low(mana)) };
+  const white = X.item(base, 'Normal'), net = NW.route(X.input(white, targets));
+  assert.ok(!net.unsupported && !net.impossible);
+  const mod = (f, tier) => ({ id: f.ids[tier], side: f.side, tier });
+  const nodeOf = (mods) => net.nodeOf(P.toState(net.ctx, X.item(base, 'Rare', mods), {}));
+  // two stats of the slot: one fills it, the other is a modifier nobody asked for, whatever the order
+  const both = nodeOf([mod(int, top(int)), mod(cold, top(cold)), mod(mana, top(mana))]), d = net.describe(both);
+  assert.ok(both >= 0);
+  assert.equal(d.has.filter((h) => [cold.label, chaos.label, int.label].some((l) => h.startsWith(l))).length, 1, 'one stat fills the slot');
+  assert.equal(d.otherSuffixes, 1, 'the other is nobody\'s');
+  assert.equal(nodeOf([mod(cold, top(cold)), mod(int, top(int)), mod(mana, top(mana))]), both, 'the order on the item does not matter');
+  // and an Exalted Orb from the item with the Intelligence leads there when the Cold Resistance rolls
+  const from = nodeOf([mod(int, top(int)), mod(mana, top(mana))]), e = net.acts[from].find((x) => x.a.op === 'exalt');
+  assert.ok(e, 'an Exalted Orb is an edge');
+  let there = false;
+  for (let t = 0; t < e.out.length; t += 2) if (e.out[t + 1] === both) there = true;
+  assert.ok(there, 'the roll leads to the node the item is read as');
+  // another element beside a filled slot: the twin of the target that needs it, not of the slot's other stats
+  const tw = net.describe(nodeOf([mod(int, top(int)), mod(fire, 1), mod(mana, top(mana))]));
+  if (tw.twin.length) assert.deepEqual(tw.twin, [light.label], 'the Fire Resistance is the Lightning Resistance\'s twin');
+});

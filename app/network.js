@@ -1264,6 +1264,18 @@
         };
         for (let i = 0; i < G; i++) {
           const g = goals[i];
+          // (One of several stats for a slot: with one of them on the item, another one that rolls is that stat all
+          // the same, and canon keeps the first of the slot's list on the item, the other one is a modifier nobody
+          // asked for. The reader of an item does the same; when a rolled one was taken for nobody's at once, the
+          // two did not meet: an item with Intelligence and Cold Resistance in one slot was two nodes, and a body
+          // armour played at 1.16 times its promise in the sixteenth deep run.)
+          if (S.g[i] === ALT && g.si === si && g.kind === 'nat') {
+            const inBig = !!(s.big && s.big.has.has(i)), beta = unblocked(S, i, floor, inBig);
+            betas[i] = beta;
+            if (s.ok[i] > 0) put(s.ok[i] * beta, i, NATURAL, inBig);
+            if (s.nearW[i] > 0) put(s.nearW[i] * beta, i, NATURAL + NEAR, inBig);
+            continue;
+          }
           if (!wanted(S.g[i]) || g.si !== si) continue;
           // a rolled modifier of the group of a Desecrated or crafted-only target is known as such (bones, essences and alloys are too dear to waste)
           if (g.kind !== 'nat') { if (s.low[i] > 0) putLow(i); continue; }
@@ -1290,7 +1302,7 @@
           let win = -1;
           const live = roles.map(([i, kind], k) => {
             const g = goals[i];
-            const on = wanted(S.g[i]) && (kind === 3 ? g.kind !== 'nat' || followed[i] : g.kind === 'nat' && (kind !== 2 || S.g[i] === ABSENT));
+            const on = (wanted(S.g[i]) || (kind === 0 && S.g[i] === ALT)) && (kind === 3 ? g.kind !== 'nat' || followed[i] : g.kind === 'nat' && (kind !== 2 || S.g[i] === ABSENT));
             if (on && (win < 0 || kind < roles[win][1])) win = k;
             return on;
           });
@@ -2472,15 +2484,21 @@
       // not be read as "in the way" of a target that is on the item)
       const meetsOne = (m) => !m.unrevealed && goals.some((g) => g.side === m.side && P.meets(m, g, g.tier));
       const inOrder = st.mods.filter(meetsOne).concat(st.mods.filter((m) => !meetsOne(m)));
+      let i0done = false; // (the modifiers that meet a target are read first: every slot's own is known after them)
+      // (a slot of several stats with one of them on the item: its other stats are no targets, as in a roll. Another
+      // element's resistance was taken for the twin of the slot's Chaos Resistance and so for nobody's, where a
+      // roll makes it the twin of the Lightning Resistance target.)
+      const slotFull = (k) => goals[k].oi >= 0 && ORG[goals[k].oi].some((j) => j !== k && met(S.g[j]));
       for (const m of inOrder) {
         const si = m.side === 'prefix' ? 0 : 1;
-        const free = (k) => wanted(S.g[k]) && goals[k].si === si;
+        const free = (k) => wanted(S.g[k]) && goals[k].si === si && !(i0done && slotFull(k));
         const kind = m.des ? DESECRATED : m.crafted ? CRAFTED : NATURAL;
-        const i = m.unrevealed ? -1 : goals.findIndex((g, k) => free(k) && P.meets(m, g, g.tier));
+        const i = m.unrevealed ? -1 : goals.findIndex((g, k) => wanted(S.g[k]) && goals[k].si === si && P.meets(m, g, g.tier));
+        i0done = i0done || !meetsOne(m);
         const v = i >= 0 || m.unrevealed ? -1 : goals.findIndex((g, k) => free(k) && P.nearMiss(m, g));
-        const t = i >= 0 || v >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => S.g[k] === ABSENT && goals[k].si === si && conv[k] && conv[k].src.has(m.id) && !(conv[k].via === 'aldur' && st.aldur));
+        const t = i >= 0 || v >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => S.g[k] === ABSENT && goals[k].si === si && !slotFull(k) && conv[k] && conv[k].src.has(m.id) && !(conv[k].via === 'aldur' && st.aldur));
         // not the target, but of its group (a lower tier, a sister modifier) or with tags that stop it: it stands in the target's way
-        const b = i >= 0 || v >= 0 || t >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => S.g[k] === ABSENT && goals[k].si === si && (g.kind !== 'nat' || (known && (known !== 3 || followed[k]))) && (m.fam === g.fam || (g.grp.length && (m.grp || []).some((x) => g.grp.includes(x))) || (m.id && kb.mods[m.id] && stops(m.id, k))));
+        const b = i >= 0 || v >= 0 || t >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => S.g[k] === ABSENT && goals[k].si === si && !slotFull(k) && (g.kind !== 'nat' || (known && (known !== 3 || followed[k]))) && (m.fam === g.fam || (g.grp.length && (m.grp || []).some((x) => g.grp.includes(x))) || (m.id && kb.mods[m.id] && stops(m.id, k))));
         const set = (k, x) => { if (S.g[k] === TWIN) { S.j[si]++; lowest[si] = Math.min(lowest[si], goalLvl[k]); } S.g[k] = x; if (m.frac) S.fg = k; role.set(m, x === BLOCKED ? 2 : x === TWIN ? 3 : 1); if (x === BLOCKED) lowest[si] = Math.min(lowest[si], m.lvl || 1); };
         if (i >= 0) set(i, kind);
         else if (v >= 0) set(v, kind + NEAR);
@@ -4004,25 +4022,30 @@
      * a network of the request without classes). null when nothing fits.
      */
     const withLevels = (from, hint) => {
+      // (most: how many targets' blockers it can follow. The small network of four targets or more follows none, and
+      // its track was taken for that: a levels network then followed no blocker, also where all of them fit.)
+      const most = from.most != null ? from.most : from.track;
       const base = from.N / Math.pow(1.4, from.track), seen = new Set(), plans = [];
-      const tracks = [from.track, Math.min(from.track, 2), 0];
-      for (const classes of [3, 2]) for (const track of tracks) {
+      // Up to five targets the full network follows every target's blockers, and so must a levels network: one that
+      // follows fewer promises less than the craft costs. A Warlord Cuirass with four targets (the fifteenth deep
+      // run): with no blocker followed 25,002 nodes, 53,602 promised and 77,645 played; with two followed 54,880 nodes
+      // and 73,846 played; with all four 116,694 nodes, 53,321 promised and 55,747 played (x1.05). Where none fits,
+      // the full network without the omen is the route. Six targets and more: as before, the most that fit.
+      const need = nT <= 5 || followed ? most : 0;
+      for (const track of [most, Math.min(most, 2), 0]) for (const classes of [3, 2]) {
         const k = classes + '|' + track;
-        if (seen.has(k)) continue;
+        if (track < need || seen.has(k)) continue;
         seen.add(k);
-        // (Three classes a side make the network up to six times as large, two about two and a half times. The limit
-        // is on that estimate, and the network itself may have 100,000 nodes: a minute and a half to solve. It was
-        // 65,000, which left a six-target amulet with two classes: 780,740 where three classes, 69,247 nodes, give
-        // 442,318. With three classes the omen can tell more often which modifier it takes.)
-        const size = base * Math.pow(1.4, track) * (classes === 3 ? 6 : 2.6);
-        if (size <= 120000) plans.push({ classes, track, size });
+        // (Three classes a side make the network larger by 2.3 on that cuirass, every target followed by 1.47 a
+        // target. The estimate was six and 1.4, which put the cuirass's network at 255,000 and never tried it. With
+        // three classes the omen can tell more often which modifier it takes: a six-target amulet, two classes
+        // 780,740, three 442,318.)
+        const size = base * Math.pow(1.5, Math.min(track, most)) * (classes === 3 ? 2.5 : 1.6);
+        if (size <= 150000) plans.push({ classes, track, size });
       }
-      // the first that should fit, and when it does not after all, the smallest (a try that does not fit costs as
-      // much time as one that does: no more than two)
-      const order = plans.length > 1 ? [plans[0], plans.slice().sort((a, b) => a.size - b.size)[0]] : plans;
-      for (let k = 0; k < order.length; k++) {
-        if (k && order[k] === order[0]) break;
-        const n2 = build(Object.assign({}, input, { lite: 0, track: order[k].track, maxStates: 100000, whittle: 'levels', classes: order[k].classes, giveUp: hint, maxBases: baseLimit }));
+      // the most blockers followed first, then the most classes; a try that does not fit costs time: three at most
+      for (let k = 0; k < plans.length && k < 3; k++) {
+        const n2 = build(Object.assign({}, input, { lite: 0, track: plans[k].track, maxStates: 150000, whittle: 'levels', classes: plans[k].classes, giveUp: hint, maxBases: baseLimit }));
         if (n2.unsupported !== 'too many item states') return done(n2);
       }
       return null;
@@ -4038,7 +4061,7 @@
       if (!bad(pre)) {
         let hint = 0, uses = pre.usesIdeal();
         if (baseLimit > 0 && !pre.done(pre.start)) { hint = fit(pre) > 0 ? pre.giveUp : 0; uses = uses || pre.usesIdeal(); }
-        const from = { N: pre.N, track: pre.track, only: !!(pre.bound && pre.bound.mode === 'never') };
+        const from = { N: pre.N, track: pre.track, most: pre.goals.filter((g) => g.kind === 'nat').length, only: !!(pre.bound && pre.bound.mode === 'never') };
         pre = null;
         const got = uses ? withLevels(from, hint) : null;
         return got || done(full('none', hint));

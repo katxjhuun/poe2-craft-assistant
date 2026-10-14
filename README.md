@@ -231,6 +231,16 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   beyaz bir Warlord Cuirass (53.602 vaat, 76.513 oynanan: engelleyici takip etmeyen ağ) ve iki "or" isteği (x1,16
   ve x1,18; bu taramanın kodu "or" statlarını hedef sayıyordu ve mod grubu kuralını bilmiyordu). Sonraki tarama
   139b9e4 ile başladı.
+- **On altıncı derin tarama (14 Ekim 2026, `reports/network-sweep-2026-10-14b.md`).** 888 senaryo, 851'i oynandı,
+  817'si uyuşuyor (%96,0), hata yok; %15'ten fazla sapan iki "or" isteği. Botlarınki (x1,18) oynatmanın hatasıydı:
+  Well of Souls'ta hedefleri adımdan önceki eşyadan okuyordu, Omen of Putrefaction'dan sonra dolu sanılan slotun
+  statlarını hiç seçmiyordu (63 vaat, 62 oynanan). Zırhınki (x1,16) ağındı: zar ile eşyayı okuyan taraf aynı eşyayı
+  iki düğüm sayıyordu (slotta Intelligence varken gelen Cold Resistance; dolu slotun yanındaki Fire Resistance'ın
+  kimin ikizi olduğu). Artık ikisi aynı kuralı izler (358 vaat, 359 oynanan; dokuz base'in 27 "or" isteği x0,93
+  ile x1,06 arası). Ayrıca seviye sınıflı ağlar (Omen of Whittling) dört hedef ve üstünde hiçbir engelleyiciyi
+  takip etmiyordu: on beşinci taramanın Warlord Cuirass'ı 53.602 vaat edip 77.645 oynanıyordu; dört hedefin
+  hepsini takip eden ağ 116.694 düğümle sığıyor, 53.321 vaat ve 55.410 oynanan. Beş hedefe kadar seviye ağı artık
+  her engelleyiciyi takip etmek zorunda; sığmazsa rota omen'siz tam ağdır.
 - Rune of Aldur, takıldıktan sonra gelen modu dönüştürmez (oyuncu 8 Ekim 2026'da doğruladı: iddia k61).
 - Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler).
 
