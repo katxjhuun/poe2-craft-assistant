@@ -240,7 +240,7 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   ile x1,06 arası). Ayrıca seviye sınıflı ağlar (Omen of Whittling) dört hedef ve üstünde hiçbir engelleyiciyi
   takip etmiyordu: on beşinci taramanın Warlord Cuirass'ı 53.602 vaat edip 77.645 oynanıyordu; dört hedefin
   hepsini takip eden ağ 116.694 düğümle sığıyor, 53.321 vaat ve 55.410 oynanan. Beş hedefe kadar seviye ağı artık
-  her engelleyiciyi takip etmek zorunda; sığmazsa rota omen'siz tam ağdır.
+  her engelleyiciyi takip etmek zorunda; sığmazsa rota omen'siz tam ağdır. Sonraki tarama: 38581433087 (82a3425).
 - Rune of Aldur, takıldıktan sonra gelen modu dönüştürmez (oyuncu 8 Ekim 2026'da doğruladı: iddia k61).
 - Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler).
 

@@ -63,4 +63,5 @@ classes) or 1.6 (two), the limit 150,000 states, three tries at most.
 
 ## The next run
 
-Started 14 Oct 2026 on the commit with these changes (see the README for its link).
+Run [38581433087](https://github.com/katxjhuun/poe2-craft-assistant/actions/runs/38581433087), started 14 Oct 2026
+15:40 UTC on commit 82a3425 (these changes).
