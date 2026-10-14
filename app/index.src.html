@@ -3178,7 +3178,9 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     }
     else if (b.id === 'tplCancel') { S.tplMode = null; renderStats(); }
     else if (b.id === 'tplSaveBtn') {
-      const stats = Object.values(S.targets).filter((t) => t && t.fam).map((t) => ({ label: t.label, minTier: t.minTier || null, minValue: t.minValue || null, required: !!t.required }));
+      // (a slot's "or" stats go with it: label and lowest tier each)
+      const stats = Object.values(S.targets).filter((t) => t && t.fam).map((t) => Object.assign({ label: t.label, minTier: t.minTier || null, minValue: t.minValue || null, required: !!t.required },
+        t.or && Array.isArray(t.alts) && t.alts.length ? { or: true, alts: t.alts.filter((a) => a && a.label).map((a) => ({ label: a.label, minTier: a.minTier || null })) } : null));
       const name = (($('#tplName') || {}).value || '').trim().slice(0, 60) || `${S.item.itemClass} targets`;
       S.userTemplates = (S.userTemplates || []).concat([{ id: 'u' + Date.now(), label: name, cls: S.item.itemClass, stats }]);
       saveTemplates(); S.tplMode = null; renderStats(); announce(`Saved the template ${name}.`);
@@ -3212,6 +3214,17 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       const t = fam.tiers.find((x) => x.tier === st.minTier && x.ok) || fam.tiers.find((x) => x.ok);
       S.targets[slot] = { key: fam.key, fam: fam.fam, group: fam.group, label: fam.label, minTier: st.minValue ? null : t ? t.tier : st.minTier,
         minValue: st.minValue || null, valueMode: !!st.minValue, required: st.required };
+      // the slot's "or" stats: those this item can have, of the slot's side
+      if (st.or && Array.isArray(st.alts)) {
+        const alts = [];
+        for (const a of st.alts) {
+          const f = E.resolveTemplateTarget(S.ix, S.item, a.label);
+          if (!f || f.fam === fam.fam || f.side !== side || alts.some((x) => x.fam === f.fam)) continue;
+          const at = f.tiers.find((x) => x.tier === a.minTier && x.ok) || f.tiers.find((x) => x.ok);
+          alts.push({ key: f.key, fam: f.fam, group: f.group, label: f.label, minTier: at ? at.tier : a.minTier });
+        }
+        if (alts.length) { S.targets[slot].or = true; S.targets[slot].alts = alts; }
+      }
     }
     saveTargets();
     renderStats(); renderItem(); renderPlan(); schedulePlans();

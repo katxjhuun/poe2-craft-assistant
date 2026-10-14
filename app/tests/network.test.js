@@ -1145,3 +1145,30 @@ test('network: an item with two stats of one slot is the node a roll leads to, a
   const tw = net.describe(nodeOf([mod(int, top(int)), mod(fire, 1), mod(mana, top(mana))]));
   if (tw.twin.length) assert.deepEqual(tw.twin, [light.label], 'the Fire Resistance is the Lightning Resistance\'s twin');
 });
+
+test('network: with one crafted modifier on the item, another slot can take an essence or alloy where Astrid\'s Creativity fits', () => {
+  // The player's report of 14 Oct 2026: only the first slot offered essences and alloys. With a crafted modifier on
+  // the item the others offered none, though Astrid's Creativity ("Can have 1 additional Crafted Modifier") makes
+  // room for a second one on an item that has or can get an augment socket; the network sockets it then. A ring has
+  // no augment socket: there the other slots offer none.
+  const X = lockWorld();
+  const setup = (base) => {
+    const ess = X.input(X.item(base, 'Normal'), {}).essences, crafts = ess.filter((r) => r.alloy || r.kind === 'rare');
+    const pre = crafts.find((r) => kb.mods[r.mod].gen === 'p'), suf = crafts.find((r) => kb.mods[r.mod].gen === 's');
+    const it = X.item(base, 'Rare', [{ id: pre.mod, side: 'prefix', crafted: true }]);
+    const offered = E.pickerOptions(X.D.ix, it, { side: 'suffix', essences: ess }).filter((o) => ['essence', 'alloy'].includes(o.group) && o.ok);
+    return { ess, pre, suf, it, offered };
+  };
+  const staff = setup('Chiming Staff');
+  assert.ok(staff.it.mods.some((m) => m.crafted), 'the staff has a crafted modifier');
+  assert.ok(staff.offered.length > 0, 'its other slots offer essences and alloys');
+  const T = (r) => ({ fam: kb.mods[r.mod].fam, group: r.alloy ? 'alloy' : 'essence', label: kb.mods[r.mod].txt.split('\n').join(' '), minTier: null, required: true });
+  const inp = X.input(staff.it, { 'prefix-0': T(staff.pre), 'suffix-0': T(staff.suf) }), net = NW.route(inp);
+  assert.ok(!net.impossible && !net.unsupported, 'the network routes both crafted modifiers');
+  assert.ok(net.materials(net.start).some((m) => /Astrid/.test(m.name)), 'with Astrid\'s Creativity');
+  const got = X.play(net, inp, 600, 7, 200000, 90000);
+  assert.equal(got.done, got.runs);
+  assert.ok(Math.abs(got.mean / net.cost(net.start) - 1) < 0.1, `played ${got.mean} +-${got.se}, promised ${net.cost(net.start)}`);
+  const ring = setup('Dusk Ring');
+  assert.equal(ring.offered.length, 0, 'a ring has no augment socket for the rune');
+});

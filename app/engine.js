@@ -187,6 +187,24 @@
    * Socketed runes that change crafting (augment texts in the game data): a "Can roll ... modifiers" rune opens its pool
    * (pools: the tags), Astrid's Creativity allows one more crafted modifier. item.runes holds the "(rune)" lines.
    */
+  /**
+   * Can the item get a rune that allows one more crafted modifier (Astrid's Creativity)? Its class takes the rune, and
+   * it has an empty augment socket or can get one (Artificer's Orb: martial weapons, wands, staves and armour, up to
+   * the class's number of sockets; planner.js validate). Rings have none: there the network says the second crafted
+   * modifier is not possible.
+   */
+  function canAstrid(ix, item) {
+    const base = ix.kb.bases[item.base];
+    if (!base) return false;
+    const n = (item.sockets || []).length, free = n > (item.runes || []).length;
+    const artificer = !['Ring', 'Amulet', 'Belt', 'Jewel', 'Sceptre', 'Quiver'].includes(base.cls) && n < maxSockets(base.cls);
+    if (!free && !artificer) return false;
+    for (const aug of Object.values(ix.kb.augments || {})) {
+      const c = aug && aug.by_class && aug.by_class[base.cls];
+      if (c && (c.txt || []).some((t) => /additional Crafted Modifier/i.test(t))) return true;
+    }
+    return false;
+  }
   function runeRules(item) {
     const lines = (item.runes || []).map((r) => r.text);
     const pools = lines.map((t) => /^Can roll (\w+) modifiers$/i.exec(t)).filter(Boolean).map((m) => m[1].toLowerCase());
@@ -932,7 +950,12 @@
       }
     }
 
-    const hasCrafted = item.mods.filter((m) => m.crafted && m.modId !== opts.exclude).length >= 1 + runeRules(item).extraCrafted;
+    // One crafted modifier an item, two with Astrid's Creativity socketed ("Can have 1 additional Crafted Modifier").
+    // An item of a class that takes the rune and has not got it yet can have the second one all the same: the route
+    // sockets the rune for it. (With one crafted modifier on the item the other slots offered no essence or alloy:
+    // the player's report of 14 Oct 2026.)
+    const extraCrafted = runeRules(item).extraCrafted || (canAstrid(ix, item) ? 1 : 0);
+    const hasCrafted = item.mods.filter((m) => m.crafted && m.modId !== opts.exclude).length >= 1 + extraCrafted;
     const hasDes = item.mods.some((m) => m.desecrated && m.modId !== opts.exclude);
 
     // Essences and alloys that poe2db lists for this item class (base eligibility known).
