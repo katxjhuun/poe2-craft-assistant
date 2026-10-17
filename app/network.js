@@ -2436,7 +2436,9 @@
       if (PR.fracture != null && S.fg < 0 && !S.fj && !S.cx && !S.cy && !S.fz && slots(S, 0) + slots(S, 1) >= 4) {
         const outs = [];
         let n = 0, gone = 0;
-        for (let i = 0; i < G; i++) if (there(S.g[i]) && kindOf(S.g[i]) !== DESECRATED) { const S2 = cp(S); S2.fg = i; outs.push([1, S2]); n++; }
+        // (a twin that is locked is no twin any more, a Flux or a Rune of Aldur leaves it as it is: a fractured
+        // modifier nobody asked for, as the reader of the item takes it)
+        for (let i = 0; i < G; i++) if (there(S.g[i]) && kindOf(S.g[i]) !== DESECRATED) { const S2 = cp(S); if (S.g[i] === TWIN) { S2.g[i] = ABSENT; S2.fj = goals[i].si + 1; } else S2.fg = i; outs.push([1, S2]); n++; }
         // A modifier nobody asked for may be one that keeps a missing target out, where the network does not follow
         // that target's blockers (a lower tier of its family, one of its group, one whose tags stop it). Fractured,
         // it does so for good: the item cannot be finished any more. The orb's edge took such a modifier for any
@@ -2496,7 +2498,11 @@
         const i = m.unrevealed ? -1 : goals.findIndex((g, k) => wanted(S.g[k]) && goals[k].si === si && P.meets(m, g, g.tier));
         i0done = i0done || !meetsOne(m);
         const v = i >= 0 || m.unrevealed ? -1 : goals.findIndex((g, k) => free(k) && P.nearMiss(m, g));
-        const t = i >= 0 || v >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => S.g[k] === ABSENT && goals[k].si === si && !slotFull(k) && conv[k] && conv[k].src.has(m.id) && !(conv[k].via === 'aldur' && st.aldur));
+        // (A fractured modifier is no twin: a Flux and a Rune of Aldur leave it as it is. A fractured Lightning
+        // Resistance was read as the Fire Resistance target's twin, where a roll had made it a fractured modifier
+        // nobody asked for: one item, two nodes, and a ring bought with it played at 1.16 times its promise in the
+        // seventeenth deep run.)
+        const t = i >= 0 || v >= 0 || m.unrevealed || m.des || m.crafted || m.frac ? -1 : goals.findIndex((g, k) => S.g[k] === ABSENT && goals[k].si === si && !slotFull(k) && conv[k] && conv[k].src.has(m.id) && !(conv[k].via === 'aldur' && st.aldur));
         // not the target, but of its group (a lower tier, a sister modifier) or with tags that stop it: it stands in the target's way
         const b = i >= 0 || v >= 0 || t >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => S.g[k] === ABSENT && goals[k].si === si && !slotFull(k) && (g.kind !== 'nat' || (known && (known !== 3 || followed[k]))) && (m.fam === g.fam || (g.grp.length && (m.grp || []).some((x) => g.grp.includes(x))) || (m.id && kb.mods[m.id] && stops(m.id, k))));
         const set = (k, x) => { if (S.g[k] === TWIN) { S.j[si]++; lowest[si] = Math.min(lowest[si], goalLvl[k]); } S.g[k] = x; if (m.frac) S.fg = k; role.set(m, x === BLOCKED ? 2 : x === TWIN ? 3 : 1); if (x === BLOCKED) lowest[si] = Math.min(lowest[si], m.lvl || 1); };
@@ -4024,14 +4030,18 @@
     const withLevels = (from, hint) => {
       // (most: how many targets' blockers it can follow. The small network of four targets or more follows none, and
       // its track was taken for that: a levels network then followed no blocker, also where all of them fit.)
-      const most = from.most != null ? from.most : from.track;
+      // (An item that is never given up keeps the small network's count, as before: there the network that follows no
+      // blocker played at its promise (the sixteenth deep run's only-item scenarios: x0.97 to x1.03), and the followed
+      // one, whose values settle slowly where nothing restarts, took 434 s where it took 44 (a Grasping Mail: sixteen
+      // such scenarios were out of time in the seventeenth deep run).)
+      const most = from.most != null && !from.only ? from.most : from.track;
       const base = from.N / Math.pow(1.4, from.track), seen = new Set(), plans = [];
       // Up to five targets the full network follows every target's blockers, and so must a levels network: one that
       // follows fewer promises less than the craft costs. A Warlord Cuirass with four targets (the fifteenth deep
       // run): with no blocker followed 25,002 nodes, 53,602 promised and 77,645 played; with two followed 54,880 nodes
       // and 73,846 played; with all four 116,694 nodes, 53,321 promised and 55,747 played (x1.05). Where none fits,
       // the full network without the omen is the route. Six targets and more: as before, the most that fit.
-      const need = nT <= 5 || followed ? most : 0;
+      const need = (nT <= 5 || followed) && !from.only ? most : 0;
       for (const track of [most, Math.min(most, 2), 0]) for (const classes of [3, 2]) {
         const k = classes + '|' + track;
         if (track < need || seen.has(k)) continue;

@@ -92,9 +92,13 @@ other small networks where they can.
   Push: `git -c credential.helper= -c "credential.helper=!'C:/Program Files/GitHub CLI/gh.exe' auth git-credential" push -q origin main`.
 - Page: `node app/build.js`, copy `app/dist/index.html` to `desktop/out/app/`, publish `app/dist/index.html` to the
   artifact https://claude.ai/artifact/7N2pMNG8ZhbqRjqy2mQmhH. Page text is English only.
-- README: a bullet in Turkish under the run reports. Cloud run:
-  `gh workflow run network.yml -R katxjhuun/poe2-craft-assistant -f mode=deep -f minutes=325 -f jobs=16 -f scenarios=drawn`
-  (after checking that none runs).
+- README: a bullet in Turkish under the run reports. Cloud run, at the full free limit (the player's wish):
+  `gh workflow run network.yml -R katxjhuun/poe2-craft-assistant -f mode=deep -f minutes=315 -f jobs=19 -f scenarios=drawn -f from=<n>`
+  (after checking that none runs). `from`: 0 when the network code changed since the last run (its results compare
+  with the last run's); otherwise where the last run ended (its "rounds: N per base", added up), so it plays new
+  scenarios instead of the same ones again. The cloud should not sit idle: when nothing changed, a run on new
+  scenarios is still worth starting.
+- "afk" from the player: the PC may be used too until they say "dur" (still at most 90% CPU, 4 GB RAM free).
 
 ## Sub-workers on a git worktree
 

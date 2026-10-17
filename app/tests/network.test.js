@@ -1010,7 +1010,10 @@ test('network: a fractured twin stays a fractured modifier when the target itsel
   const net = NW.build(Object.assign({}, X.input(it, targets, null, { restart: 'item', itemCost: 50 }), { lite: 0, track: 8, maxStates: 120000, whittle: 'none' }));
   assert.ok(!net.unsupported && !net.impossible);
   const d0 = net.describe(net.start);
-  if (!d0.twin.length) return; // (no Flux at the prices of the day: the Fire Resistance is no twin)
+  // (A fractured modifier is no twin: a Flux leaves it as it is. The reader took it for one, a roll for a fractured
+  // modifier nobody asked for: one item, two nodes, a ring at 1.16 times its promise in the seventeenth deep run.)
+  assert.deepEqual(d0.twin, [], 'the fractured Fire Resistance is no twin of the Cold Resistance target');
+  assert.equal(d0.fracturedOther, 'suffix', 'it is a fractured modifier nobody asked for');
   const e = net.acts[net.start].find((x) => x.a.op === 'exalt');
   assert.ok(e, 'an Exalted Orb is an edge of the pasted item');
   let seen = 0;

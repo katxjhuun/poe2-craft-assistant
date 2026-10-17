@@ -241,6 +241,13 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   takip etmiyordu: on beşinci taramanın Warlord Cuirass'ı 53.602 vaat edip 77.645 oynanıyordu; dört hedefin
   hepsini takip eden ağ 116.694 düğümle sığıyor, 53.321 vaat ve 55.410 oynanan. Beş hedefe kadar seviye ağı artık
   her engelleyiciyi takip etmek zorunda; sığmazsa rota omen'siz tam ağdır. Sonraki tarama: 38581433087 (82a3425).
+- **On yedinci derin tarama (17 Ekim 2026, `reports/network-sweep-2026-10-17.md`).** 897 senaryo, 848'i oynandı,
+  821'i uyuşuyor (%96,8: şimdiye kadarki en iyisi), hata yok, kesilen iş yok. Başka elementten fractured bir modu
+  olan bir yüzük x1,18 iyimserdi: okuyucu o modu Fire Resistance hedefinin ikizi sayıyordu (Flux ve Rune of Aldur
+  fractured modu değiştirmez); artık fractured mod hiçbir zaman ikiz değil (68.642 vaat, 68.200 oynanan). Seviye
+  ağlarının engelleyici takibi elden çıkarılmayan itemlerde çözümü 44 sn'den 434 sn'ye uzatmıştı (16 süre aşımı);
+  orada takipsiz ağ zaten vaadini tutuyordu, o itemler eski ağa döndü (35 sn). Bulut artık 19 makine kullanır ve
+  `from` ile her tarama yeni senaryolardan başlayabilir.
 - Rune of Aldur, takıldıktan sonra gelen modu dönüştürmez (oyuncu 8 Ekim 2026'da doğruladı: iddia k61).
 - Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler).
 
