@@ -341,6 +341,9 @@ if (require.main === module) {
   const minutes = +arg('minutes', 5), runs = +arg('runs', 1200), every = +arg('rivals', 15), deep = process.argv.includes('--deep');
   // --drawn: start after the single modifiers (they are the first scenarios of every base and were checked on their own)
   const drawn = process.argv.includes('--drawn');
+  // --from n: start at the n-th round. The scenarios of a base are drawn in a fixed order, so a run on unchanged code
+  // would play the same ones again; a run that starts where the last one ended plays new ones (17 Oct 2026).
+  const from = Math.max(0, Math.floor(+arg('from', 0)) || 0);
   const firstDrawn = (base) => { const t = table(base); return t.nat.prefix.length + t.nat.suffix.length + t.des.prefix.length + t.des.suffix.length; };
   const bases = testBases().concat(slotBases().filter((b) => !testBases().includes(b)));
   const deadline = Date.now() + minutes * 60000;
@@ -353,7 +356,7 @@ if (require.main === module) {
     for (const base of bases) {
       const mine = i++ % shards === shard;
       let sc = null;
-      try { sc = scenario(base, round + (drawn ? firstDrawn(base) : 0)); } catch (e) { if (mine) out.push({ id: `${base}|#${round}`, error: 'scenario: ' + String(e && e.message || e) }); }
+      try { sc = scenario(base, from + round + (drawn ? firstDrawn(base) : 0)); } catch (e) { if (mine) out.push({ id: `${base}|#${from + round}`, error: 'scenario: ' + String(e && e.message || e) }); }
       if (sc) live++;
       if (!sc || !mine) continue;
       let res;

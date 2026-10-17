@@ -7,7 +7,10 @@
 #   broad  five jobs; a craft of very many uses is played fewer times, so that many scenarios fit (minutes: 17).
 #   deep   every scenario is played 100,000 times (one that would take longer than 40 minutes says how far it got).
 #          `jobs` runners, four processes each, for `minutes` (325 at most: a job may run six hours, and a process
-#          ends within about ten minutes of `minutes`).
+#          ends within about ten minutes of `minutes`). The player asked for the limit to be used to the full (17 Oct
+#          2026): 19 runners of the 20 a free account runs at once (the sweep starts after the plan and price jobs;
+#          the one left free is for the price workflow's hourly runs), 315 minutes (at 325, two jobs of the sixteenth
+#          run passed the job's timeout and their reports were lost).
 #
 # Cost: the repository is public since 8 Oct 2026, and GitHub does not charge public repositories for standard
 # runners. It starts by hand only, and every process stops itself after `minutes`.
@@ -22,16 +25,19 @@ on:
         options: [broad, deep]
         default: broad
       minutes:
-        description: 'Minutes of checking per process (broad: up to 18; deep: up to 325)'
+        description: 'Minutes of checking per process (broad: up to 18; deep: up to 325, 315 is safe)'
         default: '17'
       jobs:
-        description: 'deep only: runners (four processes each; leave a few of the 20 free for the price job)'
-        default: '16'
+        description: 'deep only: runners (four processes each; 19 of the 20, one left for the price workflow)'
+        default: '19'
       scenarios:
         description: 'all (single modifiers first) or drawn (skip them: drawn sets and the special requests)'
         type: choice
         options: [all, drawn]
         default: all
+      from:
+        description: 'Start at this round of every base (0: the same scenarios as the last run; the last run''s rounds: new ones)'
+        default: '0'
 
 permissions:
   contents: read
@@ -55,11 +61,14 @@ jobs:
           MINUTES: ${{ inputs.minutes }}
           JOBS: ${{ inputs.jobs }}
           SCENARIOS: ${{ inputs.scenarios }}
+          FROM: ${{ inputs.from }}
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json, os
           mode = os.environ.get('MODE') or 'broad'
           extra = ' --drawn' if (os.environ.get('SCENARIOS') or 'all') == 'drawn' else ''
+          start = max(0, int(float(os.environ.get('FROM') or 0)))
+          if start: extra += ' --from %d' % start
           if mode == 'deep':
               jobs = min(19, max(1, int(float(os.environ.get('JOBS') or 16))))
               minutes = min(325.0, max(1.0, float(os.environ.get('MINUTES') or 325)))

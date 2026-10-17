@@ -5,6 +5,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 D = sys.argv[1].rstrip('/').rstrip(chr(92)) + '/'
 nbad = int(sys.argv[2]) if len(sys.argv) > 2 else 60
 width = int(sys.argv[3]) if len(sys.argv) > 3 else 420
+TOTAL = 0
 shards, tot = {}, dict(sc=0, checked=0, agree=0, bad=0, outside=0, err=0, crafts=0, full=0, cut=0, riv=0, cheaper=0)
 bad, cheaper, errors, outside, classes = [], [], [], {}, {}
 detours, futile, fatal = {}, [], 0
@@ -15,7 +16,7 @@ for f in sorted(glob.glob(D + 'job-*.log')):
     for l in lines:
         if 'FATAL ERROR' in l: fatal += 1
         m = re.match(r'## Craft network sweep, shard (\d+) of (\d+)', l)
-        if m: cur = int(m.group(1)); shards[cur] = 1; mode = None; continue
+        if m: cur = int(m.group(1)); shards[cur] = 1; TOTAL = max(TOTAL, int(m.group(2))); mode = None; continue
         if cur is None: continue
         m = re.match(r'(\d+) scenarios in [\d.]+ min .*?: (\d+) checked against the simulator, (\d+) agree, (\d+) do not, (\d+) outside the network, (\d+) errors', l)
         if m:
@@ -49,7 +50,7 @@ for f in sorted(glob.glob(D + 'job-*.log')):
                 m = re.match(r'- ([\d,]+)x (.*)$', l)
                 if m: detours[m.group(2)] = detours.get(m.group(2), 0) + int(m.group(1).replace(',', ''))
             elif mode == 'fut': futile.append(l[2:])
-print('shards reported:', len(shards), 'of 64; missing:', sorted(set(range(1, 65)) - set(shards)), '| processes that died of memory:', fatal)
+print('shards reported:', len(shards), 'of', TOTAL, '; missing:', sorted(set(range(1, TOTAL + 1)) - set(shards)), '| processes that died of memory:', fatal)
 print(tot)
 print('classes (scenarios, agree, do not, outside, errors):')
 for c, v in sorted(classes.items()): print('  ', c.ljust(18), v)
