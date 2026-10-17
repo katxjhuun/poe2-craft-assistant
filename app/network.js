@@ -2602,6 +2602,8 @@
     const N = states.length;
     // (input.sizeOnly: does the network fit? Its states are counted and nothing is solved: orFit.)
     if (input.sizeOnly) return { sizeOnly: true, states: N };
+    // (expand: the nodes and their edges; flat: making the edges flat arrays, below)
+    timing.expand = Date.now() - tick; tick = Date.now();
     // (the tables that only the edges were made from: hundreds of megabytes on a large network)
     statCache.clear(); afterMemo.clear(); putMemo.clear(); offMemo.clear(); stepPool.clear(); edgePool.clear();
     // The edges as flat arrays (see column). Node s has the edges nE[nAt[s]] to nE[nAt[s + 1] - 1], and after them
@@ -2641,7 +2643,7 @@
       get: (o, p, r) => (isNode(p) ? actsOf(+p) : p === 'length' ? N : Reflect.get(o, p, r)),
       has: (o, p) => isNode(p) || Reflect.has(o, p),
     });
-    timing.expand = Date.now() - tick; tick = Date.now();
+    timing.flat = Date.now() - tick; tick = Date.now();
 
     // ---- solve: for every node the cheapest edge on average
     // Nodes are solved in blocks that share rarity stage, targets and fracture: the long loops (roll, miss, roll again)
@@ -3914,7 +3916,13 @@
       /** The pool numbers of a side (for the checks): stats(side index, minimum modifier level, catalyst boost, rune bits, tag mask, present mask). */
       poolStats: stats,
       /** What the edges take (for the checks): edges at the nodes, distinct edges, their outcomes, bytes of the flat arrays. */
-      storage: () => ({ edges: nE.length, distinct: eStep.length, outcomes: oP.length, bytes: [nAt, nE, eStep, eCost, eOut, oP, oT].reduce((b, a) => b + a.byteLength, 0) }),
+      // (lock: Hinekora's Lock's edges, kept apart while the network is solved)
+      storage: () => {
+        let lock = 0, lockOut = 0;
+        if (lockE) for (const L of lockE) if (L) { lock++; lockOut += L.p.length; }
+        const bytes = [nAt, nE, eStep, eCost, eOut, oP, oT].reduce((b, a) => b + a.byteLength, 0) + lockOut * 12;
+        return { edges: nE.length, distinct: eStep.length, outcomes: oP.length, lock, lockOutcomes: lockOut, bytes };
+      },
     };
     function describe(S) {
       const has = [], miss = [], inWay = [], low = [], twin = [], across = [];
@@ -4028,6 +4036,12 @@
    * route of the full one, perhaps not its cheapest.
    */
   const FOLLOW6 = 2;
+  // The network that follows every target's blockers, at most this many states. 230,000 while an edge was an object
+  // (8.5 KB a node, 1.8 GB at 210,000 nodes); with the flat edge arrays (3.5 KB a node) 300,000 take about 1.7 GB.
+  // More would fit, but the time grows faster than the size: the player's staff with an "or" stat, 286,003 nodes,
+  // took 362 s here (205,686 nodes without it: 143 s). Where it does not fit, a smaller network follows fewer blockers
+  // and promises less than the craft costs (40 to 75% on all-tier-1 requests), so a larger limit is worth that time.
+  const FOLLOW_MAX = 300000;
   function route(input) { return routeFit(input, 0).net; }
   /** The same, with the charge on white bases fitted to a limit of bases per finished item: {net, charge}. */
   function routeFit(input, baseLimit) {
@@ -4085,7 +4099,7 @@
     for (;;) {
       const some = count(targets) > 0;
       if (strict) {
-        if (some && large(build(Object.assign({}, now(), { lite: 0, track: 8, maxStates: 230000, whittle: 'none', sizeOnly: true })))) { drop(); continue; }
+        if (some && large(build(Object.assign({}, now(), { lite: 0, track: 8, maxStates: FOLLOW_MAX, whittle: 'none', sizeOnly: true })))) { drop(); continue; }
         first = routeFit1(now(), baseLimit, null, some);
       } else {
         // (four stats or more: routeFit1 starts with this network, so one that fits is no time lost)
@@ -4120,12 +4134,12 @@
     const nT = slots.reduce((n, t) => n + 1 + (t.or && Array.isArray(t.alts) ? t.alts.filter((a) => a && a.fam && a.fam !== t.fam).length : 0), 0), many = slots.length >= 7;
     const fit = (net) => (baseLimit > 0 && !net.done(net.start) ? net.fitBases(net.start, +baseLimit) : 0);
     const bad = (net) => net.unsupported || net.impossible || net.blocked;
-    // (230,000 states for the fully followed network: a staff with two targets that keep each other out by their
-    // tags needs 207,000, about 1.8 GB and a minute and a half; with fewer it followed two of three targets and
-    // played at 1.2 to 1.5 times its promise)
+    // (FOLLOW_MAX states for the fully followed network: a staff with two targets that keep each other out by their
+    // tags needs 207,000, a minute and a half; with fewer it followed two of three targets and played at 1.2 to 1.5
+    // times its promise)
     // [lite, targets followed at most, states at most]. Up to five targets fit with all of them followed; with six the
     // two with the largest groups are (a try that does not fit is time lost, so none is made that is known not to).
-    const tries = many ? [[1, 0, 150000], [2, 0, 1000000]] : (nT <= 5 || followed ? [[0, 8, 230000]] : []).concat(nT > FOLLOW6 ? [[0, FOLLOW6, 160000]] : [], [[0, 0, 150000], [1, 0, 400000], [2, 0, 1000000]]);
+    const tries = many ? [[1, 0, 150000], [2, 0, 1000000]] : (nT <= 5 || followed ? [[0, 8, FOLLOW_MAX]] : []).concat(nT > FOLLOW6 ? [[0, FOLLOW6, 160000]] : [], [[0, 0, 150000], [1, 0, 400000], [2, 0, 1000000]]);
     /** The largest network that fits, with the omen as `whittle` says. */
     const full = (whittle, hint) => {
       let n = null;

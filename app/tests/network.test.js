@@ -1175,3 +1175,36 @@ test('network: with one crafted modifier on the item, another slot can take an e
   const ring = setup('Dusk Ring');
   assert.equal(ring.offered.length, 0, 'a ring has no augment socket for the rune');
 });
+
+test('network: the flat edge arrays read back as the edges, the lock\'s too', () => {
+  // Since 17 Oct 2026 the edges are flat typed arrays (2.4 times less memory a node); net.acts, step, options and
+  // lockSteps are made from them when asked. A network whose route uses Hinekora's Lock (priced at 3 here) has both
+  // kinds: the node's own edges, and the lock's edge after them, made again while the network is solved.
+  const X = lockWorld(), base = 'Totemic Greaves';
+  const targets = {};
+  [['prefix', /increased Movement Speed$/], ['suffix', /to Fire Resistance$/]].forEach(([side, re], k) => { const f = X.tiers(base, side, re); targets[side + '-' + k] = { fam: f.fam, group: side, minTier: 1, required: true, label: f.label }; });
+  const net = NW.build(Object.assign(X.input(X.item(base, 'Normal'), targets, { "Hinekora's Lock": 3 }), { lite: 0, track: 8, whittle: 'none' }));
+  assert.ok(!net.unsupported && !net.impossible);
+  const st = net.storage();
+  assert.ok(st.edges >= st.distinct && st.outcomes > 0 && st.bytes > 0);
+  assert.ok(st.lock > 0, 'the route uses the lock somewhere');
+  assert.equal(net.acts.length, net.N);
+  let lockNodes = 0;
+  for (let s = 0; s < net.N; s++) {
+    const list = net.acts[s];
+    for (const e of list) {
+      let sum = 0;
+      for (let t = 0; t < e.out.length; t += 2) { sum += e.out[t]; assert.ok(e.out[t + 1] === -1 || (e.out[t + 1] >= 0 && e.out[t + 1] < net.N)); }
+      assert.ok(Math.abs(sum - 1) < 1e-9, 'an edge\'s chances add up to one');
+    }
+    const lockAt = list.findIndex((e) => e.a.op === 'lock');
+    if (lockAt >= 0) { lockNodes++; assert.equal(lockAt, list.length - 1, 'the lock\'s edge comes after the node\'s own'); }
+    const step = net.step(s);
+    if (net.pol[s] >= 0) {
+      assert.deepEqual({ a: step.a, cost: step.cost, out: step.out }, list[net.pol[s]], 'the step is the edge the rule set chose');
+      if (step.a.op === 'lock') assert.deepEqual(net.lockSteps(s).map((c) => c.a), step.a.cand.map((k) => list[k].a));
+    }
+  }
+  assert.ok(lockNodes > 0);
+  assert.ok(net.acts.some((l) => l.some((e) => e.a.op === 'lock')), 'the view iterates like an array');
+});
