@@ -75,12 +75,14 @@ Kept for these tools in the main checkout (git-ignored): `.kb_cache/run-prices/r
 
 ## Workflow C: speed, memory, size
 
-- Measure first (`mem.js`, `sizes.js`, the network's `timing`). A 210,636-node network is 1.82 GB of heap: 4.94 M edges
-  and 34.9 M outcomes held as small JS objects and arrays.
+- Measure first (`mem.js`, `sizes.js`, the network's `timing`, `net.storage()`). Since 2048635 the edges are flat
+  typed arrays (`nAt`/`nE`/`eStep`/`eCost`/`eOut`/`oP`/`oT`; `edgeAt(s, k)` points `OP`/`OT`/`OA`/`OB` at an edge's
+  outcomes — copy them into locals before a loop; Hinekora's Lock's edge is `lockE[s]`; `net.acts` is a lazy view):
+  3.5 KB a node instead of 8.5. The followed network's limit is `FOLLOW_MAX` (300,000); time, not memory, limits it
+  now (205,686 nodes: 143 s in Node, 180 s in the page; 286,003: 362 s).
 - A change that should not change results must give the same `net.cost` on many scenarios to the last digits
   (compare old and new with `NWFILE`) and the same test results; only then measure the gain.
-- Hinekora's Lock edges are rewritten while the network is solved (`acts[s][lockAt[s]] = e`): storage that is fixed
-  after the build needs a place for them.
+- Hinekora's Lock edges are rewritten while the network is solved: they live in `lockE[s]`, after the node's own edges.
 
 ## Tests
 
