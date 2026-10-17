@@ -15,7 +15,10 @@ promise**: every finding below is a place where the two disagreed.
 
 - **Heavy simulation runs in the cloud** (GitHub Actions on the public repo: free). The player plays PoE2 on this PC.
   Before running anything local, check `tasklist | grep -i PathOfExile`: while it runs, one node process at a time;
-  otherwise a few at most, and keep at least 4 GB of RAM free (a network of 150,000 nodes takes 1.5 to 3 GB).
+  otherwise at most two per worker. **Memory is the real limit** (31 GB, about 9 used by the system): before starting
+  a process, check free RAM (PowerShell `(Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory/1MB`, in GB) and
+  start it only with at least 6 GB free; pass `--max-old-space-size=3000`. A network of 150,000 nodes takes 1.5 to
+  3 GB; three workers with large networks at once took free RAM down to 0.6 GB (17 Oct 2026).
 - **Never start a cloud run while one runs.** The workflow's concurrency group cancels the running one, and hours of
   results are lost. Only the coordinating session starts runs; a sub-worker never does.
 - **No paid services.** Downloading a run's artifacts needs the player's yes each time; job logs read with
