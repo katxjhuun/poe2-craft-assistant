@@ -44,6 +44,31 @@
   const R_ASTRID = 1, R_SERLE = 2, R_POOL = 4, R_ALDUR = 8;
 
   /**
+   * A column of numbers that grows while the network is built (Type: Int32Array, Float64Array): filled in chunks,
+   * made one array at the end. Nothing is copied while it grows, and the chunks are gone once the array is made.
+   */
+  function column(Type) {
+    const full = [];
+    let cur = new Type(1024), n = 0, len = 0;
+    return {
+      push(v) {
+        if (n === cur.length) { full.push(cur); cur = new Type(Math.min(1 << 18, cur.length * 2)); n = 0; }
+        cur[n++] = v;
+        len++;
+      },
+      get length() { return len; },
+      done() {
+        const a = new Type(len);
+        let o = 0;
+        for (const c of full) { a.set(c, o); o += c.length; }
+        a.set(cur.subarray(0, n), o);
+        full.length = 0; cur = null;
+        return a;
+      },
+    };
+  }
+
+  /**
    * input: { ix, item, targets, locks, priceOf(name) -> Exalted Orbs or null, baseCost, weights, essences, catalystMult,
    *          quality?: 'lock' | 'use' | 'raise' (catalyst quality: leave it alone, the default; let Omen of Catalysing
    *          Exaltation use up what the item has; or also add catalysts for it),
@@ -1006,7 +1031,7 @@
     const multOf = (q) => (!CAT || !q ? 1 : q === 2 ? ctx.catalystMult : 1 + (ctx.catalystMult - 1) * Math.min(1, CAT.q0 / 20));
 
     // ---- nodes
-    const states = [], index = new Map(), acts = [];
+    const states = [], index = new Map();
     // a node's key as one number: the targets' statuses in base 9, then the small fields (it stays under 2^53)
     const FLK = NCLS > 1 ? 9 : 1; // (the two classes of the lowest levels, see LCUT)
     // j, the modifiers of a side that nobody asked for: as many as a side holds at most. Three on most items; a
@@ -1959,14 +1984,20 @@
     }
     // Memory: a network of 140,000 nodes has three and a half million edges. The step of an edge ({op, tier, side,
     // ...}) is one of a few hundred: every edge with the same step shares one object (`same`), and an edge that is
-    // the same at every node (a new base, an Orb of Extraction, a Putrefaction with its chance) is one object for all
+    // the same at every node (a new base, an Orb of Extraction, a Putrefaction with its chance) is one edge for all
     // of them (`shared`). Ten of 64 processes of a deep run ended at their 3.5 GB.
-    const stepPool = new Map(), edgePool = new Map();
-    const same = (a) => { const k = JSON.stringify(a); let x = stepPool.get(k); if (!x) { stepPool.set(k, a); x = a; } return x; };
+    // The edges are kept in flat arrays (column), not as objects: an edge is its step (a number into `stepTab`), its
+    // price and where its outcomes start; an outcome is a chance and a node; a node's edges are a run of edge numbers.
+    // As objects and small arrays they took 8.5 KB per node (a 211,759-node network of boots: 1.85 GB of heap for 5.4
+    // million edges and 33 million outcomes); flat, the network is 3.5 KB per node (493 MB of arrays and 266 MB of
+    // heap), and solving it reads them in half the time. See `edgeAt` for how the solve reads them.
+    const stepPool = new Map(), edgePool = new Map(), stepTab = [];
+    const same = (a) => { const k = JSON.stringify(a); let x = stepPool.get(k); if (x === undefined) { x = stepTab.length; stepPool.set(k, x); stepTab.push(a); } return x; };
+    const eStepC = column(Int32Array), eCostC = column(Float64Array), eOutC = column(Int32Array), oPC = column(Float64Array), oTC = column(Int32Array);
+    const nEC = column(Int32Array), nAtC = column(Int32Array);
     function expand(sIdx) {
       const S = states[sIdx];
-      const list = [];
-      acts[sIdx] = list;
+      nAtC.push(nEC.length); // (its edges start here: nodes are expanded in their order)
       if (done(S)) return;
       const push = (a, cost, outs) => {
         // outs: [[chance, state]]; the same node reached twice is one edge
@@ -1974,10 +2005,10 @@
         let tot = 0;
         for (const [p, S2] of outs) { if (!(p > 0)) continue; const t = S2 === RESTART ? RESTART : idOf(S2); m.set(t, (m.get(t) || 0) + p); tot += p; }
         if (!m.size) return;
-        const out = [];
-        for (const [t, p] of m) out.push(p / tot, t);
-        if (out.length === 2 && out[1] === sIdx) return; // changes nothing
-        list.push({ a: same(a), cost, out });
+        if (m.size === 1 && m.has(sIdx)) return; // changes nothing
+        nEC.push(eStepC.length);
+        eStepC.push(same(a)); eCostC.push(cost); eOutC.push(oPC.length);
+        for (const [t, p] of m) { oPC.push(p / tot); oTC.push(t); }
       };
       /** A rolled modifier's node: one nobody asked for, or one in a target's way, arrives with the class of its level (a node per class under the item's). */
       const arrive = (S1, p, i, si, status, floor, out, dist) => {
@@ -2013,8 +2044,8 @@
         if (PR.alchemy != null) { const R0 = cp(S); R0.r = 2; push({ op: 'alchemy' }, PR.alchemy, rolledN(R0, 4, openMask, 0)); } // Rare with four modifiers
         return;
       }
-      /** An edge that does not depend on the node: made once (make pushes it), then the same object for every node. */
-      const shared = (key, make) => { const e = edgePool.get(key); if (e) { list.push(e); return; } const n = list.length; make(); if (list.length > n) edgePool.set(key, list[list.length - 1]); };
+      /** An edge that does not depend on the node: made once (make pushes it), then the same edge number for every node. */
+      const shared = (key, make) => { const e = edgePool.get(key); if (e !== undefined) { nEC.push(e); return; } const n = nEC.length; make(); if (nEC.length > n) edgePool.set(key, eStepC.length - 1); };
       if (!NONEW && keyOf(S) !== keyOf(BOUND ? startS : N0)) shared('newbase', () => push({ op: 'newbase' }, baseCost, [[1, RESTART]]));
       // ---- steps that lock the item (Corrupted or Sanctified): it is finished then, or lost and a new base is due.
       // `lost`: the step with the chance p of finishing; the base of the other case is in its cost and its counts.
@@ -2571,9 +2602,46 @@
     const N = states.length;
     // (input.sizeOnly: does the network fit? Its states are counted and nothing is solved: orFit.)
     if (input.sizeOnly) return { sizeOnly: true, states: N };
-    timing.expand = Date.now() - tick; tick = Date.now();
     // (the tables that only the edges were made from: hundreds of megabytes on a large network)
     statCache.clear(); afterMemo.clear(); putMemo.clear(); offMemo.clear(); stepPool.clear(); edgePool.clear();
+    // The edges as flat arrays (see column). Node s has the edges nE[nAt[s]] to nE[nAt[s + 1] - 1], and after them
+    // the lock's edge while it has one (lockAt, lockE: it is made again while the network is solved). Edge e has the
+    // step stepTab[eStep[e]], the price eCost[e] and the outcomes oP[t] (a chance), oT[t] (a node; RESTART: a new
+    // base) for t from eOut[e] to eOut[e + 1] - 1.
+    nAtC.push(nEC.length); eOutC.push(oPC.length);
+    const nAt = nAtC.done(), nE = nEC.done(), eStep = eStepC.done(), eCost = eCostC.done(), eOut = eOutC.done(), oP = oPC.done(), oT = oTC.done();
+    // (the new bases a step takes besides its price, a.bases, and one for a plain "New base": the charge is on those)
+    const stepNb = Float64Array.from(stepTab, (a) => (a.op === 'newbase' ? 1 : a.bases || 0));
+    /** The number of edges at node s, the lock's too. */
+    const degOf = (s) => nAt[s + 1] - nAt[s] + (lockAt && lockAt[s] >= 0 ? 1 : 0);
+    // (OP, OT from OA to OB - 1: the outcomes of the edge `edgeAt` was last asked for. A loop takes them into its own
+    // constants first: what it calls may ask for another edge.)
+    let OP = oP, OT = oT, OA = 0, OB = 0;
+    /** Points OP, OT, OA, OB at the outcomes of edge k of node s (k past the node's own edges: the lock's). */
+    const edgeAt = (s, k) => {
+      const b = nAt[s];
+      if (k < nAt[s + 1] - b) { const e = nE[b + k]; OP = oP; OT = oT; OA = eOut[e]; OB = eOut[e + 1]; return; }
+      const L = lockE[s];
+      OP = L.p; OT = L.t; OA = 0; OB = L.p.length;
+    };
+    /** The step of edge k of node s, and its price. */
+    const aAt = (s, k) => (k < nAt[s + 1] - nAt[s] ? stepTab[eStep[nE[nAt[s] + k]]] : lockE[s].a);
+    const priceAt = (s, k) => (k < nAt[s + 1] - nAt[s] ? eCost[nE[nAt[s] + k]] : lockE[s].cost);
+    /** Edge k of node s as an object, made when asked: {a, cost, out: [chance, node, ...]} (for the answers and the checks). */
+    const edgeObj = (s, k) => {
+      edgeAt(s, k);
+      const ch = OP, tg = OT, b = OB, out = [];
+      for (let t = OA; t < b; t++) out.push(ch[t], tg[t]);
+      return { a: aAt(s, k), cost: priceAt(s, k), out };
+    };
+    const actsOf = (s) => { const list = [], n = degOf(s); for (let k = 0; k < n; k++) list.push(edgeObj(s, k)); return list; };
+    // (net.acts[s]: the edges of node s as objects, made when asked)
+    const isNode = (p) => typeof p === 'string' && /^(0|[1-9][0-9]*)$/.test(p) && +p < N;
+    const actsView = new Proxy([], {
+      get: (o, p, r) => (isNode(p) ? actsOf(+p) : p === 'length' ? N : Reflect.get(o, p, r)),
+      has: (o, p) => isNode(p) || Reflect.has(o, p),
+    });
+    timing.expand = Date.now() - tick; tick = Date.now();
 
     // ---- solve: for every node the cheapest edge on average
     // Nodes are solved in blocks that share rarity stage, targets and fracture: the long loops (roll, miss, roll again)
@@ -2596,19 +2664,20 @@
       const ca = new Int32Array(N), ct = new Int32Array(N), stack = new Int32Array(N), call = new Int32Array(N);
       coarse.forEach((b, bi) => { for (const k of b) group[k] = bi; });
       let sp = 0, cp = 0, cnt = 0;
-      const enter = (k) => { idx[k] = low[k] = cnt++; stack[sp++] = k; open[k] = 1; call[cp++] = k; ca[k] = 0; ct[k] = 1; };
+      // (ca: the edge a node is at, ct: its outcome)
+      const enter = (k) => { idx[k] = low[k] = cnt++; stack[sp++] = k; open[k] = 1; call[cp++] = k; ca[k] = 0; ct[k] = 0; };
       // (Tarjan's algorithm without recursion: a part is complete, and written down, once everything it leads to is)
       for (const b of coarse) for (const root of b) {
         if (idx[root] >= 0) continue;
         enter(root);
         while (cp) {
-          const v = call[cp - 1], list = acts[v], bi = group[v];
+          const v = call[cp - 1], b0 = nAt[v], nv = nAt[v + 1] - b0, bi = group[v];
           let w = -1;
-          while (ca[v] < list.length) {
-            const o = list[ca[v]].out;
-            if (ct[v] >= o.length) { ca[v]++; ct[v] = 1; continue; }
-            const c = o[ct[v]];
-            ct[v] += 2;
+          while (ca[v] < nv) {
+            const e = nE[b0 + ca[v]], t = eOut[e] + ct[v];
+            if (t >= eOut[e + 1]) { ca[v]++; ct[v] = 0; continue; }
+            const c = oT[t];
+            ct[v]++;
             if (c === RESTART || group[c] !== bi) continue;
             if (idx[c] < 0) { w = c; break; }
             if (open[c] && idx[c] < low[v]) low[v] = idx[c];
@@ -2630,7 +2699,10 @@
      */
     // which blocks read a block's values (over every edge, whatever the rule set): they are solved again when it changes
     const readers = blocks.map(() => new Set());
-    for (let s = 0; s < N; s++) for (const act of acts[s]) { const o = act.out; for (let t = 1; t < o.length; t += 2) if (o[t] !== RESTART && blockOf[o[t]] !== blockOf[s]) readers[blockOf[o[t]]].add(blockOf[s]); }
+    for (let s = 0; s < N; s++) {
+      const bs = blockOf[s];
+      for (let q = nAt[s], qe = nAt[s + 1]; q < qe; q++) { const e = nE[q]; for (let t = eOut[e], te = eOut[e + 1]; t < te; t++) { const c = oT[t]; if (c !== RESTART && blockOf[c] !== bs) readers[blockOf[c]].add(bs); } }
+    }
     const readerList = readers.map((x) => [...x]);
     // A block's part of the rule set, ready to be solved. Under one rule set a node has one edge, and with those edges
     // alone the block falls into strongly connected parts that are far smaller than the block: on a bracer that is
@@ -2652,16 +2724,18 @@
         mine[li] = pol[k];
         at0[li] = ne;
         if (pol[k] < 0) continue;
-        const o = acts[k][pol[k]].out;
-        for (let t = 1; t < o.length; t += 2) if (o[t] !== RESTART && blockOf[o[t]] === bi) ne++;
+        edgeAt(k, pol[k]);
+        const tg = OT;
+        for (let t = OA, te = OB; t < te; t++) if (tg[t] !== RESTART && blockOf[tg[t]] === bi) ne++;
       }
       at0[m] = ne;
       const to0 = new Int32Array(ne), p0 = new Float64Array(ne);
       for (let li = 0, e = 0; li < m; li++) {
         const k = b[li];
         if (pol[k] < 0) continue;
-        const o = acts[k][pol[k]].out;
-        for (let t = 0; t < o.length; t += 2) if (o[t + 1] !== RESTART && blockOf[o[t + 1]] === bi) { to0[e] = local[o[t + 1]]; p0[e++] = GAMMA * o[t]; }
+        edgeAt(k, pol[k]);
+        const ch = OP, tg = OT;
+        for (let t = OA, te = OB; t < te; t++) { const to = tg[t]; if (to !== RESTART && blockOf[to] === bi) { to0[e] = local[to]; p0[e++] = GAMMA * ch[t]; } }
       }
       // its strongly connected parts (Tarjan's algorithm without recursion): written down sinks first
       const sub = new Int32Array(m), nodes = new Int32Array(m), posIn = new Int32Array(m), starts = [0];
@@ -2875,14 +2949,19 @@
       const idx = new Int32Array(N).fill(-1), lowl = new Int32Array(N), open = new Uint8Array(N), cur = new Int32Array(N);
       const stack = new Int32Array(n), call = new Int32Array(n), compOf = new Int32Array(N).fill(-1), pos = new Int32Array(N), comps = [];
       let sp = 0, cq = 0, cnt = 0, big = 0;
-      const enter = (k) => { idx[k] = lowl[k] = cnt++; stack[sp++] = k; open[k] = 1; call[cq++] = k; cur[k] = 1; };
+      // (cur: the outcome of its edge a node is at)
+      const enter = (k) => { idx[k] = lowl[k] = cnt++; stack[sp++] = k; open[k] = 1; call[cq++] = k; cur[k] = 0; };
       for (let q = 0; q < n; q++) {
         if (idx[nodes[q]] >= 0) continue;
         enter(nodes[q]);
         while (cq) {
-          const v = call[cq - 1], o = pol[v] >= 0 ? acts[v][pol[v]].out : null;
+          const v = call[cq - 1];
           let w = -1;
-          if (o) while (cur[v] < o.length) { const to = o[cur[v]]; cur[v] += 2; if (to === RESTART) continue; if (idx[to] < 0) { w = to; break; } if (open[to] && idx[to] < lowl[v]) lowl[v] = idx[to]; }
+          if (pol[v] >= 0) {
+            edgeAt(v, pol[v]);
+            const tg = OT, a0 = OA, nv = OB - OA;
+            while (cur[v] < nv) { const to = tg[a0 + cur[v]]; cur[v]++; if (to === RESTART) continue; if (idx[to] < 0) { w = to; break; } if (open[to] && idx[to] < lowl[v]) lowl[v] = idx[to]; }
+          }
           if (w >= 0) { enter(w); continue; }
           cq--;
           if (cq) { const u = call[cq - 1]; if (lowl[v] < lowl[u]) lowl[u] = lowl[v]; }
@@ -2910,7 +2989,7 @@
         const part = comps[ci], m = part.length;
         if (m === 1) {
           const k = part[0];
-          if (pol[k] >= 0) { const o = acts[k][pol[k]].out; let self = 0; for (let t = 0; t < o.length; t += 2) if (o[t + 1] === k) self += GAMMA * o[t]; one[ci] = 1 - self; }
+          if (pol[k] >= 0) { edgeAt(k, pol[k]); const ch = OP, tg = OT; let self = 0; for (let t = OA, te = OB; t < te; t++) if (tg[t] === k) self += GAMMA * ch[t]; one[ci] = 1 - self; }
           continue;
         }
         const old = prev ? prev.get(part[0]) : null;
@@ -2928,8 +3007,9 @@
           pp[li] = pol[k];
           A[li * m + li] = 1;
           if (pol[k] < 0) continue;
-          const o = acts[k][pol[k]].out;
-          for (let t = 0; t < o.length; t += 2) { const to = o[t + 1]; if (to !== RESTART && compOf[to] === ci) A[li * m + pos[to]] -= GAMMA * o[t]; }
+          edgeAt(k, pol[k]);
+          const ch = OP, tg = OT;
+          for (let t = OA, te = OB; t < te; t++) { const to = tg[t]; if (to !== RESTART && compOf[to] === ci) A[li * m + pos[to]] -= GAMMA * ch[t]; }
         }
         lus[ci] = { A, perm: luFactor(A, m), part, pp };
         byMin.set(part[0], lus[ci]);
@@ -2952,9 +3032,10 @@
           for (let li = 0; li < m; li++) {
             const k2 = part[li];
             if (pol[k2] < 0) { R[li] = pol[k2] === -1 ? term : stuck; continue; }
-            const o = acts[k2][pol[k2]].out;
+            edgeAt(k2, pol[k2]);
+            const ch = OP, tg = OT;
             let v = d ? d[k2] : 0;
-            for (let t = 0; t < o.length; t += 2) { const to = o[t + 1]; if (to === RESTART) v += GAMMA * o[t] * bnd; else if (c.compOf[to] !== ci) v += GAMMA * o[t] * Xk[to]; }
+            for (let t = OA, te = OB; t < te; t++) { const to = tg[t]; if (to === RESTART) v += GAMMA * ch[t] * bnd; else if (c.compOf[to] !== ci) v += GAMMA * ch[t] * Xk[to]; }
             R[li] = v;
           }
           if (m === 1) R[0] /= c.one[ci]; else { const f = c.lus[ci]; luSolve(f.A, f.perm, R, m, 1, Y); }
@@ -2972,13 +3053,13 @@
       if (!c || !c.ok || c.compOf[s0] < 0) return false;
       if (!c.inAt) {
         // the rule set's edges by the node they point at
-        const at = new Int32Array(N + 1);
-        const each = (fn) => { for (let q = 0; q < c.nodes.length; q++) { const k = c.nodes[q]; if (pol[k] < 0) continue; const o = acts[k][pol[k]].out; for (let t = 0; t < o.length; t += 2) if (o[t + 1] !== RESTART) fn(k, o[t + 1], GAMMA * o[t]); } };
-        each((k, to) => { at[to + 1]++; });
-        for (let k = 0; k < N; k++) at[k + 1] += at[k];
-        const src = new Int32Array(at[N]), val = new Float64Array(at[N]), fill = at.slice(0, N);
+        const inAt = new Int32Array(N + 1);
+        const each = (fn) => { for (let q = 0; q < c.nodes.length; q++) { const k = c.nodes[q]; if (pol[k] < 0) continue; edgeAt(k, pol[k]); const ch = OP, tg = OT; for (let t = OA, te = OB; t < te; t++) if (tg[t] !== RESTART) fn(k, tg[t], GAMMA * ch[t]); } };
+        each((k, to) => { inAt[to + 1]++; });
+        for (let k = 0; k < N; k++) inAt[k + 1] += inAt[k];
+        const src = new Int32Array(inAt[N]), val = new Float64Array(inAt[N]), fill = inAt.slice(0, N);
         each((k, to, p) => { const q = fill[to]++; src[q] = k; val[q] = p; });
-        c.inAt = at; c.inSrc = src; c.inVal = val;
+        c.inAt = inAt; c.inSrc = src; c.inVal = val;
       }
       const R = new Float64Array(Math.max(1, c.maxPart)), Y = new Float64Array(Math.max(1, c.maxPart));
       // (the parts in the opposite order: what flows into a part comes from the parts that lead to it)
@@ -3010,18 +3091,19 @@
       // the rule set's edges that leave their block, as flat rows (what stays inside a block is in its factors)
       const row = new Int32Array(N + 1);
       let nnz = 0;
-      for (let s = 0; s < N; s++) { row[s] = nnz; if (pol[s] >= 0) nnz += acts[s][pol[s]].out.length >> 1; }
+      for (let s = 0; s < N; s++) { row[s] = nnz; if (pol[s] >= 0) { edgeAt(s, pol[s]); nnz += OB - OA; } }
       row[N] = nnz;
       const col = new Int32Array(nnz), val = new Float64Array(nnz), back = new Float64Array(N);
       nnz = 0;
       for (let s = 0; s < N; s++) {
         row[s] = nnz;
         if (pol[s] < 0) continue;
-        const o = acts[s][pol[s]].out, bi = blockOf[s];
-        for (let t = 0; t < o.length; t += 2) {
-          const s2 = o[t + 1];
-          if (s2 === RESTART) back[s] += GAMMA * o[t];
-          else if (blockOf[s2] !== bi) { col[nnz] = s2; val[nnz++] = GAMMA * o[t]; }
+        edgeAt(s, pol[s]);
+        const ch = OP, tg = OT, bi = blockOf[s];
+        for (let t = OA, te = OB; t < te; t++) {
+          const s2 = tg[t];
+          if (s2 === RESTART) back[s] += GAMMA * ch[t];
+          else if (blockOf[s2] !== bi) { col[nnz] = s2; val[nnz++] = GAMMA * ch[t]; }
         }
       }
       row[N] = nnz;
@@ -3104,7 +3186,7 @@
     function visitsFrom(s0) {
       // the rule set's edges that enter a block from outside, by the node they point at
       const at = new Int32Array(N + 1);
-      const each = (fn) => { for (let s = 0; s < N; s++) { if (pol[s] < 0) continue; const o = acts[s][pol[s]].out, bi = blockOf[s]; for (let t = 0; t < o.length; t += 2) { const s2 = o[t + 1]; if (s2 !== RESTART && blockOf[s2] !== bi) fn(s, s2, GAMMA * o[t], bi); } } };
+      const each = (fn) => { for (let s = 0; s < N; s++) { if (pol[s] < 0) continue; edgeAt(s, pol[s]); const ch = OP, tg = OT, bi = blockOf[s]; for (let t = OA, te = OB; t < te; t++) { const s2 = tg[t]; if (s2 !== RESTART && blockOf[s2] !== bi) fn(s, s2, GAMMA * ch[t], bi); } } };
       each((s, s2) => { at[s2 + 1]++; });
       for (let s = 0; s < N; s++) at[s + 1] += at[s];
       const src = new Int32Array(at[N]), val = new Float64Array(at[N]), fill = at.slice(0, N);
@@ -3157,14 +3239,33 @@
     let charge = 0;
     // (a.bases: the new bases a step takes besides a plain "New base": one for an Orb of Extraction, the chance of
     // losing the item for a step that locks it; the charge on bases is on those too)
-    const costOf = (act) => (act.a.op === 'newbase' ? act.cost + charge : act.a.bases ? act.cost + charge * act.a.bases : act.cost);
-    const qOf = (s, act) => { let c = costOf(act); const o = act.out; for (let t = 0; t < o.length; t += 2) c += o[t] * (o[t + 1] === RESTART ? x : V[o[t + 1]]); return c; };
+    // (edge k of node s, or the edge e of the flat arrays: its cost in the equations, and with the values of its outcomes)
+    const costAt = (s, k) => {
+      const b = nAt[s];
+      if (k < nAt[s + 1] - b) { const e = nE[b + k], nb = stepNb[eStep[e]]; return nb ? eCost[e] + charge * nb : eCost[e]; }
+      const L = lockE[s];
+      return L.a.bases ? L.cost + charge * L.a.bases : L.cost;
+    };
+    const qE = (e) => {
+      const nb = stepNb[eStep[e]];
+      let c = nb ? eCost[e] + charge * nb : eCost[e];
+      for (let t = eOut[e], te = eOut[e + 1]; t < te; t++) { const to = oT[t]; c += oP[t] * (to === RESTART ? x : V[to]); }
+      return c;
+    };
+    const qAt = (s, k) => {
+      const b = nAt[s];
+      if (k < nAt[s + 1] - b) return qE(nE[b + k]);
+      let c = costAt(s, k);
+      const L = lockE[s], ch = L.p, tg = L.t;
+      for (let t = 0; t < ch.length; t++) { const to = tg[t]; c += ch[t] * (to === RESTART ? x : V[to]); }
+      return c;
+    };
     // the first rule set: one that always ends
     const essOnly = new Set(goals.filter((g) => g.kind === 'ess').flatMap((g) => [g.rareEss, g.magicEss].filter(Boolean).map((r) => r.mod)));
     for (let s = 0; s < N; s++) {
-      const S = states[s], list = acts[s];
-      if (!list.length) { pol[s] = done(S) ? -1 : -2; continue; }
-      const find = (pred) => list.findIndex((e) => pred(e.a));
+      const S = states[s], b0 = nAt[s], nv = nAt[s + 1] - b0;
+      if (!nv) { pol[s] = done(S) ? -1 : -2; continue; }
+      const find = (pred) => { for (let k = 0; k < nv; k++) if (pred(stepTab[eStep[nE[b0 + k]]])) return k; return -1; };
       let a = -1;
       if (S.r === 0) a = find((e) => e.op === 'transmute');
       else if (S.r === 1) { a = find((e) => e.op === 'essence'); if (a < 0) a = find((e) => e.op === 'regal'); }
@@ -3212,27 +3313,31 @@
     const LOCK = input.lock === false ? null : price("Hinekora's Lock");
     const BURN = LOCK != null && PR.divine != null && goals.every((g) => g.minValue == null) ? PR.divine : null;
     const SEEN = new Set(['transmute', 'augment', 'regal', 'alchemy', 'exalt', 'chaos', 'annul', 'essence', 'pessence', 'liquid', 'fracture', 'divine', 'vaal']);
+    // (lockAt[s]: the place of the lock's edge among the edges of node s, -1: none; lockE[s]: that edge, {a, cost, p:
+    // its chances, t: their nodes}. It comes after the node's own edges, and is made again while the values move.)
     const lockAt = LOCK != null ? new Int32Array(N).fill(-1) : null;
+    const lockE = lockAt ? new Array(N).fill(null) : null;
     const FIN = index.get(keyOf(FINISHED));
     /** The new bases an edge takes: its outcomes that lose the item have paid for one each. */
     const nbOf = (a) => (a.op === 'newbase' ? 1 : a.bases || 0);
     /** What an edge costs when its result is known: its price, and a base only where the item is lost. */
-    const seenCost = (act, to) => act.cost - nbOf(act.a) * baseCost + (to === RESTART ? baseCost : 0);
+    const seenCost = (s, k, to) => priceAt(s, k) - nbOf(aAt(s, k)) * baseCost + (to === RESTART ? baseCost : 0);
+    const seenE = (e, to) => eCost[e] - stepNb[eStep[e]] * baseCost + (to === RESTART ? baseCost : 0);
     /**
-     * The lock's edge at node s for the values as they stand, put into acts[s] when it beats `limit` (the best the
+     * The lock's edge at node s for the values as they stand, put into lockE[s] when it beats `limit` (the best the
      * node has without it; qs: every edge's cost in all). -> null, or {moved: the edge is not what it was}.
      */
     function lockEdge(s, qs, limit) {
-      const list = acts[s], li = lockAt[s];
+      // (the lock's edge, when the node has one, comes after its own edges: k < nv are those)
+      const li = lockAt[s], b0 = nAt[s], nv = nAt[s + 1] - b0;
       const cand = new Map();
       let cap = Infinity, capK = -1;
-      for (let k = 0; k < list.length; k++) {
-        if (k === li) continue;
-        const act = list[k], q = qs[k];
+      for (let k = 0; k < nv; k++) {
+        const a = stepTab[eStep[nE[b0 + k]]], q = qs[k];
         // a step whose result is not shown is worth what it is worth on average: the best of them is what is left
         // to do when nothing shown is better
-        if (!SEEN.has(act.a.op) || act.a.ideal) { if (q < cap) { cap = q; capK = k; } continue; }
-        const names = actNames(act.a), key = names[names.length - 1], old = cand.get(key);
+        if (!SEEN.has(a.op) || a.ideal) { if (q < cap) { cap = q; capK = k; } continue; }
+        const names = actNames(a), key = names[names.length - 1], old = cand.get(key);
         if (!old || q < old[1]) cand.set(key, [k, q]);
       }
       if (!cand.size) return null;
@@ -3243,9 +3348,9 @@
         const ent = [], mass = new Map();
         let floor = cap;
         for (const k of ks) {
-          const act = list[k], o = act.out;
+          const e = nE[b0 + k];
           mass.set(k, 1);
-          for (let t = 0; t < o.length; t += 2) { const to = o[t + 1], y = seenCost(act, to) + (to === RESTART ? charge + x : V[to]); ent.push([y, o[t], k, to]); if (y < floor) floor = y; }
+          for (let t = eOut[e], te = eOut[e + 1]; t < te; t++) { const to = oT[t], y = seenE(e, to) + (to === RESTART ? charge + x : V[to]); ent.push([y, oP[t], k, to]); if (y < floor) floor = y; }
         }
         // (the lock cannot do better than the best single result)
         if (!(LOCK + floor < limit)) return null;
@@ -3259,12 +3364,12 @@
           for (const [k2, m2] of mass) if (k2 !== k) pr *= m2;
           mass.set(k, Math.max(0, mass.get(k) - p));
           if (!(pr > 0)) { if (mass.get(k) <= 1e-15) break; continue; }
-          const act = list[k];
-          q += pr * y; cost += pr * seenCost(act, to); left -= pr;
+          const e = nE[b0 + k], ak = stepTab[eStep[e]];
+          q += pr * y; cost += pr * seenE(e, to); left -= pr;
           add(out, to, pr);
           if (to === RESTART) { bases += pr; add(also, 'New base', pr); }
-          for (const n of actNames(act.a)) add(also, n, pr * (act.a.count || 1));
-          for (const [n, c] of act.a.also || []) if (n !== 'New base') add(also, n, pr * c);
+          for (const n of actNames(ak)) add(also, n, pr * (ak.count || 1));
+          for (const [n, c] of ak.also || []) if (n !== 'New base') add(also, n, pr * c);
           if (plan.length < 24) plan.push([k, to, pr]);
           if (mass.get(k) <= 1e-15) break; // (this currency always shows something at least as good as what is left)
         }
@@ -3274,36 +3379,38 @@
           q += left * cap;
           if (capK === -2) { cost += left * BURN; add(out, s, left); add(also, 'Divine Orb', left); }
           else {
-            const act = list[capK], o = act.out;
-            cost += left * act.cost; bases += left * nbOf(act.a);
-            for (let t = 0; t < o.length; t += 2) add(out, o[t + 1], left * o[t]);
-            for (const n of actNames(act.a)) add(also, n, left * (act.a.count || 1));
-            for (const [n, c] of act.a.also || []) add(also, n, left * c);
+            const e = nE[b0 + capK], ac = stepTab[eStep[e]];
+            cost += left * eCost[e]; bases += left * nbOf(ac);
+            for (let t = eOut[e], te = eOut[e + 1]; t < te; t++) add(out, oT[t], left * oP[t]);
+            for (const n of actNames(ac)) add(also, n, left * (ac.count || 1));
+            for (const [n, c] of ac.also || []) add(also, n, left * c);
           }
         }
         if (!(q < limit)) return null;
         const flat = [];
         for (const [to, p] of out) flat.push(p, to);
         const a = { op: 'lock', item: "Hinekora's Lock", bases, also: [...also], cand: [...mass.keys()], cap: capK, capY: cap, rest: left, plan };
-        if (list.some((e, k) => k !== li && e.a.ideal && (k === capK || mass.has(k)))) a.ideal = true;
+        for (let k = 0; k < nv; k++) if (stepTab[eStep[nE[b0 + k]]].ideal && (k === capK || mass.has(k))) { a.ideal = true; break; }
         return { q, cost, flat, a };
       };
       // Which step of a currency item is looked at: the one that is cheapest on average. For the lock another one may
       // be better (the best of several results asks for spread, not for a good average), so an edge that stands is
       // also made again with the steps it has: the better of the two. An edge made again is then never worse than
       // the one it replaces, which is what keeps every round's rule set one that ends.
-      const old = li >= 0 ? list[li] : null;
+      const old = li >= 0 ? lockE[s] : null;
       let got = make([...cand.values()].map((c) => c[0]));
       if (old && pol[s] === li) { const alt = make(old.a.cand); if (alt && (!got || alt.q < got.q)) got = alt; }
       if (!got) return null;
       const { cost, flat, a } = got;
-      let moved = !old || old.out.length !== flat.length || Math.abs(old.cost - cost) > 1e-9 * (1 + Math.abs(cost));
-      if (!moved) for (let t = 0; t < flat.length; t += 2) if (old.out[t + 1] !== flat[t + 1] || Math.abs(old.out[t] - flat[t]) > 1e-7) { moved = true; break; }
+      let moved = !old || 2 * old.p.length !== flat.length || Math.abs(old.cost - cost) > 1e-9 * (1 + Math.abs(cost));
+      if (!moved) for (let t = 0; t < flat.length; t += 2) if (old.t[t >> 1] !== flat[t + 1] || Math.abs(old.p[t >> 1] - flat[t]) > 1e-7) { moved = true; break; }
       // (the edge is kept as the values make it now, also when its chances have not moved: what is left to do when
       // nothing shown is worth using is told by a value, capY, and that one moves with every round)
       if (old && !moved) { old.a = a; return { moved: false }; }
-      const act = { a, cost, out: flat };
-      if (li < 0) { lockAt[s] = list.length; list.push(act); } else list[li] = act;
+      const n = flat.length >> 1, act = { a, cost, p: new Float64Array(n), t: new Int32Array(n) };
+      for (let i = 0; i < n; i++) { act.p[i] = flat[2 * i]; act.t[i] = flat[2 * i + 1]; }
+      if (li < 0) lockAt[s] = nv;
+      lockE[s] = act;
       luStale[blockOf[s]] = 1;
       return { moved: true };
     }
@@ -3318,6 +3425,7 @@
     // set became one that finishes an item once in 1e15 tries, and stayed there.
     let lostArmed = false;
     const locks = (a) => a.bases != null && a.op !== 'extraction' && a.op !== 'lock' && a.op !== 'newbase';
+    const stepLocks = Uint8Array.from(stepTab, (a) => (locks(a) ? 1 : 0));
     /** Improve the rule set until no node has a cheaper edge (it starts from the rule set of the last solve). */
     function solve(exact) {
       if (exact !== false && hasLost && !lostArmed) { improve(exact, true); lostArmed = true; }
@@ -3336,10 +3444,10 @@
       // the best of many results, so against values that are too low somewhere it takes just those: on a quiver a
       // round valued four thousandths off was followed by a rule set that went round in circles for ever.
       let snap = null;
-      const take = () => { const locks = []; for (let s = 0; s < N; s++) if (lockAt[s] >= 0 && pol[s] === lockAt[s]) { const e = acts[s][lockAt[s]]; locks.push([s, e, e.a]); } return { pol: Int32Array.from(pol), locks, A: Av, F: Fv, x, v: V[start] }; };
+      const take = () => { const locks = []; for (let s = 0; s < N; s++) if (lockAt[s] >= 0 && pol[s] === lockAt[s]) { const e = lockE[s]; locks.push([s, e, e.a]); } return { pol: Int32Array.from(pol), locks, A: Av, F: Fv, x, v: V[start] }; };
       const back = (k) => {
         pol.set(k.pol);
-        for (const [s, e, a] of k.locks) { e.a = a; acts[s][lockAt[s]] = e; }
+        for (const [s, e, a] of k.locks) { e.a = a; lockE[s] = e; }
         Av = k.A; Fv = k.F; x = k.x;
         for (let s = 0; s < N; s++) V[s] = Math.min(BIG, Av[s] + (1 - Fv[s]) * x);
         luStale.fill(1); timing.unsettled = 0;
@@ -3357,7 +3465,7 @@
         const locking = lockArmed && exact !== false && LOCK < baseCost + charge + x;
         if (locking) rough = false;
         const d = new Float64Array(N);
-        for (let s = 0; s < N; s++) if (pol[s] >= 0) d[s] = costOf(acts[s][pol[s]]);
+        for (let s = 0; s < N; s++) if (pol[s] >= 0) d[s] = costAt(s, pol[s]);
         const passes = !rough ? (deepNow ? REPORT_PASSES : EXACT_PASSES) : last > N / 20 ? 3 : last > N / 300 ? 8 : 24;
         deepNow = false;
         const [A, F] = evaluate([{ d, bnd: 0, stuck: BIG, x0: Av }, { bnd: 0, term: 1, x0: Av ? Fv : null }], passes, rough ? 1e-7 : 1e-11);
@@ -3375,24 +3483,25 @@
         // (Hinekora's Lock is an edge only where it can pay at all: see LOCK)
         const lockOn = lockArmed && LOCK < baseCost + charge + x;
         for (let s = 0; s < N; s++) {
-          const list = acts[s];
-          if (list.length < 2) continue;
-          const li = lockAt ? lockAt[s] : -1;
+          // (the node's own edges are 0 to nv - 1; the lock's edge, when it has one, is nv)
+          const b0 = nAt[s], nv = nAt[s + 1] - b0, li = lockAt ? lockAt[s] : -1;
+          if (nv + (li >= 0 ? 1 : 0) < 2) continue;
           if (li < 0 && !lockOn) {
-            let best = pol[s], bq = qOf(s, list[pol[s]]);
+            const p0 = pol[s];
+            let best = p0, bq = qE(nE[b0 + p0]);
             // against rough values an edge must be clearly cheaper to be taken (else the rule set flutters)
             const slack = (rough ? 1e-6 : 1e-9) * (1 + Math.abs(bq));
-            for (let a = 0; a < list.length; a++) { if (a === pol[s] || (!lostArmed && locks(list[a].a))) continue; const v = qOf(s, list[a]); if (v < bq - slack) { bq = v; best = a; } }
-            if (best !== pol[s]) { pol[s] = best; changed++; }
+            for (let a = 0; a < nv; a++) { if (a === p0) continue; const e = nE[b0 + a]; if (!lostArmed && stepLocks[eStep[e]]) continue; const v = qE(e); if (v < bq - slack) { bq = v; best = a; } }
+            if (best !== p0) { pol[s] = best; changed++; }
             continue;
           }
           // with the lock: the best edge without it first, then the lock's edge as the values make it now
-          const held = pol[s] === li, qs = new Float64Array(list.length);
-          let best = held ? -1 : pol[s], bq = held ? Infinity : qOf(s, list[pol[s]]);
+          const held = pol[s] === li, qs = new Float64Array(nv + (li >= 0 ? 1 : 0));
+          let best = held ? -1 : pol[s], bq = held ? Infinity : qE(nE[b0 + pol[s]]);
           const slack = (rough ? 1e-6 : 1e-9) * (1 + Math.abs(held ? V[s] : bq));
-          for (let a = 0; a < list.length; a++) {
-            if (a === li || (!lostArmed && a !== pol[s] && locks(list[a].a))) continue;
-            const v = a === pol[s] ? bq : qOf(s, list[a]);
+          for (let a = 0; a < nv; a++) {
+            if (!lostArmed && a !== pol[s] && stepLocks[eStep[nE[b0 + a]]]) continue;
+            const v = a === pol[s] ? bq : qE(nE[b0 + a]);
             qs[a] = v;
             if (a !== pol[s] && v < bq - (best < 0 ? 0 : slack)) { bq = v; best = a; }
           }
@@ -3471,8 +3580,9 @@
       while (q.length) {
         const k = q.pop();
         if (pol[k] < 0) continue;
-        const o = acts[k][pol[k]].out;
-        for (let t = 1; t < o.length; t += 2) if (o[t] !== RESTART) add(o[t]);
+        edgeAt(k, pol[k]);
+        const tg = OT;
+        for (let t = OA, te = OB; t < te; t++) if (tg[t] !== RESTART) add(tg[t]);
       }
       return seen;
     }
@@ -3485,9 +3595,10 @@
       while (q.length) {
         const k = q.pop();
         if (pol[k] < 0) continue;
-        const act = acts[k][pol[k]], o = act.out;
-        let v = costOf(act);
-        for (let t = 0; t < o.length; t += 2) { const to = o[t + 1]; if (to === RESTART) v += o[t] * x; else { v += o[t] * V[to]; if (!seen[to]) { seen[to] = 1; q.push(to); } } }
+        let v = costAt(k, pol[k]);
+        edgeAt(k, pol[k]);
+        const ch = OP, tg = OT;
+        for (let t = OA, te = OB; t < te; t++) { const to = tg[t]; if (to === RESTART) v += ch[t] * x; else { v += ch[t] * V[to]; if (!seen[to]) { seen[to] = 1; q.push(to); } } }
         const r = Math.abs(v - V[k]) / Math.max(1, Math.abs(V[k]));
         if (r > worst) worst = r;
       }
@@ -3512,11 +3623,11 @@
       const nameSet = new Map();
       // (a.also: what a step uses or returns besides its own currency, [[name, count]]: an Orb of Extraction takes a
       // new base and returns a rune)
-      for (let s = 0; s < N; s++) if (pol[s] >= 0) { const a = acts[s][pol[s]].a; for (const n of actNames(a).concat((a.also || []).map((x) => x[0]))) if (!nameSet.has(n)) nameSet.set(n, nameSet.size); }
+      for (let s = 0; s < N; s++) if (pol[s] >= 0) { const a = aAt(s, pol[s]); for (const n of actNames(a).concat((a.also || []).map((x) => x[0]))) if (!nameSet.has(n)) nameSet.set(n, nameSet.size); }
       const names = [...nameSet.keys()];
       // money only: the cost and its second moment (M = c^2 + 2 c E[V'] + E[M']) leave the charge on bases out
       const cost = new Float64Array(N);
-      for (let s = 0; s < N; s++) if (pol[s] >= 0) cost[s] = acts[s][pol[s]].cost;
+      for (let s = 0; s < N; s++) if (pol[s] >= 0) cost[s] = priceAt(s, pol[s]);
       const X = evaluate([{ d: cost, bnd: 0, x0: Av && Av.length === N ? Av : null }], REPORT_PASSES);
       // Every currency's count from a node: the visits to each node from it until the item is finished or given up
       // (visitsFrom: one solve), times what the step there uses. (A solve per currency, thirty of them, took most of
@@ -3527,7 +3638,7 @@
         if (!c) {
           c = new Float64Array(names.length);
           const nu = visitsFrom(s0);
-          for (let t = 0; t < N; t++) { if (!(nu[t] > 0) || pol[t] < 0) continue; const a = acts[t][pol[t]].a; for (const n of actNames(a)) c[nameSet.get(n)] += nu[t] * (a.count || 1); for (const [n, k] of a.also || []) c[nameSet.get(n)] += nu[t] * k; }
+          for (let t = 0; t < N; t++) { if (!(nu[t] > 0) || pol[t] < 0) continue; const a = aAt(t, pol[t]); for (const n of actNames(a)) c[nameSet.get(n)] += nu[t] * (a.count || 1); for (const [n, k] of a.also || []) c[nameSet.get(n)] += nu[t] * k; }
           counts.set(s0, c);
         }
         return c;
@@ -3538,10 +3649,12 @@
       const moneyBase = Fv[n0] > 1e-250 ? X[0][n0] / Fv[n0] : BIG;
       const d2 = new Float64Array(N);
       for (let s = 0; s < N; s++) if (pol[s] >= 0) {
-        const act = acts[s][pol[s]], o = act.out;
+        const c0 = priceAt(s, pol[s]);
+        edgeAt(s, pol[s]);
+        const ch = OP, tg = OT;
         let next = 0;
-        for (let t = 0; t < o.length; t += 2) next += o[t] * (o[t + 1] === RESTART ? moneyBase : money[o[t + 1]]);
-        d2[s] = act.cost * act.cost + 2 * act.cost * next;
+        for (let t = OA, te = OB; t < te; t++) next += ch[t] * (tg[t] === RESTART ? moneyBase : money[tg[t]]);
+        d2[s] = c0 * c0 + 2 * c0 * next;
       }
       const M = evaluate([{ d: d2, bnd: 0 }], REPORT_PASSES)[0];
       const m2 = (s) => M[s] + (1 - Fv[s]) * (Fv[n0] > 1e-250 ? M[n0] / Fv[n0] : 0);
@@ -3554,9 +3667,10 @@
         while (q.length) {
           const k = q.pop();
           if (pol[k] < 0) continue;
-          const act = acts[k][pol[k]], o = act.out;
-          let v = act.cost;
-          for (let t = 0; t < o.length; t += 2) { const to = o[t + 1]; if (to === RESTART) v += o[t] * moneyBase; else { v += o[t] * money[to]; if (!seen[to]) { seen[to] = 1; q.push(to); } } }
+          let v = priceAt(k, pol[k]);
+          edgeAt(k, pol[k]);
+          const ch = OP, tg = OT;
+          for (let t = OA, te = OB; t < te; t++) { const to = tg[t]; if (to === RESTART) v += ch[t] * moneyBase; else { v += ch[t] * money[to]; if (!seen[to]) { seen[to] = 1; q.push(to); } } }
           const r = Math.abs(v - money[k]) / Math.max(1, Math.abs(money[k]));
           if (r > off) off = r;
         }
@@ -3566,7 +3680,7 @@
     }
     const usesOf = (s, name) => { const so = solution(), k = so.names.indexOf(name); return k < 0 ? 0 : so.uses(s, k); };
     const net = {
-      ctx, goals, states, acts, pol, start, n0, N, timing, lite,
+      ctx, goals, states, acts: actsView, pol, start, n0, N, timing, lite,
       /** The time the caller gave (input.deadline) is over: what was solved after it was cut short and is not to be shown. */
       outOfTime: () => timedOut || late(),
       // (bound: a restart is not a white base: another item like the pasted one, or none; held: the targets that no white base can get)
@@ -3615,11 +3729,11 @@
       mapping(st) { return index.has(keyOf(canon(nodeOf(st, true)))) ? 0 : index.has(keyOf(canon(nodeOf(st, 3)))) || index.has(keyOf(canon(nodeOf(st, 2)))) ? 1 : index.has(keyOf(canon(nodeOf(st, false)))) ? 2 : -1; },
       done: (s) => done(states[s]),
       /** The step to use at node s: {a, names, cost, out}, or null when done or stuck. */
-      step(s) { return pol[s] >= 0 ? Object.assign({ names: actNames(acts[s][pol[s]].a) }, acts[s][pol[s]]) : null; },
+      step(s) { return pol[s] >= 0 ? Object.assign({ names: actNames(aAt(s, pol[s])) }, edgeObj(s, pol[s])) : null; },
       /** Hinekora's Lock at node s: the steps to look at with it, one per currency item ([{k, a, names}]), or null. */
       lockSteps(s) {
-        const e = pol[s] >= 0 ? acts[s][pol[s]] : null;
-        return e && e.a.op === 'lock' ? e.a.cand.map((k) => ({ k, a: acts[s][k].a, names: actNames(acts[s][k].a) })) : null;
+        const a = pol[s] >= 0 ? aAt(s, pol[s]) : null;
+        return a && a.op === 'lock' ? a.cand.map((k) => ({ k, a: aAt(s, k), names: actNames(aAt(s, k)) })) : null;
       },
       /**
        * What is used after looking: seen = [[k, the item as step k would leave it]] -> {k, cost} for the result that is
@@ -3627,30 +3741,28 @@
        * cost: the lock and what is used (a base too where the item is lost).
        */
       lockUse(s, seen) {
-        const e = acts[s][pol[s]], list = acts[s];
-        let bestY = e.a.capY, pick = null;
+        const ea = aAt(s, pol[s]);
+        let bestY = ea.capY, pick = null;
         for (const [k, st] of seen) {
-          const act = list[k];
           let to;
           if (st.corrupted || st.sanctified) to = done(nodeOf(st, true)) ? FIN : RESTART;
           else { to = net.nodeOf(st); if (to < 0) continue; }
-          const y = seenCost(act, to) + (to === RESTART ? charge + x : V[to]);
-          if (y < bestY) { bestY = y; pick = { k, to, cost: LOCK + seenCost(act, to) }; }
+          const y = seenCost(s, k, to) + (to === RESTART ? charge + x : V[to]);
+          if (y < bestY) { bestY = y; pick = { k, to, cost: LOCK + seenCost(s, k, to) }; }
         }
         // (y: what the item is worth after the choice, with what the choice costs; want: the same as the edge has it on average. For the checks.)
-        const out = pick || (e.a.cap === -2 ? { burn: true, cost: LOCK + BURN } : { rest: Object.assign({ names: actNames(list[e.a.cap].a) }, list[e.a.cap]), cost: LOCK + list[e.a.cap].cost });
-        out.y = bestY; out.want = qOf(s, e) - LOCK;
+        const out = pick || (ea.cap === -2 ? { burn: true, cost: LOCK + BURN } : { rest: Object.assign({ names: actNames(aAt(s, ea.cap)) }, edgeObj(s, ea.cap)), cost: LOCK + priceAt(s, ea.cap) });
+        out.y = bestY; out.want = qAt(s, pol[s]) - LOCK;
         return out;
       },
       /** The same as lines for a player: what to use for which result, best first ([{names, to: 'done' | 'lost' | what the item is then, share}]), and what is left to do. */
       lockList(s, max) {
-        const e = pol[s] >= 0 ? acts[s][pol[s]] : null;
-        if (!e || e.a.op !== 'lock') return null;
-        const list = acts[s];
+        const a = pol[s] >= 0 ? aAt(s, pol[s]) : null;
+        if (!a || a.op !== 'lock') return null;
         return {
-          look: e.a.cand.map((k) => actNames(list[k].a)),
-          lines: e.a.plan.slice(0, max || 10).map(([k, to, p]) => ({ names: actNames(list[k].a), to: to === RESTART ? 'lost' : done(states[to]) ? 'done' : describe(states[to]), share: p })),
-          rest: e.a.rest > 1e-9 ? { names: e.a.cap === -2 ? ['Divine Orb'] : actNames(list[e.a.cap].a), burn: e.a.cap === -2, share: e.a.rest } : null,
+          look: a.cand.map((k) => actNames(aAt(s, k))),
+          lines: a.plan.slice(0, max || 10).map(([k, to, p]) => ({ names: actNames(aAt(s, k)), to: to === RESTART ? 'lost' : done(states[to]) ? 'done' : describe(states[to]), share: p })),
+          rest: a.rest > 1e-9 ? { names: a.cap === -2 ? ['Divine Orb'] : actNames(aAt(s, a.cap)), burn: a.cap === -2, share: a.rest } : null,
         };
       },
       /**
@@ -3682,9 +3794,10 @@
       /** Chance that the step at node s adds a target the item does not have. */
       hit(s) {
         if (pol[s] < 0) return 0;
-        const o = acts[s][pol[s]].out, n = metN(states[s]);
+        edgeAt(s, pol[s]);
+        const ch = OP, tg = OT, n = metN(states[s]);
         let p = 0;
-        for (let t = 0; t < o.length; t += 2) if (o[t + 1] !== RESTART && metN(states[o[t + 1]]) > n) p += o[t];
+        for (let t = OA, te = OB; t < te; t++) if (tg[t] !== RESTART && metN(states[tg[t]]) > n) p += ch[t];
         return p;
       },
       /** Expected cost from node s (Exalted Orbs). */
@@ -3757,9 +3870,10 @@
         while (q.length) {
           const k = q.pop();
           if (pol[k] < 0) continue;
-          const e = acts[k][pol[k]];
-          if (e.a.ideal) return true;
-          for (let t = 0; t < e.out.length; t += 2) { const to = e.out[t + 1] === RESTART ? n0 : e.out[t + 1]; if (!seen[to]) { seen[to] = 1; q.push(to); } }
+          if (aAt(k, pol[k]).ideal) return true;
+          edgeAt(k, pol[k]);
+          const tg = OT;
+          for (let t = OA, te = OB; t < te; t++) { const to = tg[t] === RESTART ? n0 : tg[t]; if (!seen[to]) { seen[to] = 1; q.push(to); } }
         }
         return false;
       },
@@ -3768,7 +3882,7 @@
         const total = (act) => { let c = act.cost; const o = act.out; for (let t = 0; t < o.length; t += 2) c += o[t] * (o[t + 1] === RESTART ? so.moneyBase : so.money[o[t + 1]]); return c; };
         // (not the omen at its best: that is no step a player can take)
         // (nor a lock's edge the route does not use: it is what earlier values made of it)
-        return acts[s].map((act, i) => ({ a: act.a, names: actNames(act.a), cost: act.cost, out: act.out, total: total(act), best: i === pol[s] })).filter((o) => !o.a.ideal && (o.best || o.a.op !== 'lock')).sort((a, b) => (b.best - a.best) || (a.total - b.total));
+        return actsOf(s).map((act, i) => ({ a: act.a, names: actNames(act.a), cost: act.cost, out: act.out, total: total(act), best: i === pol[s] })).filter((o) => !o.a.ideal && (o.best || o.a.op !== 'lock')).sort((a, b) => (b.best - a.best) || (a.total - b.total));
       },
       /** What buying a starting point is worth: the price up to which it beats rolling it from a white base. */
       entries() {
@@ -3799,6 +3913,8 @@
       stateOf: (st, known) => nodeOf(st, known !== false),
       /** The pool numbers of a side (for the checks): stats(side index, minimum modifier level, catalyst boost, rune bits, tag mask, present mask). */
       poolStats: stats,
+      /** What the edges take (for the checks): edges at the nodes, distinct edges, their outcomes, bytes of the flat arrays. */
+      storage: () => ({ edges: nE.length, distinct: eStep.length, outcomes: oP.length, bytes: [nAt, nE, eStep, eCost, eOut, oP, oT].reduce((b, a) => b + a.byteLength, 0) }),
     };
     function describe(S) {
       const has = [], miss = [], inWay = [], low = [], twin = [], across = [];
