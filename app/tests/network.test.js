@@ -1208,3 +1208,33 @@ test('network: the flat edge arrays read back as the edges, the lock\'s too', ()
   assert.ok(lockNodes > 0);
   assert.ok(net.acts.some((l) => l.some((e) => e.a.op === 'lock')), 'the view iterates like an array');
 });
+
+test('network: an essence that gives one of several modifiers can give another target', () => {
+  // Greater Essence of the Infinite gives Strength, Dexterity or Intelligence (kb.essence_outcomes). Used for an
+  // Intelligence target, its Dexterity was taken for a crafted modifier nobody asked for always; where Dexterity is a
+  // target too, the item was no node of the network, and 98,713 of 100,000 crafts of a Grand Regalia left it in the
+  // eighteenth deep run. Now it is the Dexterity target, crafted.
+  const X = lockWorld(), base = 'Grand Regalia', white = X.item(base, 'Normal');
+  const ess = X.input(white, {}).essences.filter((r) => kb.essence_outcomes && kb.essence_outcomes[r.item] && kb.essence_outcomes[r.item].mods.length > 2 && r.kind === 'magic');
+  const rec = ess.find((r) => /Intelligence/.test(r.mod));
+  if (!rec) return; // (no such essence for the base in the data of the day)
+  const others = kb.essence_outcomes[rec.item].mods.filter((id) => id !== rec.mod && ess.some((r) => r.mod === id));
+  if (!others.length) return;
+  const T = (id) => { const m = kb.mods[id], f = X.tiers(base, m.gen === 'p' ? 'prefix' : 'suffix', new RegExp(m.txt.split('\n')[0].replace(/[#+()%.]/g, '.').replace(/[0-9]+/g, '.+') + '$')); return { fam: f.fam, group: f.side, minTier: Math.max(...Object.keys(f.ids).map(Number)), required: true, label: f.label }; };
+  const targets = { 'suffix-0': T(rec.mod), 'suffix-1': T(others[0]) };
+  const inp = X.input(white, targets), net = NW.route(inp);
+  assert.ok(!net.unsupported && !net.impossible);
+  // an edge of that essence for the Intelligence target has an outcome with the other target on the item, crafted
+  const gi = net.goals.findIndex((g) => g.fam === targets['suffix-0'].fam), used = net.goals[gi].magicEss;
+  assert.ok(used && kb.essence_outcomes[used.item], 'the Intelligence target is made with an essence of several modifiers');
+  let seen = false;
+  for (let s = 0; s < net.N && !seen; s++) for (const e of net.acts[s]) {
+    if (e.a.op !== 'essence' || e.a.item !== used.item) continue;
+    for (let t = 1; t < e.out.length; t += 2) if (e.out[t] >= 0 && net.describe(e.out[t]).has.some((h) => h.startsWith(targets['suffix-1'].label) && /crafted/.test(h))) seen = true;
+  }
+  assert.ok(seen, 'the essence can give the other target');
+  const got = X.play(net, inp, 1500, 9, 200000, 90000);
+  assert.equal(got.off, 0, 'no craft leaves the network');
+  assert.equal(got.done, got.runs);
+  assert.ok(Math.abs(got.mean / net.cost(net.start) - 1) < 0.1, `played ${got.mean} +-${got.se}, promised ${net.cost(net.start)}`);
+});

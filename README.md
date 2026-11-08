@@ -248,6 +248,14 @@ bekleme süresi olmayan bir "mantıksal ağ" istendi.
   ağlarının engelleyici takibi elden çıkarılmayan itemlerde çözümü 44 sn'den 434 sn'ye uzatmıştı (16 süre aşımı);
   orada takipsiz ağ zaten vaadini tutuyordu, o itemler eski ağa döndü (35 sn). Bulut artık 19 makine kullanır ve
   `from` ile her tarama yeni senaryolardan başlayabilir.
+- **On sekizinci derin tarama (9 Kasım 2026, `reports/network-sweep-2026-11-09.md`).** 19 makine, yeni senaryolar:
+  908 senaryo, 859'u oynandı, 845'i uyuşuyor (%98,4), hata yok. Serle's Triumph'lı iki senaryoda craft'ların neredeyse
+  hepsi ağın dışına çıkıyordu: Greater Essence of the Infinite rastgele Strength, Dexterity ya da Intelligence verir;
+  ağ istenen dışındakini hep gereksiz crafted mod sayıyordu, Dexterity de hedefken item ağda yoktu. Artık essence'in
+  verebileceği her mod ne ise o (başka bir hedefse o hedef, crafted): Grand Regalia 26.153 vaat, 25.867 oynanan.
+- **PoE2 1.0 (11 Aralık 2026, `reports/poe2-1.0-crafting-2026-11-09.md`).** Conquerors of Wraeclast ligi: Crimson
+  Iron ile Forgemark, Reforging Bench (işaretli modlar yeniden atılır ve fractured olur, en çok iki fractured mod),
+  Blood Vial'lar. Tam yama notları 4 Aralık civarı; bilgi tabanı ve ağ çıkışla birlikte güncellenecek.
 - Rune of Aldur, takıldıktan sonra gelen modu dönüştürmez (oyuncu 8 Ekim 2026'da doğruladı: iddia k61).
 - Araştırma günlüğü: `reports/research-crafters-2026-10-07.md` (0.5.5 crafter videoları ve yazılı rehberler).
 

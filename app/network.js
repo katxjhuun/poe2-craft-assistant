@@ -232,13 +232,13 @@
         const pe = ctx.pool.get(r.mod);
         if (g.minValue != null ? reach(r.mod, g) < 0 : !(!g.tier || g.kind === 'ess' || (pe && pe.tier <= g.tier))) continue;
         const o = kb.essence_outcomes && kb.essence_outcomes[r.item];
-        let pHit = 1;
+        let pHit = 1, outs = null;
         if (o) {
-          const fit = o.mods.map((id, k) => ({ id, w: o.weights ? o.weights[k] : 1 })).filter((x) => ctx.essences.some((y) => y.item === r.item && y.mod === x.id));
+          const fit = o.mods.map((id, k) => ({ id, w: o.weights ? o.weights[k] : 1 })).filter((x) => kb.mods[x.id] && ctx.essences.some((y) => y.item === r.item && y.mod === x.id));
           const tw = fit.reduce((x, y) => x + y.w, 0), mine = fit.find((x) => x.id === r.mod);
-          if (fit.length > 1) pHit = mine && tw > 0 ? mine.w / tw : 0;
+          if (fit.length > 1) { pHit = mine && tw > 0 ? mine.w / tw : 0; outs = fit; }
         }
-        if (pHit > 0) list.push(Object.assign({}, r, { price: pr, pHit, pOK: Math.max(0, reach(r.mod, g)) }));
+        if (pHit > 0) list.push(Object.assign({}, r, { price: pr, pHit, pOK: Math.max(0, reach(r.mod, g)), outs }));
       }
       list.sort((a, b) => a.price / a.pHit - b.price / b.pHit);
       g.magicEss = list.find((r) => r.kind === 'magic') || null;
@@ -889,6 +889,44 @@
     // modifier was counted once, and a second taken for a plain one: that left room for a third crafted modifier,
     // which the rules refuse; then steps that leave a second were not offered, which cost a bow's route a sixth.)
     const ownOn = (S, si, kind) => (S.cx === si + 1 && S.ct === kind) || (S.cy === si + 1 && S.cu === kind);
+    /**
+     * What an essence used for target i gives, the target's slot being free (chance p): most essences give one modifier;
+     * some give one of several (kb.essence_outcomes: Essence of the Infinite gives Strength, Dexterity or Intelligence,
+     * each as likely). The simulator rolls among the ones the item can take (a side with room, a group not on it). One
+     * that is another target is that target, crafted; the others are a crafted modifier nobody asked for. (The miss was
+     * taken for a modifier nobody asked for always: where it was Dexterity and Dexterity a target, the item was no node
+     * of the network, and 98,713 of 100,000 crafts of a Grand Regalia left it in the eighteenth deep run.)
+     */
+    const essOuts = (S1, i, r, p, outs) => {
+      const g = goals[i];
+      const own = (x) => x.id === r.mod;
+      const fit = (r.outs || [{ id: r.mod, w: 1 }]).filter((x) => {
+        if (own(x)) return true;
+        const m = kb.mods[x.id], si = m.gen === 'p' ? 0 : 1;
+        if (!(open(S1, si) > 0)) return false;
+        for (let k = 0; k < G; k++) if (there(S1.g[k]) && S1.g[k] !== TWIN && goals[k].grp.some((y) => m.grp.includes(y))) return false;
+        return true;
+      });
+      const W = fit.reduce((t, x) => t + x.w, 0);
+      for (const x of fit) {
+        const q = p * x.w / W;
+        if (own(x)) {
+          if (r.pOK > 0) outs.push([q * r.pOK, addRolled(S1, i, g.si, CRAFTED)]);
+          if (r.pOK < 1) outs.push([q * (1 - r.pOK), addRolled(S1, i, g.si, CRAFTED + NEAR)]);
+          continue;
+        }
+        const m = kb.mods[x.id], si = m.gen === 'p' ? 0 : 1, pe = ctx.pool.get(x.id);
+        const k = goals.findIndex((h, kk) => kk !== i && h.kind !== 'des' && h.si === si && h.fam === m.fam && wanted(S1.g[kk]));
+        const h = k >= 0 ? goals[k] : null;
+        const ok = !h ? 0 : h.minValue != null ? Math.max(0, reach(x.id, h)) : (!h.tier || h.kind === 'ess' || (pe && pe.tier <= h.tier)) ? 1 : 0;
+        if (ok > 0) outs.push([q * ok, addRolled(S1, k, si, CRAFTED)]);
+        // (under the value: near it; under the tier, or no target: a crafted modifier nobody asked for, as the reader takes it)
+        if (ok < 1) {
+          if (h && h.minValue != null && reach(x.id, h) >= 0) outs.push([q * (1 - ok), addRolled(S1, k, si, CRAFTED + NEAR)]);
+          else { const S2 = cp(S1); addCrafted(S2, si, 0); outs.push([q * (1 - ok), S2]); }
+        }
+      }
+    };
     const addCrafted = (n, si, kind) => { if (!n.cx) { n.cx = si + 1; n.ct = kind; } else if (!n.cy) { n.cy = si + 1; n.cu = kind; } else n.j[si]++; };
     const canon = (n) => {
       // One of several stats for a slot: while one of them is on the item (the fractured one first), the others are
@@ -2110,9 +2148,7 @@
           if (open(S1, g.si) > 0 || S.g[i] === TWIN) {
             const outs = [], free = clear(S1, i);
             if (free < 1) outs.push([1 - free, S1]);
-            if (r.pOK > 0) outs.push([free * r.pHit * r.pOK, addRolled(S1, i, g.si, CRAFTED)]);
-            if (r.pOK < 1) outs.push([free * r.pHit * (1 - r.pOK), addRolled(S1, i, g.si, CRAFTED + NEAR)]);
-            if (r.pHit < 1) { const S2 = cp(S1); addCrafted(S2, g.si, 0); outs.push([free * (1 - r.pHit), S2]); }
+            essOuts(S1, i, r, free, outs);
             push({ op: 'essence', item: r.item, mod: r.mod }, r.price, outs);
           }
         }
@@ -2202,9 +2238,7 @@
             const free = clear(S1, i);
             if (free < 1) outs.push([p * (1 - free), S1]);
             p *= free;
-            if (r.pOK > 0) outs.push([p * r.pHit * r.pOK, addRolled(S1, i, g.si, CRAFTED)]);
-            if (r.pOK < 1) outs.push([p * r.pHit * (1 - r.pOK), addRolled(S1, i, g.si, CRAFTED + NEAR)]);
-            if (r.pHit < 1) { const S2 = cp(S1); addCrafted(S2, g.si, 0); outs.push([p * (1 - r.pHit), S2]); }
+            essOuts(S1, i, r, p, outs);
           };
           if (tw) for (const u of us) give(removeUnit(S, u), u.w / tw); else if (v < 0) give(S, 1);
           push(Object.assign({ op: 'pessence', item: r.item, mod: r.mod }, v >= 0 ? { side: SIDES[v] } : null), r.price + (v >= 0 ? PR.crystal[v] : 0), outs);
