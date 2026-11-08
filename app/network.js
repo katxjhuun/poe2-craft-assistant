@@ -516,15 +516,15 @@
      * -> { W, ok, low, nearW, twin, block }: per goal the weight that meets it, that lands under its value, that is in
      * its way, and that is its twin of another element.
      */
-    function stats(si, floor, mult, bits, tm, pm, kf) {
+    function stats(si, floor, mult, bits, tm, pm, kf, cm) {
       mult = mult > 1 ? mult : 1;
       bits = (bits || 0) & (R_POOL | R_ALDUR);
-      tm = tm || 0; pm = pm || 0; kf = kf && FRAC ? 1 : 0;
+      tm = tm || 0; pm = pm || 0; kf = kf && FRAC ? 1 : 0; cm = cm | 0;
       let fi = statFloors.indexOf(floor), mi = statMults.indexOf(mult);
       if (fi < 0) fi = statFloors.push(floor) - 1;
       if (mi < 0) mi = statMults.push(mult) - 1;
       // (tm: at most 12 bits, pm: one bit per target)
-      const key = (((((fi * 16 + mi) * 2 + si) * 16 + bits) * 4096 + tm) * 1024 + pm) * 2 + kf;
+      const key = ((((((fi * 16 + mi) * 2 + si) * 16 + bits) * 4096 + tm) * 1024 + pm) * 2 + kf) * 16 + cm;
       let s = statCache.get(key);
       if (s) return s;
       let pool = P.sidePool(ctx, SIDES[si], floor);
@@ -537,6 +537,21 @@
         // element's resistance for a Void Flux, from three elements where two can roll; x1.17, the tenth deep run.)
         const at = kb.mods[FRAC.id].at, added = at ? new Set(at) : null;
         pool = pool.filter((e) => !((FRAC.si === si && e.fam === FRAC.fam) || e.grp.some((x) => FRAC.grp.includes(x)) || (added && !e.rune && E.tagBlocked(kb.mods[e.id], ctx.baseTags, added))));
+      }
+      if (cm) {
+        // cm: crafted modifiers nobody asked for whose essence is known (cmOf: a tool essence's own). The same: what
+        // is of their groups, on either side, and what their tags stop cannot roll, also what would be in a target's
+        // way. (knownTake took their groups out of the modifiers nobody asked for alone: on a staff whose tool
+        // essence gives "+# to Level of all Spell Skills", the Fire, Lightning, Chaos and Physical spell levels,
+        // whose tags keep its Freeze Buildup target out, stayed in the pool as in its way, and a Greater Exalted
+        // Orb put one there at 32% in the network and at 21% in the play, at the node the craft spent most of its
+        // uses on: x1.06.)
+        for (let b = 0; b < 4; b++) {
+          const m = cm & (1 << b) ? CXM(b >> 1, (b & 1) + 1) : null;
+          if (!m) continue;
+          const grp = m.grp || [], added = m.at ? new Set(m.at) : null;
+          pool = pool.filter((e) => !(e.grp.some((x) => grp.includes(x)) || (added && !e.rune && E.tagBlocked(kb.mods[e.id], ctx.baseTags, added))));
+        }
       }
       if (pm) {
         // pm: the targets of this side that are on the item (or have a modifier of their group in their way). What
@@ -635,6 +650,19 @@
         gw[q] = X; J += ws[q];
       }
       let other = null, tx = null; // the other side's pool, read only when a modifier of this side has tags
+      // (With the blockers followed, a modifier nobody asked for that keeps a target of the other side out
+      // arrives as a state of that target (XBLOCKED, see roll): the plain ones on an item where that target can still
+      // come are none of those. What the plain ones stop on the other side is counted without them, xJ being their
+      // weight. Counted with them, a staff's three plain prefixes were taken to stop a third of the suffixes nobody
+      // asked for, mostly with the tags of the Fire and Lightning prefixes that keep its Freeze Buildup target out:
+      // the suffixes in Freeze Buildup's way came at 32% a Greater Exalted Orb in the network and 21% in the play, at
+      // the node the craft spent most of its uses on.)
+      let xJ = 0;
+      const xStop = TRACK ? new Uint8Array(pool.length) : null;
+      if (xStop) for (const q of own) {
+        const e = pool[q];
+        for (let i = 0; i < G; i++) { const g = goals[i]; if (g.si !== si && ((!e.rune && stops(e.id, i)) || (g.grp.length && e.fam !== g.fam && e.grp.some((x) => g.grp.includes(x))))) { xStop[q] = 1; xJ += ws[q]; break; } }
+      }
       for (const q of own) {
         const at = pool[q].rune ? null : kb.mods[pool[q].id].at;
         if (!at) continue;
@@ -642,6 +670,7 @@
         const shares = new Set(keysOf(pool[q]).flatMap((k) => byGrp.get(k)));
         for (const o of own) if (!shares.has(o) && !pool[o].rune && E.tagBlocked(kb.mods[pool[o].id], ctx.baseTags, added)) tw[o] += ws[q];
         if (!other) { other = P.sidePool(ctx, SIDES[1 - si], floor).filter((o) => !theirs.has(o.fam)); tx = new Float64Array(other.length); }
+        if (xStop && xStop[q]) continue;
         for (let o = 0; o < other.length; o++) if (E.tagBlocked(kb.mods[other[o].id], ctx.baseTags, added)) tx[o] += ws[q];
       }
       // what the pasted item's fractured modifier takes from this side: its groups (on its own side) and its tags
@@ -662,7 +691,7 @@
       // they were nearly always "of the catalyst's type": on an amulet with Defences quality the model took an
       // unknown prefix for % Energy Shield or % Armour nine times in ten, took those out of the pool, and promised
       // the Evasion target at 43% where it rolls at 32% (x1.18, the ninth and tenth deep runs).
-      const plain = mult > 1 ? stats(si, floor, 1, bits, tm, pm, kf) : null;
+      const plain = mult > 1 ? stats(si, floor, 1, bits, tm, pm, kf, cm) : null;
       // sv[n][q]: the chance that entry q is still in the pool next to n modifiers nobody asked for (kept for the
       // boosted pools of the same entries: made when one asks)
       let svs = null;
@@ -693,7 +722,7 @@
           let f = 0;
           if (L > 0) for (const q of own) { surv[q] *= Math.max(0, 1 - Math.min(1, gw[q] / L) - tw[q] / J); f += ws[q] * surv[q]; }
           left[n] = f;
-          if (other && X0 > 0) { let fx = 0; for (let o = 0; o < other.length; o++) { sx[o] *= Math.max(0, 1 - tx[o] / J); fx += other[o].w * sx[o]; } across[n] = fx / X0; }
+          if (other && X0 > 0 && J - xJ > 0) { let fx = 0; for (let o = 0; o < other.length; o++) { sx[o] *= Math.max(0, 1 - tx[o] / (J - xJ)); fx += other[o].w * sx[o]; } across[n] = fx / X0; }
         }
       }
       // The dominant group: one group that is a fifth or more of what nobody asked for (the local defences are half of
@@ -1166,6 +1195,8 @@
     // tool's modifier on it was promised a tenth too cheap.
     // (S.ct says whose the crafted one is: 1 the aimed tool's of its side, 2 the unaimed one's, 0 not known)
     const CXM = (si, ct) => (ct === 1 && TOOL[si] ? kb.mods[TOOL[si].mod] : ct === 2 && FILL[si] ? kb.mods[FILL[si].mod] : null);
+    /** The crafted modifiers of node S whose essence is known, as stats' cm (a bit per side and kind of tool). */
+    const cmOf = (S) => (S.cx && (S.ct === 1 || S.ct === 2) && CXM(S.cx - 1, S.ct) ? 1 << ((S.cx - 1) * 2 + S.ct - 1) : 0) | (S.cy && (S.cu === 1 || S.cu === 2) && CXM(S.cy - 1, S.cu) ? 1 << ((S.cy - 1) * 2 + S.cu - 1) : 0);
     const DJL = [0, 1].map((si) => (ctx.bone ? P.desPoolFor(ctx, SIDES[si], 0, null) : []));
     // PDV: the chance that the option taken on a miss is a desecrated-only one: one desecrated-only option of three
     // (80%), two (15%) or three, and the highest of the three is taken
@@ -1195,7 +1226,31 @@
       if (S.cx === si + 1 && CXM(si, S.ct)) g *= Math.max(0, 1 - knownTake(s, si, 0, S.ct) / J0);
       if (S.cy === si + 1 && CXM(si, S.cu)) g *= Math.max(0, 1 - knownTake(s, si, 0, S.cu) / J0);
       if (S.dj === si + 1 && DJD[si]) g *= Math.max(0, 1 - knownTake(s, si, 1) / J0);
+      // A target's twin of another element is one more modifier of the side, and nothing of its own group rolls beside
+      // it (a twin of the target's own group is out of the pool already: twinGrp). It took nothing from the pool: on a
+      // talisman with a Fire Damage prefix, the twin of its Lightning Damage target, an Exalted Orb gave another
+      // prefix 38% of the time in the network and 33% in the play; a Regal Orb on a Magic body armour with the twin of
+      // its Fire Resistance target another suffix 39% and 34% (x1.09 the talisman, its promise under its play).
+      for (let i = 0; i < G; i++) if (S.g[i] === TWIN && goals[i].si === si && conv[i] && !twinGrp[i]) g *= Math.max(0, 1 - twinTake(s, i) / J0);
       return g;
+    }
+    /** What a twin of target i takes from the anonymous weight of its side in pool s: its group, on average over the twins by weight. */
+    function twinTake(s, i) {
+      const key = 't' + i;
+      let v = s.takes.get(key);
+      if (v == null) {
+        let tot = 0, sum = 0;
+        for (let q = 0; q < s.pool.length; q++) {
+          const e = s.pool[q];
+          if (!conv[i].src.has(e.id)) continue;
+          let x = 0;
+          for (let o = 0; o < s.pool.length; o++) if (s.anon[o] && s.pool[o].grp.some((y) => e.grp.includes(y))) x += s.ws[o];
+          sum += s.ws[q] * x; tot += s.ws[q];
+        }
+        v = tot > 0 ? sum / tot : 0;
+        s.takes.set(key, v);
+      }
+      return v;
     }
     /**
      * The share of the other side's pool that is left next to n base modifiers of side si taken at the Well of Souls
@@ -1245,7 +1300,7 @@
       // the other side's modifiers stop a share of this side's pool with their tags
       // (S.pw: under an Omen of Putrefaction the other side was filled at the Well first, with that many base
       // modifiers taken by the rule for a reveal without a target: see wellAcross)
-      const share = S.pw !== undefined ? wellAcross(1 - si, floor)[Math.min(S.pw, NM)] : m ? stats(1 - si, floor, 1, S.u, tm, presentMask(S, 1 - si), S.kf).across[Math.min(m, NM)] : 1;
+      const share = S.pw !== undefined ? wellAcross(1 - si, floor)[Math.min(S.pw, NM)] : m ? stats(1 - si, floor, 1, S.u, tm, presentMask(S, 1 - si), S.kf, cmOf(S)).across[Math.min(m, NM)] : 1;
       if (!s.big) return { NM, n, share, f: (S.kf && s.J > 0 ? Math.max(0, 1 - s.fracTake / s.J) : 1) * knownLeft(S, si, s, s.J), q: 1, fracIn: false };
       // the pasted item's fractured modifier is of the dominant group: that group is known to be on the item
       const fracIn = !!(S.kf && FRAC.si === si && FRAC.grp.includes(s.big.key));
@@ -1273,7 +1328,7 @@
      * network does not follow (what `unblocked` counts for every such modifier, here for the one a Fracturing Orb picks).
      */
     function hiddenWay(S, si) {
-      const tm = tagMask(S), s = stats(si, 0, 1, S.u, tm, presentMask(S, si), S.kf);
+      const tm = tagMask(S), s = stats(si, 0, 1, S.u, tm, presentMask(S, si), S.kf, cmOf(S));
       if (!(s.W > 0)) return 0;
       let keep = 1;
       for (let i = 0; i < G; i++) {
@@ -1296,19 +1351,38 @@
       // (a followed target: its blockers on its own side are states. ownIsCase: the target is of the dominant group;
       // whether a modifier of that group is on the item is a case)
       const n = ownIsCase || followed[i] ? 0 : unknown(S, g.si);
-      if (n) { const s0 = stats(g.si, floor || 0, 1, S.u, tm, presentMask(S, g.si), S.kf); if (s0.W > 0) p *= Math.pow(1 - Math.min(1, s0.low[i] / s0.W), n); }
+      if (n) { const s0 = stats(g.si, floor || 0, 1, S.u, tm, presentMask(S, g.si), S.kf, cmOf(S)); if (s0.W > 0) p *= Math.pow(1 - Math.min(1, s0.low[i] / s0.W), n); }
       const m = TRACK ? 0 : unknown(S, 1 - g.si); // (with blockers followed, one of the other side is a state too)
-      if (m) { const sx = stats(1 - g.si, floor || 0, 1, S.u, tm, presentMask(S, 1 - g.si), S.kf); if (sx.W > 0 && sx.cross[i] > 0) p *= Math.pow(1 - Math.min(1, sx.cross[i] / sx.W), m); }
+      if (m) { const sx = stats(1 - g.si, floor || 0, 1, S.u, tm, presentMask(S, 1 - g.si), S.kf, cmOf(S)); if (sx.W > 0 && sx.cross[i] > 0) p *= Math.pow(1 - Math.min(1, sx.cross[i] / sx.W), m); }
       // another target's twin of another element on the item may stop this one with its tags
       for (let k = 0; k < G; k++) if (S.g[k] === TWIN && twinStops[k] && !(TRACK && goals[k].si !== g.si)) p *= 1 - twinStops[k][i];
       return p;
+    }
+    /**
+     * The share of target i's twins in pool s that is still there next to the modifiers nobody asked for on side si of
+     * node S: each twin's own chance of not being taken by them (sv, their groups and tags), and what the other side's
+     * tags and the known modifiers leave of that weight (mix: share, f), as for the rest of it.
+     */
+    function twinSurv(S, si, s, i, floor, tm) {
+      const x = mix(S, si, s, floor, tm);
+      if (!x.n) return x.share * x.f;
+      const key = 'v' + i + '|' + x.n;
+      let v = s.takes.get(key);
+      if (v == null) {
+        const sv = (s.plain || s).survs()[x.n];
+        let tot = 0, left = 0;
+        for (let q = 0; q < s.pool.length; q++) if (s.anon[q] && conv[i].src.has(s.pool[q].id)) { tot += s.ws[q]; left += s.ws[q] * sv[q]; }
+        v = tot > 0 ? left / tot : 1;
+        s.takes.set(key, v);
+      }
+      return v * x.share * x.f;
     }
     /** A random modifier for the open sides in `mask` (bit 0 prefix, bit 1 suffix): [[chance, goal index or -1, side, status]]. */
     function roll(S, mask, floor, mult) {
       const tm = tagMask(S), sides = [];
       for (let si = 0; si < 2; si++) {
         if (!(mask & (1 << si))) continue;
-        const s = stats(si, floor, mult, S.u, tm, presentMask(S, si), S.kf);
+        const s = stats(si, floor, mult, S.u, tm, presentMask(S, si), S.kf, cmOf(S));
         const cs = cases(S, si, s, floor, tm).filter((c) => c.pool > 0);
         if (!cs.length) continue;
         // what can roll for a target on this side: [weight, target, status, of the dominant group]
@@ -1351,13 +1425,19 @@
           if (followed[i] && s.low[i] > 0) putLow(i);
           // (what keeps the target out keeps its twin of another element out as well: they are of one group)
           if (S.g[i] === ABSENT && s.twin[i] > 0) {
+            // (The twins are modifiers nobody asked for in the pool, and what those on the side take out of it takes
+            // twins too: they are thinned as the rest of that weight is. At their full weight, a Greater Exalted Orb
+            // gave a talisman the twin of its Lightning Damage target, another element's Damage prefix, 11.9% of the
+            // time in the network and 6.2% in the play, beside two prefixes nobody asked for that are often of those
+            // elements: x1.09, its promise under its play.)
+            const k = twinSurv(S, si, s, i, floor, tm);
             let rest = s.twin[i];
             const tx = TRACK ? s.twinX[i] : null;
             if (tx) for (const [m, w] of tx) {
               const ww = Math.min(rest, w);
-              if (ww > 0) { ws.push([ww * beta, i, TWIN, false, m]); rest -= ww; }
+              if (ww > 0) { ws.push([ww * beta * k, i, TWIN, false, m]); rest -= ww; }
             }
-            if (rest > 0) put(rest * beta, i, TWIN, false);
+            if (rest > 0) put(rest * beta * k, i, TWIN, false);
           }
         }
         // a modifier that is something for two targets has one status: the others' weights lose it (see stats, multi)
@@ -1523,7 +1603,7 @@
     function clear(S, i) {
       const g = goals[i];
       if (g.kind !== 'nat' || followed[i]) return 1;
-      const s0 = stats(g.si, 0, 1, S.u, tagMask(S), presentMask(S, g.si), S.kf), n = others(S, g.si);
+      const s0 = stats(g.si, 0, 1, S.u, tagMask(S), presentMask(S, g.si), S.kf, cmOf(S)), n = others(S, g.si);
       return n && s0.W > 0 ? Math.pow(1 - Math.min(1, s0.low[i] / s0.W), n) : 1;
     }
     /**
@@ -1715,7 +1795,7 @@
       // modifiers nobody knows on this side (the pasted item's own are known while S.kx: the lists are cut already)
       // (S.pd: of those, the desecrated-only ones of an Omen of Putrefaction: they take list entries, not base modifiers)
       const unk = S.kx ? 0 : Math.max(0, unknown(S, si) - (S.pd || 0));
-      const s = stats(si, floor, 1, S.u & R_ALDUR, tagMask(S), presentMask(S, si), S.kf); // (the Well of Souls does not offer a rune's pool: open test t33)
+      const s = stats(si, floor, 1, S.u & R_ALDUR, tagMask(S), presentMask(S, si), S.kf, cmOf(S)); // (the Well of Souls does not offer a rune's pool: open test t33)
       const tm = tagMask(S), tm0 = tm;
       const want = [];
       for (let i = 0; i < G; i++) {
@@ -1727,7 +1807,7 @@
           const gone = S.px ? 0 : S.pd || 0;
           // (xb: the chance that no modifier of the other side is of the target's group; with the sides followed that is a state)
           let xb = 1;
-          if (!TRACK) { const m = unknown(S, 1 - si); if (m) { const sx = stats(1 - si, floor || 0, 1, S.u, tm0, presentMask(S, 1 - si), S.kf); if (sx.W > 0 && sx.cross[i] > 0) xb = Math.pow(1 - Math.min(1, sx.cross[i] / sx.W), m); } }
+          if (!TRACK) { const m = unknown(S, 1 - si); if (m) { const sx = stats(1 - si, floor || 0, 1, S.u, tm0, presentMask(S, 1 - si), S.kf, cmOf(S)); if (sx.W > 0 && sx.cross[i] > 0) xb = Math.pow(1 - Math.min(1, sx.cross[i] / sx.W), m); } }
           if (c || cl) want.push({ i, des: true, c, cl, hit, grp: g.grp, xb, share: pv[i], all: listFor(ex, hit, si, unk, g.grp, gone), lich: ll ? listFor(ll, hit, si, unk, g.grp, gone) : null });
         } else if (g.kind === 'nat' && !g.noWell && s.ok[i] + s.nearW[i] > 0) {
           const beta = unblocked(S, i, floor, !!(s.big && s.big.has.has(i)));
@@ -2147,6 +2227,13 @@
           const S1 = cp(S); S1.r = 2;
           if (open(S1, g.si) > 0 || S.g[i] === TWIN) {
             const outs = [], free = clear(S1, i);
+            // (A modifier nobody asked for of the target's group, where the node does not follow the target's blockers:
+            // the game refuses the essence, and this counts it as used up on an item that turned Rare. The play takes
+            // the node's next step there instead, a detour: 223,681 in 2,000 crafts of a quarterstaff whose blockers no
+            // node follows, Greater Essence of Abrasion on a Magic item with a lower Physical Damage prefix, the
+            // seventeenth deep run. Leading that share to the node that knows the modifier made that network 31%
+            // larger (103,086 to 134,934 nodes) for the same promise, 38,888.4: the page solves again from every
+            // pasted item, and its start node knows the modifier.)
             if (free < 1) outs.push([1 - free, S1]);
             essOuts(S1, i, r, free, outs);
             push({ op: 'essence', item: r.item, mod: r.mod }, r.price, outs);
@@ -2511,11 +2598,13 @@
         // fractured "Adds # to # Cold damage to Attacks" of tier 5 under the wanted tier 3; up to 2,537 of 100,000
         // crafts of such scenarios in the thirteenth deep run). The share of the orb's uses that does this is the
         // item lost: a new base where there is one, and no edge at all where the item is never given up.
+        // (The fractured one leaves the side's class of levels as a removed one does, see without: what Omen of
+        // Whittling can take on that side is what is left. It kept the class: on an amulet whose lowest prefix was
+        // fractured, the other one, of a higher level, was taken for one the omen removes for certain; a third of the
+        // fractures led to a node the network never gave, and the route played at 0.80 of its promise.)
         for (let si = 0; si < 2; si++) if (S.j[si]) {
           const q = hiddenWay(S, si);
-          const S2 = cp(S);
-          S2.j[si]--; S2.fj = si + 1;
-          if (q < 1) outs.push([S.j[si] * (1 - q), S2]);
+          if (q < 1) for (const [w, S2] of without(S, { w: 1, k: 'j', si }, false)) { S2.kx = S.kx; S2.fj = si + 1; outs.push([S.j[si] * (1 - q) * w, S2]); }
           gone += S.j[si] * q;
           n += S.j[si];
         }
@@ -2569,7 +2658,11 @@
         // seventeenth deep run.)
         const t = i >= 0 || v >= 0 || m.unrevealed || m.des || m.crafted || m.frac ? -1 : goals.findIndex((g, k) => S.g[k] === ABSENT && goals[k].si === si && !slotFull(k) && conv[k] && conv[k].src.has(m.id) && !(conv[k].via === 'aldur' && st.aldur));
         // not the target, but of its group (a lower tier, a sister modifier) or with tags that stop it: it stands in the target's way
-        const b = i >= 0 || v >= 0 || t >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => S.g[k] === ABSENT && goals[k].si === si && !slotFull(k) && (g.kind !== 'nat' || (known && (known !== 3 || followed[k]))) && (m.fam === g.fam || (g.grp.length && (m.grp || []).some((x) => g.grp.includes(x))) || (m.id && kb.mods[m.id] && stops(m.id, k))));
+        // (also where the target's twin of another element is on the item: the twin is then one more modifier nobody
+        // asked for, as a roll has it. Read as the twin, the item was the node where the target can still roll: a
+        // Regal Orb on a Magic amulet with Cold Resistance, the twin of its Fire Resistance target, led to "Fire
+        // Resistance in the way" 7.2% of the time in the network and never in the play.)
+        const b = i >= 0 || v >= 0 || t >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => (S.g[k] === ABSENT || S.g[k] === TWIN) && goals[k].si === si && !slotFull(k) && (g.kind !== 'nat' || (known && (known !== 3 || followed[k]))) && (m.fam === g.fam || (g.grp.length && (m.grp || []).some((x) => g.grp.includes(x))) || (m.id && kb.mods[m.id] && stops(m.id, k))));
         const set = (k, x) => { if (S.g[k] === TWIN) { S.j[si]++; lowest[si] = Math.min(lowest[si], goalLvl[k]); } S.g[k] = x; if (m.frac) S.fg = k; role.set(m, x === BLOCKED ? 2 : x === TWIN ? 3 : 1); if (x === BLOCKED) lowest[si] = Math.min(lowest[si], m.lvl || 1); };
         if (i >= 0) set(i, kind);
         else if (v >= 0) set(v, kind + NEAR);

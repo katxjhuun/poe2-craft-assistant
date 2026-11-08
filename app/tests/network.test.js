@@ -370,7 +370,20 @@ const lockWorld = () => {
     for (let k = 0; k < n; k++) { const st = Object.assign({}, st0, { mods: st0.mods.map((m) => Object.assign({}, m)) }); if (prep) prep(st, r); if (net.finished(P.apply(net.ctx, st, e.a, r).state)) hit++; }
     return { a: e.a, net: p, sim: hit / n, why: P.validate(net.ctx, st0, e.a) };
   };
-  return { L, SW, D, play, item, ctxOf, tiers, input, chance };
+  // One edge of the node an item is read as, against the simulator: the total variation between the edge's chances
+  // and where n uses of it on that very item lead (every finished item one end), and the share that left the network.
+  const edgeGap = (net, st, pick, n) => {
+    const e = net.acts[net.nodeOf(st)].find((x) => pick(x.a));
+    if (!e) return null;
+    const key = (k) => (k >= 0 && net.done(k) ? 'done' : k), model = new Map(), got = new Map();
+    for (let t = 0; t < e.out.length; t += 2) { const k = key(e.out[t + 1] < 0 ? net.n0 : e.out[t + 1]); model.set(k, (model.get(k) || 0) + e.out[t]); }
+    const r = L.rng(3);
+    for (let i = 0; i < n; i++) { const k = key(net.nodeOf(P.apply(net.ctx, Object.assign({}, st, { mods: st.mods.map((m) => Object.assign({}, m)) }), e.a, r).state)); got.set(k, (got.get(k) || 0) + 1 / n); }
+    let tv = 0;
+    for (const k of new Set([...model.keys(), ...got.keys()])) tv += Math.abs((model.get(k) || 0) - (got.get(k) || 0));
+    return { tv: tv / 2, off: got.get(-1) || 0, e };
+  };
+  return { L, SW, D, play, item, ctxOf, tiers, input, chance, edgeGap };
 };
 
 test('network: Omen of Sanctification lifts a value past its tier, and only the highest tier counts for it', () => {
@@ -1237,4 +1250,67 @@ test('network: an essence that gives one of several modifiers can give another t
   assert.equal(got.off, 0, 'no craft leaves the network');
   assert.equal(got.done, got.runs);
   assert.ok(Math.abs(got.mean / net.cost(net.start) - 1) < 0.1, `played ${got.mean} +-${got.se}, promised ${net.cost(net.start)}`);
+});
+
+const tierRange = (t) => ({ top: Math.min(...Object.keys(t.ids).map(Number)), low: Math.max(...Object.keys(t.ids).map(Number)) });
+const goalOf = (f, tier) => ({ fam: f.fam, group: f.side, minTier: tier, required: true, label: f.label });
+const modOf = (f, tier, more) => Object.assign({ id: f.ids[tier], side: f.side, tier }, more);
+
+test("network: a lower tier of a target beside its twin is in the target's way, and the twin takes its own group out of the pool", () => {
+  // A Magic ring with Cold Resistance, the twin of its Fire Resistance target. A Regal Orb that added a lower Fire
+  // Resistance led to "in the way" in the network, and the reader took the item for the twin's node (an amulet: 7.2%
+  // of the rolls, never in the play). And the twin took nothing from the pool: on a body armour another suffix came
+  // 39% of the time in the network and 34% in the play.
+  const X = lockWorld(), base = 'Dusk Ring';
+  const fire = X.tiers(base, 'suffix', /to Fire Resistance$/), cold = X.tiers(base, 'suffix', /to Cold Resistance$/);
+  const mana = X.tiers(base, 'prefix', /to maximum Mana$/), acc = X.tiers(base, 'prefix', /to Accuracy Rating$/);
+  const net = NW.route(X.input(X.item(base, 'Normal'), { 'suffix-0': goalOf(fire, 2), 'prefix-0': goalOf(mana, tierRange(mana).low) }));
+  const st = (rarity, mods) => P.toState(net.ctx, X.item(base, rarity, mods), {});
+  const magic = st('Magic', [modOf(acc, tierRange(acc).top), modOf(cold, tierRange(cold).top)]);
+  assert.deepEqual(net.describe(net.nodeOf(magic)).twin, [fire.label]);
+  const both = net.describe(net.nodeOf(st('Rare', [modOf(acc, tierRange(acc).top), modOf(cold, tierRange(cold).top), modOf(fire, tierRange(fire).low)])));
+  assert.deepEqual(both.inWay, [fire.label], 'the lower Fire Resistance is in the way, the twin is nobody\'s');
+  const g = X.edgeGap(net, magic, (a) => a.op === 'regal', 6000);
+  assert.ok(g && g.tv < 0.03, `a Regal Orb: the network and the simulator ${g && g.tv.toFixed(3)} apart`);
+});
+
+test("network: a tool essence's crafted modifier takes its groups and what its tags stop out of the pool, also what is in a target's way", () => {
+  // A staff whose tool essence (Perfect Essence of Sorcery) gives "+# to Level of all Spell Skills": the Fire,
+  // Lightning, Chaos and Physical spell levels, whose tags keep its Freeze Buildup target out, cannot roll beside it.
+  // They stayed in the pool as in the target's way: a Greater Exalted Orb put one there at 32% in the network and
+  // 21% in the play, at the node a craft spent most of its uses on (x1.06).
+  const X = lockWorld(), base = 'Permafrost Staff';
+  const freeze = X.tiers(base, 'suffix', /increased Freeze Buildup$/), mana = X.tiers(base, 'suffix', /Mana per enemy killed$/);
+  const pre = (re) => { const t = X.tiers(base, 'prefix', re); return modOf(t, tierRange(t).low); };
+  const net = NW.route(X.input(X.item(base, 'Normal'), { 'suffix-0': goalOf(freeze, 1), 'suffix-1': goalOf(mana, 2) }, { 'Perfect Essence of Sorcery': 0.01 }));
+  // three prefixes nobody asked for, and the essence's own suffix as the essence leaves it (the text of a pasted item
+  // reads as the base modifier of that text)
+  const st = P.toState(net.ctx, X.item(base, 'Rare', [pre(/to maximum Mana$/), pre(/increased Spell Damage$/), pre(/of Damage as Extra Fire Damage$/), { id: 'EssenceSpellSkillLevel2H1', side: 'suffix', crafted: true }]), {});
+  const em = kb.mods.EssenceSpellSkillLevel2H1, k = st.mods.findIndex((m) => m.crafted);
+  st.mods[k] = Object.assign({}, st.mods[k], { id: 'EssenceSpellSkillLevel2H1', fam: em.fam, grp: em.grp, tier: null });
+  assert.ok(net.nodeOf(st) >= 0 && net.states[net.nodeOf(st)].ct === 1, "the crafted suffix is the tool essence's");
+  const g = X.edgeGap(net, st, (a) => a.op === 'exalt' && !a.side && a.tier === 'base', 6000);
+  assert.ok(g && g.tv < 0.06, `an Exalted Orb: the network and the simulator ${g && g.tv.toFixed(3)} apart`);
+});
+
+test('network: a Fracturing Orb on a modifier nobody asked for leaves the class of levels of what is left on its side', () => {
+  // An amulet whose two prefixes nobody asked for are of a low and a high level: fracturing the low one leaves the
+  // high one, which Omen of Whittling no longer takes for certain. The edge kept the class: a third of the fractures
+  // led to a node the network never gave.
+  const X = lockWorld(), base = 'Absent Amulet';
+  const attr = X.tiers(base, 'suffix', /to all Attributes$/), cast = X.tiers(base, 'suffix', /increased Cast Speed$/);
+  const acc = X.tiers(base, 'prefix', /to Accuracy Rating$/), life = X.tiers(base, 'prefix', /to maximum Life$/), regen = X.tiers(base, 'suffix', /Life Regeneration per second$/);
+  const net = NW.build(X.input(X.item(base, 'Normal'), { 'suffix-0': goalOf(attr, 2), 'suffix-1': goalOf(cast, 2) }));
+  assert.ok(net.classes > 1, 'the levels are followed');
+  const st = P.toState(net.ctx, X.item(base, 'Rare', [modOf(cast, 2), modOf(acc, tierRange(acc).top), modOf(life, tierRange(life).low), modOf(regen, tierRange(regen).top, { des: true })]), {});
+  const g = X.edgeGap(net, st, (a) => a.op === 'fracture', 6000);
+  assert.ok(g, 'a Fracturing Orb is an edge');
+  for (const fam of [acc.fam, life.fam]) {
+    const k = net.nodeOf(Object.assign({}, st, { mods: st.mods.map((m) => Object.assign({}, m, m.fam === fam ? { frac: true } : null)) }));
+    let p = 0;
+    for (let t = 0; t < g.e.out.length; t += 2) if (g.e.out[t + 1] === k) p += g.e.out[t];
+    assert.ok(p > 0.03, `the item with its ${fam} fractured is an outcome of the edge (${p.toFixed(3)})`);
+  }
+  // (how often the class rises is the pool's average, not this item's: a node knows the lowest class of a side only)
+  assert.equal(g.off, 0);
 });
