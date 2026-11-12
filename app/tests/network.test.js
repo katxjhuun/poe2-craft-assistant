@@ -1049,6 +1049,38 @@ test('network: a fractured twin stays a fractured modifier when the target itsel
   assert.ok(reached, 'and the Exalted Orb leads to it');
 });
 
+test('network: a modifier in a target\'s way is read as that, also beside the target\'s twin and whatever the order', () => {
+  // A ring that is never given up wants Cold Resistance at tier 1 and has a Fire Resistance (the twin: a Flux turns
+  // it) and a low Cold Resistance (in the target's way). A roll of the low one beside the twin makes it the blocker
+  // and the twin a modifier nobody asked for; the reader took whichever came first on the item. With the twin first
+  // the blocker was nobody's, and a Fracturing Orb could lock it for good: on a sceptre 52 crafts of the
+  // seventeenth deep run never ended that way.
+  const X = lockWorld(), base = 'Dusk Ring';
+  const cold = X.tiers(base, 'suffix', /to Cold Resistance$/), fire = X.tiers(base, 'suffix', /to Fire Resistance$/), mana = X.tiers(base, 'prefix', /to maximum Mana$/), life = X.tiers(base, 'prefix', /to maximum Life$/);
+  const top = (t) => Math.min(...Object.keys(t.ids).map(Number)), low = (t) => Math.max(...Object.keys(t.ids).map(Number));
+  const mod = (t, tier, more) => Object.assign({ id: t.ids[tier], side: t.side, tier }, more);
+  const targets = {
+    'suffix-0': { fam: cold.fam, group: 'suffix', minTier: 1, required: true, label: cold.label },
+    'prefix-0': { fam: mana.fam, group: 'prefix', minTier: 1, required: true, label: mana.label },
+  };
+  const it = X.item(base, 'Rare', [mod(fire, top(fire)), mod(life, low(life))]);
+  const net = NW.build(Object.assign({}, X.input(it, targets, null, { restart: 'never' }), { lite: 0, track: 8, maxStates: 120000, whittle: 'none' }));
+  assert.ok(!net.unsupported && !net.impossible);
+  if (!net.describe(net.start).twin.length) return; // (no Flux at the prices of the day: the Fire Resistance is no twin)
+  for (const frac of [false, true]) {
+    const both = X.item(base, 'Rare', [mod(fire, top(fire), { frac }), mod(cold, low(cold)), mod(life, low(life))]);
+    const st = P.toState(net.ctx, both, {});
+    const flip = Object.assign({}, st, { mods: st.mods.slice().reverse() });
+    const a = net.nodeOf(st), b = net.nodeOf(flip);
+    assert.ok(a >= 0, 'the item is a node');
+    assert.equal(a, b, 'the same node whichever modifier comes first');
+    const d = net.describe(a);
+    assert.ok(d.inWay.some((x) => x.startsWith(cold.label)), 'the low Cold Resistance is in the target\'s way: ' + JSON.stringify(d));
+    assert.equal(d.twin.length, 0, 'the Fire Resistance is a modifier nobody asked for then');
+    if (frac) assert.equal(d.fracturedOther, 'suffix', 'a fractured twin is the fractured modifier nobody asked for');
+  }
+});
+
 test('network: alternatives never send a request to the smaller networks, and more than eight stats still have a route', () => {
   // The player's staff of 13 Oct 2026: five slots, two of them with an alternative, were solved as a request of seven
   // targets in the smaller network (225,216 where the slots' own five stats cost 41,219). "Many targets" goes by the

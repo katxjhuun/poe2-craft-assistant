@@ -5,6 +5,9 @@ const path = require('path');
 const L = require('../lib.js');
 const ROOT = L.ROOT;
 const NW = require(process.env.NWFILE ? path.resolve(process.env.NWFILE) : path.join(ROOT, 'app', 'network.js'));
+// (the sweep and the play require app/network.js themselves: with NWFILE they get the other one too, else run_one.js
+// and play_sweep.js ran the current network whatever NWFILE said)
+if (process.env.NWFILE) require.cache[require.resolve(path.join(ROOT, 'app', 'network.js'))] = require.cache[require.resolve(path.resolve(process.env.NWFILE))];
 const SW = require('../network_sweep.js');
 const { play } = require('../network_check.js');
 /** The sweep's scenario with this id ("Base|kind|...|n"), or null. */

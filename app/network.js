@@ -2628,6 +2628,7 @@
     function nodeOf(st, known) {
       const S = cp(N0);
       const role = new Map(); // modifier -> 1 a target or its twin, 2 in a target's way
+      const twinMod = []; // target -> the modifier read as its twin
       const lowest = [Infinity, Infinity]; // per side, the lowest level among the modifiers nobody asked for and those in a target's way
       S.r = st.rarity === 'Rare' ? 2 : st.rarity === 'Magic' ? 1 : 0;
       S.q = CAT && st.catTag === CAT.tag && st.catQ > 0 ? (st.catQ >= 20 ? 2 : 1) : 0;
@@ -2661,9 +2662,22 @@
         // (also where the target's twin of another element is on the item: the twin is then one more modifier nobody
         // asked for, as a roll has it. Read as the twin, the item was the node where the target can still roll: a
         // Regal Orb on a Magic amulet with Cold Resistance, the twin of its Fire Resistance target, led to "Fire
-        // Resistance in the way" 7.2% of the time in the network and never in the play.)
+        // Resistance in the way" 7.2% of the time in the network and never in the play. Read in the item's order, the
+        // twin that came first held the target's one status and the modifier in its way was nobody's: on a sceptre that
+        // is never given up a Fracturing Orb then fractured "Allies in your Presence deal # to # added Attack Fire
+        // Damage" of tier 4 under the wanted tier 3, which no step can take off any more, and 52 crafts of the
+        // seventeenth deep run went on for ever. set() takes the twin's role away and keeps a fractured twin the
+        // fractured modifier nobody asked for, as addRolled does.)
         const b = i >= 0 || v >= 0 || t >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => (S.g[k] === ABSENT || S.g[k] === TWIN) && goals[k].si === si && !slotFull(k) && (g.kind !== 'nat' || (known && (known !== 3 || followed[k]))) && (m.fam === g.fam || (g.grp.length && (m.grp || []).some((x) => g.grp.includes(x))) || (m.id && kb.mods[m.id] && stops(m.id, k))));
-        const set = (k, x) => { if (S.g[k] === TWIN) { S.j[si]++; lowest[si] = Math.min(lowest[si], goalLvl[k]); } S.g[k] = x; if (m.frac) S.fg = k; role.set(m, x === BLOCKED ? 2 : x === TWIN ? 3 : 1); if (x === BLOCKED) lowest[si] = Math.min(lowest[si], m.lvl || 1); };
+        const set = (k, x) => {
+          if (S.g[k] === TWIN) {
+            // (the twin stays as a modifier nobody asked for; a fractured twin as the fractured one, as in addRolled)
+            if (S.fg === k && !S.fj) { S.fg = -1; S.fj = si + 1; } else S.j[si]++;
+            lowest[si] = Math.min(lowest[si], goalLvl[k]);
+            if (twinMod[k]) role.delete(twinMod[k]);
+          }
+          S.g[k] = x; if (m.frac) S.fg = k; role.set(m, x === BLOCKED ? 2 : x === TWIN ? 3 : 1); if (x === TWIN) twinMod[k] = m; if (x === BLOCKED) lowest[si] = Math.min(lowest[si], m.lvl || 1);
+        };
         if (i >= 0) set(i, kind);
         else if (v >= 0) set(v, kind + NEAR);
         else if (t >= 0) set(t, TWIN);
@@ -3903,7 +3917,9 @@
       hiddenBlocks(st, s) {
         const S = states[s], out = [];
         for (let k = 0; k < G; k++) {
-          if (S.g[k] !== ABSENT) continue; // (met, under its value, in the way, a twin, kept out from the other side: the node knows)
+          // (met, under its value, in the way, kept out from the other side: the node knows. Beside its twin a target
+          // can still have a modifier in its way that the node does not follow.)
+          if (S.g[k] !== ABSENT && S.g[k] !== TWIN) continue;
           const g = goals[k];
           for (const m of st.mods) {
             if (m.unrevealed || !m.fam || goals.some((q) => P.meets(m, q, q.tier) || P.nearMiss(m, q))) continue;

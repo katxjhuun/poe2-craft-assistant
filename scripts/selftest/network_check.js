@@ -112,8 +112,16 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
     const key = net.states[node].g.map((x) => (x >= 1 && x <= 3 ? 1 : 0)).join('') + '|' + hidden.join(',');
     const got = again.get(key), mean = got && got.n ? got.sum / got.n : null;
     if (got && got.n >= AGAIN.per) return mean;
-    // (an item the writer below cannot put into text as it is: runes that change the rules, a hidden modifier, quality)
-    if (st.aldur || st.xCrafted || st.xSuffix || (st.tags || []).length || st.catQ || st.mods.some((m) => !m.id || m.unrevealed)) return mean;
+    // (an item the writer below cannot put into text as it is: runes that change the rules, a hidden modifier, quality.
+    // Astrid's Creativity and Serle's Triumph that the craft socketed are written with it, as rune lines the reader
+    // takes their rules from: boots that carried Astrid's Creativity and a low "+# to Evasion Rating" were never
+    // valued, and 99 of 1,000 such crafts never ended where the item is never given up.)
+    const runeTxt = (n) => ((((ctx.kb.augments[n] || {}).by_class || {})[ctx.cls] || {}).txt || []).join('\n');
+    const runes = st.runes || [];
+    const xc = runes.filter((n) => /additional Crafted Modifier/i.test(runeTxt(n))).length;
+    const xs = runes.reduce((s, n) => { const x = /\+(\d+) Suffix Modifiers? allowed/i.exec(runeTxt(n)); return s + (x ? +x[1] : 0); }, 0);
+    const written = runes.every((n) => /additional Crafted Modifier|Suffix Modifiers? allowed/i.test(runeTxt(n))) && (st.xCrafted || 0) === xc && (st.xSuffix || 0) === xs;
+    if (st.aldur || !written || (st.tags || []).length || st.catQ || st.mods.some((m) => !m.id || m.unrevealed)) return mean;
     // No more routes to solve for this scenario: a kind that was never solved is valued as the kinds with as many
     // targets on the item were, on average. (Without that an item of a new kind had no end where the item is never
     // given up: in the thirteenth deep run up to 2,537 of 100,000 crafts of such a scenario went on for ever.)
@@ -122,7 +130,7 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
     let v = null;
     try {
       const base = input.item.base;
-      const text = renderItem({ base, cls: ctx.cls, rarity: st.rarity, ilvl: input.item.ilvl, name: 'Item In Hand', implicits: ctx.kb.bases[base].imp || [],
+      const text = renderItem({ base, cls: ctx.cls, rarity: st.rarity, ilvl: input.item.ilvl, name: 'Item In Hand', implicits: ctx.kb.bases[base].imp || [], runes,
         mods: st.mods.map((m) => ({ id: m.id, side: m.side, tier: m.tier, frac: m.frac, des: m.des, crafted: m.crafted })) }, rng(seed + 7919 * solves), 'adv').text;
       const item = E.parseItem(ctx.ix, text).item;
       // (The small network: no blocker followed, no Omen of Whittling. The item's own blockers are known to it all
@@ -229,7 +237,17 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
             stuck.clear(); from = -1;
             continue;
           }
-          const alt = net.options(node).find((o) => !o.best && o.a.op !== 'lock' && !P.validate(ctx, st, o.a.pre || o.a) && !futileOn(node, o, st, hidden));
+          // An item that is never given up, that no route solved again has valued, and that has come back to this
+          // node forty times: whoever holds it takes off a modifier that may be the one in the way, with a step that
+          // can take any of them (no side, not Omen of Light). The next cheapest step that can do something is the
+          // network's choice for an item without the blocker and can go round in a circle that never touches it: a
+          // bone that leaves a hidden Desecrated modifier, then Omen of Light with an Orb of Annulment that takes that
+          // one off again (Grand Cuisses with a low "+# to Evasion Rating", the network that follows no blocker where
+          // the item is never given up: 99 of 1,000 crafts did not end within 115,650 uses, 627 in the sixteenth deep
+          // run). Only that late: where the other steps change the item they mostly get past the blocker, and for
+          // less (a Grand Regalia played at x1.22 with the removal from the sixth time on, x1.04 without it).
+          const clear = never && c > 40 ? net.options(node).find((o) => (o.a.op === 'annul' || o.a.op === 'chaos') && !o.a.side && !o.a.light && !o.a.whittle && !o.a.pre && !P.validate(ctx, st, o.a)) : null;
+          const alt = clear || net.options(node).find((o) => !o.best && o.a.op !== 'lock' && !P.validate(ctx, st, o.a.pre || o.a) && !futileOn(node, o, st, hidden));
           if (alt) { detours++; note(detourWhy, step.a, why); step = alt; }
         }
       }
