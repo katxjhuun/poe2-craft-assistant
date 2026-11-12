@@ -39,9 +39,12 @@ taramanın Wrath Sceptre'ı 2.000/2.000 craft bitiyor), bilgi tabanı 0.5.5.7 on
    kazanıyorsa hata kaydı açılır.
 4. **Sonuç damgası:** her simülasyon sonucu kural defterinin özetini (hash) ve fiyat tarihini taşır; bir kural
    değişince yalnızca o kuralı kullanan rotalar yeniden koşar.
-5. **Uzman görünümü (sayfa):** en iyi rota + sonraki seçenekler; beklenen maliyet, kötü gidiş (P90), adım şansları,
-   item'ı bozabilecek adımlar; rotanın dayandığı `weak` kurallar uyarı olarak; "en iyi" ölçütü oyuncunun seçimi
-   (beklenen maliyet / en kötü durum / en az adım). Öğretici metin yok.
+5. **Uzman görünümü (sayfa):** en iyi rota + sonraki seçenekler; beklenen maliyet, medyan, kötü gidiş (P90) ve
+   replay'de görülen en kötü durum; adım şansları, item'ı bozabilecek adımlar; rotanın dayandığı `weak` kurallar
+   uyarı olarak; "en iyi" ölçütü oyuncunun seçimi (beklenen maliyet / en kötü durum / en az adım). Öğretici metin yok.
+   Dağılım grafikleri `dataviz` skill'iyle.
+6. **10 saniye ölçümü sayfada:** cevap süresi Node'da değil, yayımlanan sayfada (tarayıcıda) ölçülür; hedef
+   listesinin en büyük ağlarıyla. Ağ büyüdükçe (Faz 2'nin iki fractured modifier'ı) yeniden ölçülür.
 
 ## Faz 2 — 1.0 ön hazırlık (20 Kasım–3 Aralık, Faz 1 ile paralel)
 
@@ -88,3 +91,6 @@ Datamine edilmiş bilgiyle yapılabilenler; yama notları geldiğinde yalnızca 
 1. `worktree-agent-a648…` dalı kurtarılır (Faz 0).
 2. Hedef listesi 100 craft hedefi; cevap 10 saniye; fiyatlar en çok 24 saatlik.
 3. Faz 1 ve Faz 2 paralel, iki ayrı oturumda.
+4. Simülasyon işlerinde `craft-network` ile birlikte `simulasyon-crafting-denge` ve `hayal-gucu-hassas-is`
+   skill'leri kullanılır; oturum brief'leri bunu söyler. Uzman görünümü medyan ve en kötü durumu da gösterir;
+   10 saniye sayfada ölçülür (Faz 1 madde 5–6).
