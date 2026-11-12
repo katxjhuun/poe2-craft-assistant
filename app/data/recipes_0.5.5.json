@@ -3300,8 +3300,8 @@
   {
    "id": "k62",
    "claim": "With Hinekora's Lock on an item, every currency item held over it shows its own result, the results of different currency items are drawn apart, and any currency that is used (a Divine Orb too) spends the lock",
-   "verdict": "plausible",
-   "reason": "Game text: \"Allows an item to foresee the result of the next Currency item used on it. Modifying the item in any way removes the ability to foresee.\" That each currency item has its own result, shown again and again until the item changes, is how the lock is used by crafters; the game files say nothing about how the results are drawn. The craft network builds its lock step on this: the player looks at one step per currency item and uses the best result (app/network.js, LOCK). Not counted on: whether an omen changes the result that is shown or draws another one (only one step per currency item is looked at), a bone's modifier (it is chosen at the Well of Souls afterwards), the reveal there, and runes. Open test t36."
+   "verdict": "verified",
+   "reason": "Game text: \"Allows an item to foresee the result of the next Currency item used on it. Modifying the item in any way removes the ability to foresee.\" That each currency item has its own result, shown again and again until the item changes, is how the lock is used by crafters; the game files say nothing about how the results are drawn. The craft network builds its lock step on this: the player looks at one step per currency item and uses the best result (app/network.js, LOCK). Not counted on: whether an omen changes the result that is shown or draws another one (only one step per currency item is looked at), a bone's modifier (it is chosen at the Well of Souls afterwards), the reveal there, and runes. Open test t36. Shown in game (t36, 12 Nov 2026): each currency item, and each with an omen, shows its own result; a Divine Orb removes the lock."
   },
   {
    "id": "k63",
@@ -3641,7 +3641,10 @@
    "id": "t33",
    "question": "With a rune that opens a modifier pool socketed (Kolr's Hunt, Katla's Gloom, Vorana's Carnage, Uhtred's Sidereus, Thrud's Might, Medved's Tending): does the Well of Souls offer that pool's modifiers, and how often do they roll against the item's own?",
    "how": "Desecrate such an item a few times and note whether a Marksman (Decay, Soul...) modifier is among the three options. For the weights: use Exalted Orbs on a few such items and count how many of the new modifiers are from the rune's pool. The planner assumes the Well of Souls does not offer them and gives them an estimated weight.",
-   "claims": []
+   "claims": [],
+   "status": "confirmed",
+   "note": "The Well of Souls does offer the socketed rune's pool (the player, 12 Nov 2026). How often those modifiers come against the item's own is still not known: a route with a bone step on an item with such a rune socketed is not offered as a recommendation until it is.",
+   "source": "the player (12 Nov 2026)"
   },
   {
    "id": "t34",
@@ -3672,7 +3675,9 @@
    "claims": [
     "k62"
    ],
-   "note": "The route looks at one step per currency item until this is known; if an omen draws its own result, the lock is worth more than the route counts."
+   "note": "Each currency item shows its own result, and an omen changes it: a Vaal Orb and a Vaal Orb with an Omen of Corruption showed two different results, a Chaos, Greater Chaos and Perfect Chaos Orb three different ones, each again different with an Omen of Whittling; an Orb of Annulment shows the modifier it removes. Every use of a currency (a Divine Orb too) removes the lock. The network looks at one step per currency item, so the lock is worth more than it counts (it may look at each currency and omen pair).",
+   "status": "confirmed",
+   "source": "a crafter's in-game video (EOD Gamer, day five of 0.5.5), given by the player on 12 Nov 2026"
   }
  ]
 }

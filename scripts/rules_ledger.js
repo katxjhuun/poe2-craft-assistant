@@ -30,8 +30,9 @@ const ASSUMPTIONS = [
   { id: 'A_SANCTIFY_EVEN', file: 'app/planner.js', find: 'game publishes no weights, so evenly', rule: 'Omen of Sanctification: each value is multiplied by 78% to 122%, every factor equally likely.', status: 'weak' },
   { id: 'A_DES_WEIGHTS', file: 'app/planner.js', find: 'desecrated-only ones evenly', rule: 'Desecrated-only modifiers at the Well of Souls are equally likely (Craft of Exile gives them weight 1).', status: 'weak' },
   { id: 'A_WEIGHTS', file: 'app/planner.js', find: 'weightOf', rule: 'Roll chances come from poe2db weights (the client data has only 0/1); Craft of Exile agrees on 8,929 of 8,987 tiers.', status: 'strong' },
-  { id: 'A_CATALYST_RING', file: 'app/planner.js', find: 'Which catalysts it takes is in-game test t29', rule: 'A base that says "Catalysts can be applied" takes the ring and amulet catalysts.', status: 'unknown' },
-  { id: 'A_RUNE_POOL_WELL', file: 'app/planner.js', find: 'in-game test t33', rule: 'The Well of Souls does not offer a socketed rune\'s pool: no plan counts on it.', status: 'unknown' },
+  { id: 'A_CATALYST_RING', file: 'app/planner.js', find: 'Which catalysts it takes is in-game test t29', rule: 'A base that says "Catalysts can be applied" takes the ring and amulet catalysts, with the same rules as on rings and amulets.', status: 'verified', source: 'in-game test t29; the player (12 Nov 2026)' },
+  { id: 'A_RUNE_POOL_WELL', file: 'app/planner.js', find: 'in-game test t33', rule: 'The Well of Souls does not offer a socketed rune\'s pool: no plan counts on it.', status: 'refuted', source: 'the player (12 Nov 2026): it does offer it (t33)' },
+  { id: 'A_RUNE_POOL_WEIGHT', file: 'app/planner.js', find: 'in-game test t33', rule: 'How often the Well of Souls offers a socketed rune\'s pool modifiers against the item\'s own. Not modelled: a route with a bone step on an item with a pool rune is not offered as a recommendation.', status: 'unknown' },
 ];
 
 /** PoE2 1.0, before the patch notes (reports/poe2-1.0-crafting-2026-11-09.md). */
@@ -68,7 +69,7 @@ for (const t of lib.tests || []) rows.push({ section: 'In-game tests', id: t.id,
 for (const c of lib.claims || []) if (c.verdict !== 'rejected') rows.push({ section: 'Claims', id: c.id, rule: c.claim, status: fromVerdict(c.verdict), source: c.source ? [c.source.author, c.source.tier].filter(Boolean).join(', ') : c.reason });
 for (const a of ASSUMPTIONS) {
   const ln = lineOf(a.file, a.find);
-  rows.push({ section: 'Engine assumptions', id: a.id, rule: a.rule, status: a.status, source: ln ? `${a.file}:${ln}` : `${a.file} (not found: "${a.find}")` });
+  rows.push({ section: 'Engine assumptions', id: a.id, rule: a.rule, status: a.status, source: (ln ? `${a.file}:${ln}` : `${a.file} (not found: "${a.find}")`) + (a.source ? `; ${a.source}` : '') });
 }
 for (const v of V1) rows.push({ section: 'PoE2 1.0', id: v.id, rule: v.rule, status: v.status, source: v.source });
 
