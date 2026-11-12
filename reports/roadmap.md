@@ -12,9 +12,11 @@ oyuncuya tek mesajda sorulur; cevaplar gelmeden simülasyon koşmaz. 0.5.5 için
 
 ---
 
-## Faz 0 — Toparlama (12–19 Kasım)
+## Faz 0 — Toparlama (12–19 Kasım) — **bitti 12 Kasım**
 
-Yarım kalan işleri kapatmak; yeni iş açmamak.
+Yarım kalan işleri kapatmak; yeni iş açmamak. Sonuç: 84d2c77 main'de (200f4ee), yarım dal kurtarıldı (7d7f2a8; 17.
+taramanın Wrath Sceptre'ı 2.000/2.000 craft bitiyor), bilgi tabanı 0.5.5.7 onaylandı ve yayımlandı (e000a4b, sayfa v88),
+19. tarama okundu (`network-sweep-2026-11-12.md`: %97,0 uyum; eksi söz ve oturmamış değerler Faz 1'e). 194 test geçiyor.
 
 | İş | Bitti sayılır |
 |---|---|
