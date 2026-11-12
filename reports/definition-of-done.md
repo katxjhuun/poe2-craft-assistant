@@ -1,4 +1,4 @@
-# Definition of done (12 Nov 2026; the route bound is the player's, the other numbers are proposals)
+# Definition of done (12 Nov 2026; every number confirmed by the player)
 
 Agreed with the player on 12 Nov 2026 after a look at why the work kept restarting (rules found during simulations,
 questions asked late, a goal that drifted from "a good route for my item" to "the network agrees with the simulator
@@ -22,12 +22,12 @@ crafting very well, and who still wants to see the best scenario. So:
 
 | # | Measure | Target | How it is checked |
 |---|---|---|---|
-| 1 | **Coverage** | The craft goals players actually make: *proposal* the 30 most common goals at the 1.0 launch (weapons, body armour, rings, amulets, belts, jewels), picked from trade demand in the first week; until then the scenarios already in the sweep | a fixed list in the repo |
+| 1 | **Coverage** | The craft goals players actually make: the **100** most common goals at the 1.0 launch (the player asked for more than 30 on 12 Nov 2026) (weapons, body armour, rings, amulets, belts, jewels), picked from trade demand in the first week; until then the scenarios already in the sweep | a fixed list in the repo |
 | 2 | **Near-perfect routes** | Every route the assistant offers keeps its promise: the simulator plays its expected cost within **±2%** and its success chance within **0.5 points** (the player asked for tighter than ±5% / 1 point on 12 Nov 2026), measured on 100,000 replayed crafts so that the 95% confidence interval of the play lies inside the bound (±2% on a heavy-tailed cost needs about 10,000 to 40,000 crafts, 0.5 points about 38,000). A route that cannot be shown to do that is not offered as a recommendation (it may be listed, marked unsure) | replay (`scripts/selftest/diag`) of every offered route on the list |
 | 2b | **Better than the known recipe** | On every goal of the list the recommended route is at least as cheap as the best recipe crafters use for it (route library), and the page shows by how much. A goal where a known recipe beats it is a defect to fix, not a pass | route library vs recommendation, per goal |
-| 3 | **Speed** | An answer within *proposal* 10 seconds after the paste, on the player's PC | page timing |
+| 3 | **Speed** | An answer within **10 seconds** after the paste, on the player's PC | page timing |
 | 4 | **Rules shown** | Every route says which rules it rests on; a `weak` rule shows as a warning; a route that needs an `unknown` rule is not offered | `reports/rules-ledger.md` |
-| 5 | **Prices** | Prices of the player's league, not older than *proposal* 24 hours | the price job |
+| 5 | **Prices** | Prices of the player's league, not older than **24 hours** | the price job |
 
 The player, 12 Nov 2026: "I already have this recipe for this item" would make the assistant useless; route success
 has to be near-perfect or the project is worthless. So the bar is high where the player looks (the routes offered),
