@@ -102,3 +102,13 @@ test('gate: median, P90 and worst of the played costs; the stamp names the rules
   changed.rules.k56.hash = '00000000';
   assert.deepEqual(G.staleRules(result, changed), ['k63']);
 });
+
+test('gate: the rules of a route include the steps after a new start (a wand\'s bone after a restart)', () => {
+  // a pasted item (node 0) whose only step gives it up (outcome -1: the network's start n0 = 2), where a bone is used
+  const steps = { 0: { a: { op: 'chaos' }, out: [1, -1] }, 2: { a: { op: 'bone', mark: true }, out: [1, 3] } };
+  const net = { start: 0, n0: 2, done: (s) => s === 3, step: (s) => steps[s] || null };
+  const ops = G.routeActions(net).acts.map((a) => a.op);
+  assert.deepEqual(ops.sort(), ['bone', 'chaos']);
+  const ids = G.rulesOfRoute(G.routeActions(net).acts, { cls: 'Wand' }, LEDGER).map((r) => r.id);
+  assert.ok(ids.includes('k59') && ids.includes('A_DESECRATE_SIDE'));
+});

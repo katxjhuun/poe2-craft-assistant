@@ -94,7 +94,7 @@ function runGoal(g, crafts, opts) {
     verdict: v.label, why: v.why, cost: v.cost, p: v.p, weak: v.weak, unknown: v.unknown, runs: got.runs, done: got.done,
     spread: G.spread(costs), hist: G.histogram(costs, 24),
     steps: [...steps.entries()].map(([name, r]) => ({ name, uses: r.uses, gain: r.gain, loss: r.loss })).sort((a, b) => b.uses - a.uses),
-    detours: got.detours, gaveUp: got.gaveUp, off: got.off, refusedSteps: got.refused, valued: got.valued, endWhy: got.endWhy, detourWhy: got.detourWhy,
+    detours: got.detours, gaveUp: got.gaveUp, off: got.off, refusedSteps: got.refused, refusedWhy: got.why, valued: got.valued, endWhy: got.endWhy, detourWhy: got.detourWhy,
   });
   if (opts.rivals) {
     let best = null;

@@ -174,7 +174,9 @@
       acts.push(step.a);
       if (step.a.pre) acts.push(step.a.pre);
       if (step.a.op === 'lock' && net.lockSteps) for (const c of net.lockSteps(s)) acts.push(c.a);
-      for (let t = 0; t < step.out.length; t += 2) { const to = step.out[t + 1]; if (to >= 0 && !seen.has(to)) { seen.add(to); q.push(to); } }
+      // (an outcome below 0 is a new start: the route goes on from the network's start node n0, which is not the
+      // pasted item's node; without it a wand's bone steps after a restart were left out of its rules)
+      for (let t = 0; t < step.out.length; t += 2) { const o = step.out[t + 1], to = o < 0 ? net.n0 : o; if (to >= 0 && !seen.has(to)) { seen.add(to); q.push(to); } }
     }
     return { acts, nodes: seen.size };
   }
