@@ -39,6 +39,7 @@ promise**: every finding below is a place where the two disagreed.
 | `node replay.js <base> <id> [crafts]` | a scenario's network: settled, residual, promise, played, the model by its own chances |
 | `node transitions.js <base> <id> <crafts> [top]` | per node: where played items went vs the network's chances (largest gaps first) |
 | `node step_probe.js <base> <id> <node> [n]` | one step from a real item at that node: which rolled modifier lands on which node |
+| `node hunt.js <crafts> <maxNodes> @list.txt` | many scenarios (lines `base::id::crafts`): one JSON line each, the nodes whose gap is over the noise (chi-square), and `excess`: how much each node's gap adds to the played cost (the played cost less the promise is their sum) |
 | `node stuck.js <base> <id> [runs] [maxUses]` | crafts that never end on an item that is never given up: the item it is stuck with |
 | `node sizes.js <base> <id> [crafts] [classes:track,...]` | the same request in networks of different size, with plays |
 | `node play_sweep.js <crafts> <k> <regex> <bases...>` | the sweep's scenarios of some bases matching a pattern, run as the sweep runs them |

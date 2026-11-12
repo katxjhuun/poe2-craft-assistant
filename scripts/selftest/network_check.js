@@ -164,7 +164,7 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
         const fin = !!(net.finished && net.finished(st));
         // (for the audit: where the locking step led, finished or lost; it was the one step whose outcome was not kept,
         // and a Putrefaction that finished less often than promised showed in no node's share of the gap)
-        if (audit && from >= 0) { const rec = audit.get(from) || { n: 0, to: new Map() }; rec.n++; const to = fin ? Math.max(-2, net.nodeOf(st)) : net.n0; rec.to.set(to, (rec.to.get(to) || 0) + 1); audit.set(from, rec); }
+        if (audit && from >= 0) { const rec = audit.get(from) || { n: 0, to: new Map() }; rec.n++; const to = fin ? ((k) => (k < 0 ? -2 : k))(net.nodeOf(st)) : net.n0; /* (-2: finished, and no node for it) */ rec.to.set(to, (rec.to.get(to) || 0) + 1); audit.set(from, rec); }
         // (and what the locked items were: finished, with a target's family under its tier or value, with every target's family but not all met, the rest)
         if (audit) { const L = (audit.locked = audit.locked || { n: 0, fin: 0, under: 0, fams: new Map() }); L.n++; if (fin) L.fin++; else { const k = goals.map((g) => (st.mods.some((m) => P.meets(m, g, g.tier)) ? 'M' : st.mods.some((m) => m.fam === g.fam) ? 'u' : '-')).join(''); L.fams.set(k, (L.fams.get(k) || 0) + 1); if (k.includes('u')) L.under++; } }
         if (fin) { ok = true; break; }
@@ -178,7 +178,7 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
       if (turns && lastA && (lastA.op === 'fracture' || lastA.op === 'flux') && turns.length < 40 && turns[turns.length - 1] !== k) { turns.push(k); turns.push(`use ${k} ${lastA.op}${lastA.to ? ' ' + lastA.to : ''} -> ${words(st)}`); }
       // (for the audit: how much of the item the network knew: everything, not what a blocker's tags stop, not the blockers)
       if (audit && net.mapping && node >= 0) { const lv = net.mapping(st); (audit.maps = audit.maps || [0, 0, 0])[lv < 0 ? 2 : lv]++; }
-      if (audit && from >= 0) { const rec = audit.get(from) || { n: 0, to: new Map() }; rec.n++; rec.to.set(node, (rec.to.get(node) || 0) + 1); audit.set(from, rec); }
+      if (audit && from >= 0) { const rec = audit.get(from) || { n: 0, to: new Map() }, to = node < 0 && net.finished && net.finished(st) ? -2 : node; rec.n++; rec.to.set(to, (rec.to.get(to) || 0) + 1); audit.set(from, rec); }
       // (an item the network has no node for: kept with the step that led to it, for the audit)
       if (node < 0 && audit && from >= 0) (audit.offs = audit.offs || []).push({ from, a: lastA, state: net.stateOf ? JSON.stringify(net.stateOf(st, true)) + ' (with what is known); ' + JSON.stringify(net.stateOf(st, false)) + ' (without)' : '', item: st.rarity + ' ' + st.mods.map((m) => `${m.side[0]}:${m.unrevealed ? '(hidden)' : m.fam}${m.tier ? ' T' + m.tier : ''}${m.frac ? '(F)' : ''}${m.des ? '(D)' : ''}${m.crafted ? '(C)' : ''}`).join(', ') });
       from = node;
@@ -234,6 +234,9 @@ function play(net, input, runs, seed, maxSteps, limitMs, audit, opts) {
         }
       }
       if (step.a.op === 'newbase') stuck.clear();
+      // (for the audit: a detour is another edge than the node's, whose chances the node's step does not have; its
+      // outcome is counted apart, per node, and not as the node's)
+      if (audit && step !== null && step.a !== (net.step(node) || {}).a) { audit.detours = audit.detours || new Map(); audit.detours.set(node, (audit.detours.get(node) || 0) + 1); from = -1; }
       let a = step.a;
       lastA = a;
       // (a step the simulator's rules refuse is a disagreement between the network and the rules: counted, and kept for the audit)
