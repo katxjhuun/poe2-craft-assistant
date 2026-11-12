@@ -58,3 +58,47 @@ test('gate: a network whose values did not settle, or that promises a negative o
     assert.ok(!(a.meanCost >= 0), what + ': no cost is shown as the route\'s');
   }
 });
+
+const G = require('../gate.js');
+const LEDGER = require('../data/rules_ledger.json');
+
+test('gate: a route is recommended only when the 95% interval of 100,000 crafts lies within 2% and 0.5 points', () => {
+  // (cost sd 50 on a promise of 100: se 0.16 over 100,000 crafts, the interval +-0.31%)
+  const ok = G.verdict({ cost: 100, p: 1 }, { runs: 100000, done: 100000, mean: 100.5, sd: 50 });
+  assert.equal(ok.label, 'recommend', ok.why.join('; '));
+  // the same spread over 2,000 crafts: the interval is +-2.2%, wider than the bound
+  const few = G.verdict({ cost: 100, p: 1 }, { runs: 2000, done: 2000, mean: 100, sd: 50 });
+  assert.equal(few.label, 'unsure');
+  // played 3% over the promise, however many crafts
+  assert.equal(G.verdict({ cost: 100, p: 1 }, { runs: 100000, done: 100000, mean: 103, sd: 50 }).label, 'unsure');
+  // 0.7% of the crafts never end where the route promises they all do
+  const lost = G.verdict({ cost: 100, p: 1 }, { runs: 100000, done: 99300, mean: 100, sd: 50 });
+  assert.equal(lost.label, 'unsure');
+  assert.ok(lost.why.some((w) => /success/.test(w)));
+  // a route on a rule nobody knows is never a recommendation; a weak rule is a warning
+  const unk = G.verdict({ cost: 100, p: 1 }, { runs: 100000, done: 100000, mean: 100, sd: 50 }, [{ id: 'A_RUNE_POOL_WEIGHT', status: 'unknown' }, { id: 'k24', status: 'weak' }]);
+  assert.equal(unk.label, 'unsure');
+  assert.deepEqual(unk.weak, ['k24']);
+  // no trusted promise: never
+  assert.equal(G.verdict({ cost: -936020250.9, p: 1 }, { runs: 100000, done: 100000, mean: 5314114, sd: 1 }).label, 'unsure');
+  assert.ok(G.craftsFor(0.5) > 2000 && G.craftsFor(0.5) < 3000, 'cv 0.5: (1.96 x 0.5 / 0.02)^2 = 2,401 crafts');
+});
+
+test('gate: median, P90 and worst of the played costs; the stamp names the rules a route uses', () => {
+  const s = G.spread([5, 1, 4, 2, 3, 10, 6, 7, 8, 9]);
+  assert.deepEqual([s.median, s.p90, s.worst, s.best], [5, 9, 10, 1]);
+  // a bone on an item with a pool rune rests on the unknown weight of the rune's pool at the Well of Souls (t33)
+  const rules = G.rulesOfRoute([{ op: 'exalt', tier: 'greater' }, { op: 'bone', putrefy: true }], { cls: 'Wand', poolRune: true }, LEDGER);
+  const ids = rules.map((r) => r.id);
+  for (const id of ['R_RARITY_SLOTS', 'k24', 'A_DESECRATE_SIDE', 'k63', 'A_RUNE_POOL_WEIGHT']) assert.ok(ids.includes(id), id);
+  assert.equal(rules.find((r) => r.id === 'A_RUNE_POOL_WEIGHT').status, 'unknown');
+  assert.ok(rules.every((r) => r.status !== 'missing'), 'every rule is in the ledger');
+  // a rule change makes only the results that use the rule stale
+  const result = { stamp: G.stamp(LEDGER, rules, '2026-11-09') };
+  assert.deepEqual(G.staleRules(result, LEDGER), []);
+  const changed = JSON.parse(JSON.stringify(LEDGER));
+  changed.rules.k63.status = 'verified';
+  changed.rules.k63.hash = G.ruleHash({ id: 'k63', status: 'verified', rule: 'x' });
+  changed.rules.k56.hash = '00000000';
+  assert.deepEqual(G.staleRules(result, changed), ['k63']);
+});

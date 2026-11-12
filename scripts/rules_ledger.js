@@ -5,6 +5,9 @@
  *   node scripts/rules_ledger.js            write reports/rules-ledger.md from the knowledge base in use
  *   POE2_KB=path node scripts/rules_ledger.js   from a candidate knowledge base
  *
+ * It also writes app/data/rules_ledger.json: every rule's status and hash (app/gate.js ruleHash) and the ledger's
+ * hash, which every gate result carries as its stamp (a rule change reruns only the routes that use that rule).
+ *
  * Sources: kb.crafting_rules, kb.crafting_ops, kb.legacy_or_disabled, the recipe library's claims and in-game tests,
  * the engine's own assumptions (ASSUMPTIONS below, each found in the code by a search string) and the 1.0 rules
  * (V1 below, from reports/poe2-1.0-crafting-2026-11-09.md).
@@ -108,6 +111,17 @@ for (const st of ['unknown', 'weak']) {
   for (const r of rows.filter((x) => x.status === st)) out.push(`- **${cell(r.id)}** (${r.section}): ${short(r.rule, 220)}`);
   out.push('');
 }
+// the machine-readable ledger for the gate (scripts/gate.js, the page)
+const G = require(path.join(ROOT, 'app', 'gate.js'));
+const json = { meta: { made: 'node scripts/rules_ledger.js', kb: path.basename(process.env.POE2_KB || 'poe2_kb_0.5.5.json'), game_data: kb.meta.game_data_version }, hash: null, rules: {} };
+for (const r of rows) {
+  const id = cell(r.id);
+  if (json.rules[id]) throw new Error('two rules with the id ' + id);
+  json.rules[id] = { status: r.status, section: r.section, hash: G.ruleHash({ id, status: r.status, rule: cell(r.rule) }), rule: short(r.rule, 260) };
+}
+json.hash = G.hash(Object.keys(json.rules).sort().map((id) => id + ':' + json.rules[id].hash).join(','));
+fs.writeFileSync(path.join(ROOT, 'app', 'data', 'rules_ledger.json'), JSON.stringify(json, null, 1) + '\n');
+out.splice(3, 0, '', `Ledger hash: \`${json.hash}\` (app/data/rules_ledger.json: every rule's hash; the gate's results carry them).`);
 const file = path.join(ROOT, 'reports', 'rules-ledger.md');
 fs.writeFileSync(file, out.join('\n'));
 console.log(`${file}: ${rows.length} rules; ` + statuses.map((st) => `${st} ${rows.filter((r) => r.status === st).length}`).join(', '));
