@@ -239,8 +239,11 @@
   }
 
   /** Is dotted version a newer than b ("4.5.10.0" > "4.5.9.3")? */
+  // The game data export numbered patch 0.5.5 as 4.5.5.x (the client's own numbering of the 0.x patches) and later
+  // as 0.5.5.x: a leading 4 is the same as a leading 0, so 0.5.5.8 is newer than 4.5.5.2.
+  const verParts = (v) => { const p = String(v).split('.').map(Number); if (p[0] === 4) p[0] = 0; return p; };
   function newerVersion(a, b) {
-    const pa = String(a).split('.').map(Number), pb = String(b).split('.').map(Number);
+    const pa = verParts(a), pb = verParts(b);
     for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
       const d = (pa[i] || 0) - (pb[i] || 0);
       if (d) return d > 0;
