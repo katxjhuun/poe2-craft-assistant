@@ -64,7 +64,22 @@
     if (g < 0) return null;
     return (blood ? ['Bloodvial of Komaki', 'Bloodvial of Eldra', 'Bloodvial of Rithva'] : ['Crimson Iron', 'Scarlet Hide', 'Vermilion Gold'])[g];
   }
-  const FORGEMARK_MAX_ILVL = 64, BLOODMARK_MIN_LVL = 65, MAX_FRACTURED = 2;
+  const FORGEMARK_MAX_ILVL = 64, BLOODMARK_MIN_LVL = 65;
+  /**
+   * The 1.0 rules no source settles yet (reports/rules-ledger.md, PoE2 1.0): the working answers the player agreed to
+   * on 12 Nov 2026, in one place so that the patch notes (about 4 Dec) change a value here and nothing else. The
+   * craft network reads them too (network.js V1R).
+   *  maxFractured  V1_TWO_FRACTURED (weak, Game8 only): fractured modifiers an item can have
+   *  sameSide      V1_FORGE_SIDE (unknown): a Forgemark's new modifier is of the marked one's side
+   *  markFractured V1_NO_REMARK (strong): false, a fractured item cannot be marked
+   *  mix           V1_MIX (unknown): Forgemarks and Bloodmarks on one item, reforged together
+   *  bloodRoutes   V1_BLOOD_GROUPS (unknown): whether a route may count on a Bloodmark; until the mod groups are in
+   *                the game data a Bloodmark draws from every suffix of modifier level 65 or more, which no route
+   *                should promise anything on
+   *  orbMinMods    V1_FRACTURE_ORB (unknown): the Fracturing Orb's modifier count, unchanged in 1.0
+   */
+  const V1_RULES = { maxFractured: 2, sameSide: true, markFractured: false, mix: false, bloodRoutes: false, orbMinMods: 4 };
+  const MAX_FRACTURED = V1_RULES.maxFractured;
   /** The 1.0 items are in the knowledge base (its game data has them), or a test or preview asks for them. */
   const hasV1 = (kb, opts) => !!(opts && opts.v1) || /^1\./.test(String((kb.meta || {}).patch || ''))
     || !!(kb.item_descriptions || {})['Crimson Iron'];
@@ -636,7 +651,9 @@
         const marks = a.marks || [];
         if (!marks.length) return 'Mark a modifier first.';
         if (marks.length > MAX_FRACTURED) return `An item can have at most ${MAX_FRACTURED} fractured modifiers.`;
-        if (st.mods.some((m) => m.frac)) return 'Fractured items cannot be Forgemarked.';
+        if (!V1_RULES.markFractured && st.mods.some((m) => m.frac)) return 'Fractured items cannot be Forgemarked.';
+        if (st.mods.filter((m) => m.frac).length + marks.length > MAX_FRACTURED) return `An item can have at most ${MAX_FRACTURED} fractured modifiers.`;
+        if (!V1_RULES.mix && marks.some((k) => k.blood) && marks.some((k) => !k.blood)) return 'Forgemarks and Bloodmarks are not reforged together.';
         const seen = new Set();
         for (const k of marks) {
           const name = markItemFor(cls, k.blood);
@@ -653,13 +670,14 @@
         const rest = Object.assign({}, st, { mods: st.mods.filter((m) => !seen.has(m.id)) });
         for (const k of marks) {
           const side = k.blood ? 'suffix' : st.mods.find((x) => x.id === k.id).side;
-          if (!rollPool(ctx, rest, side, k.blood ? BLOODMARK_MIN_LVL : 0).length) return `No ${side} modifier can take the marked one's place.`;
+          const can = (k.blood || V1_RULES.sameSide ? [side] : SIDES).some((s) => rollPool(ctx, rest, s, k.blood ? BLOODMARK_MIN_LVL : 0).length);
+          if (!can) return `No ${side} modifier can take the marked one's place.`;
         }
         return null;
       }
       case 'fracture':
         if (R !== 'Rare') return 'Fracturing Orb needs a Rare item.';
-        if (st.mods.length < 4) return 'Fracturing Orb needs at least 4 modifiers.';
+        if (st.mods.length < V1_RULES.orbMinMods) return `Fracturing Orb needs at least ${V1_RULES.orbMinMods} modifiers.`;
         return st.mods.some((m) => m.frac) ? 'Fracturing Orb cannot be used on Fractured items.' : null;
       case 'divine':
         if (R !== 'Magic' && R !== 'Rare' && R !== 'Unique') return 'Divine Orb needs an item with modifiers.';
@@ -1253,7 +1271,7 @@
         for (const { m } of marks) { st.mods.splice(st.mods.indexOf(m), 1); removed.push(m); }
         for (const { k, m } of marks) {
           const side = k.blood ? 'suffix' : m.side;
-          const e = rollMod(ctx, st, [side], k.blood ? BLOODMARK_MIN_LVL : 0, rng);
+          const e = rollMod(ctx, st, k.blood || V1_RULES.sameSide ? [side] : SIDES, k.blood ? BLOODMARK_MIN_LVL : 0, rng);
           if (e) { addRolled(ctx, st, e, { frac: true }, rng); added.push(st.mods[st.mods.length - 1]); }
         }
         break;
@@ -1800,6 +1818,21 @@
         const keep = st.mods.filter((m) => goals.some((x) => meets(m, x, x.eff)));
         if (keep.length && (st.mods.length === 4 || (st.mods.length === 5 && keep.length >= 2)) && params.fracture) return { op: 'fracture' };
       }
+      // Forgemark (PoE2 1.0, a plan variant): on an item of item level 64 or lower with no fractured modifier, where a
+      // natural goal's side has no open slot and holds a modifier no goal wants, mark it (one a goal for each such
+      // goal, up to the fractured limit) and reforge: what comes is fractured at once, a goal for good.
+      // (ctx.v1 is read first: without 1.0 the setting is never read, and the sweeps group strategies as before)
+      if (ctx.v1 && ctx.ilvl <= FORGEMARK_MAX_ILVL && (V1_RULES.markFractured || !st.mods.some((m) => m.frac)) && params.reforge) {
+        const marks = [];
+        for (const s of SIDES) {
+          if (open(ctx, st, s) > 0) continue;
+          const need = left.filter((g) => g.side === s && !g.des && !g.essenceOnly && !shut(st, g)).length;
+          const junk = st.mods.filter((m) => m.side === s && removable(m) && !m.des && !m.crafted && m.id && !useful(m, goals));
+          for (const m of junk.slice(0, need)) marks.push({ id: m.id });
+        }
+        marks.splice(MAX_FRACTURED - st.mods.filter((m) => m.frac).length);
+        if (marks.length && !validate(ctx, st, { op: 'reforge', marks })) return { op: 'reforge', marks };
+      }
       // Values come last: when every goal left only needs a better roll on a mod that is already there, reroll values.
       if (left.every((x) => st.mods.some((m) => nearMiss(m, x)))) return { op: 'divine' };
       // Work on a goal that can be slammed into an open slot first; removals come after.
@@ -2298,6 +2331,12 @@
     essence: [false, true], fracture: [false, true], catalyse: [false, true], flux: [true, false],
     bone: ['Gnawed', 'Preserved', 'Ancient'], echoes: [false, true], lich: [false, true], desSlam: [false, true], homog: [false, true],
   };
+  /**
+   * Settings that exist only with PoE2 1.0 (ctx.v1): kept out of SPACE so that the exhaustive sweep and the strategy
+   * groups stay what they are without it.
+   */
+  const SPACE_V1 = { reforge: [false, true] };
+  const spaceOf = (k) => SPACE[k] || SPACE_V1[k];
   const BEAM_WIDTH = 3, BEAM_DEPTH = 8;
   /** Uses a run when no strategy finishes within the usual 600 (plans for many goals on a large pool). */
   const LONG_USES = 3000;
@@ -2308,10 +2347,10 @@
    */
   const SEARCH = { lo: 40, hi: 200, top: 800, loMs: 150, hiMs: 400, topMs: 1200, keep: 6, keepSeeds: 10, seed: 7, budgetMs: 6000, tailMs: 2500 };
   /** Settings in the order the pick tries them on rare paths: the ones that leave an expensive dead end first. */
-  const TAIL_ORDER = ['pair', 'slamOnly', 'chaosTier', 'removal', 'exaltTier', 'homog', 'sideOmens', 'desSlam', 'greaterExalt', 'catalyse', 'bone', 'echoes', 'fracture', 'flux'];
+  const TAIL_ORDER = ['pair', 'slamOnly', 'chaosTier', 'removal', 'exaltTier', 'homog', 'sideOmens', 'desSlam', 'greaterExalt', 'catalyse', 'bone', 'echoes', 'fracture', 'flux', 'reforge'];
   /** The order the search tries settings in: the ones that most often separate the best strategy in the exhaustive sweep first. */
   const SEARCH_ORDER = ['exaltTier', 'sideOmens', 'chaosTier', 'removal', 'essence', 'magicTier', 'slamOnly', 'start', 'pair', 'desSlam', 'bone', 'echoes',
-    'catalyse', 'fracture', 'flux', 'greaterExalt', 'homog', 'restart', 'lich'];
+    'catalyse', 'fracture', 'flux', 'greaterExalt', 'homog', 'restart', 'lich', 'reforge'];
   /** A complete strategy: the per-operation orb tiers filled from `tier`, every setting present. */
   function expandStrategy(p) {
     const t = p.tier || 'base';
@@ -2321,8 +2360,10 @@
     return out;
   }
   /** Settings that can change the result on this item and these goals. */
-  function relevantKeys(st, goals) {
+  function relevantKeys(st, goals, ctx) {
     const keys = st.rarity !== 'Rare' ? ['slamOnly', 'pair', 'magicTier', 'start', 'restart'] : [];
+    // Forgemark (1.0): items of item level 64 or lower with a natural goal
+    if (ctx && ctx.v1 && ctx.ilvl <= FORGEMARK_MAX_ILVL && markItemFor(ctx.cls, false) && goals.some((g) => !g.des && !g.essenceOnly)) keys.push('reforge');
     keys.push('exaltTier', 'chaosTier', 'sideOmens', 'greaterExalt', 'removal', 'flux');
     if (goals.some((g) => (g.ess || []).length)) keys.push('essence');
     if (goals.length >= 2) keys.push('fracture');
@@ -2396,8 +2437,8 @@
    */
   function makeScreen(ctx, st, pg, input) {
     const rank = (k) => { const i = SEARCH_ORDER.indexOf(k); return i < 0 ? SEARCH_ORDER.length : i; };
-    const keys = relevantKeys(st, pg).sort((a, b) => rank(a) - rank(b));
-    const ALL = Object.keys(SPACE).concat('runes');
+    const keys = relevantKeys(st, pg, ctx).sort((a, b) => rank(a) - rank(b));
+    const ALL = Object.keys(SPACE).concat('runes', ctx.v1 ? Object.keys(SPACE_V1) : []);
     const sigOf = (p) => ALL.map((k) => p[k]).join('|');
     const hi = input.screenTrials || SEARCH.hi, lo = Math.min(SEARCH.lo, hi);
     const LEVELS = [{ n: lo, ms: SEARCH.loMs, min: Math.min(12, lo) }, { n: hi, ms: SEARCH.hiMs, min: Math.min(60, hi) }, { n: Math.max(SEARCH.top, hi), ms: SEARCH.topMs, min: hi }];
@@ -2416,7 +2457,7 @@
     }
     function create(full, sig, from) {
       const reads = [], seen = new Set();
-      const px = new Proxy(full, { get(t, k) { if (typeof k === 'string' && !seen.has(k)) { seen.add(k); if (k in SPACE || k === 'runes') reads.push(k); } return t[k]; } });
+      const px = new Proxy(full, { get(t, k) { if (typeof k === 'string' && !seen.has(k)) { seen.add(k); if (k in SPACE || k in SPACE_V1 || k === 'runes') reads.push(k); } return t[k]; } });
       const c = { params: full, sig, reads, known: 0, run: createRun(ctx, st, pg, px, base), r: null, from: from || null, members: [], split: [], level: -1, expanded: false };
       classes.push(c); bySig.set(sig, c);
       return c;
@@ -2508,7 +2549,7 @@
           let whole = true;
           const from = c.from && c.from.recipe ? c.from : { search: true };
           const moves = [];
-          for (const k of keys) for (const v of SPACE[k]) {
+          for (const k of keys) for (const v of spaceOf(k)) {
             if (c.params[k] === v) continue;
             if (left() <= 0) { whole = false; break; }
             const n = await ensure(Object.assign({}, c.params, { [k]: v }), 0, from);
@@ -2547,7 +2588,7 @@
           // A setting the longest run read for the first time only matters on a rare path, but such a path can carry much
           // of the cost (a dead end that takes hundreds of Chaos Orbs): its other values get the longest run too.
           const fresh = c.reads.slice(before).filter((k) => keys.includes(k)).sort((a, b) => tail(a) - tail(b));
-          for (const k of fresh) for (const v of SPACE[k]) {
+          for (const k of fresh) for (const v of spaceOf(k)) {
             if (v === c.params[k] || Date.now() - t0 > SEARCH.tailMs) continue;
             const full = expandStrategy(Object.assign({}, c.params, { [k]: v }));
             const sig = sigOf(full);
@@ -3459,11 +3500,11 @@
   }
 
   return {
-    ORB, OMEN, TIERS, boneFor, markItemFor, actionNames, makeContext, toState, validate, apply, rngFrom, sidePool, desPoolFor,
+    ORB, OMEN, TIERS, boneFor, markItemFor, V1_RULES, FORGEMARK_MAX_ILVL, BLOODMARK_MIN_LVL, hasV1, actionNames, makeContext, toState, validate, apply, rngFrom, sidePool, desPoolFor,
     goalsFromTargets, goalMet, meets, nearMiss, reaches, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
     availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, goalClash, essencesForBase, liquidFor, CATALYST_DEFAULT, CATALYST_NAME, ALDUR_ELEMENT, aldurTwin, runeFor, runeSide, freeSockets, socketsOf,
     emulate, chanceOf, familyChances, runStrategy, runStrategyAsync, groupsMet, revealOptions, revealPool, desSides, DES_OPTIONS, lichOmenWorks,
     planProfile, rankProfiles, setTick, clampStrategy, materialOk,
-    expandStrategy, recipeParams, relevantKeys, SPACE, SEARCH, improvePlan, searchOf: (plan) => SCREENS.get(plan), legacyItems, suffixRune, runeBlocks,
+    expandStrategy, recipeParams, relevantKeys, SPACE, SPACE_V1, SEARCH, improvePlan, searchOf: (plan) => SCREENS.get(plan), legacyItems, suffixRune, runeBlocks,
   };
 });

@@ -46,10 +46,15 @@ promise**: every finding below is a place where the two disagreed.
 | `node play_sweep.js <crafts> <k> <regex> <bases...>` | the sweep's scenarios of some bases matching a pattern, run as the sweep runs them |
 | `node run_one.js <base> <id> [crafts] [deep]` | one scenario exactly as the sweep runs it |
 | `node --expose-gc mem.js <base> <id> [track]` | where a network's memory goes (edges, outcomes, heap per node) |
+| `node same_cost.js <other network.js> <n> <bases...>` | a change that must not change results: `net.cost(start)` and the node count of the sweep's scenarios in two network files, to the last digit (`SAME_STRIDE` spaces the scenarios) |
+| `node v1_scen.js <crafts> <base> <n...>` | PoE2 1.0, local and small: the scenario at item level 64 (`V1_ILVL`), its targets at the best tier that rolls there, 1.0 off and on, reforge steps, nodes with two fractured modifiers, and the play (`V1_PLAY_OFF=1` also plays the network without 1.0; `V1_MAXSTEPS`: the default 4,000 uses cut expensive crafts short and their mean is then too low) |
 
 Environment: `POE2_PRICES=<file>` replays with a run's prices (the run promised with them); `NWFILE=<file>` runs another
 `network.js` (the code before a change, for before/after; it must lie in `app/`, next to engine.js and planner.js, and
-the sweep and the play get it too); `POE2_OUT=<folder>` points at a price folder.
+the sweep and the play get it too); `POE2_OUT=<folder>` points at a price folder; `POE2_LEAGUE` the league whose prices are used (default: app/data/leagues.json);
+`POE2_V1=1` builds every diag tool's network with PoE2 1.0 (Forgemarks, reforge, a second fractured modifier: `fh`/`fk`,
+rules in planner.js `V1_RULES`), with `V1_ILVL` and `V1_FORGE_PRICE` (the Forgemark items have no price yet: an
+assumption the result must state).
 
 Kept for these tools in the main checkout (git-ignored): `.kb_cache/run-prices/runNN.json` (the prices of run NN) and
 `.kb_cache/runs/runNN/` (its job logs).

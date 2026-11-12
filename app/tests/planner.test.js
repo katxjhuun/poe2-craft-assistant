@@ -1469,3 +1469,44 @@ test('Void Flux, Omen of Putrefaction, Homogenising omens, Altered Collarbone, c
   const cu = E.parseItem(ix, P.emulate(ix, uq, { op: 'cultivation' }, { seed: 3 }).text).item;
   assert.ok(cu.rarity === 'Unique' && cu.name !== "Ventor's Gamble" && kb.uniques[cu.name].cls === 'Ring' && cu.flags.corrupted);
 });
+
+test('1.0 Forgemark as a plan variant: a full goal side marks what no goal wants, only with 1.0 and item level 64 or lower', () => {
+  const low = Object.assign({}, parse('rare-sceptre-adv'), { ilvl: 60 });
+  const ctx = P.makeContext(ix, low, { v1: true });
+  const st = P.toState(ctx, low);
+  const pool = P.sidePool(ctx, 'prefix', 0).filter((e) => e.lvl <= 60);
+  const taken = new Set(st.mods.flatMap((m) => m.grp));
+  const fams = [...new Set(pool.filter((e) => !e.grp.some((g) => taken.has(g))).map((e) => e.fam))];
+  // the goal: a prefix family the item lacks; the prefixes filled with others
+  const goalFam = fams[0];
+  for (const fam of fams.slice(1)) {
+    if (st.mods.filter((m) => m.side === 'prefix').length >= 3) break;
+    const e = pool.find((x) => x.fam === fam && !x.grp.some((g) => taken.has(g)));
+    if (!e || e.grp.some((g) => pool.some((x) => x.fam === goalFam && x.grp.includes(g)))) continue;
+    e.grp.forEach((g) => taken.add(g));
+    st.mods.push({ id: e.id, fam: e.fam, side: 'prefix', lvl: e.lvl, grp: e.grp, tier: e.tier, frac: false, des: false, crafted: false, lock: false });
+  }
+  assert.equal(st.mods.filter((m) => m.side === 'prefix').length, 3);
+  const tier = Math.max(...pool.filter((e) => e.fam === goalFam).map((e) => e.tier));
+  const { goals } = P.goalsFromTargets(ctx, { 'prefix-0': { fam: goalFam, group: 'prefix', minTier: tier, required: true, label: goalFam } });
+  goals.forEach((g) => { g.eff = g.tier; });
+  const a = P.makePolicy(ctx, goals, { tier: 'base', reforge: true })(st);
+  assert.equal(a.op, 'reforge');
+  assert.equal(a.marks.length, 1);
+  assert.equal(st.mods.find((m) => m.id === a.marks[0].id).side, 'prefix');
+  assert.equal(P.validate(ctx, st, a), null);
+  assert.deepEqual(P.actionNames(a, ctx), ['Crimson Iron']);
+  assert.notEqual(P.makePolicy(ctx, goals, { tier: 'base', reforge: false })(st).op, 'reforge');
+  // without 1.0 the setting is never read
+  const off = P.makeContext(ix, low);
+  const reads = [];
+  const params = new Proxy({ tier: 'base', reforge: true }, { get(t, k) { reads.push(k); return t[k]; } });
+  assert.notEqual(P.makePolicy(off, goals, params)(P.toState(off, low)).op, 'reforge');
+  assert.ok(!reads.includes('reforge'));
+  assert.ok(P.relevantKeys(st, goals, ctx).includes('reforge'));
+  assert.ok(!P.relevantKeys(st, goals, off).includes('reforge'));
+  assert.ok(!('reforge' in P.SPACE));
+  // the rule parameters the patch notes may change (rules ledger, PoE2 1.0)
+  assert.deepEqual(Object.keys(P.V1_RULES).sort(), ['bloodRoutes', 'markFractured', 'maxFractured', 'mix', 'orbMinMods', 'sameSide']);
+  assert.match(P.validate(ctx, st, { op: 'reforge', marks: [{ id: st.mods.find((m) => m.side === 'suffix').id, blood: true }, { id: a.marks[0].id }] }), /below item level 65|not reforged together/);
+});
