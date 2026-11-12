@@ -1600,6 +1600,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (pl.blocked) { out.msg = pl.finished === true ? { t: 'All targets are met.', kind: 'ok' } : { t: `${pl.blocked} items cannot be crafted.${pl.finished === false ? ' Go on with a new base.' : ''}`, kind: 'bad' }; return out; }
     if (pl.unsupported) return { show: false };
     if (pl.impossible) { out.msg = { t: 'Not possible on this item: ' + pl.impossible.join(' '), kind: 'bad' }; return out; }
+    if (pl.refused) { out.msg = { t: 'No route: ' + pl.refused.join(' '), kind: 'bad' }; return out; }
     if (!pl.steps || !pl.steps.length) { out.msg = { t: 'Targets already met.', kind: 'ok' }; return out; }
     // what to use now, then the materials of the whole craft
     out.title = 'Craft route';
@@ -3553,6 +3554,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     }
     if (r.unsupported) return `<div class="plan-card sub">${esc(r.unsupported === 'no targets' ? 'Pick target stats first.' : r.unsupported === 'unknown base' ? 'This base is not in the game data.' : 'No route: ' + r.unsupported + '.')}</div>`;
     if (r.impossible) return `<div class="plan-card"><b>Not possible on this item</b><ul class="pnotes">${r.impossible.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
+    // (the gate: a network whose values did not settle, or that promises a negative cost, offers no route)
+    if (r.refused) return `<div class="plan-card"><b>No route offered</b><ul class="pnotes">${r.refused.map((x) => `<li>${esc(x)}</li>`).join('')}</ul><p class="sub" style="margin:0">${(r.nodes || 0).toLocaleString('en-US')} item states.</p></div>`;
     const nx = r.next;
     if (!r.steps.length) return '<div class="plan-card"><b class="ok-note">Targets already met.</b></div>';
     const over = r.budget > 0 && r.meanCost > r.budget;
@@ -3601,7 +3604,6 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       <div class="next"><span class="mk">Next step</span>${nextHtml}</div>
       ${r.bound ? `<p class="sub" style="margin:0">${r.bound.held.length ? `${esc(r.bound.held.join(', '))} ${r.bound.held.length > 1 ? 'are' : 'is'} on the item and no white base can get ${r.bound.held.length > 1 ? 'them' : 'it'}: ` : ''}${r.bound.mode === 'item' ? `where the route gives the item up, it takes another item like this one for ${money(parseFloat(S.itemCost) || 0)} (Plan options).` : 'the route never gives this item up and uses no step that can lose it. If you can buy another one like it, give its price under Plan options.'}</p>` : ''}
       ${r.next && r.next.instead ? `<p class="sub" style="margin:0">The route's first choice here is ${esc(r.next.instead.names.join(' + '))}, which the game refuses on this item (${esc(r.next.instead.why)}): the next best step is shown.</p>` : ''}
-      ${r.settled === false ? '<p class="sub" style="margin:0">The numbers of this route are rough: the craft repairs the item in long loops and their cost did not settle in the time a route may take. The next step is still the best one found.</p>' : ''}
       ${r.orLeft && r.orLeft.length ? `<p class="sub" style="margin:0">${r.orNone ? 'No “or” stat is followed by this route. ' : ''}Left out: ${esc(r.orLeft.join('; '))}. An “or” stat is left out when it can never be on an item together with another slot’s stat, or when the network does not hold it with every modifier followed that can keep a target out (without that the route would promise less than the craft costs; the last stat of the longest list goes first). Each slot’s own stat stays a target: the route never costs more for it.</p>` : ''}
       ${profitLine(r)}
       <div>
