@@ -5,6 +5,9 @@
  *   node scripts/rules_ledger.js            write reports/rules-ledger.md from the knowledge base in use
  *   POE2_KB=path node scripts/rules_ledger.js   from a candidate knowledge base
  *
+ * It also writes app/data/rules_ledger.json: every rule's status and hash (app/gate.js ruleHash) and the ledger's
+ * hash, which every gate result carries as its stamp (a rule change reruns only the routes that use that rule).
+ *
  * Sources: kb.crafting_rules, kb.crafting_ops, kb.legacy_or_disabled, the recipe library's claims and in-game tests,
  * the engine's own assumptions (ASSUMPTIONS below, each found in the code by a search string) and the 1.0 rules
  * (V1 below, from reports/poe2-1.0-crafting-2026-11-09.md).
@@ -30,8 +33,9 @@ const ASSUMPTIONS = [
   { id: 'A_SANCTIFY_EVEN', file: 'app/planner.js', find: 'game publishes no weights, so evenly', rule: 'Omen of Sanctification: each value is multiplied by 78% to 122%, every factor equally likely.', status: 'weak' },
   { id: 'A_DES_WEIGHTS', file: 'app/planner.js', find: 'desecrated-only ones evenly', rule: 'Desecrated-only modifiers at the Well of Souls are equally likely (Craft of Exile gives them weight 1).', status: 'weak' },
   { id: 'A_WEIGHTS', file: 'app/planner.js', find: 'weightOf', rule: 'Roll chances come from poe2db weights (the client data has only 0/1); Craft of Exile agrees on 8,929 of 8,987 tiers.', status: 'strong' },
-  { id: 'A_CATALYST_RING', file: 'app/planner.js', find: 'Which catalysts it takes is in-game test t29', rule: 'A base that says "Catalysts can be applied" takes the ring and amulet catalysts.', status: 'unknown' },
-  { id: 'A_RUNE_POOL_WELL', file: 'app/planner.js', find: 'in-game test t33', rule: 'The Well of Souls does not offer a socketed rune\'s pool: no plan counts on it.', status: 'unknown' },
+  { id: 'A_CATALYST_RING', file: 'app/planner.js', find: 'Which catalysts it takes is in-game test t29', rule: 'A base that says "Catalysts can be applied" takes the ring and amulet catalysts, with the same rules as on rings and amulets.', status: 'verified', source: 'in-game test t29; the player (12 Nov 2026)' },
+  { id: 'A_RUNE_POOL_WELL', file: 'app/planner.js', find: 'in-game test t33', rule: 'The Well of Souls does not offer a socketed rune\'s pool: no plan counts on it.', status: 'refuted', source: 'the player (12 Nov 2026): it does offer it (t33)' },
+  { id: 'A_RUNE_POOL_WEIGHT', file: 'app/planner.js', find: 'in-game test t33', rule: 'How often the Well of Souls offers a socketed rune\'s pool modifiers against the item\'s own. Not modelled: a route with a bone step on an item with a pool rune is not offered as a recommendation.', status: 'unknown' },
 ];
 
 /** PoE2 1.0, before the patch notes (reports/poe2-1.0-crafting-2026-11-09.md). */
@@ -68,7 +72,7 @@ for (const t of lib.tests || []) rows.push({ section: 'In-game tests', id: t.id,
 for (const c of lib.claims || []) if (c.verdict !== 'rejected') rows.push({ section: 'Claims', id: c.id, rule: c.claim, status: fromVerdict(c.verdict), source: c.source ? [c.source.author, c.source.tier].filter(Boolean).join(', ') : c.reason });
 for (const a of ASSUMPTIONS) {
   const ln = lineOf(a.file, a.find);
-  rows.push({ section: 'Engine assumptions', id: a.id, rule: a.rule, status: a.status, source: ln ? `${a.file}:${ln}` : `${a.file} (not found: "${a.find}")` });
+  rows.push({ section: 'Engine assumptions', id: a.id, rule: a.rule, status: a.status, source: (ln ? `${a.file}:${ln}` : `${a.file} (not found: "${a.find}")`) + (a.source ? `; ${a.source}` : '') });
 }
 for (const v of V1) rows.push({ section: 'PoE2 1.0', id: v.id, rule: v.rule, status: v.status, source: v.source });
 
@@ -107,6 +111,17 @@ for (const st of ['unknown', 'weak']) {
   for (const r of rows.filter((x) => x.status === st)) out.push(`- **${cell(r.id)}** (${r.section}): ${short(r.rule, 220)}`);
   out.push('');
 }
+// the machine-readable ledger for the gate (scripts/gate.js, the page)
+const G = require(path.join(ROOT, 'app', 'gate.js'));
+const json = { meta: { made: 'node scripts/rules_ledger.js', kb: path.basename(process.env.POE2_KB || 'poe2_kb_0.5.5.json'), game_data: kb.meta.game_data_version }, hash: null, rules: {} };
+for (const r of rows) {
+  const id = cell(r.id);
+  if (json.rules[id]) throw new Error('two rules with the id ' + id);
+  json.rules[id] = { status: r.status, section: r.section, hash: G.ruleHash({ id, status: r.status, rule: cell(r.rule) }), rule: short(r.rule, 260) };
+}
+json.hash = G.hash(Object.keys(json.rules).sort().map((id) => id + ':' + json.rules[id].hash).join(','));
+fs.writeFileSync(path.join(ROOT, 'app', 'data', 'rules_ledger.json'), JSON.stringify(json, null, 1) + '\n');
+out.splice(3, 0, '', `Ledger hash: \`${json.hash}\` (app/data/rules_ledger.json: every rule's hash; the gate's results carry them).`);
 const file = path.join(ROOT, 'reports', 'rules-ledger.md');
 fs.writeFileSync(file, out.join('\n'));
 console.log(`${file}: ${rows.length} rules; ` + statuses.map((st) => `${st} ${rows.filter((r) => r.status === st).length}`).join(', '));

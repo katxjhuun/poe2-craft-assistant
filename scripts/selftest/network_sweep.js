@@ -277,17 +277,18 @@ const RIVALS_RARE = [{}, { exaltTier: 'greater' }, { sideOmens: true }, { chaosT
   { removal: 'erasure', sideOmens: true, exaltTier: 'greater', chaosTier: 'greater' }, { greaterExalt: true }];
 const RIVALS_START = [{ magicTier: 'greater' }, {}, { magicTier: 'perfect' }, { pair: true, magicTier: 'greater' }, { magicTier: 'greater', slamOnly: true }, { start: 'alchemy' }, { start: 'alchemy', slamOnly: true }];
 
-function rivals(sc, input) {
+function rivals(sc, input, more, trials) {
   const { priceOf } = load();
   const ctx = P.makeContext(input.ix, input.item, { weights: input.weights, essences: input.essences });
   const st = P.toState(ctx, input.item);
   const { goals } = P.goalsFromTargets(ctx, input.targets);
   goals.forEach((g) => { g.eff = g.tier; });
   let best = null;
-  const list = st.rarity === 'Rare' ? RIVALS_RARE : RIVALS_START.concat(RIVALS_RARE.slice(0, 5));
+  // (more: further strategies, e.g. the library's recipes for the class (scripts/gate.js); trials: 300 for the sweep)
+  const list = (st.rarity === 'Rare' ? RIVALS_RARE : RIVALS_START.concat(RIVALS_RARE.slice(0, 5))).concat(more || []);
   for (const p of list) {
     let res;
-    try { res = P.simulate(ctx, st, goals, P.expandStrategy(p), { trials: 300, seed: 17, priceOf, baseCost: 1, maxSteps: 600 }); } catch (e) { continue; }
+    try { res = P.simulate(ctx, st, goals, P.expandStrategy(p), { trials: trials || 300, seed: 17, priceOf, baseCost: 1, maxSteps: 600 }); } catch (e) { continue; }
     if (!(res.p >= 0.2) || (res.missingPrices && res.missingPrices.length)) continue;
     const cps = res.meanCost / res.p;
     if (!best || cps < best.cps) best = { cps, p: res.p, params: p, route: res.steps.slice(0, 4).map((x) => `${x.key} x${x.avg.toFixed(1)}`) };
@@ -416,4 +417,4 @@ if (require.main === module) {
   if (json) fs.writeFileSync(json, JSON.stringify({ at: new Date().toISOString(), shard, shards, minutes, results: out }));
   process.exitCode = errors.length ? 1 : 0;
 }
-module.exports = { scenario, table, runOne, special };
+module.exports = { scenario, table, runOne, special, rivals };

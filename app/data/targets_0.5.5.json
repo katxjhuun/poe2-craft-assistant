@@ -1,0 +1,841 @@
+{
+ "meta": {
+  "made": "node scripts/targets.js",
+  "patch": "0.5.5",
+  "note": "Until the 1.0 trade demand: the sweep's own scenarios (see scripts/targets.js).",
+  "size": 100,
+  "groups": {
+   "unsettled": 6,
+   "promise too high": 1,
+   "refused bone steps": 1,
+   "never ended (run 17)": 1,
+   "pasted item": 16,
+   "drawn": 75
+  },
+  "classes": {
+   "One Hand Mace": 5,
+   "Body Armour": 14,
+   "Warstaff": 2,
+   "Gloves": 9,
+   "Boots": 8,
+   "Wand": 6,
+   "Sceptre": 4,
+   "Bow": 5,
+   "Spear": 4,
+   "Helmet": 7,
+   "Staff": 4,
+   "Focus": 1,
+   "Ring": 5,
+   "Jewel": 6,
+   "Two Hand Mace": 4,
+   "Belt": 4,
+   "Amulet": 4,
+   "Crossbow": 4,
+   "Shield": 2,
+   "Buckler": 1,
+   "Talisman": 1
+  }
+ },
+ "goals": [
+  {
+   "id": "Fortified Hammer|set4|rare, other modifiers|only item|2",
+   "base": "Fortified Hammer",
+   "n": 40,
+   "cls": "One Hand Mace",
+   "group": "unsettled",
+   "targets": "#% increased Physical Damage T2; Adds # to # Cold Damage T3; #% increased Physical Damage T3; Skills which create Fissures have a #% chance to create an additional Fissure"
+  },
+  {
+   "id": "Grasping Mail|set6|rare, a target fractured|4",
+   "base": "Grasping Mail",
+   "n": 95,
+   "cls": "Body Armour",
+   "group": "unsettled",
+   "targets": "#% increased Cast Speed T1; Minions deal #% increased Damage T2; #% reduced Poison Duration on you T2; +# to Dexterity and Intelligence; #% increased Curse Magnitudes T3; +# to Armour T1"
+  },
+  {
+   "id": "Seastorm Mantle|set4|rare, other modifiers|only item|2",
+   "base": "Seastorm Mantle",
+   "n": 34,
+   "cls": "Body Armour",
+   "group": "unsettled",
+   "targets": "# to # Physical Thorns damage T1; +#% to Cold Resistance T2; #% increased Energy Shield Recharge Rate T3; # Life Regeneration per second T1"
+  },
+  {
+   "id": "Aegis Quarterstaff|set4|rare, other modifiers|only item|2",
+   "base": "Aegis Quarterstaff",
+   "n": 37,
+   "cls": "Warstaff",
+   "group": "unsettled",
+   "targets": "Adds # to # Fire Damage T3; #% increased Physical Damage T3; Adds # to # Physical Damage T1; Leeches #% of Physical Damage as Mana T1"
+  },
+  {
+   "id": "Corsair Coat|set4|rare, other modifiers|only item|2",
+   "base": "Corsair Coat",
+   "n": 33,
+   "cls": "Body Armour",
+   "group": "unsettled",
+   "targets": "#% reduced Poison Duration on you T1; +# to Evasion Rating T2; +# to maximum Life T3; # to # Physical Thorns damage T3"
+  },
+  {
+   "id": "Grand Manchettes|set4|rare, other modifiers|only item|2",
+   "base": "Grand Manchettes",
+   "n": 53,
+   "cls": "Gloves",
+   "group": "unsettled",
+   "targets": "+# to Armour T3; Leech #% of Physical Attack Damage as Life T2; +#% to Cold Resistance T2; Adds # to # Fire damage to Attacks T1"
+  },
+  {
+   "id": "Blacksteel Sabatons|or3|IncreasedLife+LocalBaseArmourAndEvasionRating+IncreasedMana|8",
+   "base": "Blacksteel Sabatons",
+   "n": 44,
+   "cls": "Boots",
+   "group": "promise too high",
+   "targets": "+# to maximum Life T2; +#% of Armour also applies to Elemental Damage T2; #% increased Armour and Evasion T3"
+  },
+  {
+   "id": "Dueling Wand|set5|rare, an unwanted desecrated modifier|13",
+   "base": "Dueling Wand",
+   "n": 57,
+   "cls": "Wand",
+   "group": "refused bone steps",
+   "targets": "#% increased Fire Damage T1; Gain #% of Damage as Extra Fire Damage T1; #% increased chance to Shock T1; #% of Spell Mana Cost Converted to Life Cost; #% increased Mana Regeneration Rate T2"
+  },
+  {
+   "id": "Wrath Sceptre|set4|rare, other modifiers|only item|2",
+   "base": "Wrath Sceptre",
+   "n": 24,
+   "cls": "Sceptre",
+   "group": "never ended (run 17)",
+   "targets": "Allies in your Presence deal # to # added Attack Fire Damage T3; +# to maximum Mana T1; Allies in your Presence have #% increased Cast Speed T2; Allies in your Presence have #% increased Critical Hit Chance T1"
+  },
+  {
+   "id": "Adherent Cuffs|set4|rare, other modifiers|only item|2",
+   "base": "Adherent Cuffs",
+   "n": 46,
+   "cls": "Gloves",
+   "group": "pasted item",
+   "targets": "Gain # Life per enemy killed T1; Gain # Mana per enemy killed T1; +# to Armour T2; +# to maximum Mana T3"
+  },
+  {
+   "id": "Austere Garb|set4|rare, other modifiers|only item|2",
+   "base": "Austere Garb",
+   "n": 36,
+   "cls": "Body Armour",
+   "group": "pasted item",
+   "targets": "# Life Regeneration per second T2; #% increased Evasion and Energy Shield T3; #% increased Energy Shield Recharge Rate T1; +# to Spirit T2"
+  },
+  {
+   "id": "Drakeskin Boots|set4|rare, other modifiers|only item|2",
+   "base": "Drakeskin Boots",
+   "n": 36,
+   "cls": "Boots",
+   "group": "pasted item",
+   "targets": "+# to maximum Mana T2; +# to Evasion Rating T3; #% increased Evasion Rating T1; # Life Regeneration per second T1"
+  },
+  {
+   "id": "Fanatic Bow|set4|rare, other modifiers|only item|2",
+   "base": "Fanatic Bow",
+   "n": 40,
+   "cls": "Bow",
+   "group": "pasted item",
+   "targets": "Adds # to # Physical Damage T3; #% increased Light Radius T2; +# to Dexterity T3; +# to Accuracy Rating T1"
+  },
+  {
+   "id": "Feathered Raiment|set4|rare, other modifiers|only item|2",
+   "base": "Feathered Raiment",
+   "n": 32,
+   "cls": "Body Armour",
+   "group": "pasted item",
+   "targets": "#% increased Energy Shield Recharge Rate T3; +# to Intelligence T3; #% increased Energy Shield T2; #% increased Energy Shield T3"
+  },
+  {
+   "id": "Grand Cuisses|set4|rare, other modifiers|only item|2",
+   "base": "Grand Cuisses",
+   "n": 44,
+   "cls": "Boots",
+   "group": "pasted item",
+   "targets": "+# to Intelligence T1; #% reduced Freeze Duration on you T1; +# to Evasion Rating T3; +#% to Fire and Chaos Resistances"
+  },
+  {
+   "id": "Grand Regalia|set4|rare, other modifiers|only item|2",
+   "base": "Grand Regalia",
+   "n": 41,
+   "cls": "Body Armour",
+   "group": "pasted item",
+   "targets": "#% reduced Poison Duration on you T1; +# to Armour T1; +# to Intelligence T1; # Life Regeneration per second T3"
+  },
+  {
+   "id": "Grand Spear|set4|rare, other modifiers|only item|2",
+   "base": "Grand Spear",
+   "n": 43,
+   "cls": "Spear",
+   "group": "pasted item",
+   "targets": "#% increased Elemental Damage with Attacks T1; +#% to Critical Hit Chance T2; Gain # Mana per enemy killed T3; #% increased Physical Damage T1"
+  },
+  {
+   "id": "Grasping Mail|set4|rare, other modifiers|only item|2",
+   "base": "Grasping Mail",
+   "n": 93,
+   "cls": "Body Armour",
+   "group": "pasted item",
+   "targets": "Adds # to # Physical Damage to Attacks T2; #% increased Spell Damage T2; #% increased Critical Spell Damage Bonus T3; +# to Strength T1"
+  },
+  {
+   "id": "Grinning Mask|set4|rare, other modifiers|only item|2",
+   "base": "Grinning Mask",
+   "n": 38,
+   "cls": "Helmet",
+   "group": "pasted item",
+   "targets": "#% increased Critical Hit Chance T2; #% increased Evasion and Energy Shield T1; +#% to Fire Resistance T1; #% increased Evasion and Energy Shield T3"
+  },
+  {
+   "id": "Massive Mitts|set4|rare, other modifiers|only item|2",
+   "base": "Massive Mitts",
+   "n": 40,
+   "cls": "Gloves",
+   "group": "pasted item",
+   "targets": "+# to Dexterity T3; #% reduced Attribute Requirements T1; #% increased Armour T1; +# to Strength T2"
+  },
+  {
+   "id": "Permafrost Staff|set4|rare, other modifiers|only item|2",
+   "base": "Permafrost Staff",
+   "n": 45,
+   "cls": "Staff",
+   "group": "pasted item",
+   "targets": "#% increased Critical Spell Damage Bonus T3; +# to Level of all Lightning Spell Skills T2; #% increased Spell Damage T2; #% increased Critical Hit Chance for Spells T1"
+  },
+  {
+   "id": "Polished Bracers|set4|rare, other modifiers|only item|2",
+   "base": "Polished Bracers",
+   "n": 41,
+   "cls": "Gloves",
+   "group": "pasted item",
+   "targets": "+# to maximum Mana T2; Adds # to # Fire damage to Attacks T1; #% reduced Attribute Requirements T2; +# to Level of all Melee Skills T2"
+  },
+  {
+   "id": "Sirenscale Gloves|set4|rare, other modifiers|only item|2",
+   "base": "Sirenscale Gloves",
+   "n": 44,
+   "cls": "Gloves",
+   "group": "pasted item",
+   "targets": "+#% to Chaos Resistance T3; Adds # to # Fire damage to Attacks T2; Gain # Life per Enemy Hit with Attacks T2; #% increased Energy Shield Recharge Rate T1"
+  },
+  {
+   "id": "Tasalian Focus|set4|rare, other modifiers|only item|2",
+   "base": "Tasalian Focus",
+   "n": 42,
+   "cls": "Focus",
+   "group": "pasted item",
+   "targets": "+# to Level of all Spell Skills T1; #% increased Energy Shield T2; #% increased Critical Spell Damage Bonus T2; #% increased Spell Damage T3"
+  },
+  {
+   "id": "Thane Mail|set4|rare, other modifiers|only item|2",
+   "base": "Thane Mail",
+   "n": 35,
+   "cls": "Body Armour",
+   "group": "pasted item",
+   "targets": "#% reduced effect of Curses on you; +#% to Lightning Resistance T3; +# to Spirit T2; # to # Physical Thorns damage T2"
+  },
+  {
+   "id": "Austere Garb|set3|magic|1",
+   "base": "Austere Garb",
+   "n": 35,
+   "cls": "Body Armour",
+   "group": "drawn",
+   "targets": "#% increased Evasion and Energy Shield T3; Gain Deflection Rating equal to #% of Evasion Rating T2; #% reduced Ignite Duration on you T3"
+  },
+  {
+   "id": "Biostatic Ring|set3|magic|1",
+   "base": "Biostatic Ring",
+   "n": 54,
+   "cls": "Ring",
+   "group": "drawn",
+   "targets": "+# to Evasion Rating T2; Remnants you create have #% increased effect; #% increased Rarity of Items found T3"
+  },
+  {
+   "id": "Corsair Coat|set3|magic|1",
+   "base": "Corsair Coat",
+   "n": 32,
+   "cls": "Body Armour",
+   "group": "drawn",
+   "targets": "#% reduced Duration of Bleeding on You T1; +# to Strength and Intelligence; +# to Dexterity T2"
+  },
+  {
+   "id": "Diamond|set3|magic|1",
+   "base": "Diamond",
+   "n": 193,
+   "cls": "Jewel",
+   "group": "drawn",
+   "targets": "#% chance for Attack Hits to apply Incision T1; #% increased Critical Spell Damage Bonus T1; #% increased Melee Damage if you've dealt a Projectile Attack Hit in the past eight seconds T1"
+  },
+  {
+   "id": "Dueling Wand|set3|magic|1",
+   "base": "Dueling Wand",
+   "n": 45,
+   "cls": "Wand",
+   "group": "drawn",
+   "targets": "#% increased Spell Damage T3; #% increased Fire Damage T1; +# to Level of all Chaos Spell Skills T1"
+  },
+  {
+   "id": "Emerald|set3|magic|1",
+   "base": "Emerald",
+   "n": 107,
+   "cls": "Jewel",
+   "group": "drawn",
+   "targets": "#% chance to Poison on Hit T1; #% increased Intelligence; #% increased Damage with Bows T1"
+  },
+  {
+   "id": "Fanatic Bow|set3|magic|1",
+   "base": "Fanatic Bow",
+   "n": 39,
+   "cls": "Bow",
+   "group": "drawn",
+   "targets": "#% increased Physical Damage T1; +# to Accuracy Rating T1; +#% to Critical Hit Chance T2"
+  },
+  {
+   "id": "Feathered Raiment|set3|magic|1",
+   "base": "Feathered Raiment",
+   "n": 31,
+   "cls": "Body Armour",
+   "group": "drawn",
+   "targets": "+#% to Cold and Chaos Resistances; +# to maximum Life T2; #% reduced Ignite Duration on you T1"
+  },
+  {
+   "id": "Fortified Hammer|set3|magic|1",
+   "base": "Fortified Hammer",
+   "n": 39,
+   "cls": "One Hand Mace",
+   "group": "drawn",
+   "targets": "Gain # Life per enemy killed T3; Adds # to # Fire Damage T3; Adds # to # Cold Damage T3"
+  },
+  {
+   "id": "Grand Regalia|set3|magic|1",
+   "base": "Grand Regalia",
+   "n": 40,
+   "cls": "Body Armour",
+   "group": "drawn",
+   "targets": "+# to Armour T1; +#% of Armour also applies to Elemental Damage T2; +# to Spirit T3"
+  },
+  {
+   "id": "Grand Spear|set3|magic|1",
+   "base": "Grand Spear",
+   "n": 42,
+   "cls": "Spear",
+   "group": "drawn",
+   "targets": "Adds # to # Cold Damage T2; Adds # to # Lightning Damage T2; +# to Level of all Projectile Skills T3"
+  },
+  {
+   "id": "Grasping Mail|set3|magic|1",
+   "base": "Grasping Mail",
+   "n": 92,
+   "cls": "Body Armour",
+   "group": "drawn",
+   "targets": "#% increased Chaos Damage T1; Remnants you create have #% increased effect; +#% to Chaos Resistance T2"
+  },
+  {
+   "id": "Permafrost Staff|set3|magic|1",
+   "base": "Permafrost Staff",
+   "n": 44,
+   "cls": "Staff",
+   "group": "drawn",
+   "targets": "#% increased Lightning Damage T3; #% increased Spell Damage T3; #% reduced Attribute Requirements T2"
+  },
+  {
+   "id": "Ruby|set3|magic|1",
+   "base": "Ruby",
+   "n": 83,
+   "cls": "Jewel",
+   "group": "drawn",
+   "targets": "#% increased Knockback Distance T1; #% increased Fire Damage T1; #% increased Skill Effect Duration T1"
+  },
+  {
+   "id": "Ruination Maul|set3|magic|1",
+   "base": "Ruination Maul",
+   "n": 39,
+   "cls": "Two Hand Mace",
+   "group": "drawn",
+   "targets": "#% increased Attack Speed T3; Gain # Mana per enemy killed T1; +# to Accuracy Rating T2"
+  },
+  {
+   "id": "Runemastered Heavy Belt|set3|magic|1",
+   "base": "Runemastered Heavy Belt",
+   "n": 39,
+   "cls": "Belt",
+   "group": "drawn",
+   "targets": "+#% to Fire Resistance T2; +#% to Cold and Chaos Resistances; #% increased Charm Effect Duration T1"
+  },
+  {
+   "id": "Runemastered Veridical Chain|set3|magic|1",
+   "base": "Runemastered Veridical Chain",
+   "n": 65,
+   "cls": "Amulet",
+   "group": "drawn",
+   "targets": "#% of Damage taken Recouped as Mana T1; #% increased Deflection Rating; #% increased Armour T1"
+  },
+  {
+   "id": "Sapphire|set3|magic|1",
+   "base": "Sapphire",
+   "n": 91,
+   "cls": "Jewel",
+   "group": "drawn",
+   "targets": "#% increased Damage with Plant Skills T1; #% increased Shock Duration T1; #% increased Withered Magnitude T1"
+  },
+  {
+   "id": "Seastorm Mantle|set3|magic|1",
+   "base": "Seastorm Mantle",
+   "n": 33,
+   "cls": "Body Armour",
+   "group": "drawn",
+   "targets": "+#% to Cold Resistance T3; #% reduced Duration of Bleeding on You T2; # Life Regeneration per second T3"
+  },
+  {
+   "id": "Siege Crossbow|set3|magic|1",
+   "base": "Siege Crossbow",
+   "n": 38,
+   "cls": "Crossbow",
+   "group": "drawn",
+   "targets": "+# to Level of all Projectile Skills T2; +# to Strength T1; +#% to Critical Hit Chance T2"
+  },
+  {
+   "id": "Time-Lost Diamond|set3|magic|1",
+   "base": "Time-Lost Diamond",
+   "n": 172,
+   "cls": "Jewel",
+   "group": "drawn",
+   "targets": "Notable Passive Skills in Radius also grant #% increased Knockback Distance T1; Notable Passive Skills in Radius also grant #% increased Critical Spell Damage Bonus T1; Small Passive Skills in Radius also grant #% increased Global Physical Damage T1"
+  },
+  {
+   "id": "Time-Lost Emerald|set3|magic|1",
+   "base": "Time-Lost Emerald",
+   "n": 89,
+   "cls": "Jewel",
+   "group": "drawn",
+   "targets": "Notable Passive Skills in Radius also grant #% increased Magnitude of Shock you inflict T1; Small Passive Skills in Radius also grant #% increased Evasion Rating T1; Small Passive Skills in Radius also grant #% increased Charm Effect Duration T1"
+  },
+  {
+   "id": "Wrath Sceptre|set3|magic|1",
+   "base": "Wrath Sceptre",
+   "n": 23,
+   "cls": "Sceptre",
+   "group": "drawn",
+   "targets": "Allies in your Presence deal #% increased Damage T1; #% increased Spirit T3; Allies in your Presence deal # to # added Attack Lightning Damage T1"
+  },
+  {
+   "id": "Adherent Cuffs|set3|magic|1",
+   "base": "Adherent Cuffs",
+   "n": 45,
+   "cls": "Gloves",
+   "group": "drawn",
+   "targets": "+#% to Fire Resistance T3; +# to maximum Life T2; #% increased Energy Shield Recharge Rate T1"
+  },
+  {
+   "id": "Aegis Quarterstaff|set3|magic|1",
+   "base": "Aegis Quarterstaff",
+   "n": 36,
+   "cls": "Warstaff",
+   "group": "drawn",
+   "targets": "+# to Intelligence T2; Adds # to # Fire Damage T2; #% increased Light Radius T1"
+  },
+  {
+   "id": "Ancestral Tiara|set3|magic|1",
+   "base": "Ancestral Tiara",
+   "n": 33,
+   "cls": "Helmet",
+   "group": "drawn",
+   "targets": "# Life Regeneration per second T2; +#% to Cold Resistance T2; #% increased Critical Hit Chance T3"
+  },
+  {
+   "id": "Blacksteel Crest Shield|set3|magic|1",
+   "base": "Blacksteel Crest Shield",
+   "n": 42,
+   "cls": "Shield",
+   "group": "drawn",
+   "targets": "# to # Physical Thorns damage T1; #% of Physical Damage taken as Lightning while your Shield is raised; #% increased Armour and Energy Shield T3"
+  },
+  {
+   "id": "Blacksteel Gauntlets|set3|magic|1",
+   "base": "Blacksteel Gauntlets",
+   "n": 42,
+   "cls": "Gloves",
+   "group": "drawn",
+   "targets": "Adds # to # Cold damage to Attacks T1; Gain # Mana per enemy killed T2; Leech #% of Physical Attack Damage as Mana T1"
+  },
+  {
+   "id": "Blacksteel Sabatons|set3|magic|1",
+   "base": "Blacksteel Sabatons",
+   "n": 37,
+   "cls": "Boots",
+   "group": "drawn",
+   "targets": "+#% to Fire Resistance T3; +# to Armour T3; #% increased Armour and Evasion T1"
+  },
+  {
+   "id": "Cryptic Crown|set3|magic|1",
+   "base": "Cryptic Crown",
+   "n": 38,
+   "cls": "Helmet",
+   "group": "drawn",
+   "targets": "# Life Regeneration per second T1; #% increased Rarity of Items found T2; #% increased Rarity of Items found T1"
+  },
+  {
+   "id": "Cryptic Leggings|set3|magic|1",
+   "base": "Cryptic Leggings",
+   "n": 37,
+   "cls": "Boots",
+   "group": "drawn",
+   "targets": "#% reduced Attribute Requirements T3; #% reduced Chill Duration on you T1; +# to maximum Life T3"
+  },
+  {
+   "id": "Daggerfoot Shoes|set3|magic|1",
+   "base": "Daggerfoot Shoes",
+   "n": 37,
+   "cls": "Boots",
+   "group": "drawn",
+   "targets": "+# to Evasion Rating T2; Gain Deflection Rating equal to #% of Evasion Rating T3; #% increased Rarity of Items found T2"
+  },
+  {
+   "id": "Desert Buckler|set3|magic|1",
+   "base": "Desert Buckler",
+   "n": 34,
+   "cls": "Buckler",
+   "group": "drawn",
+   "targets": "+# to Evasion Rating T3; #% increased Parried Debuff Magnitude; +#% to Maximum Fire Resistance T1"
+  },
+  {
+   "id": "Drakeskin Boots|set3|magic|1",
+   "base": "Drakeskin Boots",
+   "n": 35,
+   "cls": "Boots",
+   "group": "drawn",
+   "targets": "#% increased Rarity of Items found T2; #% increased Movement Speed T1; +#% to Lightning Resistance T1"
+  },
+  {
+   "id": "Freebooter Cap|set3|magic|1",
+   "base": "Freebooter Cap",
+   "n": 35,
+   "cls": "Helmet",
+   "group": "drawn",
+   "targets": "# Life Regeneration per second T3; +#% to Cold Resistance T3; +# to Level of all Minion Skills T1"
+  },
+  {
+   "id": "Gladiatorial Helm|set3|magic|1",
+   "base": "Gladiatorial Helm",
+   "n": 40,
+   "cls": "Helmet",
+   "group": "drawn",
+   "targets": "#% increased Armour and Evasion T2; +# to Intelligence T1; #% increased Critical Hit Chance T2"
+  },
+  {
+   "id": "Golden Targe|set3|magic|1",
+   "base": "Golden Targe",
+   "n": 42,
+   "cls": "Shield",
+   "group": "drawn",
+   "targets": "+#% to Maximum Cold Resistance T3; +#% to Maximum Chaos Resistance T2; +# to maximum Life T3"
+  },
+  {
+   "id": "Grand Cuisses|set3|magic|1",
+   "base": "Grand Cuisses",
+   "n": 43,
+   "cls": "Boots",
+   "group": "drawn",
+   "targets": "Gain Deflection Rating equal to #% of Evasion Rating T3; +#% to Fire Resistance T2; +# to maximum Life T3"
+  },
+  {
+   "id": "Grand Manchettes|set3|magic|1",
+   "base": "Grand Manchettes",
+   "n": 52,
+   "cls": "Gloves",
+   "group": "drawn",
+   "targets": "+#% to Lightning and Chaos Resistances; #% increased Energy Shield Recharge Rate T1; +#% to Fire Resistance T3"
+  },
+  {
+   "id": "Grand Visage|set3|magic|1",
+   "base": "Grand Visage",
+   "n": 45,
+   "cls": "Helmet",
+   "group": "drawn",
+   "targets": "+# to Armour T2; +#% to Cold Resistance T3; #% increased effect of Arcane Surge on you"
+  },
+  {
+   "id": "Grinning Mask|set3|magic|1",
+   "base": "Grinning Mask",
+   "n": 37,
+   "cls": "Helmet",
+   "group": "drawn",
+   "targets": "#% increased Evasion and Energy Shield T3; #% reduced Attribute Requirements T2; +# to maximum Life T2"
+  },
+  {
+   "id": "Maji Talisman|set3|magic|1",
+   "base": "Maji Talisman",
+   "n": 42,
+   "cls": "Talisman",
+   "group": "drawn",
+   "targets": "+#% to Critical Hit Chance T3; Grants # Life per Enemy Hit T1; #% increased Physical Damage T2"
+  },
+  {
+   "id": "Massive Mitts|set3|magic|1",
+   "base": "Massive Mitts",
+   "n": 39,
+   "cls": "Gloves",
+   "group": "drawn",
+   "targets": "+# to Armour T3; +# to Accuracy Rating T3; #% increased Critical Damage Bonus T3"
+  },
+  {
+   "id": "Biostatic Ring|set4|rare, other modifiers|only item|2",
+   "base": "Biostatic Ring",
+   "n": 55,
+   "cls": "Ring",
+   "group": "drawn",
+   "targets": "#% increased Cold Damage T1; +# to Dexterity T1; +# to Intelligence T3; +# to maximum Life T3"
+  },
+  {
+   "id": "Dueling Wand|set4|rare, other modifiers|only item|2",
+   "base": "Dueling Wand",
+   "n": 46,
+   "cls": "Wand",
+   "group": "drawn",
+   "targets": "Enemies Hindered by you take #% increased Elemental Damage; #% increased Critical Hit Chance for Spells T3; +# to Level of all Cold Spell Skills T3; #% increased Spell Physical Damage T2"
+  },
+  {
+   "id": "Ruination Maul|set4|rare, other modifiers|only item|2",
+   "base": "Ruination Maul",
+   "n": 40,
+   "cls": "Two Hand Mace",
+   "group": "drawn",
+   "targets": "#% increased Warcry Cooldown Recovery Rate; +# to Accuracy Rating T1; Causes #% increased Stun Buildup T1; #% reduced Attribute Requirements T3"
+  },
+  {
+   "id": "Runemastered Heavy Belt|set4|rare, other modifiers|only item|2",
+   "base": "Runemastered Heavy Belt",
+   "n": 40,
+   "cls": "Belt",
+   "group": "drawn",
+   "targets": "#% reduced Charm Charges used T2; +# to Strength T1; +#% to Lightning Resistance T2; #% increased Flask Mana Recovery rate T1"
+  },
+  {
+   "id": "Runemastered Veridical Chain|set4|rare, other modifiers|only item|2",
+   "base": "Runemastered Veridical Chain",
+   "n": 66,
+   "cls": "Amulet",
+   "group": "drawn",
+   "targets": "+# to Strength T2; #% increased Spell Damage T1; +#% to all Elemental Resistances T2; +# to Spirit T3"
+  },
+  {
+   "id": "Siege Crossbow|set4|rare, other modifiers|only item|2",
+   "base": "Siege Crossbow",
+   "n": 39,
+   "cls": "Crossbow",
+   "group": "drawn",
+   "targets": "Grants # Life per Enemy Hit T2; Attacks Chain an additional time; #% increased Light Radius T3; Adds # to # Lightning Damage T2"
+  },
+  {
+   "id": "Biostatic Ring|set5|rare, some targets there|3",
+   "base": "Biostatic Ring",
+   "n": 56,
+   "cls": "Ring",
+   "group": "drawn",
+   "targets": "+# to all Attributes T2; #% increased Fire Damage T1; #% increased Rarity of Items found T1; +#% to Fire Resistance T1; #% increased Chaos Damage T1"
+  },
+  {
+   "id": "Dueling Wand|set5|rare, some targets there|3",
+   "base": "Dueling Wand",
+   "n": 47,
+   "cls": "Wand",
+   "group": "drawn",
+   "targets": "Break #% increased Armour; +# to maximum Mana T3; #% increased Freeze Buildup T3; +# to Level of all Fire Spell Skills T2; #% increased Spell Damage T3"
+  },
+  {
+   "id": "Fanatic Bow|set5|rare, some targets there|3",
+   "base": "Fanatic Bow",
+   "n": 41,
+   "cls": "Bow",
+   "group": "drawn",
+   "targets": "Adds # to # Physical Damage T3; Adds # to # Lightning Damage T2; #% increased Physical Damage T1; Grants # Life per Enemy Hit T1; #% chance to Pierce an Enemy"
+  },
+  {
+   "id": "Fortified Hammer|set5|rare, some targets there|3",
+   "base": "Fortified Hammer",
+   "n": 41,
+   "cls": "One Hand Mace",
+   "group": "drawn",
+   "targets": "+#% to Critical Hit Chance T1; Adds # to # Cold Damage T1; +# to Level of all Melee Skills T2; Adds # to # Physical Damage T2; Causes #% increased Stun Buildup T3"
+  },
+  {
+   "id": "Grand Spear|set5|rare, some targets there|3",
+   "base": "Grand Spear",
+   "n": 44,
+   "cls": "Spear",
+   "group": "drawn",
+   "targets": "#% reduced Attribute Requirements T3; +#% to Critical Damage Bonus T3; #% increased Attack Speed T1; Adds # to # Lightning Damage T2; Adds # to # Cold Damage T2"
+  },
+  {
+   "id": "Permafrost Staff|set5|rare, some targets there|3",
+   "base": "Permafrost Staff",
+   "n": 46,
+   "cls": "Staff",
+   "group": "drawn",
+   "targets": "+# to Intelligence T2; #% increased Archon Buff duration; Gain #% of Damage as Extra Cold Damage T1; +# to Level of all Physical Spell Skills T2; Gain #% of Damage as Extra Lightning Damage T1"
+  },
+  {
+   "id": "Ruination Maul|set5|rare, some targets there|3",
+   "base": "Ruination Maul",
+   "n": 41,
+   "cls": "Two Hand Mace",
+   "group": "drawn",
+   "targets": "Attacks with this Weapon Penetrate #% Cold Resistance; Adds # to # Fire Damage T2; +# to Level of all Melee Skills T3; Leeches #% of Physical Damage as Mana T3; #% increased Physical Damage T3"
+  },
+  {
+   "id": "Runemastered Heavy Belt|set5|rare, some targets there|3",
+   "base": "Runemastered Heavy Belt",
+   "n": 41,
+   "cls": "Belt",
+   "group": "drawn",
+   "targets": "#% increased Flask Mana Recovery rate T3; #% reduced Charm Charges used T2; +# to maximum Life T1; #% reduced Flask Charges used T3; +# to Stun Threshold T1"
+  },
+  {
+   "id": "Runemastered Veridical Chain|set5|rare, some targets there|3",
+   "base": "Runemastered Veridical Chain",
+   "n": 67,
+   "cls": "Amulet",
+   "group": "drawn",
+   "targets": "+# to maximum Energy Shield T3; #% of Damage taken Recouped as Life T1; +# to Level of all Melee Skills T1; +#% to Chaos Resistance T1; #% increased Rarity of Items found T1"
+  },
+  {
+   "id": "Siege Crossbow|set5|rare, some targets there|3",
+   "base": "Siege Crossbow",
+   "n": 40,
+   "cls": "Crossbow",
+   "group": "drawn",
+   "targets": "Adds # to # Fire Damage T2; Adds # to # Physical Damage T3; Adds # to # Cold Damage T1; +# to Dexterity T1; Gain # Life per enemy killed T1"
+  },
+  {
+   "id": "Wrath Sceptre|set5|rare, some targets there|3",
+   "base": "Wrath Sceptre",
+   "n": 25,
+   "cls": "Sceptre",
+   "group": "drawn",
+   "targets": "Allies in your Presence have +#% to all Elemental Resistances T3; Allies in your Presence have #% increased Critical Damage Bonus T2; Allies in your Presence deal # to # added Attack Cold Damage T2; #% increased Mana Regeneration Rate T3; Allies in your Presence deal # to # added Attack Physical Damage T3"
+  },
+  {
+   "id": "Biostatic Ring|set6|rare, a target fractured|4",
+   "base": "Biostatic Ring",
+   "n": 57,
+   "cls": "Ring",
+   "group": "drawn",
+   "targets": "#% increased Cold Damage T1; +# to maximum Mana T2; #% increased Spell Damage while on Full Energy Shield; Leech #% of Physical Attack Damage as Life T2; #% increased Rarity of Items found T3; +#% to Fire Resistance T2"
+  },
+  {
+   "id": "Dueling Wand|set6|rare, a target fractured|4",
+   "base": "Dueling Wand",
+   "n": 48,
+   "cls": "Wand",
+   "group": "drawn",
+   "targets": "#% increased Fire Damage T3; #% increased Spell Damage T2; #% increased Light Radius T1; Gain # Mana per enemy killed T2; #% increased Spell Damage with Spells that cost Life; +# to Intelligence T3"
+  },
+  {
+   "id": "Fanatic Bow|set6|rare, a target fractured|4",
+   "base": "Fanatic Bow",
+   "n": 42,
+   "cls": "Bow",
+   "group": "drawn",
+   "targets": "+# to Accuracy Rating T2; Leeches #% of Physical Damage as Mana T2; Gain # Mana per enemy killed T3; #% increased Light Radius T1; #% increased Elemental Damage with Attacks T3; Adds # to # Cold Damage T3"
+  },
+  {
+   "id": "Fortified Hammer|set6|rare, a target fractured|4",
+   "base": "Fortified Hammer",
+   "n": 42,
+   "cls": "One Hand Mace",
+   "group": "drawn",
+   "targets": "#% increased Light Radius T3; #% increased Attack Speed T2; Adds # to # Physical Damage T1; +#% to Critical Damage Bonus T3; #% increased Physical Damage T1; Adds # to # Lightning Damage T2"
+  },
+  {
+   "id": "Grand Spear|set6|rare, a target fractured|4",
+   "base": "Grand Spear",
+   "n": 45,
+   "cls": "Spear",
+   "group": "drawn",
+   "targets": "+# to Level of all Melee Skills T3; #% reduced Attribute Requirements T3; Attacks with this Weapon Penetrate #% Cold Resistance; Adds # to # Fire Damage T3; Leeches #% of Physical Damage as Mana T3; Adds # to # Cold Damage T1"
+  },
+  {
+   "id": "Permafrost Staff|set6|rare, a target fractured|4",
+   "base": "Permafrost Staff",
+   "n": 47,
+   "cls": "Staff",
+   "group": "drawn",
+   "targets": "#% increased Cold Damage T1; Gain #% of Damage as Extra Fire Damage T2; +# to Level of all Chaos Spell Skills T1; #% increased Mana Regeneration Rate T2; #% increased Freeze Buildup T3; +# to maximum Mana T2"
+  },
+  {
+   "id": "Ruination Maul|set6|rare, a target fractured|4",
+   "base": "Ruination Maul",
+   "n": 42,
+   "cls": "Two Hand Mace",
+   "group": "drawn",
+   "targets": "Gain # Life per enemy killed T1; #% increased Physical Damage T2; +# to Level of all Melee Skills T2; +#% to Critical Hit Chance T3; #% increased Physical Damage T1; Adds # to # Cold Damage T3"
+  },
+  {
+   "id": "Runemastered Heavy Belt|set6|rare, a target fractured|4",
+   "base": "Runemastered Heavy Belt",
+   "n": 42,
+   "cls": "Belt",
+   "group": "drawn",
+   "targets": "#% reduced Flask Charges used T2; #% chance for Charms you use to not consume Charges; # Life Regeneration per second T3; #% increased Charm Effect Duration T1; +#% to Lightning Resistance T3; +# to maximum Mana T1"
+  },
+  {
+   "id": "Runemastered Veridical Chain|set6|rare, a target fractured|4",
+   "base": "Runemastered Veridical Chain",
+   "n": 68,
+   "cls": "Amulet",
+   "group": "drawn",
+   "targets": "+# to Accuracy Rating T3; +#% to Chaos Resistance T3; +# to Intelligence T1; +# to maximum Energy Shield T1; #% increased Global Armour, Evasion and Energy Shield; +# to Dexterity T1"
+  },
+  {
+   "id": "Siege Crossbow|set6|rare, a target fractured|4",
+   "base": "Siege Crossbow",
+   "n": 41,
+   "cls": "Crossbow",
+   "group": "drawn",
+   "targets": "Gain # Mana per enemy killed T1; +# to Dexterity T1; #% increased Physical Damage T2; Projectiles have #% increased Critical Damage Bonus against Enemies within #m; Adds # to # Fire Damage T2; Adds # to # Cold Damage T3"
+  },
+  {
+   "id": "Wrath Sceptre|set6|rare, a target fractured|4",
+   "base": "Wrath Sceptre",
+   "n": 26,
+   "cls": "Sceptre",
+   "group": "drawn",
+   "targets": "Allies in your Presence deal # to # added Attack Fire Damage T2; +# to Level of all Minion Skills T3; +# to maximum Mana T1; #% increased Spirit T1; Allies in your Presence have #% increased Cast Speed T2; Minions have #% increased maximum Life T1"
+  },
+  {
+   "id": "Biostatic Ring|set3|rare, an unwanted desecrated modifier|6",
+   "base": "Biostatic Ring",
+   "n": 59,
+   "cls": "Ring",
+   "group": "drawn",
+   "targets": "+#% to Fire and Chaos Resistances; +# to all Attributes T2; +# to Strength T3"
+  },
+  {
+   "id": "Dueling Wand|set3|rare, an unwanted desecrated modifier|6",
+   "base": "Dueling Wand",
+   "n": 50,
+   "cls": "Wand",
+   "group": "drawn",
+   "targets": "#% increased Chaos Damage T1; +# to maximum Mana T3; Gain #% of Damage as Extra Cold Damage T3"
+  },
+  {
+   "id": "Fanatic Bow|set3|rare, an unwanted desecrated modifier|6",
+   "base": "Fanatic Bow",
+   "n": 44,
+   "cls": "Bow",
+   "group": "drawn",
+   "targets": "+# to Dexterity T2; +#% Surpassing chance to fire an additional Arrow T2; Attacks with this Weapon Penetrate #% Lightning Resistance"
+  },
+  {
+   "id": "Fortified Hammer|set3|rare, an unwanted desecrated modifier|6",
+   "base": "Fortified Hammer",
+   "n": 44,
+   "cls": "One Hand Mace",
+   "group": "drawn",
+   "targets": "+#% to Critical Hit Chance T2; #% reduced Attribute Requirements T1; #% increased Elemental Damage with Attacks T1"
+  }
+ ]
+}

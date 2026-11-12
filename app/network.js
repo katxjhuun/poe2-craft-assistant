@@ -4363,14 +4363,15 @@
 
   /**
    * The route for a request as plain data: what the page shows (it can cross a worker's boundary).
-   * opts: {budget: the player's ceiling in Exalted Orbs (0: none), baseLimit: white bases per finished item at most}.
+   * opts: {budget: the player's ceiling in Exalted Orbs (0: none), baseLimit: white bases per finished item at most,
+   * solved: {net, charge} of the request when the caller has solved it already (the replay gate plays that network)}.
    * Returns {blocked} for an item no currency works on, {impossible: [text]} for a target the item cannot have,
    * {unsupported: reason} when there is nothing to solve (no targets, unknown base), else the route.
    */
   function answer(input, opts) {
     opts = opts || {};
     const t0 = Date.now();
-    const { net, charge } = routeFit(input, opts.baseLimit > 0 ? +opts.baseLimit : 0);
+    const { net, charge } = opts.solved && opts.solved.net ? opts.solved : routeFit(input, opts.baseLimit > 0 ? +opts.baseLimit : 0);
     if (net.blocked) return { net: true, label: 'Route', blocked: net.blocked, finished: net.finished };
     if (net.unsupported) return { net: true, label: 'Route', unsupported: net.unsupported };
     if (net.impossible) return { net: true, label: 'Route', impossible: net.impossible.map((x) => `${x.label}: ${x.why}`), steps: null };
@@ -4378,6 +4379,15 @@
     // an item that is the only one and that every way to the targets can lose: no route can promise it
     if (net.bound && net.bound.mode === 'never' && !done && !(net.cost(s) < 1e11)) {
       return { net: true, label: 'Route', steps: null, impossible: [`${net.bound.held.length ? net.bound.held.join(', ') + ': no white base can get ' + (net.bound.held.length > 1 ? 'them' : 'it') + ', and ' : ''}every way to the targets can lose a modifier that must stay. Give the price of another item like this one (Plan options, "If given up") and the route can take the risk.`] };
+    }
+    // The gate's first check: a promise that cannot be trusted offers no route. In the nineteenth deep run a Fortified
+    // Hammer (set4, rare with other modifiers, only item) promised -936,020,251 with its values not settled and played
+    // 5,314,114 with 863 crafts that never ended; a Grasping Mail whose values had not settled promised 4,610,281 and
+    // played 1,963,840 (x0.43). Values that did not settle are no route's, and no craft costs less than nothing.
+    const promised = done ? 0 : net.cost(s);
+    if (!done && (!net.settled || !(promised >= 0) || !(promised < BIG))) {
+      return { net: true, label: 'Route', steps: null, nodes: net.N, settled: net.settled, promised: isFinite(promised) ? promised : null,
+        refused: [net.settled ? 'The route promises ' + (isFinite(promised) ? 'a negative cost' : 'no cost') + ': it is not offered.' : 'The values of this route did not settle: it is not offered.'] };
     }
     let step = net.step(s);
     const B = opts.budget > 0 ? +opts.budget : 0;
@@ -4429,5 +4439,6 @@
     };
   }
 
-  return { build, route, answer, gammaP };
+  // (routeFit: the page's worker solves once, answers from it (answer opts.solved) and plays that network for the expert view)
+  return { build, route, routeFit, answer, gammaP };
 });

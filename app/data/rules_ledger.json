@@ -1,0 +1,946 @@
+{
+ "meta": {
+  "made": "node scripts/rules_ledger.js",
+  "kb": "poe2_kb_0.5.5.json",
+  "game_data": "0.5.5.7"
+ },
+ "hash": "011606b5",
+ "rules": {
+  "R_RARITY_SLOTS": {
+   "status": "verified",
+   "section": "Rules",
+   "hash": "0ea4f281",
+   "rule": "Normal: 0 explicit; Magic: max 1 prefix + 1 suffix; Rare: max 3 prefix + 3 suffix"
+  },
+  "R_ILVL_GATE": {
+   "status": "strong",
+   "section": "Rules",
+   "hash": "9d93ca17",
+   "rule": "A mod tier can roll only if mod.lvl <= item level"
+  },
+  "R_MOD_GROUP": {
+   "status": "strong",
+   "section": "Rules",
+   "hash": "c73b06e0",
+   "rule": "Only one mod per modifier group on an item; guaranteed-mod currency fails instead of duplicating"
+  },
+  "R_ONE_CRAFTED": {
+   "status": "verified",
+   "section": "Rules",
+   "hash": "2028452b",
+   "rule": "0.5+: max 1 crafted modifier per item (Essence, Perfect/special Essence, Runic Alloy, liquid emotion, some Runic Ward enchants share this slot); the rune Astrid's Creativity socketed allows 1 more"
+  },
+  "R_ONE_DESECRATED": {
+   "status": "verified",
+   "section": "Rules",
+   "hash": "b2347a02",
+   "rule": "0.5+: max 1 Desecrated modifier per item (items with Desecrated modifiers cannot be Desecrated again); Desecrated mods do NOT count as crafted"
+  },
+  "R_DESECRATE_FULL": {
+   "status": "verified",
+   "section": "Rules",
+   "hash": "0b1d50ca",
+   "rule": "Desecrating adds an Unrevealed Desecrated modifier; if the modifiers are full, a random modifier is also removed"
+  },
+  "R_DESECRATE_REVEAL": {
+   "status": "strong",
+   "section": "Rules",
+   "hash": "29250bb1",
+   "rule": "The Unrevealed Desecrated modifier already has its side (prefix or suffix: the Necromancy omen's, else at random). The Well of Souls offers 3 modifiers of that side: 1, 2 or 3 desecrated-only ones (80% / 15% / 5%) and base modifiers that could roll there for …"
+  },
+  "R_FLUX": {
+   "status": "strong",
+   "section": "Rules",
+   "hash": "ba85ca7f",
+   "rule": "A Flux turns every resistance modifier of the other elements into the same tier of its element and rolls the value again; an item that already has that resistance keeps both (two modifiers of one group)"
+  },
+  "R_FRACTURED_LOCK": {
+   "status": "verified",
+   "section": "Rules",
+   "hash": "291425dc",
+   "rule": "A Fractured modifier is locked permanently: it cannot be removed or altered (a Divine Orb leaves its values; a Fracturing Orb cannot be used on Fractured items)"
+  },
+  "R_MIN_MOD_LEVEL": {
+   "status": "verified",
+   "section": "Rules",
+   "hash": "348014b0",
+   "rule": "Currency with a Minimum Modifier Level adds random modifiers of at least that level, except a modifier type that would be excluded entirely (it keeps its best tier); it cannot be used on items with an item level below that level"
+  },
+  "R_MAX_ITEM_LEVEL": {
+   "status": "verified",
+   "section": "Rules",
+   "hash": "27c44506",
+   "rule": "Currency with a Maximum Item Level (Gnawed bones: 64) cannot be used on items above that level"
+  },
+  "R_CORRUPTED_LOCK": {
+   "status": "verified",
+   "section": "Rules",
+   "hash": "993c3263",
+   "rule": "Corrupted items cannot be modified except by currencies that explicitly target corrupted items (Architect's Orb, Orbs of Sacrifice, Vaal Cultivation Orb, ...)"
+  },
+  "R_SANCTIFIED_LOCK": {
+   "status": "verified",
+   "section": "Rules",
+   "hash": "348afda0",
+   "rule": "Sanctifying multiplies each modifier value by a random 78% to 122%; most methods of crafting and modification cannot be used on Sanctified items"
+  },
+  "R_VALUE_MULT_05": {
+   "status": "strong",
+   "section": "Rules",
+   "hash": "c213b6a5",
+   "rule": "0.5+: Sanctify and the Vaal value-randomise outcome multiply each mod value from its CURRENT value (Divine to max first)"
+  },
+  "R_JEWEL_SLOTS": {
+   "status": "strong",
+   "section": "Rules",
+   "hash": "8f9f0273",
+   "rule": "Rare jewels: 2 prefix + 2 suffix by default (Magic jewels 1 + 1). The liquid emotion modifiers \"+1 Prefix Modifier allowed\" and \"+1 Suffix Modifier allowed\" raise one side by 1 (game data: +1 on that side, +0 on the other). With the allowance mod a jewel hold…"
+  },
+  "R_NO_SPACE": {
+   "status": "strong",
+   "section": "Rules",
+   "hash": "07ae1b1e",
+   "rule": "A currency that removes a modifier and adds one (Chaos Orb, liquid emotion, Perfect essence) needs a slot for the new modifier once the old one is gone; otherwise the game refuses it (\"Item has no space for more modifiers\") and nothing is spent. On an item ov…"
+  },
+  "R_SWAP_REMOVAL": {
+   "status": "strong",
+   "section": "Rules",
+   "hash": "171bb395",
+   "rule": "Perfect and Corrupted essences and liquid emotions remove a random modifier and add a guaranteed one: when the side of the new modifier is full, the removed modifier is one of that side; otherwise any modifier can go (Omens of Sinistral/Dextral Crystallisatio…"
+  },
+  "R_RUNE_POOLS": {
+   "status": "strong",
+   "section": "Rules",
+   "hash": "1fbcc341",
+   "rule": "Six socket-bound runes give the item a tag, and the modifiers with a spawn weight on that tag can then roll like the item's own prefixes and suffixes: Kolr's Hunt (Marksman, gloves), Katla's Gloom (Decay, gloves), Vorana's Carnage (Berserking, helmets), Uhtre…"
+  },
+  "R_EXCEPTIONAL": {
+   "status": "weak",
+   "section": "Rules",
+   "hash": "40155d27",
+   "rule": "An exceptional base can drop, even as a Normal item, with one augment socket more than its class usually has, with quality above 20%, or with both. Artificer's Orb adds sockets only up to the usual number (2 on body armour and two-handed weapons, else 1): on …"
+  },
+  "R_WEIGHTS": {
+   "status": "strong",
+   "section": "Rules",
+   "hash": "0568eb81",
+   "rule": "Real roll weights are not in client data (spawn weight 0/1). Weights come from poe2db; Craft of Exile gives the same chances for 8,929 of its 8,987 tiers (jewels as a fixed multiple) and differs on 58 (weapon skill level tiers, cast speed on jewellery, a few …"
+  },
+  "transmute": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "5457ffd1",
+   "rule": "Orb of Transmutation, Greater Orb of Transmutation, Perfect Orb of Transmutation: -> Magic with 1 random mod. Floors: Greater 44, Perfect 70 (game_data)."
+  },
+  "augment": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "79e97019",
+   "rule": "Orb of Augmentation, Greater Orb of Augmentation, Perfect Orb of Augmentation: +1 random mod. Floors: Greater 44, Perfect 70 (game_data)."
+  },
+  "regal": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "3a982df0",
+   "rule": "Regal Orb, Greater Regal Orb, Perfect Regal Orb: -> Rare, +1 random mod. Floors: Greater 35, Perfect 50 (game_data)."
+  },
+  "alchemy": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "5ce2be2e",
+   "rule": "Orb of Alchemy: -> Rare with 4 random mods."
+  },
+  "exalt": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "c67b2cd4",
+   "rule": "Exalted Orb, Greater Exalted Orb, Perfect Exalted Orb: +1 random mod. Floors: Greater 35, Perfect 50 (game_data)."
+  },
+  "chaos": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "ac71e08a",
+   "rule": "Chaos Orb, Greater Chaos Orb, Perfect Chaos Orb: remove 1 random mod + add 1 random mod (NOT a full reroll like PoE1). Floors: Greater 35, Perfect 50 (game_data)."
+  },
+  "annul": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "5319b813",
+   "rule": "Orb of Annulment: remove 1 random mod."
+  },
+  "divine": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "719d5155",
+   "rule": "Divine Orb: randomise numeric values of mods."
+  },
+  "chance": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "a9d4d447",
+   "rule": "Orb of Chance: -> random Unique of same class OR destroyed."
+  },
+  "vaal": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "00b00603",
+   "rule": "Vaal Orb: unpredictable modification + Corrupted."
+  },
+  "fracture": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "1e99e97f",
+   "rule": "Fracturing Orb: fracture (lock) 1 random mod."
+  },
+  "hinekora": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "b98db123",
+   "rule": "Hinekora's Lock: foresee result of next currency; any modification removes the foresight."
+  },
+  "mirror": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "48e8d627",
+   "rule": "Mirror of Kalandra: create mirrored copy."
+  },
+  "artificer": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "082c5ae4",
+   "rule": "Artificer's Orb: +1 augment socket."
+  },
+  "essence_upgrade": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "92e4ab6e",
+   "rule": "Lesser/normal/Greater Essence of X: -> Rare + guaranteed mod (counts as the 1 crafted mod)."
+  },
+  "essence_replace": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "6f0555c0",
+   "rule": "Perfect Essence of X + special essences (Abyss, Breach, Horror, Insanity, Delirium, Hysteria): remove 1 random mod + add guaranteed mod."
+  },
+  "alloy": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "7efe598f",
+   "rule": "13 Runic Alloys: remove 1 random mod + add alloy-exclusive guaranteed mod (counts as crafted)."
+  },
+  "desecrate": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "8b543ac4",
+   "rule": "Bones: Jawbone (Rare weapon/quiver), Rib (Rare armour), Collarbone (Rare amulet/ring/belt), Altered Collarbone (+chance of otherworldly mods), Cranium (Rare jewel), Vertebrae (Rare waystone): adds 1 unrevealed Desecrated mod (its side is set now); reveal at W…"
+  },
+  "catalyst": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "084967ca",
+   "rule": "Catalysts (Flesh=Life, Neural=Mana, Carapace=Armour/Evasion/ES, Uul-Netol's=Physical, Xoph's=Fire, Tul's=Cold, Esh's=Lightning, Chayula's=Chaos, Reaver=Attack, Sibilant=Caster, Skittering=Speed, Adaptive=Attribute, Necrotic=Minion); Refined = same for jewels:…"
+  },
+  "quality": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "09998b6c",
+   "rule": "Blacksmith's Whetstone (martial weapon), Armourer's Scrap (armour), Arcanist's Etcher (wand/staff/sceptre), Glassblower's Bauble (flask): +quality."
+  },
+  "infuser": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "89e704fa",
+   "rule": "Vaal Arcanist's/Armourer's/Blacksmith's/Catalysing Infuser: quality above max by up to 10%, chance to Corrupt."
+  },
+  "flux": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "1e627a99",
+   "rule": "Blazing/Chilling/Crackling/Void Flux: convert all elemental resistance mods to Fire/Cold/Lightning (Void: to Chaos) equivalents, same tier, value rolled again; the item can end with two of one element (R_FLUX)."
+  },
+  "sacrifice": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "c0f20d75",
+   "rule": "Kamasa's (amulet/ring/belt), Kopec's (armour), Yaomac's (weapon/quiver), Yugul's (jewel) Orb of Sacrifice: upgrade corruption enchantment + remove 1 random mod."
+  },
+  "architect": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "c4424463",
+   "rule": "Architect's Orb: modify unpredictably or destroy."
+  },
+  "cultivation": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "493c6ce3",
+   "rule": "Vaal Cultivation Orb: replace up to 2 mods / turn into corrupted Unique of same class."
+  },
+  "verisium": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "9fc500a2",
+   "rule": "Verisium, Exceptional Verisium: Runeforging: adds Runic Ward; bases from level 55 give up part of their Armour/Evasion/Energy Shield for it (ArmourTypes); Uniques move to their Runeforged/Runemastered base and stay the same unique."
+  },
+  "aldur_rune": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "0051ed48",
+   "rule": "Passion of Aldur, Breath of Aldur, Ire of Aldur, Betrayal of Aldur: while socketed, transforms the other elements' modifiers into equivalent Fire (Passion), Cold (Breath), Lightning (Ire) or Chaos (Betrayal) modifiers; fractured modifiers stay."
+  },
+  "liquid_emotion": {
+   "status": "verified",
+   "section": "Operators",
+   "hash": "768f2635",
+   "rule": "Liquid emotions (Diluted, plain, Concentrated and Potent; the Ancient ones are for Time-Lost jewels): removes a random modifier and adds the guaranteed crafted modifier the game lists for that jewel (liquid_emotions)."
+  },
+  "Omen of Homogenising Exaltation / Coronation": {
+   "status": "strong",
+   "section": "Not in the game",
+   "hash": "621af1b3",
+   "rule": "drops disabled since 0.4 (Standard legacy); not in 0.5.5"
+  },
+  "Omen of Corruption": {
+   "status": "strong",
+   "section": "Not in the game",
+   "hash": "324899fc",
+   "rule": "unobtainable since 0.5.0 (legacy)"
+  },
+  "Omen of Sinistral Alchemy / Dextral Alchemy": {
+   "status": "weak",
+   "section": "Not in the game",
+   "hash": "19b5b1a2",
+   "rule": "in the game files but not in the game: only the Orb of Alchemy exists"
+  },
+  "Omen of Sinistral Coronation / Dextral Coronation": {
+   "status": "weak",
+   "section": "Not in the game",
+   "hash": "c104a7ea",
+   "rule": "in the game files but not in the game: a Regal Orb cannot be aimed at a side"
+  },
+  "Omen of Greater Annulment": {
+   "status": "weak",
+   "section": "Not in the game",
+   "hash": "29266680",
+   "rule": "in the game files but not in the game: only the Orb of Annulment and the Sinistral and Dextral Annulment omens exist"
+  },
+  "Omen of Recombination": {
+   "status": "strong",
+   "section": "Not in the game",
+   "hash": "fd72ae3a",
+   "rule": "removed in 0.5.0"
+  },
+  "Recombinator (Expedition)": {
+   "status": "strong",
+   "section": "Not in the game",
+   "hash": "9f397fba",
+   "rule": "removed with 0.5.0 (with the Omen of Recombination) and not back in 0.5.5"
+  },
+  "t1": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "bfbc0cee",
+   "rule": "Is Tier 1 in Advanced Mod Descriptions the best tier? (On the 6 real items you pasted (2 jewels, 4 wands and staves, 27 Sept 2026) all 25 modifiers show the same tier in the game's Alt+Ctrl+C text as the planner gives them; T1 is the highest level of the fami…"
+  },
+  "t2": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "8eb605da",
+   "rule": "Greater and Perfect Regal, Chaos and Exalted Orbs: are the minimum modifier levels 35 and 50? (Greater Exalted, Chaos and Regal Orbs: 35; Perfect: 50. Such currency cannot be used below that item level either.)"
+  },
+  "t3": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "6885ab0a",
+   "rule": "A second crafted modifier is blocked (not overwritten)? (A second essence does not go on: the item keeps its one crafted modifier (an in-game report quoted \"this item already has a crafted modifier\").)"
+  },
+  "t4": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "28fe55e6",
+   "rule": "Gnawed bones only work on item level 64 or lower? (Gnawed bones show \"Maximum Item Level: 64\".)"
+  },
+  "t5": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "72359435",
+   "rule": "Omen of Putrefaction in 0.5.5: all mods desecrated, item corrupted? (Your corrupted Tasalian Focus (Vortex Barrier) has six Desecrated mods (September 2026).)"
+  },
+  "t6": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "65829cd3",
+   "rule": "Can Runic Alloys be found or used in Forbidden Rites? (Runic Alloys trade in Forbidden Rites (e.g. Mystic Alloy about 7,300 a day, Runebinder's Alloy about 1,400, 27 Sept 2026).)"
+  },
+  "t7": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "27b3eca6",
+   "rule": "Sanctify multiplier range (78-122%?) (Each modifier value is multiplied by a random 78% to 122%; most crafting cannot be used afterwards.)"
+  },
+  "t8": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "ea94c7fc",
+   "rule": "How big is the Omen of Catalysing Exaltation boost? (Your test (28 Sept 2026): 4 rings with \"+# to all Attributes\" and 20% Adaptive Catalyst quality; every Omen of Catalysing Exaltation + Exalted Orb gave another attribute modifier (4 of 4). Without the omen …"
+  },
+  "t9": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "2a573739",
+   "rule": "Omen of Whittling removes the lowest level mod (not the lowest tier)? (It removes the lowest level modifier, not the lowest tier.)"
+  },
+  "t10": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "1d900fa7",
+   "rule": "A bone on a full item removes a random mod first? (If the modifiers are full, a random modifier is also removed.)"
+  },
+  "t11": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "e5a07f66",
+   "rule": "Lich mods need item level 65+ and a Preserved or Ancient bone? (Kurgal, Amanamu and Ulaman modifiers are level 65, and Gnawed bones stop at item level 64: lich modifiers need item level 65+ and a Preserved or Ancient bone.)"
+  },
+  "t12": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "b9514dd6",
+   "rule": "Omen of Catalysing Exaltation works together with a side exaltation omen? (Yes: Omen of Catalysing Exaltation can be combined with Omen of Sinistral or Dextral Exaltation.)"
+  },
+  "t13": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "26e6d8d6",
+   "rule": "Direction of lowest_ratio and highest_ratio in the Currency Exchange data (Both fields hold paired amounts {A: x, B: y}; the price of A in B is y/x. lowest/highest are that hour's price range (checked on the 25 September data).)"
+  },
+  "t14": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "e777547e",
+   "rule": "Does the Alt+Ctrl+C copy include mod tags? (Yes: the Alt+Ctrl+C headers carry the modifier tags after a dash, e.g. { Prefix Modifier \"Prismatic\" (Tier: 1) — Damage, Elemental, Fire, Cold, Lightning }; modifiers without tags show none. The parser reads them.)"
+  },
+  "t15": {
+   "status": "refuted",
+   "section": "In-game tests",
+   "hash": "0721ed1b",
+   "rule": "Do sword, axe, dagger or flail bases drop in 0.5.5? (Not obtainable in 0.5.x; they are expected with 1.0.)"
+  },
+  "t16": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "e889188b",
+   "rule": "Can Astrid's Creativity be obtained in Forbidden Rites? (Astrid's Creativity trades in Forbidden Rites (about 9,800 a day, 27 Sept 2026).)"
+  },
+  "t17": {
+   "status": "refuted",
+   "section": "In-game tests",
+   "hash": "7839369f",
+   "rule": "Does a Divine Orb reroll the values of fractured modifiers? (A Fractured modifier cannot be removed or altered; the planner leaves its values alone.)"
+  },
+  "t18": {
+   "status": "refuted",
+   "section": "In-game tests",
+   "hash": "a864210f",
+   "rule": "Do essences check item level (for example a level 72 essence modifier on an item level 64 item)? (No: an essence adds its modifier whatever the item level (a level 72 essence modifier can go on an item level 64 item). The planner already works that way.)"
+  },
+  "t19": {
+   "status": "refuted",
+   "section": "In-game tests",
+   "hash": "67c51126",
+   "rule": "Can a Fracturing Orb be used on an item that already has a fractured modifier? (Fracturing Orbs cannot be used on Fractured items.)"
+  },
+  "t20": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "44fb12a5",
+   "rule": "What does a Flux do when the item already has a resistance of the target element (for example Blazing Flux on an item with Fire and Cold Resistance)? (Every resistance modifier of the other elements turns into the same tier of the target element with its valu…"
+  },
+  "t21": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "631e2e48",
+   "rule": "Can Orbs of Transmutation, Regal Orbs or Orbs of Alchemy be used on jewels? (Yes: jewels are crafted like other gear (Transmutation, Augmentation, Regal, then Exalted Orbs). The game-data flag was a guess and is not used.)"
+  },
+  "t22": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "adb0e83e",
+   "rule": "What does a Gnawed bone reveal on a Rare of item level 64 or lower? (Base modifiers: the Well of Souls offers base modifiers that could roll on the item as well as desecrated-only ones, and the desecrated-only equipment ones need item level 65, so a Gnawed bo…"
+  },
+  "t23": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "a1ef88ff",
+   "rule": "Can a sceptre be desecrated? (Yes, with base modifiers only: sceptres have no desecrated-only modifier, and the Well of Souls offers base modifiers too. Not tried in game yet; the planner now offers it.)"
+  },
+  "t24": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "d8d5c01f",
+   "rule": "After the \"+1 Prefix/Suffix Modifier allowed\" mod is removed, can a Rare jewel take a fifth regular modifier? (Yes. Two 0.5 video guides show it step by step, and the jewels they show read as three suffixes, a prefix and a crafted prefix. With \"+1 Suffix Modi…"
+  },
+  "t25": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "8288dfab",
+   "rule": "When the side of the new modifier is full, does a Perfect essence or a liquid emotion remove a modifier of that side? (Yes: without an Omen of Crystallisation, a Perfect essence (or Runic Alloy) whose modifier side is full removes a modifier of that side; oth…"
+  },
+  "t26": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "e6285045",
+   "rule": "Which modifier does Potent Liquid Contempt or Ferocity add: the prefix or the suffix one? (The added modifier sits on the side the removal opened: \"(40-60)% increased Effect of Suffixes\" and \"+1 Suffix Modifier allowed\" are prefixes; \"(40-60)% increased Effec…"
+  },
+  "t27": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "e85e1b75",
+   "rule": "Does one element's spell modifier keep another element's off wands and staves? (Your trade searches (27 Sept 2026): wands 0 results for the three pairs, the check pair found (Brimstone Cry). Staves: the Cold/Lightning pair 0; two staves carry a pair, each wit…"
+  },
+  "t28": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "3b9babbe",
+   "rule": "Does the Verisium Anvil keep an item's modifiers when it turns the base into its Runeforged form? (Runeforging keeps the modifiers (fractured ones too since the 0.5.1 hotfix). It adds Runic Ward; bases from level 55 give up part of their Armour, Evasion or En…"
+  },
+  "t29": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "a332de8c",
+   "rule": "Which catalysts can be applied to a Grasping Mail (\"Catalysts can be applied to this item\")? (Grasping Mail takes every catalyst that works on rings and amulets and rolls like a ring.)"
+  },
+  "t30": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "7a06c167",
+   "rule": "Which route puts two spell modifiers of different elements on one staff (Ghoul Beam, Mind Roar), and does a fractured modifier still keep other elements off? (The Runes of Aldur: Passion of Aldur turns Cold and Lightning modifiers into equivalent Fire ones (B…"
+  },
+  "t31": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "48b734ed",
+   "rule": "How many of the three Well of Souls options are desecrated-only? (One, two or three of the three options are desecrated-only with chances 80%, 15% and 5%; the rest are base modifiers of the side. With a lich omen the first option is that lich's. Without a des…"
+  },
+  "t32": {
+   "status": "unknown",
+   "section": "In-game tests",
+   "hash": "361ff018",
+   "rule": "Potent Liquid Contempt on a jewel with two prefixes and two suffixes, one suffix fractured: how often does it give \"+1 Suffix Modifier allowed\"?"
+  },
+  "t33": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "00fc7639",
+   "rule": "With a rune that opens a modifier pool socketed (Kolr's Hunt, Katla's Gloom, Vorana's Carnage, Uhtred's Sidereus, Thrud's Might, Medved's Tending): does the Well of Souls offer that pool's modifiers, and how often do they roll against the item's own? (The Wel…"
+  },
+  "t34": {
+   "status": "refuted",
+   "section": "In-game tests",
+   "hash": "b6129818",
+   "rule": "Does an Omen of Sinistral or Dextral Crystallisation aim a Runic Alloy, or only Perfect and Corrupted Essences as its text says? (An alloy is not used with a Crystallisation omen: the omen aims Perfect and Corrupted Essences only, as its text says.)"
+  },
+  "t35": {
+   "status": "refuted",
+   "section": "In-game tests",
+   "hash": "2d9b4251",
+   "rule": "Does a Fracturing Orb ever fracture a Desecrated modifier (hidden or revealed)? (A Fracturing Orb does not land on a hidden Desecrated modifier: with four modifiers of which one is a hidden Desecrated one, the fracture is one of the other three (1 in 3).)"
+  },
+  "t36": {
+   "status": "verified",
+   "section": "In-game tests",
+   "hash": "46250d16",
+   "rule": "Hinekora's Lock: does each currency show its own result, and does an omen change the result that is shown? (Each currency item shows its own result, and an omen changes it: a Vaal Orb and a Vaal Orb with an Omen of Corruption showed two different results, a C…"
+  },
+  "k7": {
+   "status": "weak",
+   "section": "Claims",
+   "hash": "49b09f75",
+   "rule": "Chaos Shards combine into a Chaos Orb"
+  },
+  "k9": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "ead6c578",
+   "rule": "Omen of the Blackblooded, Liege and Sovereign guarantee a Kurgal, Amanamu or Ulaman modifier on weapon or jewellery desecration"
+  },
+  "k10": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "4955f75d",
+   "rule": "An item can have only one crafted modifier and one desecrated modifier"
+  },
+  "k11": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "5e54589b",
+   "rule": "Omen of Putrefaction creates an item with six desecrated modifiers"
+  },
+  "k13": {
+   "status": "weak",
+   "section": "Claims",
+   "hash": "a477a1aa",
+   "rule": "Exact percentage chances for crafting outcomes"
+  },
+  "k14": {
+   "status": "refuted",
+   "section": "Claims",
+   "hash": "68c9262b",
+   "rule": "Use Omen of Homogenising Exaltation for level crafts"
+  },
+  "k15": {
+   "status": "refuted",
+   "section": "Claims",
+   "hash": "867a26d5",
+   "rule": "Use the Recombinator to merge items"
+  },
+  "k16": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "58cbd6cd",
+   "rule": "Vaal Infusers require 20% quality"
+  },
+  "k18": {
+   "status": "weak",
+   "section": "Claims",
+   "hash": "e3d5f801",
+   "rule": "Vaal Orb can turn a Unique into a random Rare"
+  },
+  "k20": {
+   "status": "weak",
+   "section": "Claims",
+   "hash": "2dbf6eba",
+   "rule": "Sanctify multiplies values by 78 to 122 percent"
+  },
+  "k21": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "329bccb4",
+   "rule": "Greater Orb of Transmutation and Augmentation have minimum modifier level 44"
+  },
+  "k23": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "b2ce0b6f",
+   "rule": "Perfect Orb of Transmutation has minimum modifier level 70"
+  },
+  "k24": {
+   "status": "weak",
+   "section": "Claims",
+   "hash": "36c96da4",
+   "rule": "Greater and Perfect Regal, Chaos and Exalted Orbs have floors 35 and 50"
+  },
+  "k25": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "d518bbe1",
+   "rule": "If a floor removes a whole mod family the best legal tier can still roll"
+  },
+  "k26": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "00a2763b",
+   "rule": "Gnawed bones work on items of item level 64 or below"
+  },
+  "k28": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "0d0d4a22",
+   "rule": "Ancient bones apply minimum modifier level 40"
+  },
+  "k29": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "38e8ae4c",
+   "rule": "Omen of Light makes Orb of Annulment remove only the desecrated modifier"
+  },
+  "k30": {
+   "status": "refuted",
+   "section": "Claims",
+   "hash": "479b33cb",
+   "rule": "Catalysts drop from Breach monsters"
+  },
+  "k31": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "16275691",
+   "rule": "Sanctify and Vaal value changes multiply the current value"
+  },
+  "k32": {
+   "status": "refuted",
+   "section": "Claims",
+   "hash": "173df5e6",
+   "rule": "Omen of Corruption controls Vaal outcomes"
+  },
+  "k37": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "b6861684",
+   "rule": "Omen of Catalysing Exaltation consumes catalyst quality to raise the chance of the matching mod type"
+  },
+  "k38": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "54749937",
+   "rule": "Necrotic Catalyst boosts minion modifiers on rings and amulets"
+  },
+  "k39": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "8aa3234a",
+   "rule": "Liquid emotions replace a random jewel modifier like a Greater Essence"
+  },
+  "k41": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "83596529",
+   "rule": "Tier 1 in Advanced Mod Descriptions is the best tier"
+  },
+  "k42": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "d1a8ad49",
+   "rule": "Omen of Sinistral Exaltation makes Exalted Orb add only a prefix"
+  },
+  "k43": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "0d051690",
+   "rule": "Omen of Dextral Erasure makes Chaos Orb remove only a suffix"
+  },
+  "k44": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "45d45229",
+   "rule": "Omen of Greater Exaltation makes Exalted Orb add two modifiers"
+  },
+  "k45": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "4782171c",
+   "rule": "Fractured modifiers cannot be removed or changed"
+  },
+  "k46": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "0d105151",
+   "rule": "Corrupted items only accept corrupted-item currency"
+  },
+  "k47": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "cec1e3f8",
+   "rule": "The Well of Souls offers base modifiers as well as desecrated-only ones; a lich omen offers only that lich's"
+  },
+  "k48": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "74777b12",
+   "rule": "A Flux can leave two resistance modifiers of one element on an item"
+  },
+  "k49": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "9b951413",
+   "rule": "Jewels can be crafted with Transmutation, Augmentation, Regal and Exalted Orbs"
+  },
+  "k50": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "4ae135f3",
+   "rule": "Roll weights of natural modifiers (poe2db) match Craft of Exile"
+  },
+  "k51": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "d74446ca",
+   "rule": "Desecrated-only modifiers all roll with the same weight"
+  },
+  "k52": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "c03de892",
+   "rule": "Essences do not check the item level"
+  },
+  "k53": {
+   "status": "weak",
+   "section": "Claims",
+   "hash": "c757a1b2",
+   "rule": "Omen of Catalysing Exaltation at 20% quality makes the matching modifier type very likely (about x25 its weight)"
+  },
+  "k54": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "6425a7ba",
+   "rule": "A jewel keeps three suffixes (or prefixes) after its \"+1 Suffix (Prefix) Modifier allowed\" modifier is removed, and the other side can still be filled: five modifiers"
+  },
+  "k55": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "acafa944",
+   "rule": "On a jewel with three suffixes over the limit and both prefixes filled, a Chaos Orb only changes prefixes and Potent Liquid Ferocity only gives \"increased Effect of Suffixes\""
+  },
+  "k56": {
+   "status": "weak",
+   "section": "Claims",
+   "hash": "5cc10bfa",
+   "rule": "Potent Liquid Contempt gives \"+1 Suffix Modifier allowed\" or \"+1 Prefix Modifier allowed\" with even chances whatever the item holds"
+  },
+  "k57": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "06e3efc1",
+   "rule": "A Fracturing Orb never picks a Desecrated modifier, but a hidden one counts for the four modifiers the orb needs (1 in 3 with three others)"
+  },
+  "k59": {
+   "status": "weak",
+   "section": "Claims",
+   "hash": "2a29f6e6",
+   "rule": "Essence of the Abyss leaves the crafted modifier \"Bears the Mark of the Abyssal Lord\", and the next desecration replaces that Mark instead of taking a free slot or removing another modifier; the essence cannot be used on an item that has a Desecrated modifier"
+  },
+  "k60": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "e936de14",
+   "rule": "A cheap Perfect Essence aimed with an Omen of Sinistral or Dextral Crystallisation is a tool to remove an unwanted Desecrated modifier: no Omen of Light and no Orb of Annulment are needed. Where that side is full, an essence or alloy of that side removes a mo…"
+  },
+  "k62": {
+   "status": "verified",
+   "section": "Claims",
+   "hash": "bea92266",
+   "rule": "With Hinekora's Lock on an item, every currency item held over it shows its own result, the results of different currency items are drawn apart, and any currency that is used (a Divine Orb too) spends the lock"
+  },
+  "k63": {
+   "status": "weak",
+   "section": "Claims",
+   "hash": "d797af29",
+   "rule": "Omen of Putrefaction reveals its up to six Desecrated modifiers like any other, three options each, and a modifier taken at one reveal takes the Well's entries of its groups out of the next reveals of the item"
+  },
+  "A_FLUX_TIER": {
+   "status": "strong",
+   "section": "Engine assumptions",
+   "hash": "ed274546",
+   "rule": "Flux: an \"equivalent\" resistance modifier is the same tier number of the new element."
+  },
+  "A_DESECRATE_SIDE": {
+   "status": "weak",
+   "section": "Engine assumptions",
+   "hash": "48802dc8",
+   "rule": "Desecrating a full item: the removed modifier is from a side that can hold the desecrated one."
+  },
+  "A_ESSENCE_EVEN": {
+   "status": "weak",
+   "section": "Engine assumptions",
+   "hash": "f6c01deb",
+   "rule": "An essence with several outcomes and no weights in the files gives each of them equally often."
+  },
+  "A_ENCHANT_EVEN": {
+   "status": "weak",
+   "section": "Engine assumptions",
+   "hash": "5d2e781f",
+   "rule": "Corruption Enchantments: each one the base can take is equally likely."
+  },
+  "A_SANCTIFY_EVEN": {
+   "status": "weak",
+   "section": "Engine assumptions",
+   "hash": "48edbdba",
+   "rule": "Omen of Sanctification: each value is multiplied by 78% to 122%, every factor equally likely."
+  },
+  "A_DES_WEIGHTS": {
+   "status": "weak",
+   "section": "Engine assumptions",
+   "hash": "21365794",
+   "rule": "Desecrated-only modifiers at the Well of Souls are equally likely (Craft of Exile gives them weight 1)."
+  },
+  "A_WEIGHTS": {
+   "status": "strong",
+   "section": "Engine assumptions",
+   "hash": "2e812bb6",
+   "rule": "Roll chances come from poe2db weights (the client data has only 0/1); Craft of Exile agrees on 8,929 of 8,987 tiers."
+  },
+  "A_CATALYST_RING": {
+   "status": "verified",
+   "section": "Engine assumptions",
+   "hash": "202d93f6",
+   "rule": "A base that says \"Catalysts can be applied\" takes the ring and amulet catalysts, with the same rules as on rings and amulets."
+  },
+  "A_RUNE_POOL_WELL": {
+   "status": "refuted",
+   "section": "Engine assumptions",
+   "hash": "95bb512b",
+   "rule": "The Well of Souls does not offer a socketed rune's pool: no plan counts on it."
+  },
+  "A_RUNE_POOL_WEIGHT": {
+   "status": "unknown",
+   "section": "Engine assumptions",
+   "hash": "270cc8d8",
+   "rule": "How often the Well of Souls offers a socketed rune's pool modifiers against the item's own. Not modelled: a route with a bone step on an item with a pool rune is not offered as a recommendation."
+  },
+  "V1_FORGEMARK": {
+   "status": "verified",
+   "section": "PoE2 1.0",
+   "hash": "876dbab6",
+   "rule": "Crimson Iron / Scarlet Hide / Vermilion Gold: a Forgemark in place of a chosen modifier on a Rare weapon or quiver / armour or belt / amulet or ring, item level 64 or lower."
+  },
+  "V1_BLOODMARK": {
+   "status": "verified",
+   "section": "PoE2 1.0",
+   "hash": "c796c35e",
+   "rule": "Bloodvial of Komaki / Eldra / Rithva: a Bloodmark in place of a chosen suffix, same three groups, Minimum Modifier Level 65."
+  },
+  "V1_REFORGE": {
+   "status": "strong",
+   "section": "PoE2 1.0",
+   "hash": "ddb323c3",
+   "rule": "Reforging turns every marked modifier into a new random one, fractured at once."
+  },
+  "V1_NO_REMARK": {
+   "status": "strong",
+   "section": "PoE2 1.0",
+   "hash": "4089f318",
+   "rule": "A fractured item cannot be marked again."
+  },
+  "V1_TWO_FRACTURED": {
+   "status": "weak",
+   "section": "PoE2 1.0",
+   "hash": "e1ae0f60",
+   "rule": "An item can have up to two fractured modifiers."
+  },
+  "V1_FORGE_SIDE": {
+   "status": "unknown",
+   "section": "PoE2 1.0",
+   "hash": "df24eb89",
+   "rule": "A Forgemark's new modifier is of the marked one's side."
+  },
+  "V1_BLOOD_GROUPS": {
+   "status": "unknown",
+   "section": "PoE2 1.0",
+   "hash": "1623f020",
+   "rule": "Which modifiers the Komaki, Eldra and Rithva groups hold (the engine draws from every suffix of level 65+)."
+  },
+  "V1_MIX": {
+   "status": "unknown",
+   "section": "PoE2 1.0",
+   "hash": "3d0f1921",
+   "rule": "Forgemarks and Bloodmarks can be on one item and reforged together."
+  },
+  "V1_FRACTURE_ORB": {
+   "status": "unknown",
+   "section": "PoE2 1.0",
+   "hash": "8dafbc75",
+   "rule": "The Fracturing Orb still needs four modifiers and works next to Forgemarks."
+  },
+  "V1_EXISTING": {
+   "status": "unknown",
+   "section": "PoE2 1.0",
+   "hash": "f4594440",
+   "rule": "Existing currencies, omens, essences, bones, runes, affix limits and the crafted-modifier limit are unchanged in 1.0."
+  },
+  "V1_SWORDS": {
+   "status": "strong",
+   "section": "PoE2 1.0",
+   "hash": "8edce57d",
+   "rule": "Swords and daggers are real item classes (the KB marks swords unconfirmed_class)."
+  }
+ }
+}

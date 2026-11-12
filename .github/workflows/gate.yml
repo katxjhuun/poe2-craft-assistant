@@ -1,0 +1,173 @@
+# Replay gate: every goal of app/data/targets_0.5.5.json played 100,000 times (scripts/gate.js; reports/roadmap.md
+# phase 1). A route is "recommend" only when the 95% confidence interval of the played cost lies within 2% of the
+# promise and that of the success chance within 0.5 points; else "unsure", and "refused" where the network's values did
+# not settle or its promise is negative. Each goal is also set beside the known recipes (the crafters' standard
+# routes and the library's recipes of the class); each result carries the rules ledger's hashes and the price date.
+#
+# The results are printed in the log as "GATE {json}" lines and added up in the job summary, so they can be read with
+# `gh run view <run> --log` without downloading anything; the JSON lines are also an artifact.
+#
+# `stale`: only the goals whose rules changed since the last gate run are played again (the last run's artifact
+# "gate-results" is given back with --stale); every other result is kept as it was.
+#
+# Cost: the repository is public, standard runners are free. It starts by hand only (never while the network sweep
+# runs: both take every runner), and every process stops starting goals after `minutes`.
+name: Replay gate
+
+on:
+  workflow_dispatch:
+    inputs:
+      crafts:
+        description: 'Crafts per goal (100000 for the gate; fewer for a try)'
+        default: '100000'
+      jobs:
+        description: 'Runners (four processes each; 19 of the 20, one left for the price workflow)'
+        default: '19'
+      minutes:
+        description: 'Minutes per process: no goal is started after this (a goal then plays for up to 120 more; 220 fits a six-hour job)'
+        default: '220'
+      goals:
+        description: 'Only the goals whose id matches this regular expression (empty: all 100)'
+        default: ''
+      stale:
+        description: 'Run id of an earlier gate run: only goals whose rules changed since then are played again (empty: all)'
+        default: ''
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: replay-gate
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+      timeout: ${{ steps.m.outputs.timeout }}
+    steps:
+      - id: m
+        env:
+          JOBS: ${{ inputs.jobs }}
+          MINUTES: ${{ inputs.minutes }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          jobs = min(19, max(1, int(float(os.environ.get('JOBS') or 19))))
+          minutes = min(225.0, max(1.0, float(os.environ.get('MINUTES') or 220)))
+          procs = 4
+          print('matrix=' + json.dumps({'include': [{'name': f'gate {j + 1} of {jobs}', 'first': j * procs, 'total': jobs * procs} for j in range(jobs)]}))
+          # a goal in play is cut at --limit-minutes 120 (a Fortified Hammer of the pasted kind: 2,000 crafts in 137 s here,
+          # 100,000 in about two hours), so a process ends within about 130 minutes of `minutes`
+          print('timeout=%d' % min(358, int(minutes + 132)))
+          PY
+
+  prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Restore price hours
+        uses: actions/cache/restore@v6
+        with:
+          path: .kb_cache/cx
+          key: cx-gate
+          restore-keys: cx-
+      # the last 24 hours (definition of done, measure 5)
+      - name: Fetch prices
+        run: python scripts/fetch_prices.py --budget 240
+      - uses: actions/upload-artifact@v7
+        with:
+          name: prices
+          path: .kb_cache/out
+          include-hidden-files: true
+          retention-days: 3
+
+  gate:
+    needs: [plan, prices]
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(needs.plan.outputs.timeout) }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    name: ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v8
+        with:
+          name: prices
+          path: .kb_cache/out
+      - name: Earlier results (stale)
+        if: inputs.stale != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: gate-results
+          path: earlier
+          run-id: ${{ inputs.stale }}
+          github-token: ${{ github.token }}
+      - name: Gate
+        env:
+          CRAFTS: ${{ inputs.crafts }}
+          MINUTES: ${{ inputs.minutes }}
+          GOALS: ${{ inputs.goals }}
+          FIRST: ${{ matrix.first }}
+          TOTAL: ${{ matrix.total }}
+        run: |
+          mkdir -p out
+          more=()
+          if [ -d earlier ]; then cat earlier/*.jsonl > earlier.jsonl; more+=(--stale earlier.jsonl); fi
+          if [ -n "$GOALS" ]; then more+=(--goals "$GOALS"); fi
+          fail=0
+          for p in 0 1 2 3; do
+            node --max-old-space-size=3500 scripts/gate.js --crafts "$CRAFTS" --shard "$((FIRST + p))/$TOTAL" --minutes "$MINUTES" --limit-minutes 120 "${more[@]}" --out "out/gate-$((FIRST + p)).jsonl" > "out/log-$p.txt" 2>&1 &
+          done
+          for job in $(jobs -p); do wait "$job" || fail=1; done
+          exit $fail
+      - name: Results
+        if: always()
+        run: |
+          cat out/log-*.txt || true
+          for f in out/gate-*.jsonl; do [ -f "$f" ] && sed 's/^/GATE /' "$f"; done || true
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: gate-${{ strategy.job-index }}
+          path: out/*.jsonl
+          retention-days: 30
+
+  report:
+    needs: gate
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: gate-*
+          path: parts
+          merge-multiple: true
+      - name: Report
+        run: |
+          cat parts/*.jsonl > gate-results.jsonl
+          node scripts/gate.js --report gate-results.jsonl | tee report.md
+          cat report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: gate-results
+          path: |
+            gate-results.jsonl
+            report.md
+          retention-days: 90
