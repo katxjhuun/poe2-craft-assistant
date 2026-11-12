@@ -11,6 +11,10 @@ html = html.replace('/*__FONTIN_SC__*/', () => 'data:font/otf;base64,' + font);
 html = html.replace('/*__ENGINE__*/', () => fs.readFileSync(path.join(here, 'engine.js'), 'utf8'));
 html = html.replace('/*__PLANNER__*/', () => fs.readFileSync(path.join(here, 'planner.js'), 'utf8'));
 html = html.replace('/*__NETWORK__*/', () => fs.readFileSync(path.join(here, 'network.js'), 'utf8'));
+html = html.replace('/*__REPLAY__*/', () => fs.readFileSync(path.join(here, 'replay.js'), 'utf8'));
+html = html.replace('/*__GATE__*/', () => fs.readFileSync(path.join(here, 'gate.js'), 'utf8'));
+// the rules ledger (scripts/rules_ledger.js): the rules a route rests on, with their status, in the expert view
+html = html.replace('/*__LEDGER__*/null', () => JSON.stringify(JSON.parse(fs.readFileSync(path.join(here, 'data', 'rules_ledger.json'), 'utf8'))));
 html = html.replace('/*__GUIDE__*/', () => fs.readFileSync(path.join(here, 'guide.js'), 'utf8'));
 html = html.replace('/*__VALUE__*/', () => fs.readFileSync(path.join(here, 'value.js'), 'utf8'));
 html = html.replace('/*__PRICECHECK__*/', () => fs.readFileSync(path.join(here, 'pricecheck.js'), 'utf8'));

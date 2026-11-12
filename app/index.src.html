@@ -435,6 +435,26 @@ details.notes[open] summary { margin-bottom: 6px; }
 .mk { display: block; color: var(--muted); font-size: 13px; }
 .metrics b { font-size: 19px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; flex-wrap: wrap; }
 .metrics b .alt { font-size: 13.5px; font-weight: 400; color: var(--muted); }
+.xv .xv-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.xv-scroll { overflow-x: auto; }
+.xv-table { width: 100%; border-collapse: collapse; font-size: 13.5px; font-variant-numeric: tabular-nums; }
+.xv-table th { text-align: left; font-weight: 600; color: var(--muted); border-bottom: 1px solid var(--line-2); padding: 4px 6px; white-space: nowrap; }
+.xv-table td { border-bottom: 1px solid var(--line); padding: 4px 6px; white-space: nowrap; }
+.xv-table td.num, .xv-table th:not(:first-child) { text-align: right; }
+.xv-table tr.xv-top td { color: var(--text); font-weight: 600; }
+.xv-star { color: var(--accent); }
+.xv-warn { color: var(--err); font-weight: 600; }
+.xv-chart { width: 100%; height: auto; display: block; }
+.xv-bar { fill: #3987e5; }
+.xv-dot { fill: var(--text); stroke: var(--inset); stroke-width: 2; }
+.xv-worst { stroke: var(--text); stroke-width: 2; stroke-linecap: round; }
+.xv-track, .xv-base { stroke: var(--line); stroke-width: 1; }
+.xv-m { stroke: var(--text); stroke-width: 1.5; stroke-dasharray: 3 3; }
+.xv-p { stroke: var(--accent); stroke-width: 2; }
+.xv-lab, .xv-ax { fill: var(--muted); font-size: 11px; font-family: var(--f-ui); }
+.xv-rules { margin: 0; padding-left: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; }
+.xv-weak { color: var(--warn); border-color: var(--warn); }
+.xv-unk { color: var(--err); border-color: var(--err); }
 .badge { font-size: 12.5px; border: 1px solid var(--line-2); border-radius: 4px; padding: 0 6px; color: var(--muted); }
 .badge.verify { color: var(--warn); border-color: rgba(214,166,74,.5); }
 .pnotes { margin: 12px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 14.5px; }
@@ -863,6 +883,15 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
 <script id="srcNetwork">
 /*__NETWORK__*/
 </script>
+<script id="srcReplay">
+/*__REPLAY__*/
+</script>
+<script id="srcGate">
+/*__GATE__*/
+</script>
+<script>
+window.PoE2Ledger = /*__LEDGER__*/null;
+</script>
 <script>
 /*__GUIDE__*/
 </script>
@@ -950,7 +979,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     // chosen for one base (restartFor)
     restart: store.get('restart', 'white'), itemCost: store.get('itemCost', ''), restartFor: store.get('restartFor', ''), profitOf: store.get('profitOf', ''), spent: store.get('spent', []),
     lastEval: null, pendingStep: null, opsOpen: false, buyPrice: store.get('buyPrice', ''), preview: store.get('preview', false), ack: {}, catMult: store.get('catMult', null), weightSource: store.get('weightSource', 'poe2db'), priceSource: store.get('priceSource', 'ee2'), myLeagues: [].concat(store.get('myLeagues', []) || []).filter((l) => l && typeof l.name === 'string' && l.name),
-    sample: null,
+    sample: null, expert: null, timing: null, bestBy: store.get('bestBy', 'mean'),
     inGame: null, inGameOff: false, // the route whose steps the desktop program draws over the game; turned off in its tray menu
   };
 
@@ -3299,19 +3328,60 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     return !!it && (['Ring', 'Amulet', 'Jewel'].includes(it.itemClass) || !!(base && (base.imp || []).includes('Catalysts can be applied to this item')));
   }
   const NET_WORKER_MAIN = `
-    const E = self.PoE2Engine, NW = self.PoE2Network;
-    let ix = null;
+    const E = self.PoE2Engine, NW = self.PoE2Network, PL = self.PoE2Planner, GT = self.PoE2Gate;
+    const RP = self.PoE2Replay.make({ E, P: PL, NW });
+    let ix = null, ledger = null;
+    // The expert view: the route and up to three other first steps, each played on the item by the simulator for a
+    // share of the time (opts.expertMs), with the costs of every craft, the steps' outcomes and the rules it rests on.
+    function expert(id, input, net, out, ms) {
+      const s = net.start, seen = new Set(), cands = [{ names: out.next.names, first: null, promised: out.meanCost, best: true }];
+      for (const o of net.options(s)) {
+        const k = o.names.join('+') + (o.a.hide ? '|hide' : '');
+        if (o.best || seen.has(k) || o.a.op === 'lock' || !(o.total >= 0)) continue;
+        seen.add(k);
+        cands.push({ names: o.names.length ? o.names : ['Well of Souls'], first: o, promised: o.total });
+        if (cands.length >= 4) break;
+      }
+      const st0 = PL.toState(net.ctx, input.item, input.locks || {});
+      const about = { cls: net.ctx.cls, poolRune: net.goals.some((g) => g.rune) || (st0.tags || []).length > 0, fractured: st0.mods.some((m) => m.frac) };
+      const rules = ledger ? GT.rulesOfRoute(GT.routeActions(net).acts, about, ledger).map((r) => Object.assign(r, { rule: (ledger.rules[r.id] || {}).rule || '' })) : [];
+      const guess = net.materials(s).reduce((x, m) => x + m.uses, 0), maxSteps = Math.max(5000, Math.round(guess * 60));
+      const done = [];
+      const t0 = Date.now();
+      for (let i = 0; i < cands.length; i++) {
+        const c = cands[i], left = ms - (Date.now() - t0);
+        // (half the time for the route, the rest shared by the other first steps)
+        const budget = i === 0 ? ms / 2 : left / (cands.length - i);
+        if (budget < 150) break;
+        const costs = [], steps = new Map();
+        const got = RP.play(net, input, 100000, 7 + i, maxSteps, budget, null, { costs, steps, first: c.first, minRuns: 30 });
+        const v = GT.verdict({ cost: c.promised, p: 1 }, { runs: got.runs, done: got.done, mean: got.mean, sd: got.sd, success: got.done }, rules);
+        done.push({ names: c.names, best: !!c.best, promised: c.promised, runs: got.runs, done: got.done, mean: got.mean, sd: got.sd, uses: got.steps,
+          spread: GT.spread(costs), hist: GT.histogram(costs, 24), verdict: v.label, why: v.why, interval: [v.cost.lo, v.cost.hi],
+          steps: [...steps.entries()].map(([name, r]) => ({ name, uses: r.uses, gain: r.gain, loss: r.loss })).sort((a, b) => b.uses - a.uses), detours: got.detours, off: got.off });
+        self.postMessage({ type: 'expert', id, data: { cands: done, rules, ms: Date.now() - t0, final: i === cands.length - 1 } });
+      }
+      self.postMessage({ type: 'expert', id, data: { cands: done, rules, ms: Date.now() - t0, final: true } });
+    }
     self.onmessage = (e) => {
       const m = e.data;
-      if (m.type === 'init') { ix = E.buildIndex(m.kb); return; }
+      if (m.type === 'init') { ix = E.buildIndex(m.kb); ledger = m.ledger || null; return; }
       if (m.type !== 'route') return;
       const prices = m.prices;
+      let input = null, solved = null, out = null;
       try {
-        const out = NW.answer(Object.assign({}, m.input, { ix, priceOf: (n) => (Object.prototype.hasOwnProperty.call(prices, n) ? prices[n] : null) }), m.opts);
+        const t0 = Date.now();
+        input = Object.assign({}, m.input, { ix, priceOf: (n) => (Object.prototype.hasOwnProperty.call(prices, n) ? prices[n] : null) });
+        solved = NW.routeFit(input, m.opts.baseLimit > 0 ? +m.opts.baseLimit : 0);
+        out = NW.answer(input, Object.assign({}, m.opts, { solved }));
+        out.ms = Date.now() - t0;
         self.postMessage({ type: 'done', id: m.id, out });
       } catch (err) {
         self.postMessage({ type: 'error', id: m.id, message: String((err && err.message) || err) });
+        return;
       }
+      if (!(m.opts.expertMs > 0) || !out.steps || !out.steps.length || out.refused || !out.next || !out.next.names) { self.postMessage({ type: 'expert', id: m.id, data: null }); return; }
+      try { expert(m.id, input, solved.net, out, m.opts.expertMs); } catch (err) { self.postMessage({ type: 'expert', id: m.id, data: { error: String((err && err.message) || err), final: true } }); }
     };`;
   const NWK = { w: null, url: null, failed: false, seq: 0, busy: false };
   function netWorker() {
@@ -3319,18 +3389,19 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     if (NWK.w) return NWK.w;
     try {
       if (!NWK.url) {
-        const src = ['srcEngine', 'srcPlanner', 'srcNetwork'].map((id) => document.getElementById(id).textContent).concat([NET_WORKER_MAIN]).join('\n;\n');
+        const src = ['srcEngine', 'srcPlanner', 'srcNetwork', 'srcReplay', 'srcGate'].map((id) => document.getElementById(id).textContent).concat([NET_WORKER_MAIN]).join('\n;\n');
         NWK.url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
       }
       NWK.w = new Worker(NWK.url);
-      NWK.w.postMessage({ type: 'init', kb: S.ix.kb });
+      NWK.w.postMessage({ type: 'init', kb: S.ix.kb, ledger: window.PoE2Ledger || null });
     } catch (e) { NWK.w = null; NWK.failed = true; }
     return NWK.w;
   }
   function dropNetWorker() { if (NWK.w) { try { NWK.w.terminate(); } catch (e) { /* gone */ } } NWK.w = null; NWK.busy = false; }
   /** The network's answer for the item as it is (plain data): in the worker, or on the page's thread where there are no workers. */
   function routeJob() {
-    const input = routeInput(), opts = { budget: budgetEx(), baseLimit: baseLimit() };
+    // (expertMs: after the answer the worker replays the route and its next options for that long: the expert view)
+    const input = routeInput(), opts = { budget: budgetEx(), baseLimit: baseLimit(), expertMs: EXPERT_MS };
     const here = () => new Promise((resolve, reject) => setTimeout(() => { try { resolve(NW.answer(input, opts)); } catch (e) { reject(e); } }, 0));
     if (NWK.busy) dropNetWorker(); // what it is still solving was asked for an older state of the item
     const w = netWorker();
@@ -3346,19 +3417,27 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       w.onmessage = (e) => {
         const m = e.data;
         if (!m || m.id !== id) return;
-        NWK.busy = false;
-        if (m.type === 'done') resolve(m.out); else reject(new Error(m.message));
+        // the expert view's replay comes after the answer, in parts; the worker is busy until its last part
+        if (m.type === 'expert') {
+          if (!m.data || m.data.final) NWK.busy = false;
+          S.expert = m.data ? Object.assign({ id }, m.data) : null;
+          if (m.data && m.data.final && S.planT0) S.timing = Object.assign({}, S.timing, { expert: Date.now() - S.planT0 });
+          if (S.route && S.route.workerId === id) renderPlan();
+          return;
+        }
+        if (m.type === 'done') { m.out.workerId = id; resolve(m.out); } else { NWK.busy = false; reject(new Error(m.message)); }
       };
       try { w.postMessage({ type: 'route', id, input: plain, opts, prices }); } catch (e) { fallBack(); }
     });
   }
   let planGen = 0, planTimer = null;
+  const EXPERT_MS = 6000;
   /** "Find craft route": solve the network for the item as it is and show its route. */
   async function runRoute() {
     clearTimeout(planTimer);
     if (!S.item || !S.ix || S.item.unsupported || !S.item.base) return;
     const gen = ++planGen;
-    S.planState = 'running'; S.planT0 = Date.now();
+    S.planState = 'running'; S.planT0 = Date.now(); S.expert = null; S.timing = null;
     // most routes are there in a moment: the "solving" view comes up only when one takes longer
     const slow = setTimeout(() => { if (gen === planGen && S.planState === 'running') { renderPlan(); startJobTimer(); } }, 300);
     gameStepsSync(true);
@@ -3368,6 +3447,8 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
     clearTimeout(slow); stopJobTimer();
     if (err) console.warn('craft network', err);
     S.route = r; S.planState = r ? 'ready' : 'error'; S.planError = err ? String(err.message || err) : null;
+    S.timing = Object.assign({}, S.timing, { answer: Date.now() - S.planT0 });
+    try { window.__poe2Timing = (window.__poe2Timing || []).concat([{ at: new Date().toISOString(), answer: S.timing.answer, nodes: r && r.nodes }]); } catch (e) { /* only for measuring */ }
     gameStepsSync();
     renderPlan(); renderPrice();
     if (S.preview) renderItem();
@@ -3627,6 +3708,82 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       </details>
     </div>`;
   }
+  // ============================================================ expert view
+  // The route next to the next best first steps, each replayed on this item by the simulator for a few seconds:
+  // expected cost, median, P90 and the worst seen; the steps' outcomes; the rules the route rests on. "Best" by the
+  // player's measure (S.bestBy). Replays this short are never a recommendation by themselves: the label says how far
+  // the interval is from the gate's bound (2% of cost, 0.5 points of success over 100,000 crafts).
+  const BEST_BY = [['mean', 'Expected cost'], ['p90', 'P90'], ['worst', 'Worst seen'], ['uses', 'Fewest steps']];
+  const measureOf = (c, k) => (k === 'mean' ? c.mean : k === 'p90' ? c.spread.p90 : k === 'worst' ? c.spread.worst : c.uses);
+  /** A cost in the unit the page shows (for chart axes): {v, u}. */
+  function inUnit(ex, u) { return u === 'div' ? ex / S.prices.divine : u === 'chaos' ? ex / S.prices.chaos : ex; }
+  const UNIT_NAME = { div: 'Divine Orbs', chaos: 'Chaos Orbs', ex: 'Exalted Orbs' };
+  /** Histogram of one route's played costs, with the median, P90 and promise marked (one series: no legend box). */
+  function histSvg(c, u) {
+    const h = c.hist, W = 560, H = 150, padL = 8, padR = 8, padT = 22, padB = 26;
+    if (!h || !h.counts || !h.counts.length) return '';
+    const max = Math.max(...h.counts), n = h.counts.length, bw = (W - padL - padR) / n;
+    const x = (v) => padL + ((v - h.edges[0]) / (h.width * n)) * (W - padL - padR);
+    const y = (k) => padT + (H - padT - padB) * (1 - k / max);
+    const bars = h.counts.map((k, i) => { const top = y(k), hgt = H - padB - top; return k ? `<rect class="xv-bar" x="${(padL + i * bw + 1).toFixed(1)}" y="${top.toFixed(1)}" width="${Math.max(1, bw - 2).toFixed(1)}" height="${hgt.toFixed(1)}" rx="2"><title>${fmtShort(inUnit(h.edges[i], u))} to ${fmtShort(inUnit(h.edges[i] + h.width, u))}: ${k.toLocaleString('en-US')} crafts</title></rect>` : ''; }).join('');
+    // (the median's label ends at its line and the P90's starts at its own: the median is never above the P90, so the two never overlap)
+    const mark = (v, label, cls, row, anchor) => (v >= h.edges[0] && v <= h.edges[0] + h.width * n ? `<line class="${cls}" x1="${x(v).toFixed(1)}" x2="${x(v).toFixed(1)}" y1="${padT - 4}" y2="${H - padB}"/><text class="xv-lab" x="${(x(v) + (anchor === 'end' ? -3 : anchor === 'start' ? 3 : 0)).toFixed(1)}" y="${row}" text-anchor="${anchor || 'middle'}">${label} ${fmtShort(inUnit(v, u))}</text>` : '');
+    const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => { const v = h.edges[0] + f * h.width * n; return `<text class="xv-ax" x="${x(v).toFixed(1)}" y="${H - 8}" text-anchor="${f === 0 ? 'start' : f === 1 ? 'end' : 'middle'}">${fmtShort(inUnit(v, u))}</text>`; }).join('');
+    return `<svg class="xv-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Played cost of ${c.runs} crafts">${bars}<line class="xv-base" x1="${padL}" x2="${W - padR}" y1="${H - padB}" y2="${H - padB}"/>${mark(c.spread.median, 'median', 'xv-m', 11, 'end')}${mark(c.spread.p90, 'P90', 'xv-m', 11, 'start')}${mark(c.promised, 'promised', 'xv-p', padT + 12, 'start')}${ticks}</svg>`;
+  }
+  /** The routes side by side: median to P90 as a bar, the mean as a dot, the worst seen as a tick, on one cost axis. */
+  function rangeSvg(cands, u) {
+    const W = 560, rowH = 36, padL = 8, padR = 8, padT = 4, H = padT + rowH * cands.length + 22;
+    const hi = Math.max(...cands.map((c) => c.spread.worst || 0)) || 1;
+    const x = (v) => padL + (Math.max(0, v) / hi) * (W - padL - padR);
+    const rows = cands.map((c, i) => {
+      const cy = padT + i * rowH + rowH - 12, sp = c.spread, name = c.names.join(' + ');
+      return `<g><title>${esc(c.names.join(' + '))}: median ${fmtShort(inUnit(sp.median, u))}, mean ${fmtShort(inUnit(c.mean, u))}, P90 ${fmtShort(inUnit(sp.p90, u))}, worst ${fmtShort(inUnit(sp.worst, u))}</title>
+        <text class="xv-lab" x="${padL}" y="${cy - 10}">${esc(name.length > 70 ? name.slice(0, 69) + '\u2026' : name)}</text>
+        <line class="xv-track" x1="${padL}" x2="${W - padR}" y1="${cy}" y2="${cy}"/>
+        <rect class="xv-bar" x="${x(sp.median).toFixed(1)}" y="${cy - 4}" width="${Math.max(2, x(sp.p90) - x(sp.median)).toFixed(1)}" height="8" rx="4"/>
+        <circle class="xv-dot" cx="${x(c.mean).toFixed(1)}" cy="${cy}" r="4.5"/>
+        <line class="xv-worst" x1="${x(sp.worst).toFixed(1)}" x2="${x(sp.worst).toFixed(1)}" y1="${cy - 7}" y2="${cy + 7}"/></g>`;
+    }).join('');
+    const ticks = [0, 0.5, 1].map((f) => `<text class="xv-ax" x="${x(f * hi).toFixed(1)}" y="${H - 6}" text-anchor="${f === 0 ? 'start' : f === 1 ? 'end' : 'middle'}">${fmtShort(inUnit(f * hi, u))}</text>`).join('');
+    return `<svg class="xv-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Cost spread of the routes">${rows}${ticks}</svg>`;
+  }
+  function expertHtml(r) {
+    if (!r || !r.steps || !r.steps.length || r.refused) return '';
+    const X = S.expert;
+    const t = S.timing || {};
+    const timing = `<span class="sub num">answer ${t.answer != null ? (t.answer / 1000).toFixed(1) + ' s' : '\u2014'}${t.expert != null ? ' · replay ' + (t.expert / 1000).toFixed(1) + ' s' : ''}</span>`;
+    if (!X || X.id !== r.workerId) return `<div class="plan-card xv"><div class="xv-head"><b>Expert view</b>${timing}</div><p class="sub" style="margin:0">Replaying the route\u2026</p></div>`;
+    if (X.error) return `<div class="plan-card xv"><div class="xv-head"><b>Expert view</b>${timing}</div><p class="sub" style="margin:0">Replay stopped: ${esc(X.error)}</p></div>`;
+    const by = BEST_BY.some((b) => b[0] === S.bestBy) ? S.bestBy : 'mean';
+    const cands = X.cands.filter((c) => c.done > 0);
+    if (!cands.length) return '';
+    const ranked = cands.slice().sort((a, b) => measureOf(a, by) - measureOf(b, by));
+    const top = ranked[0];
+    const u = unitFor(Math.max(...cands.map((c) => c.spread.worst || 0)));
+    const pc = (x) => (x * 100).toFixed(x > 0 && x < 0.1 ? 2 : 1) + '%';
+    const rel = (c) => (c.promised > 0 ? ((c.mean - c.promised) / c.promised) : NaN);
+    const half = (c) => (c.mean > 0 && c.interval ? (c.interval[1] - c.interval[0]) / 2 / c.promised : NaN);
+    const rows = ranked.map((c) => `<tr class="${c === top ? 'xv-top' : ''}"><td>${c === top ? '<span class="xv-star" aria-label="best by ' + esc(by) + '">\u2605</span> ' : ''}${esc(c.names.join(' + '))}${c.best ? ' <span class="badge">route</span>' : ''}</td>
+      <td class="num">${money(c.promised)}</td><td class="num">${money(c.mean)}</td><td class="num">${money(c.spread.median)}</td><td class="num">${money(c.spread.p90)}</td><td class="num">${money(c.spread.worst)}</td>
+      <td class="num">${c.uses.toFixed(c.uses < 10 ? 1 : 0)}</td><td class="num" title="${esc((c.why || []).join('; '))}">${(rel(c) >= 0 ? '+' : '') + pc(rel(c))} \u00B1${pc(half(c))}</td><td class="num">${c.done.toLocaleString('en-US')}${c.done < c.runs ? ' / ' + c.runs.toLocaleString('en-US') : ''}</td></tr>`).join('');
+    const route = cands.find((c) => c.best) || cands[0];
+    const steps = (route.steps || []).filter((x) => x.uses > 0).slice(0, 10).map((x) => `<tr class="${x.loss ? 'xv-risk' : ''}"><td>${esc(x.name)}</td><td class="num">${(x.uses / route.runs).toFixed(x.uses / route.runs < 10 ? 2 : 0)}</td><td class="num">${pc(x.gain / x.uses)}</td><td class="num">${x.loss ? '<span class="xv-warn">' + pc(x.loss / x.uses) + '</span>' : '0'}</td></tr>`).join('');
+    const weak = (X.rules || []).filter((x) => x.status === 'weak' || x.status === 'unknown');
+    const verdictText = route.verdict === 'recommend' ? 'within the gate' : `unsure: ${route.runs.toLocaleString('en-US')} crafts, interval \u00B1${pc(half(route))} (gate: \u00B12%, 0.5 pt, 100,000 crafts)`;
+    return `<div class="plan-card xv">
+      <div class="xv-head"><b>Expert view</b>${timing}</div>
+      <div class="seg" role="group" aria-label="Best by">${BEST_BY.map(([k, label]) => `<button type="button" class="${k === by ? 'on' : ''}" data-best="${k}" aria-pressed="${k === by}">${label}</button>`).join('')}</div>
+      <div class="xv-scroll"><table class="xv-table"><thead><tr><th>First step</th><th>Promised</th><th>Mean</th><th>Median</th><th>P90</th><th>Worst</th><th>Uses</th><th>Played vs promised</th><th>Crafts</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <div><div class="steps-head"><span>Spread, ${esc(UNIT_NAME[u])}</span><span class="sub">bar median\u2013P90 · dot mean · tick worst</span></div>${rangeSvg(ranked, u)}</div>
+      <div><div class="steps-head"><span>${esc(route.names.join(' + '))}: played cost</span><span class="sub">${route.done.toLocaleString('en-US')} crafts · ${esc(verdictText)}</span></div>${histSvg(route, u)}</div>
+      <div class="xv-scroll"><table class="xv-table"><thead><tr><th>Step</th><th>Per craft</th><th>Adds a target</th><th>Loses a target</th></tr></thead><tbody>${steps}</tbody></table></div>
+      ${weak.length ? `<ul class="xv-rules">${weak.map((x) => `<li><span class="badge ${x.status === 'unknown' ? 'xv-unk' : 'xv-weak'}">${esc(x.status)}</span> <b>${esc(x.id)}</b> ${esc(x.rule)}</li>`).join('')}</ul>` : ''}
+      <p class="sub" style="margin:0">Ledger ${esc((window.PoE2Ledger || {}).hash || '\u2014')} · prices ${esc(priceStamp())}</p>
+    </div>`;
+  }
+  /** The date of the prices the route uses (the stamp of the expert view). */
+  function priceStamp() { const m = S.meta || {}; return m.updatedAt ? String(m.updatedAt).slice(0, 16).replace('T', ' ') + ' UTC' : '\u2014'; }
   (async () => { try { S.sample = window.claude && window.claude.use ? await window.claude.use('sample') : null; } catch (e) { S.sample = null; } if (S.sample) renderPlan(); })();
 
   const OPT_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4.5h7M12.5 4.5h1M2.5 11.5h1M6.5 11.5h7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="11" cy="4.5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5" cy="11.5" r="1.6" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>';
@@ -3689,7 +3846,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       html += `<div class="eval ${v.verdict}" style="margin:0"><b>${v.verdict === 'expected' ? 'On plan' : v.verdict === 'acceptable' ? 'No hit yet' : 'Off plan'}</b> · ${esc(v.names.join(' + '))} · ${money(v.cost)}${a && bv ? ` · value ${signed(a.value - bv.value)}` : ''}${v.notes.length ? `<div class="sub">${v.notes.map(esc).join(' ')}</div>` : ''}</div>`;
     }
     if (S.planState === 'error') html += `<div class="plan-card bad-note">The craft network stopped: ${esc(S.planError || 'unknown error')}.</div>`;
-    else if (S.route) html += routeHtml(S.route);
+    else if (S.route) html += routeHtml(S.route) + expertHtml(S.route);
     html += '</div>';
     // setup: the options, one row each, and the run button
     html += optHtml;
@@ -3716,6 +3873,7 @@ details.review > summary { cursor: pointer; padding: 6px 10px; color: var(--mute
       runRoute(); planEl.scrollIntoView({ behavior: 'smooth', block: 'start' }); return;
     }
     if (b.id === 'stopBtn') { S.planArmed = false; schedulePlans(); return; }
+    if (b.dataset.best) { S.bestBy = b.dataset.best; store.set('bestBy', S.bestBy); renderPlan(); return; }
     if (b.dataset.quality) { S.quality = b.dataset.quality; store.set('quality', S.quality); schedulePlans(); if (!S.planArmed) renderPlan(); return; }
     if (b.dataset.browse) { S.ex.cat = b.dataset.browse; S.ex.q = ''; openExchange(); return; }
     if (b.id === 'inGameOn') { S.inGame = {}; renderPlan(); gameStepsSync(); return; }

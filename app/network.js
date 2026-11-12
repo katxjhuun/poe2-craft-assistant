@@ -4439,5 +4439,6 @@
     };
   }
 
-  return { build, route, answer, gammaP };
+  // (routeFit: the page's worker solves once, answers from it (answer opts.solved) and plays that network for the expert view)
+  return { build, route, routeFit, answer, gammaP };
 });
