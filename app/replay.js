@@ -143,7 +143,10 @@
         { const nm = key.split('|')[0].split('1').length - 1, m = againMet.get(nm) || { n: 0, sum: 0 }; m.n++; m.sum += v; againMet.set(nm, m); }
         return v;
       };
-      const removes = (a, st) => a.op === 'chaos' || a.op === 'annul' || a.op === 'pessence' || a.op === 'liquid' || a.op === 'newbase' || a.op === 'extraction' || a.op === 'vaal'
+      // a reforge step names the kind of modifier to mark (PoE2 1.0): the network finds it on the item; the rules check that
+      // (validated as it stood, with no modifier named, every such step was refused and a detour taken in its place)
+      const onItem = (a, st) => (a && a.op === 'reforge' && net.marksFor ? net.marksFor(a, st) || a : a);
+      const removes = (a, st) => a.op === 'chaos' || a.op === 'reforge' || a.op === 'annul' || a.op === 'pessence' || a.op === 'liquid' || a.op === 'newbase' || a.op === 'extraction' || a.op === 'vaal'
         || (a.op === 'bone' && (a.putrefy || a.mark || (!a.hide && open(st, 'prefix') + open(st, 'suffix') === 0)));
       /** Can edge e of the node do nothing on this item: all it could add is among the targets kept out (blocked), and it removes nothing? */
       const futileOn = (node, e, st, blocked) => { if (removes(e.a, st)) return false; const adds = net.adds(node, e.out); return adds.length > 0 && adds.every((i) => blocked.includes(i)); };
@@ -206,9 +209,9 @@
           // (not every target's blockers are followed in a large network): the player sees the item and takes the next
           // cheapest step the rules allow. Counted as a detour, with the reason; the cost shows what it does to the promise.
           if (step.a.op !== 'lock' && step.a.op !== 'reveal' && !(step.a.op === 'bone' && step.a.hide) && step.a.op !== 'catalyst') {
-            const bad = P.validate(ctx, st, step.a.pre || step.a);
+            const bad = P.validate(ctx, st, onItem(step.a.pre || step.a, st));
             if (bad) {
-              const alt = net.options(node).find((o) => !o.best && o.a.op !== 'lock' && !P.validate(ctx, st, o.a.pre || o.a));
+              const alt = net.options(node).find((o) => !o.best && o.a.op !== 'lock' && !P.validate(ctx, st, onItem(o.a.pre || o.a, st)));
               if (alt) { detours++; note(detourWhy, step.a, bad); step = alt; }
             }
             // The same for a step that can do nothing on this very item: every target it could add is kept out by a
@@ -254,7 +257,7 @@
               // run). Only that late: where the other steps change the item they mostly get past the blocker, and for
               // less (a Grand Regalia played at x1.22 with the removal from the sixth time on, x1.04 without it).
               const clear = never && c > 40 ? net.options(node).find((o) => (o.a.op === 'annul' || o.a.op === 'chaos') && !o.a.side && !o.a.light && !o.a.whittle && !o.a.pre && !P.validate(ctx, st, o.a)) : null;
-              const alt = clear || net.options(node).find((o) => !o.best && o.a.op !== 'lock' && !P.validate(ctx, st, o.a.pre || o.a) && !futileOn(node, o, st, hidden));
+              const alt = clear || net.options(node).find((o) => !o.best && o.a.op !== 'lock' && !P.validate(ctx, st, onItem(o.a.pre || o.a, st)) && !futileOn(node, o, st, hidden));
               if (alt) { detours++; note(detourWhy, step.a, why); step = alt; }
             }
           }
@@ -321,6 +324,8 @@
             for (let i = 0; i < a.count; i++) st = P.apply(ctx, st, a, r).state;
           } else {
             if (a.pre) { refuse(a.pre); st = P.apply(ctx, st, a.pre, r).state; }
+            // (a reforge step names the kind of modifier to mark: the network finds it on the item)
+            if (a.op === 'reforge') { a = onItem(a, st); lastA = a; }
             refuse(a);
             // (with Abyssal Echoes the first three options are declined when no target is among them: `again` is the reroll)
             // (what is a target is read off the item as it is at that reveal, `at`: an Omen of Putrefaction has taken

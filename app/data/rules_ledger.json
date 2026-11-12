@@ -4,7 +4,7 @@
   "kb": "poe2_kb_0.5.5.json",
   "game_data": "0.5.5.7"
  },
- "hash": "011606b5",
+ "hash": "13feb0d7",
  "rules": {
   "R_RARITY_SLOTS": {
    "status": "verified",
@@ -935,6 +935,18 @@
    "section": "PoE2 1.0",
    "hash": "f4594440",
    "rule": "Existing currencies, omens, essences, bones, runes, affix limits and the crafted-modifier limit are unchanged in 1.0."
+  },
+  "V1_FORGE_POOL": {
+   "status": "unknown",
+   "section": "PoE2 1.0",
+   "hash": "d918bbbe",
+   "rule": "A Forgemark's new modifier rolls from the item's own pool at its item level (64 or lower) with the usual weights."
+  },
+  "V1_BENCH": {
+   "status": "unknown",
+   "section": "PoE2 1.0",
+   "hash": "6099cb51",
+   "rule": "Marking and reforging is one step: nothing is used on the item in between, and the Reforging Bench costs nothing besides the marking items."
   },
   "V1_SWORDS": {
    "status": "strong",

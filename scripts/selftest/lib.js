@@ -7,6 +7,15 @@ const P = require(path.join(ROOT, 'app', 'planner.js'));
 
 let cache = null;
 /**
+ * The league whose prices the self-tests, sweeps and cloud runs use: POE2_LEAGUE (a name or a slug), else
+ * app/data/leagues.json craftLeague. A parameter, so that 1.0 day (Conquerors of Wraeclast) changes a value.
+ */
+const LEAGUES = require(path.join(ROOT, 'app', 'data', 'leagues.json'));
+const slugOf = (n) => String(n).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
+const LEAGUE_SLUG = slugOf(process.env.POE2_LEAGUE || LEAGUES.craftLeague);
+/** The items expected soon (leagues.json): no price until the exchange trades them. */
+const EXPECTED_ITEMS = (LEAGUES.expected || []).flatMap((e) => e.items);
+/**
  * Newest prices on this computer: .kb_cache/out (written by scripts/fetch_prices.py or the local price server)
  * when it is there, else the copy in the last page build.
  */
@@ -21,9 +30,11 @@ function latestPrices() {
       const f = path.join(out, 'league-' + l.slug + '.json');
       if (fs.existsSync(f)) leagues[l.slug] = JSON.parse(fs.readFileSync(f, 'utf8'));
     }
-    if (leagues['forbidden-rites']) return { meta, leagues, source: '.kb_cache/out' };
+    if (leagues[LEAGUE_SLUG]) return { meta, leagues, source: '.kb_cache/out' };
   } catch (e) { /* fall back to the build copy */ }
-  return Object.assign(require(path.join(ROOT, 'app', 'dist', 'data', 'prices-snapshot.json')), { source: 'app/dist/data/prices-snapshot.json' });
+  const copy = path.join(ROOT, 'app', 'dist', 'data', 'prices-snapshot.json');
+  if (!fs.existsSync(copy)) throw new Error(`no prices for the league "${LEAGUE_SLUG}" in ${out} (POE2_OUT, POE2_LEAGUE, app/data/leagues.json craftLeague) and no page build`);
+  return Object.assign(require(copy), { source: 'app/dist/data/prices-snapshot.json' });
 }
 /** Knowledge base, index, poe2db weights, essence lists, prices (Forbidden Rites snapshot) and the recipe library. */
 function load() {
@@ -35,7 +46,8 @@ function load() {
   ix.essenceModsByClass = new Map(Object.entries(W.essences || {}).map(([c, l]) => [c, new Set(l.map((r) => r.mod))]));
   const snap = latestPrices();
   const lib = require(path.join(ROOT, 'app', 'data', 'recipes_0.5.5.json'));
-  const league = snap.leagues['forbidden-rites'];
+  const league = snap.leagues[LEAGUE_SLUG];
+  if (!league) throw new Error(`no prices for the league "${LEAGUE_SLUG}" (POE2_LEAGUE, app/data/leagues.json craftLeague) in ${snap.source}`);
   const priceByName = {};
   for (const r of Object.values(league.items)) if (r[2] != null) priceByName[r[0]] = r[2];
   // POE2_PRICES: a list [[name, Exalted Orbs], ...] instead of the newest prices: the prices of a cloud run, read from its
@@ -44,7 +56,9 @@ function load() {
     for (const k of Object.keys(priceByName)) delete priceByName[k];
     for (const [n, p] of JSON.parse(require('fs').readFileSync(process.env.POE2_PRICES, 'utf8'))) priceByName[n] = p;
   }
-  cache = { kb, ix, W, snap, lib, league, priceByName, priceOf: (n) => (priceByName[n] != null ? priceByName[n] : null) };
+  // the items expected soon that have no price: unpriced (a route leaves them out; a sweep that needs one says so)
+  const unpriced = EXPECTED_ITEMS.filter((n) => priceByName[n] == null);
+  cache = { kb, ix, W, snap, lib, league, leagueSlug: LEAGUE_SLUG, priceByName, unpriced, priceOf: (n) => (priceByName[n] != null ? priceByName[n] : null) };
   return cache;
 }
 
@@ -152,4 +166,4 @@ function slotBases() {
   return Object.keys(kb.bases).filter((n) => !/Flask|Charm/.test(kb.bases[n].cls) && (kb.bases[n].imp || []).some((t) => /Modifiers? allowed/.test(t))).sort();
 }
 
-module.exports = { ROOT, E, P, load, weightsFor, essencesFor, classText, rng, roll, rollText, renderItem, testBases, slotBases };
+module.exports = { ROOT, E, P, load, weightsFor, essencesFor, classText, rng, roll, rollText, renderItem, testBases, slotBases, LEAGUE_SLUG, EXPECTED_ITEMS, slugOf };

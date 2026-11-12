@@ -19,11 +19,31 @@ function scenarioById(base, id) {
   }
   return null;
 }
-/** The network's input for a scenario, as the sweep makes it. */
+/**
+ * The network's input for a scenario, as the sweep makes it. POE2_V1=1: with PoE2 1.0 (Forgemarks, reforge, a second
+ * fractured modifier); V1_ILVL: the item at that item level (Forgemarks work up to 64); V1_FORGE_PRICE: a price for the
+ * Forgemark items, which have none before the exchange trades them (an assumption the caller states).
+ */
 function inputOf(sc, more) {
-  const { ix, priceOf } = L.load();
-  return Object.assign({ ix, item: sc.item, targets: sc.targets, locks: {}, priceOf, baseCost: 1, weights: L.weightsFor(sc.base), essences: SW.table(sc.base).essences,
+  const { ix, priceOf: own } = L.load();
+  const v1 = process.env.POE2_V1 === '1';
+  const forge = v1 && process.env.V1_FORGE_PRICE != null ? +process.env.V1_FORGE_PRICE : null;
+  const priceOf = forge != null ? (n) => (n === 'Crimson Iron' || n === 'Scarlet Hide' || n === 'Vermilion Gold' ? forge : own(n)) : own;
+  const item = process.env.V1_ILVL ? Object.assign({}, sc.item, { ilvl: +process.env.V1_ILVL }) : sc.item;
+  return Object.assign({ ix, item, v1, targets: item === sc.item ? sc.targets : targetsAt(sc, item.ilvl), locks: {}, priceOf, baseCost: 1, weights: L.weightsFor(sc.base), essences: SW.table(sc.base).essences,
     quality: sc.qualityMode, restart: sc.restart, itemCost: sc.itemCost }, more);
+}
+/**
+ * The scenario's targets on an item of a lower item level: each asks for the best tier of its family that rolls there
+ * (the sweep's targets ask for the top tiers, which need item level 65 and more; Forgemarks work up to 64).
+ */
+function targetsAt(sc, ilvl) {
+  const { ix, kb } = L.load();
+  const top = new Map();
+  for (const [id, pe] of L.E.poolFor(ix, kb.bases[sc.base].sig)) { const m = kb.mods[id]; if (m.lvl <= ilvl) top.set(m.fam, Math.min(top.get(m.fam) || 99, pe.tier || 99)); }
+  const out = {};
+  for (const [k, t] of Object.entries(sc.targets)) out[k] = t.minTier != null && top.has(t.fam) ? Object.assign({}, t, { minTier: Math.max(t.minTier, top.get(t.fam)) }) : t;
+  return out;
 }
 /** argv: base and id; exits with a message when the scenario is not there. */
 function need(base, id) {
@@ -37,4 +57,4 @@ function words(net, k) {
   const w = net.describe(k);
   return `${w.rarity} has[${w.has.join('; ')}] miss[${w.miss.join('; ')}]${w.inWay.length ? ' inWay[' + w.inWay.join('; ') + ']' : ''}${w.twin.length ? ' twin[' + w.twin.join(';') + ']' : ''} others ${w.otherPrefixes}/${w.otherSuffixes}${w.desecratedOther ? ' desOther ' + w.desecratedOther : ''}${w.fracturedOther ? ' fracOther' : ''}${w.runes.length ? ' runes[' + w.runes.join(';') + ']' : ''}${w.hidden ? ' hidden ' + w.hidden : ''}`;
 }
-module.exports = { L, ROOT, NW, SW, play, scenarioById, inputOf, need, words };
+module.exports = { L, ROOT, NW, SW, play, scenarioById, inputOf, targetsAt, need, words };

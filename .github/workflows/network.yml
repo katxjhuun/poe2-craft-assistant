@@ -105,8 +105,11 @@ jobs:
       - name: Prices as text
         run: |
           python3 - <<'PY'
-          import json
-          d = json.load(open('.kb_cache/out/league-forbidden-rites.json'))
+          import json, os, re
+          # (the craft league: POE2_LEAGUE, else app/data/leagues.json, as scripts/selftest/lib.js reads it)
+          name = os.environ.get('POE2_LEAGUE') or json.load(open('app/data/leagues.json'))['craftLeague']
+          slug = re.sub(r'[^A-Za-z0-9]+', '-', name).strip('-').lower()
+          d = json.load(open(f'.kb_cache/out/league-{slug}.json'))
           rows = [[r[0], r[2]] for r in d['items'].values() if r[2] is not None]
           for i in range(0, len(rows), 60):
               print('PRICES ' + json.dumps(rows[i:i + 60], separators=(',', ':')))

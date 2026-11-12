@@ -94,7 +94,13 @@
       } catch (e) { /* an item the planner cannot read: blocked, no more is said */ }
       return out;
     }
-    const ctx = P.makeContext(ix, item, { weights: input.weights || null, essences: input.essences || [], catalystMult: input.catalystMult });
+    const ctx = P.makeContext(ix, item, { weights: input.weights || null, essences: input.essences || [], catalystMult: input.catalystMult, v1: !!input.v1 });
+    // PoE2 1.0 (Conquerors of Wraeclast), on with the 1.0 items in the knowledge base or input.v1: Forgemarks, the
+    // Reforging Bench and a second fractured modifier, by the rules planner.js V1_RULES holds (the working answers
+    // until the patch notes). Off, nothing of it is in the network and every node is what it was.
+    const V1R = ctx.v1 ? P.V1_RULES : null;
+    /** Is target i the fractured modifier (one of the two)? */
+    const isF = (S, i) => S.fg === i || S.fh === i;
     const st0 = P.toState(ctx, item, input.locks);
     if (st0.rarity !== 'Normal' && st0.rarity !== 'Magic' && st0.rarity !== 'Rare') return { blocked: String(st0.rarity) };
     const gt = P.goalsFromTargets(ctx, input.targets);
@@ -872,6 +878,12 @@
       crystal: [price(OMEN.crystal.prefix), price(OMEN.crystal.suffix)], whittling: price(OMEN.whittling), greaterExalt: price(OMEN.greaterExalt),
     };
     const EXTRACT = price('Orb of Extraction');
+    // PoE2 1.0: the Forgemark item of the class (Crimson Iron, Scarlet Hide, Vermilion Gold), for items of item level 64
+    // or lower; the Reforging Bench takes nothing besides (working answer, 12 Nov 2026). A Bloodmark is no step of a
+    // route while the Komaki, Eldra and Rithva groups are unknown (V1R.bloodRoutes), nor is a Forgemark whose new
+    // modifier may be of the other side (V1R.sameSide false: the edge below rolls the marked one's side). No price, no step.
+    const FORGE_ITEM = V1R && V1R.sameSide && !lite && ctx.ilvl <= P.FORGEMARK_MAX_ILVL ? P.markItemFor(ctx.cls, false) : null;
+    PR.forge = FORGE_ITEM ? price(FORGE_ITEM) : null;
     PR.vaal = price('Vaal Orb'); PR.putrefy = ctx.bone ? price(OMEN.putrefy) : null; PR.sanct = sanctOK ? price('Omen of Sanctification') : null;
     // ---- Omen of Whittling: the Chaos Orb removes the modifier of the lowest level.
     // Whether that is a modifier nobody asked for or a target is decided by levels that stay what they are for as long
@@ -956,6 +968,21 @@
         }
       }
     };
+    /**
+     * Target i stops being a target while it is fractured (another stat of its slot is on the item, or it was a twin):
+     * it is the fractured modifier nobody asked for of its side then. false: it was not fractured, or there is no
+     * field left for it (the caller counts it as one more modifier nobody asked for).
+     */
+    const fracJunk = (n, i) => {
+      const f = n.fg === i ? 'fg' : n.fh === i ? 'fh' : null;
+      if (!f) return false;
+      n[f] = -1;
+      const si = goals[i].si + 1;
+      if (!n.fj) n.fj = si;
+      else if (V1R && !n.fk) n.fk = si;
+      else return false;
+      return true;
+    };
     const addCrafted = (n, si, kind) => { if (!n.cx) { n.cx = si + 1; n.ct = kind; } else if (!n.cy) { n.cy = si + 1; n.cu = kind; } else n.j[si]++; };
     const canon = (n) => {
       // One of several stats for a slot: while one of them is on the item (the fractured one first), the others are
@@ -964,20 +991,23 @@
       for (let q = 0; q < ORG.length; q++) {
         const grp = ORG[q];
         let keep = -1;
-        for (const i of grp) if (met(n.g[i]) && (keep < 0 || n.fg === i)) keep = i;
+        for (const i of grp) if (met(n.g[i]) && (keep < 0 || isF(n, i))) keep = i;
         for (const i of grp) {
           if (i === keep) continue;
           const x = n.g[i];
           if (keep < 0) { if (x === ALT) n.g[i] = ABSENT; continue; }
           if (x === ALT) continue;
           if (there(x)) {
-            if (n.fg === i) { n.fg = -1; if (!n.fj) n.fj = goals[i].si + 1; else junkAt(n, goals[i].si, goalLvl[i]); }
-            else junkAt(n, goals[i].si, goalLvl[i]);
+            if (!fracJunk(n, i)) junkAt(n, goals[i].si, goalLvl[i]);
           }
           n.g[i] = ALT;
           if (xbit[i] >= 0) n.xg &= ~(1 << xbit[i]);
         }
       }
+      // (two fractured modifiers, PoE2 1.0: the first of the two fields holds one before the second does, and the two
+      // targets or the two sides in one order)
+      if (n.fh >= 0 && (n.fg < 0 || n.fh < n.fg)) { const a = n.fg; n.fg = n.fh; n.fh = a; }
+      if (n.fk && (!n.fj || n.fk < n.fj)) { const a = n.fj; n.fj = n.fk; n.fk = a; }
       if (!n.cx && n.cy) { n.cx = n.cy; n.ct = n.cu; n.cy = 0; }
       if (!n.cx) n.ct = 0;
       if (!n.cy) n.cu = 0;
@@ -1137,7 +1167,10 @@
       }
       return v;
     };
-    const KEY_REST = 3 * JK * JK * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2 * FLK * 3 * 3 * 3 * XK * (FZT.length + 1);
+    // (fh, fk: a second fractured modifier, a target or one nobody asked for; only with PoE2 1.0, see V1R. Without it
+    // they take no room in the key, and the keys are what they were.)
+    const FHK = V1R ? 10 : 1, FKK = V1R ? 3 : 1;
+    const KEY_REST = 3 * JK * JK * 10 * 3 * 3 * 3 * 3 * 3 * 16 * 4 * 3 * 3 * 2 * 2 * FLK * 3 * 3 * 3 * XK * (FZT.length + 1) * FHK * FKK;
     const KEY_NUM = Math.pow(11, G) * KEY_REST < 9e15; // (the two parts fit one number exactly)
     const keyOf = (S) => {
       let a = 0;
@@ -1146,9 +1179,10 @@
       if (S.j[0] > JMAX || S.j[1] > JMAX) throw new Error('more modifiers on a side than a node can count');
       k = k * JK + S.j[0]; k = k * JK + S.j[1]; k = k * 10 + (S.fg + 1); k = k * 3 + S.fj; k = k * 3 + S.cx; k = k * 3 + S.dj; k = k * 3 + S.du;
       k = k * 3 + S.q; k = k * 16 + S.u; k = k * 4 + S.fs; k = k * 3 + S.ad; k = k * 3 + S.aw; k = k * 2 + S.kx; k = k * 2 + S.kf; k = k * FLK + S.fl; k = k * 3 + S.ct; k = k * 3 + S.cy; k = k * 3 + S.cu; k = k * XK + S.xg; k = k * (FZT.length + 1) + S.fz;
+      if (V1R) { k = k * FHK + (S.fh + 1); k = k * FKK + S.fk; }
       return KEY_NUM ? a * KEY_REST + k : a + ':' + k;
     };
-    const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad, aw: S.aw, kx: S.kx, kf: S.kf, fl: S.fl, ct: S.ct, cy: S.cy, cu: S.cu, xg: S.xg, fz: S.fz });
+    const cp = (S) => ({ r: S.r, g: S.g.slice(), j: [S.j[0], S.j[1]], fg: S.fg, fj: S.fj, cx: S.cx, dj: S.dj, du: S.du, q: S.q, u: S.u, fs: S.fs, ad: S.ad, aw: S.aw, kx: S.kx, kf: S.kf, fl: S.fl, ct: S.ct, cy: S.cy, cu: S.cu, xg: S.xg, fz: S.fz, fh: S.fh, fk: S.fk });
     function idOf(S) {
       canon(S);
       const k = keyOf(S);
@@ -1156,7 +1190,7 @@
       if (i === undefined) { i = states.length; index.set(k, i); states.push(S); }
       return i;
     }
-    const others = (S, si) => S.j[si] + (S.fj === si + 1 ? 1 : 0) + (S.cx === si + 1 ? 1 : 0) + (S.cy === si + 1 ? 1 : 0) + (S.dj === si + 1 ? 1 : 0);
+    const others = (S, si) => S.j[si] + (S.fj === si + 1 ? 1 : 0) + (S.fk === si + 1 ? 1 : 0) + (S.cx === si + 1 ? 1 : 0) + (S.cy === si + 1 ? 1 : 0) + (S.dj === si + 1 ? 1 : 0);
     // the allowance modifier: aw 1 "+1 Prefix Modifier allowed" (it is a suffix), aw 2 "+1 Suffix Modifier allowed" (a prefix)
     const awSide = (S) => (S.aw === 1 ? 1 : 0);
     function slots(S, si) {
@@ -1206,7 +1240,7 @@
       return 0.8 * pb * pb + 0.15 * pb + 0.05;
     });
     const DJD = PDV.map((p) => p >= 0.5);
-    const unknown = (S, si) => S.j[si] + (S.fj === si + 1 && !(S.kf && FRAC.si === si) ? 1 : 0) + (S.cx === si + 1 && !CXM(si, S.ct) ? 1 : 0) + (S.cy === si + 1 && !CXM(si, S.cu) ? 1 : 0) + (S.dj === si + 1 && !DJD[si] ? 1 : 0);
+    const unknown = (S, si) => S.j[si] + (S.fj === si + 1 && !(S.kf && FRAC.si === si) ? 1 : 0) + (S.fk === si + 1 ? 1 : 0) + (S.cx === si + 1 && !CXM(si, S.ct) ? 1 : 0) + (S.cy === si + 1 && !CXM(si, S.cu) ? 1 : 0) + (S.dj === si + 1 && !DJD[si] ? 1 : 0);
     /** What the crafted (kind 0) or the Desecrated (kind 1) modifier nobody asked for takes from the anonymous weight of side si in pool s. */
     function knownTake(s, si, kind, ct) {
       const key = 'k' + kind + (ct || '');
@@ -1338,6 +1372,28 @@
         else if (!TRACK && s.cross[i] > 0) keep *= 1 - Math.min(1, s.cross[i] / s.W);
       }
       return 1 - keep;
+    }
+    /**
+     * PoE2 1.0: hiddenWay's same-side part target by target, [[chance, target]]: a modifier nobody asked for on side si
+     * is in the way of target i, whose blockers the network does not follow. Fractured, such a modifier keeps i out for
+     * good, and the reader of the item knows it (V1R): the node where it is fractured in i's way, from which the item
+     * is only given up. (As a modifier nobody asked for, reforged rings with a fractured lower "Adds # to # Lightning
+     * damage to Attacks" under the target's tier took an Essence of the Mind and a bone in turn for ever: 46 of 1,000
+     * crafts did not end within 100,000 uses.)
+     */
+    function hiddenSplit(S, si) {
+      const tm = tagMask(S), s = stats(si, 0, 1, S.u, tm, presentMask(S, si), S.kf, cmOf(S));
+      if (!(s.W > 0)) return [];
+      const as = [];
+      let keep = 1, sum = 0;
+      for (let i = 0; i < G; i++) {
+        const g = goals[i];
+        if (g.kind !== 'nat' || !wanted(S.g[i]) || g.si !== si || followed[i] || !(s.low[i] > 0)) continue;
+        const a = Math.min(1, s.low[i] / s.W);
+        keep *= 1 - a; sum += a; as.push([a, i]);
+      }
+      // (a target whose twin is on the item keeps its share in hiddenWay's: the twin would be lost with the status)
+      return sum > 0 ? as.filter(([, i]) => S.g[i] === ABSENT).map(([a, i]) => [(1 - keep) * a / sum, i]) : [];
     }
     /**
      * Chance that none of the modifiers nobody asked for keeps natural target i out: none of its own side is of its
@@ -1499,8 +1555,7 @@
         // target as the fractured modifier: the item, whose fractured modifier is the twin, was no node. 1,572 of a
         // hammer's crafts left the network that way in the fourteenth deep run.)
         if (n.g[i] === TWIN && status !== TWIN) {
-          if (n.fg === i && !n.fj) { n.fg = -1; n.fj = goals[i].si + 1; }
-          else junkAt(n, goals[i].si, goalLvl[i]);
+          if (!fracJunk(n, i)) junkAt(n, goals[i].si, goalLvl[i]);
         }
         if (status === BLOCKED) junk = goals[i].si;
       } else junk = si;
@@ -1522,7 +1577,7 @@
     }
     function units(S, pred) {
       const out = [];
-      for (let i = 0; i < G; i++) if (there(S.g[i]) && S.fg !== i && pred(goals[i].si, kindOf(S.g[i]) === DESECRATED)) out.push({ w: 1, k: 'g', i, si: goals[i].si });
+      for (let i = 0; i < G; i++) if (there(S.g[i]) && !isF(S, i) && pred(goals[i].si, kindOf(S.g[i]) === DESECRATED)) out.push({ w: 1, k: 'g', i, si: goals[i].si });
       for (let si = 0; si < 2; si++) if (S.j[si] && pred(si, false)) out.push(...plain(S, si));
       if (S.cx && pred(S.cx - 1, false)) out.push({ w: 1, k: 'cx', si: S.cx - 1 });
       if (S.cy && pred(S.cy - 1, false)) out.push({ w: 1, k: 'cy', si: S.cy - 1 });
@@ -1624,7 +1679,7 @@
     }
     function whittled(S) {
       if (S.du || NCLS < 2) return null;
-      let sig = S.fl + '|' + S.fg + '|';
+      let sig = S.fl + '|' + S.fg + '|' + (V1R ? S.fh + '|' : '');
       for (let i = 0; i < G; i++) sig += S.g[i];
       sig += '|' + S.j[0] + S.j[1] + (xOn(S, 0) ? 1 : 0) + (xOn(S, 1) ? 1 : 0) + '|' + S.dj + S.cx + S.ct + S.cy + S.cu;
       if (whitMemo.has(sig)) return whitMemo.get(sig);
@@ -1644,7 +1699,7 @@
       const anon = [];
       for (let i = 0; i < G; i++) {
         const x = S.g[i];
-        if (!there(x) || S.fg === i) continue;
+        if (!there(x) || isF(S, i)) continue;
         if (x === BLOCKED) anon.push({ k: 'g', i, si: goals[i].si, w: 1 });
         else for (const e of levelsOn(i, x)) if (e[0] < low) low = e[0];
       }
@@ -1919,7 +1974,7 @@
       }
       return turnedMemo.get(key);
     }
-    const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FSN, ad: AD0, aw: 0, kx: 0, kf: 0, fl: 0, ct: 0, cy: 0, cu: 0, xg: 0, fz: 0 };
+    const N0 = { r: 0, g: new Array(G).fill(ABSENT), j: [0, 0], fg: -1, fj: 0, cx: 0, dj: 0, du: 0, q: 0, u: 0, fs: FSN, ad: AD0, aw: 0, kx: 0, kf: 0, fl: 0, ct: 0, cy: 0, cu: 0, xg: 0, fz: 0, fh: -1, fk: 0 };
     const RESTART = -1; // edge target: a fresh white base (its value is solved as one number, see solve)
     let hasLost = false; // (some node has a step that locks the item: see lostArmed)
     // (a finished item that is locked: one node for all of them)
@@ -1980,7 +2035,7 @@
      */
     const putMemo = new Map();
     function putrefied(S, floor, echoes) {
-      const mk = S.fg + '|' + (S.fg >= 0 ? S.g[S.fg] : 0) + '|' + S.fj + '|' + S.u + '|' + S.kf + '|' + floor + '|' + (echoes ? 1 : 0);
+      const mk = S.fg + '|' + (S.fg >= 0 ? S.g[S.fg] : 0) + '|' + S.fj + '|' + (V1R ? S.fh + '|' + (S.fh >= 0 ? S.g[S.fh] : 0) + '|' + S.fk + '|' : '') + S.u + '|' + S.kf + '|' + floor + '|' + (echoes ? 1 : 0);
       if (!putMemo.has(mk)) putMemo.set(mk, putrefied0(S, floor, echoes));
       return putMemo.get(mk);
     }
@@ -2029,6 +2084,8 @@
       const base = cp(N0);
       base.r = 2; base.u = S.u; base.fs = S.fs; base.ad = S.ad; base.kf = S.kf; base.fj = S.fj;
       if (S.fg >= 0) { base.fg = S.fg; base.g[S.fg] = S.g[S.fg]; }
+      if (S.fh >= 0) { base.fh = S.fh; base.g[S.fh] = S.g[S.fh]; }
+      base.fk = S.fk;
       for (let i = 0; i < G; i++) if (base.g[i] === ABSENT && (goals[i].kind === 'ess' || goals[i].rune || goals[i].noWell)) return 0;
       // What is followed of the Well's lists is kept as small as the answer allows. On an amulet (11 and 20 entries)
       // every item that differed in what its misses had taken off either list was a state of its own: a network of
@@ -2189,7 +2246,7 @@
             const x = S.g[i];
             if (!(met(x) || near(x))) { p = 0; break; }
             if (goals[i].minValue == null) continue;
-            if (S.fg === i) { if (near(x)) p = 0; continue; } // (a fractured modifier's value is not altered)
+            if (isF(S, i)) { if (near(x)) p = 0; continue; } // (a fractured modifier's value is not altered)
             any = true;
             p *= sanctChance(i, near(x));
           }
@@ -2205,7 +2262,7 @@
       // a value under the wanted one: a Divine Orb rolls every value again (not a fractured modifier's)
       if (PR.divine != null) {
         const vs = [];
-        for (let i = 0; i < G; i++) if (goals[i].minValue != null && (met(S.g[i]) || near(S.g[i])) && S.fg !== i) vs.push(i);
+        for (let i = 0; i < G; i++) if (goals[i].minValue != null && (met(S.g[i]) || near(S.g[i])) && !isF(S, i)) vs.push(i);
         if (vs.some((i) => near(S.g[i]))) {
           const outs = [];
           for (let m = 0; m < (1 << vs.length); m++) {
@@ -2443,7 +2500,7 @@
         return res;
       };
       const fluxes = new Map();
-      for (let i = 0; i < G; i++) if (S.g[i] === TWIN && conv[i] && conv[i].via === 'flux' && S.fg !== i) { if (!fluxes.has(conv[i].to)) fluxes.set(conv[i].to, []); fluxes.get(conv[i].to).push(i); }
+      for (let i = 0; i < G; i++) if (S.g[i] === TWIN && conv[i] && conv[i].via === 'flux' && !isF(S, i)) { if (!fluxes.has(conv[i].to)) fluxes.set(conv[i].to, []); fluxes.get(conv[i].to).push(i); }
       for (const [to, is] of fluxes) {
         // it turns every resistance of the other elements: a finished resistance target of another element would go with it
         let harm = false;
@@ -2457,7 +2514,7 @@
         // one for the other: 48 ex promised where the item was worth 1,070.)
         let outs = [[1, S1]];
         for (let k = 0; k < G; k++) {
-          if (S.g[k] !== TWIN || is.includes(k) || !conv[k] || conv[k].via !== 'flux' || S.fg === k) continue;
+          if (S.g[k] !== TWIN || is.includes(k) || !conv[k] || conv[k].via !== 'flux' || isF(S, k)) continue;
           const sh = turnedBy(k, to);
           if (!(sh > 0)) continue;
           const next = [];
@@ -2476,7 +2533,7 @@
       // Flux, and after the other resistance target was lost, the item's node and the model's own next state were
       // two nodes of different worth: a Lament Amulet with five targets played 15% over its promise.)
       for (let i = 0; i < G; i++) {
-        if (S.g[i] !== TWIN || !conv[i] || conv[i].via !== 'flux' || S.fg === i) continue;
+        if (S.g[i] !== TWIN || !conv[i] || conv[i].via !== 'flux' || isF(S, i)) continue;
         for (let j = 0; j < G; j++) {
           // (only a later target: a modifier is counted as the twin of the first target it can become, so the twin of
           // target i is none that an earlier target could have had. An edge to an earlier one promised a T1 Chaos
@@ -2500,10 +2557,10 @@
       }
       if (ALD && !(S.u & R_ALDUR)) {
         const is = [];
-        for (let i = 0; i < G; i++) if (S.g[i] === TWIN && conv[i] && conv[i].via === 'aldur' && S.fg !== i) is.push(i);
+        for (let i = 0; i < G; i++) if (S.g[i] === TWIN && conv[i] && conv[i].via === 'aldur' && !isF(S, i)) is.push(i);
         let harm = false;
         // (a fractured modifier stays what it is)
-        for (let k = 0; k < G; k++) if (ALD.harms[k] && (met(S.g[k]) || near(S.g[k])) && !is.includes(k) && S.fg !== k) harm = true;
+        for (let k = 0; k < G; k++) if (ALD.harms[k] && (met(S.g[k]) || near(S.g[k])) && !is.includes(k) && !isF(S, k)) harm = true;
         const sk = is.length && !harm ? socket(S) : null;
         if (sk) {
           const S1 = sk.S;
@@ -2605,7 +2662,14 @@
         for (let si = 0; si < 2; si++) if (S.j[si]) {
           const q = hiddenWay(S, si);
           if (q < 1) for (const [w, S2] of without(S, { w: 1, k: 'j', si }, false)) { S2.kx = S.kx; S2.fj = si + 1; outs.push([S.j[si] * (1 - q) * w, S2]); }
-          gone += S.j[si] * q;
+          // (with 1.0 the reader knows a fractured modifier in a target's way: that node, see hiddenSplit)
+          let qs = 0;
+          if (V1R && q > 0) for (const [w, t] of hiddenSplit(S, si)) {
+            // (it stays on its side, now as the target's blocker: the side's class of levels is the same)
+            const S2 = cp(S); S2.j[si]--; S2.g[t] = BLOCKED; S2.fg = t; outs.push([S.j[si] * w, S2]);
+            qs += w;
+          }
+          gone += S.j[si] * (q - qs);
           n += S.j[si];
         }
         if (n && !(gone > 0 && NONEW)) {
@@ -2614,7 +2678,92 @@
           else push({ op: 'fracture' }, PR.fracture, outs.map(([w, S2]) => [w / n, S2]));
         }
       }
+      // PoE2 1.0, Forgemark and the Reforging Bench (planner.js 'reforge'): on a Rare item of item level 64 or lower that
+      // has no fractured modifier, one or two modifiers nobody asked for (or one in a target's way, or a twin) are
+      // marked and reforged: each becomes a new random modifier of its side, fractured at once. A target that comes so
+      // is on the item for good; what comes and is nobody's is a fractured modifier nobody asked for.
+      if (PR.forge != null && S.r === 2 && S.fg < 0 && !S.fj) {
+        const us = units(S, (si, des) => !des).filter((u) => u.k === 'j' || u.k === 'jx' || (u.k === 'g' && (S.g[u.i] === BLOCKED || S.g[u.i] === TWIN)));
+        for (let a = 0; a < us.length; a++) {
+          reforge(S, [us[a]], push);
+          if (V1R.maxFractured < 2) continue;
+          // (two of the plain ones of one side: two of them must be there)
+          for (let b = a; b < us.length; b++) if (b > a || (us[a].k === 'j' && us[a].w >= 2)) reforge(S, [us[a], us[b]], push);
+        }
+      }
     }
+    /**
+     * The reforge edge for the marked units: they go (each by chance, as a removal does, see without), then each mark
+     * is rolled on its side in turn, the item holding what the marks before it gave. What keeps a target out for good
+     * once it is fractured and that no node knows (its twin, one whose tags stop a target of the other side, or one in
+     * the way of a target whose blockers the network does not follow: hiddenWay) leaves the item lost: a new base where
+     * there is one, as with the Fracturing Orb, and no edge where the item is never given up.
+     */
+    function reforge(S, marks, pushOf) {
+      let cur = [[1, S]];
+      for (const u of marks) {
+        const nx = [];
+        for (const [p, X] of cur) for (const [w, Y] of without(X, u, false)) nx.push([p * w, Y]);
+        cur = nx;
+      }
+      const outs = [];
+      let gone = 0, dead = false;
+      const next = (p, X, k) => {
+        if (k === marks.length) { outs.push([p, X]); return; }
+        const si = marks[k].si;
+        const rs = roll(X, 1 << si, 0, 1);
+        if (!rs.length) { dead = true; return; } // (nothing can take the mark's place: the bench refuses it)
+        const h = hiddenWay(X, si);
+        for (const [q, i, si2, status0, cls] of rs) {
+          const status = status0 & 15;
+          // (a target, or one under its value, or one in a followed target's way: fractured for good, as the reader of
+          // the item takes it. The last two leave nodes where the item can only be given up; as a new base at once the
+          // play, which reads the item, found no node for them.)
+          if (i >= 0 && (status === NATURAL || status === NATURAL + NEAR || status === BLOCKED)) {
+            for (const [w, Y] of arrivals(X, i, si2, status0, cls)) { if (Y.fg < 0) Y.fg = i; else Y.fh = i; next(p * q * w, Y, k + 1); }
+          } else if (i === -1) {
+            // (in the way of a target the network does not follow: that target's fractured blocker, see hiddenSplit;
+            // what stops a target of the other side with its tags: the item lost)
+            let hs = 0;
+            if (h > 0) for (const [w, t] of hiddenSplit(X, si)) {
+              for (const [w2, Y] of arrivals(X, t, si, BLOCKED, null)) { if (Y.fg < 0) Y.fg = t; else Y.fh = t; next(p * q * w * w2, Y, k + 1); }
+              hs += w;
+            }
+            if (h > hs) gone += p * q * (h - hs);
+            const Y = cp(X);
+            if (!Y.fj) Y.fj = si2 + 1; else Y.fk = si2 + 1;
+            next(p * q * (1 - h), Y, k + 1);
+          } else gone += p * q;
+        }
+      };
+      for (const [p, X] of cur) next(p, X, 0);
+      if (dead || !outs.length || (gone > 1e-9 && NONEW)) return;
+      const a = { op: 'reforge', marks: marks.map((u) => markOf(S, u)) };
+      if (gone > 1e-9) {
+        hasLost = true;
+        outs.push([gone, RESTART]);
+        a.bases = gone; a.also = [['New base', gone]];
+      }
+      pushOf(a, marks.length * PR.forge + (gone > 1e-9 ? gone * baseCost : 0), outs);
+    }
+    /**
+     * A rolled modifier's nodes, as the edges' arrive makes them: one in a target's way comes with the class of its
+     * level ([[chance, node]]; dist: roll's classes for it, else those of a modifier of the side rolled with no floor).
+     * (Given roll's classes as one class, the reforge edge made nodes whose class was not a number: the item's reader
+     * never found them, and a ring reforged into a fractured blocker was crafted on for ever.)
+     */
+    function arrivals(S1, i, si, status, dist) {
+      if (!(NCLS > 1 && (i < 0 || (status & 15) === BLOCKED))) return [[1, addRolled(S1, i, si, status)]];
+      const sj = i >= 0 ? goals[i].si : si;
+      const d = dist || clsDist(sj, 0), top = nSide(S1, sj) > 0 ? clsAt(S1, sj) : NCLS - 1;
+      const out = [];
+      let rest = 0;
+      for (let c = 0; c < NCLS; c++) { if (c >= top) rest += d[c]; else if (d[c] > 0) out.push([d[c], addRolled(S1, i, si, status, c)]); }
+      if (rest > 0) out.push([rest, addRolled(S1, i, si, status, top)]);
+      return out;
+    }
+    /** What a mark is in words the play and the page can find on the item (marksFor). */
+    const markOf = (S, u) => (u.k === 'g' ? { side: SIDES[u.si], pick: S.g[u.i] === TWIN ? 'twin' : 'inWay', goal: u.i } : { side: SIDES[u.si], pick: u.k === 'jx' ? 'across' : 'other' });
 
     // ---- the item as a node
     /**
@@ -2668,22 +2817,22 @@
         // Damage" of tier 4 under the wanted tier 3, which no step can take off any more, and 52 crafts of the
         // seventeenth deep run went on for ever. set() takes the twin's role away and keeps a fractured twin the
         // fractured modifier nobody asked for, as addRolled does.)
-        const b = i >= 0 || v >= 0 || t >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => (S.g[k] === ABSENT || S.g[k] === TWIN) && goals[k].si === si && !slotFull(k) && (g.kind !== 'nat' || (known && (known !== 3 || followed[k]))) && (m.fam === g.fam || (g.grp.length && (m.grp || []).some((x) => g.grp.includes(x))) || (m.id && kb.mods[m.id] && stops(m.id, k))));
+        const b = i >= 0 || v >= 0 || t >= 0 || m.unrevealed || m.des || m.crafted ? -1 : goals.findIndex((g, k) => (S.g[k] === ABSENT || S.g[k] === TWIN) && goals[k].si === si && !slotFull(k) && (g.kind !== 'nat' || (known && (known !== 3 || followed[k] || (V1R && m.frac)))) && (m.fam === g.fam || (g.grp.length && (m.grp || []).some((x) => g.grp.includes(x))) || (m.id && kb.mods[m.id] && stops(m.id, k))));
         const set = (k, x) => {
           if (S.g[k] === TWIN) {
             // (the twin stays as a modifier nobody asked for; a fractured twin as the fractured one, as in addRolled)
-            if (S.fg === k && !S.fj) { S.fg = -1; S.fj = si + 1; } else S.j[si]++;
+            if (!fracJunk(S, k)) S.j[si]++;
             lowest[si] = Math.min(lowest[si], goalLvl[k]);
             if (twinMod[k]) role.delete(twinMod[k]);
           }
-          S.g[k] = x; if (m.frac) S.fg = k; role.set(m, x === BLOCKED ? 2 : x === TWIN ? 3 : 1); if (x === TWIN) twinMod[k] = m; if (x === BLOCKED) lowest[si] = Math.min(lowest[si], m.lvl || 1);
+          S.g[k] = x; if (m.frac) { if (V1R && S.fg >= 0) S.fh = k; else S.fg = k; } role.set(m, x === BLOCKED ? 2 : x === TWIN ? 3 : 1); if (x === TWIN) twinMod[k] = m; if (x === BLOCKED) lowest[si] = Math.min(lowest[si], m.lvl || 1);
         };
         if (i >= 0) set(i, kind);
         else if (v >= 0) set(v, kind + NEAR);
         else if (t >= 0) set(t, TWIN);
         else if (b >= 0) set(b, BLOCKED);
         else if (m.id && ctx.capMods.get(m.id) && !m.frac) S.aw = ctx.capMods.get(m.id).prefix ? 1 : 2;
-        else if (m.frac) S.fj = si + 1;
+        else if (m.frac) { if (V1R && S.fj) S.fk = si + 1; else S.fj = si + 1; }
         else if (m.unrevealed) S.du = si + 1;
         else if (m.des) S.dj = si + 1;
         else if (m.crafted && (!S.cx || !S.cy)) addCrafted(S, si, TOOL[si] && m.id === TOOL[si].mod ? 1 : FILL[si] && m.id === FILL[si].mod ? 2 : 0);
@@ -2792,7 +2941,7 @@
     // A + (1 - F) x, with A the cost until the item is done or given up and F the chance that it gets done, and
     // x = A(N0) / F(N0). The rule set starts as "add while a target can come, else a new base", which always ends, and
     // is improved node by node until no node has a cheaper edge.
-    const blockKey = (S) => (S.r < 2 ? 'early' : S.g.join(',') + '|' + S.fg + '|' + S.fj);
+    const blockKey = (S) => (S.r < 2 ? 'early' : S.g.join(',') + '|' + S.fg + '|' + S.fj + (V1R ? '|' + S.fh + '|' + S.fk : ''));
     const bmap = new Map();
     for (let s = 0; s < N; s++) { const k = blockKey(states[s]); if (!bmap.has(k)) bmap.set(k, []); bmap.get(k).push(s); }
     const metN = (S) => { let n = 0; for (let i = 0; i < G; i++) if (met(S.g[i])) n++; return n; };
@@ -3823,7 +3972,32 @@
     }
     const usesOf = (s, name) => { const so = solution(), k = so.names.indexOf(name); return k < 0 ? 0 : so.uses(s, k); };
     const net = {
-      ctx, goals, states, acts: actsView, pol, start, n0, N, timing, lite,
+      ctx, goals, states, acts: actsView, pol, start, n0, N, timing, lite, forge: FORGE_ITEM && PR.forge != null ? { item: FORGE_ITEM, price: PR.forge } : null,
+      /**
+       * A reforge step of the route with the modifiers it marks named on this item ({ op: 'reforge', marks: [{ id }] }),
+       * or null when the item has none such. The route's step says what kind of modifier to mark (markOf): one nobody
+       * asked for that keeps no target out, the one that keeps a target of the other side out, the one in a target's
+       * way, a target's twin.
+       */
+      marksFor(a, st) {
+        if (!a || a.op !== 'reforge') return null;
+        const used = new Set(), out = [];
+        const isTarget = (m) => goals.some((g) => g.side === m.side && (P.meets(m, g, g.tier) || P.nearMiss(m, g)));
+        const inWayOf = (m, k) => { const g = goals[k]; return g.side === m.side && (m.fam === g.fam || (g.grp.length && (m.grp || []).some((x) => g.grp.includes(x)))); };
+        const across = (m) => goals.some((g, k) => g.side !== m.side && !!m.id && !!kb.mods[m.id] && stops(m.id, k));
+        for (const k of a.marks) {
+          if (k.id) { out.push({ id: k.id }); used.add(k.id); continue; }
+          const cands = st.mods.filter((m) => m.side === k.side && m.id && !m.frac && !m.des && !m.crafted && !m.unrevealed && !used.has(m.id) && !isTarget(m));
+          let m = null;
+          if (k.pick === 'twin') m = cands.find((x) => conv[k.goal] && conv[k.goal].src.has(x.id));
+          else if (k.pick === 'inWay') m = cands.find((x) => inWayOf(x, k.goal) || (!!kb.mods[x.id] && stops(x.id, k.goal)));
+          else if (k.pick === 'across') m = cands.find(across);
+          else m = cands.find((x) => !across(x) && !goals.some((g, q) => inWayOf(x, q))) || cands.find((x) => !across(x)) || cands[0];
+          if (!m) return null;
+          used.add(m.id); out.push({ id: m.id });
+        }
+        return { op: 'reforge', marks: out };
+      },
       /** The time the caller gave (input.deadline) is over: what was solved after it was cut short and is not to be shown. */
       outOfTime: () => timedOut || late(),
       // (bound: a restart is not a white base: another item like the pasted one, or none; held: the targets that no white base can get)
@@ -4069,16 +4243,16 @@
     };
     function describe(S) {
       const has = [], miss = [], inWay = [], low = [], twin = [], across = [];
-      const junk = [0, 1].map((si) => S.j[si] + (S.cx === si + 1 ? 1 : 0) + (S.cy === si + 1 ? 1 : 0) + (S.dj === si + 1 ? 1 : 0) + (S.fj === si + 1 ? 1 : 0));
+      const junk = [0, 1].map((si) => S.j[si] + (S.cx === si + 1 ? 1 : 0) + (S.cy === si + 1 ? 1 : 0) + (S.dj === si + 1 ? 1 : 0) + (S.fj === si + 1 ? 1 : 0) + (S.fk === si + 1 ? 1 : 0));
       for (let i = 0; i < G; i++) {
         const x = S.g[i], g = goals[i];
-        const how = (S.fg === i ? ' (fractured)' : '') + (kindOf(x) === CRAFTED ? ' (crafted)' : kindOf(x) === DESECRATED ? ' (desecrated)' : '');
+        const how = (isF(S, i) ? ' (fractured)' : '') + (kindOf(x) === CRAFTED ? ' (crafted)' : kindOf(x) === DESECRATED ? ' (desecrated)' : '');
         if (met(x)) has.push(g.label + how);
         else if (near(x)) { has.push(g.label + how); low.push(g.label); }
         else if (x === ALT) continue; // (another stat of its slot is on the item)
         else {
           miss.push(g.label);
-          if (x === BLOCKED) { inWay.push(g.label + (S.fg === i ? ' (fractured)' : '')); junk[g.si]++; }
+          if (x === BLOCKED) { inWay.push(g.label + (isF(S, i) ? ' (fractured)' : '')); junk[g.si]++; }
           if (x === XBLOCKED) across.push(g.label);
           if (x === TWIN) { twin.push(g.label); junk[g.si]++; }
         }
@@ -4090,7 +4264,7 @@
       if (S.u & R_ALDUR) runes.push(ALD.rune);
       if (S.aw) junk[awSide(S)]++;
       return { rarity: ['Normal', 'Magic', 'Rare'][S.r], has, miss, inWay, across, low, twin, runes, allowance: S.aw ? SIDES[S.aw - 1] : null, otherPrefixes: junk[0], otherSuffixes: junk[1], hidden: S.du ? SIDES[S.du - 1] : null,
-        fracturedOther: S.fj ? SIDES[S.fj - 1] : null, desecratedOther: S.dj ? SIDES[S.dj - 1] : null,
+        fracturedOther: S.fj ? SIDES[S.fj - 1] : null, fracturedOther2: S.fk ? SIDES[S.fk - 1] : null, desecratedOther: S.dj ? SIDES[S.dj - 1] : null,
         // a second modifier of this target's family may be on the item (a Flux made it; see fz)
         secondOf: S.fz ? goals[FZT[S.fz - 1]].label : null,
         // the lowest level among the modifiers nobody asked for (Omen of Whittling takes the lowest of all): from, under

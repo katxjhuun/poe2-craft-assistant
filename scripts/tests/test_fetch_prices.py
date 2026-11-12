@@ -81,6 +81,24 @@ class PriceLayer(unittest.TestCase):
         self.assertEqual([l['name'] for l in meta['leagues']], [LEAGUE])
         self.assertEqual(meta['hours'], 3)
 
+    def test_expected_league_and_items_are_listed_unpriced_until_traded(self):
+        cfg = {'expected': [{'league': 'Conquerors of Wraeclast', 'from': '2026-12-11', 'items': ['Crimson Iron', 'Bloodvial of Rithva']},
+                            {'league': LEAGUE, 'items': ['Omen of Testing', 'Crimson Iron']}]}
+        with mock.patch.object(fp, 'LEAGUES', cfg):
+            fp.build()
+        meta = json.load(open(os.path.join(fp.OUT_DIR, 'meta.json')))
+        new, here = meta['expected']
+        self.assertFalse(new['trading'])
+        self.assertEqual(new['unpriced'], ['Crimson Iron', 'Bloodvial of Rithva'])
+        self.assertEqual(new['items'], {'Crimson Iron': None, 'Bloodvial of Rithva': None})
+        self.assertTrue(here['trading'])
+        self.assertAlmostEqual(here['items']['Omen of Testing'], 50, delta=0.1)
+        self.assertEqual(here['unpriced'], ['Crimson Iron'])
+
+    def test_the_league_names_are_parameters(self):
+        self.assertEqual(fp.POE2DB_LEAGUE, os.environ.get('POE2_POE2DB_LEAGUE') or fp.LEAGUES.get('poe2dbLeague'))
+        self.assertIn('Conquerors of Wraeclast', [e['league'] for e in fp.LEAGUES['expected']])
+
     def test_missing_hours_are_fetched_newest_first_and_a_stalled_hour_is_retried(self):
         now_hour = int(time.time()) // 3600 * 3600
         cached = {self.h0 + i * 3600 for i in range(3)}

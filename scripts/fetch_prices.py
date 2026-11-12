@@ -136,7 +136,17 @@ def fetch(hour_id):
 
 POE2DB_URL = 'https://poe2db.tw/us/Economy_{}'
 POE2DB_UA = 'Mozilla/5.0 (poe2craftassist personal tool)'
-POE2DB_LEAGUE = 'Runes of Aldur'  # the league poe2db's economy pages show (hourly rates checked against ours)
+def _leagues_cfg():
+    """app/data/leagues.json: the craft league, poe2db's league and the leagues and items expected soon (empty when absent)."""
+    try:
+        return json.load(open(os.path.join(ROOT, 'app', 'data', 'leagues.json'), encoding='utf-8'))
+    except (OSError, ValueError):
+        return {}
+
+
+LEAGUES = _leagues_cfg()
+# the league poe2db's economy pages show (hourly rates checked against ours); a parameter, so that 1.0 day changes a value
+POE2DB_LEAGUE = os.environ.get('POE2_POE2DB_LEAGUE') or LEAGUES.get('poe2dbLeague') or 'Runes of Aldur'
 POE2DB_SOURCE = 'poe2db.tw economy pages (unofficial mirror of the official Currency Exchange)'
 OFFICIAL_SOURCE = 'Path of Exile 2 Currency Exchange (official hourly digest)'
 # one market row: "<amount> <item A> <-> <amount> <item B>", then the 24h volume (in Divine Orbs on the Divine page)
@@ -344,6 +354,29 @@ def feed_agreement(doc, official):
     return (ratios[n // 2] if n % 2 else (ratios[n // 2 - 1] + ratios[n // 2]) / 2), n
 
 
+def mark_expected(meta):
+    """meta['expected']: each league expected soon (leagues.json) with whether it trades yet, and the price in Exalted Orbs
+    of each of its new items in that league's document, or None: unpriced (not traded on the exchange yet). A route that
+    needs an unpriced item leaves it out (no price, no step); the page and the sweeps say so (missingPrices)."""
+    out = []
+    for e in LEAGUES.get('expected') or []:
+        lg = next((l for l in meta.get('leagues', []) if l['name'] == e['league']), None)
+        prices = {}
+        if lg:
+            try:
+                doc = json.load(open(os.path.join(OUT_DIR, f"league-{lg['slug']}.json"), encoding='utf-8'))
+                by_name = {r[0]: r[2] for r in doc.get('items', {}).values()}
+            except (OSError, ValueError):
+                by_name = {}
+            prices = {n: by_name.get(n) for n in e['items']}
+        else:
+            prices = {n: None for n in e['items']}
+        out.append({'league': e['league'], 'from': e.get('from'), 'trading': bool(lg), 'items': prices,
+                    'unpriced': [n for n, v in prices.items() if v is None]})
+    meta['expected'] = out
+    return meta
+
+
 def ee2_layer(meta, offline=False):
     """Put the feed's document in front of the official one for each big league; rewrites meta.json. Returns meta."""
     base = json.load(open(BASE_ITEMS, encoding='utf-8'))
@@ -377,6 +410,7 @@ def ee2_layer(meta, offline=False):
             docs.append(slug)
     meta['docs'] = docs
     meta['source'] = f"{EE2_SOURCE}; {OFFICIAL_SOURCE} as fallback and switch"
+    mark_expected(meta)
     with open(os.path.join(OUT_DIR, 'meta.json'), 'w', encoding='utf-8') as f:
         json.dump(meta, f, separators=(',', ':'))
     keep = {f'league-{d}.json' for d in docs} | {'meta.json'}
@@ -590,6 +624,7 @@ def build():
     leagues.sort(key=lambda l: -l['volEx'])
     meta = {'updatedAt': now, 'hourFrom': hours[0], 'hourTo': hours[-1] + 3600, 'hours': len(hours),
             'source': 'Path of Exile 2 Currency Exchange (official hourly digest)', 'leagues': leagues}
+    mark_expected(meta)
     with open(os.path.join(OUT_DIR, 'meta.json'), 'w', encoding='utf-8') as f:
         json.dump(meta, f, separators=(',', ':'))
     # drop docs for leagues that no longer trade

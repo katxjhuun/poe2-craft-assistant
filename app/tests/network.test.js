@@ -1346,3 +1346,50 @@ test('network: a Fracturing Orb on a modifier nobody asked for leaves the class 
   // (how often the class rises is the pool's average, not this item's: a node knows the lowest class of a side only)
   assert.equal(g.off, 0);
 });
+
+// ---- PoE2 1.0: Forgemarks, the Reforging Bench and a second fractured modifier (planner.js V1_RULES)
+test('network 1.0: off, nothing changes; on, a Forgemark route keeps its promise and two fractured modifiers are nodes', () => {
+  const { play } = require('../../scripts/selftest/network_check.js');
+  const at = (lvl) => ['Rarity: Normal', 'Totemic Greaves', '--------', 'Item Level: ' + lvl];
+  const wants = [['prefix', /increased Movement Speed$/, 4], ['prefix', /to maximum Life$/, 5]];
+  const priced = (p) => (n) => (n === 'Scarlet Hide' ? p : priceOf(n));
+  // without 1.0, or on an item of item level 65 or more, a priced Scarlet Hide changes nothing
+  const plain = NW.build(inputFor(boots(at(64)), wants));
+  const keyed = NW.build(inputFor(boots(at(64)), wants, { priceOf: priced(2) }));
+  assert.equal(keyed.cost(keyed.start), plain.cost(plain.start));
+  assert.equal(keyed.N, plain.N);
+  const high = NW.build(inputFor(boots(at(82)), wants, { priceOf: priced(2), v1: true }));
+  const high0 = NW.build(inputFor(boots(at(82)), wants));
+  assert.equal(high.cost(high.start), high0.cost(high0.start));
+  assert.equal(high.N, high0.N);
+  // on, item level 64: reforge steps, nodes with two fractured modifiers, and the play keeps the promise
+  const input = inputFor(boots(at(64)), wants, { priceOf: priced(2), v1: true });
+  const net = NW.build(input);
+  assert.ok(!net.unsupported && !net.impossible);
+  assert.equal(net.forge.item, 'Scarlet Hide');
+  let best = 0, two = 0, one = 0;
+  for (let s = 0; s < net.N; s++) {
+    const S = net.states[s];
+    assert.ok(Number.isInteger(S.fl), 'every node has a class of levels'); // (a reforge gave roll's classes as one: no number, no node the reader finds)
+    if (S.fh >= 0 || S.fk) two++;
+    for (const e of net.acts[s]) if (e.a.op === 'reforge') { one++; if (e.a.marks.length === 2) assert.ok(e.a.marks.every((k) => k.side && k.pick)); }
+    if ((net.step(s) || { a: {} }).a.op === 'reforge') best++;
+  }
+  assert.ok(one > 0 && best > 0 && two > 0, `reforge edges ${one}, best at ${best}, two fractured ${two}`);
+  assert.ok(net.cost(net.start) <= plain.cost(plain.start) + 1e-9, 'a step more never costs more');
+  const got = play(net, input, 600, 13, 20000);
+  assert.equal(got.done, 600);
+  assert.equal(got.off, 0);
+  assert.equal(got.refused, 0, JSON.stringify(got.why));
+  assert.ok(Math.abs(got.mean - net.cost(net.start)) <= 4 * got.se + 0.05 * net.cost(net.start), `${got.mean} ± ${got.se} vs ${net.cost(net.start)}`);
+  // the marks of a step are found on the item: the reader of the item and the step agree
+  const rare = boots(['Rarity: Rare', 'Test', 'Totemic Greaves', '--------', 'Item Level: 64', '--------',
+    '{ Prefix Modifier "Hellion\'s" (Tier: 4) — Speed }', '20(20-24)% increased Movement Speed',
+    '{ Prefix Modifier "Robust" (Tier: 6) }', '+40(35-49) to maximum Energy Shield',
+    '{ Suffix Modifier "of the Whelpling" (Tier: 8) — Elemental, Fire, Resistance }', '+8(6-10)% to Fire Resistance']);
+  const n2 = NW.build(inputFor(rare, wants, { priceOf: priced(2), v1: true }));
+  const st = P.toState(n2.ctx, rare, {});
+  const a = n2.marksFor({ op: 'reforge', marks: [{ side: 'prefix', pick: 'other' }] }, st);
+  assert.ok(a && a.marks.length === 1 && st.mods.find((m) => m.id === a.marks[0].id).side === 'prefix');
+  assert.equal(P.validate(n2.ctx, st, a), null);
+});
