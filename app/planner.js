@@ -51,6 +51,23 @@
     if (cls === 'Jewel') return 'Cranium';
     return null;
   }
+  /**
+   * PoE2 1.0 (Conquerors of Wraeclast), datamined on poe2db before the patch notes (reports/poe2-1.0-crafting-2026-11-09.md):
+   * "Applies a Forgemark in place of a modifier of your choice on a Rare Weapon or Quiver" (Crimson Iron; Scarlet Hide:
+   * Armour or Belt; Vermilion Gold: Amulet or Ring), Maximum Item Level 64; "Applies a Bloodmark in place of a suffix
+   * modifier of your choice" (Bloodvials of Komaki, Eldra, Rithva, the same three groups), Minimum Modifier Level 65.
+   * At the Reforging Bench every marked modifier becomes a new random one, fractured at once; fractured items cannot be
+   * marked (Maxroll); up to two fractured modifiers (Game8).
+   */
+  function markItemFor(cls, blood) {
+    const g = WEAPON.includes(cls) ? 0 : ARMOUR.includes(cls) || cls === 'Belt' ? 1 : cls === 'Ring' || cls === 'Amulet' ? 2 : -1;
+    if (g < 0) return null;
+    return (blood ? ['Bloodvial of Komaki', 'Bloodvial of Eldra', 'Bloodvial of Rithva'] : ['Crimson Iron', 'Scarlet Hide', 'Vermilion Gold'])[g];
+  }
+  const FORGEMARK_MAX_ILVL = 64, BLOODMARK_MIN_LVL = 65, MAX_FRACTURED = 2;
+  /** The 1.0 items are in the knowledge base (its game data has them), or a test or preview asks for them. */
+  const hasV1 = (kb, opts) => !!(opts && opts.v1) || /^1\./.test(String((kb.meta || {}).patch || ''))
+    || !!(kb.item_descriptions || {})['Crimson Iron'];
   const CASTER = ['Wand', 'Staff', 'Sceptre'];
   const MARTIAL = WEAPON.filter((c) => !CASTER.includes(c) && c !== 'Quiver');
   const SIDES = ['prefix', 'suffix'];
@@ -106,6 +123,7 @@
       case 'extraction': return ['Orb of Extraction'];
       case 'newbase': return ['New base'];
       case 'fracture': return ['Fracturing Orb'];
+      case 'reforge': return (a.marks || []).map((k) => markItemFor(ctx ? ctx.cls : null, k.blood) || (k.blood ? 'Bloodvial' : 'Forgemark'));
       case 'divine': return [...(a.sanctify ? ['Omen of Sanctification'] : []), 'Divine Orb'];
       case 'essence': return [a.item || 'Essence'];
       case 'pessence': return [...(a.side ? [OMEN.crystal[a.side]] : []), a.item || 'Perfect Essence'];
@@ -244,7 +262,7 @@
       ix, kb, item, base, cls: base.cls, ilvl, pool, desPool, weights: opts.weights || null,
       // (slotDelta: what the base itself adds to the slots. What a socketed rune adds, Serle's Triumph's suffix, is
       // the item's: toState puts it in st.xSuffix, and a new base starts without it.)
-      floors: floorsFrom(kb), bone: boneFor(base.cls),
+      floors: floorsFrom(kb), bone: boneFor(base.cls), v1: hasV1(kb, opts),
       slotDelta: { prefix: ((item.slotDelta || {}).prefix || 0) - ((item.runeSlots || {}).prefix || 0), suffix: ((item.slotDelta || {}).suffix || 0) - ((item.runeSlots || {}).suffix || 0) },
       _side: new Map(), _des: new Map(), imputed: new Set(), legacy: legacyItems(kb),
       essences: essencesForBase(ix, base, (opts.essences || []).filter((r) => !r.liquid)).concat(liquidFor(kb, item.base)),
@@ -610,6 +628,33 @@
         if (full && !st.mods.some((m) => removable(m) && (!a.side || m.side === a.side))) return 'The item is full and no modifier there can be removed.';
         if (!full && a.side && open(ctx, st, a.side) < 1) return `No room: the item already has ${count(st, a.side)} ${a.side}es.`;
         if (!desSides(ctx, st, a).length) return a.lich ? `No ${a.lich} modifier can roll here (lich modifiers on equipment are level 65).` : 'The Well of Souls would have no modifier to offer on a side with room.';
+        return null;
+      }
+      case 'reforge': {
+        if (!ctx.v1) return 'Forgemarks and Bloodmarks come with PoE2 1.0 (11 December 2026).';
+        if (R !== 'Rare') return 'Forgemarks and Bloodmarks need a Rare item.';
+        const marks = a.marks || [];
+        if (!marks.length) return 'Mark a modifier first.';
+        if (marks.length > MAX_FRACTURED) return `An item can have at most ${MAX_FRACTURED} fractured modifiers.`;
+        if (st.mods.some((m) => m.frac)) return 'Fractured items cannot be Forgemarked.';
+        const seen = new Set();
+        for (const k of marks) {
+          const name = markItemFor(cls, k.blood);
+          if (!name) return `${k.blood ? 'Bloodvials' : 'Forgemarks'} work on Rare weapons, quivers, armour, belts, amulets and rings.`;
+          const m = st.mods.find((x) => x.id === k.id);
+          if (!m) return `${name}: the item has no such modifier.`;
+          if (seen.has(k.id)) return 'Each modifier can be marked once.';
+          seen.add(k.id);
+          if (k.blood && m.side !== 'suffix') return `${name} marks a suffix modifier.`;
+          if (k.blood && ctx.ilvl < BLOODMARK_MIN_LVL) return `${name} cannot be used on items below item level ${BLOODMARK_MIN_LVL} (Minimum Modifier Level ${BLOODMARK_MIN_LVL}).`;
+          if (!k.blood && ctx.ilvl > FORGEMARK_MAX_ILVL) return `${name} only works on items of item level ${FORGEMARK_MAX_ILVL} or lower.`;
+        }
+        // something must be able to take each mark's place (the item without the marked modifiers)
+        const rest = Object.assign({}, st, { mods: st.mods.filter((m) => !seen.has(m.id)) });
+        for (const k of marks) {
+          const side = k.blood ? 'suffix' : st.mods.find((x) => x.id === k.id).side;
+          if (!rollPool(ctx, rest, side, k.blood ? BLOODMARK_MIN_LVL : 0).length) return `No ${side} modifier can take the marked one's place.`;
+        }
         return null;
       }
       case 'fracture':
@@ -1198,6 +1243,19 @@
         // 0.5.5; see reports/research-crafters-2026-10-07.md, P4)
         const cands = st.mods.filter((m) => !m.frac && !m.des);
         if (cands.length) cands[Math.floor(rng() * cands.length)].frac = true;
+        break;
+      }
+      case 'reforge': {
+        // the marked modifiers go, then each mark becomes a new random modifier of its side (a Bloodmark: a suffix of
+        // modifier level 65 or more), fractured at once. Which modifiers the Komaki, Eldra and Rithva groups hold is not
+        // known before the 1.0 game data: until then a Bloodmark draws from every suffix of that level.
+        const marks = (a.marks || []).map((k) => ({ k, m: st.mods.find((x) => x.id === k.id) })).filter((x) => x.m);
+        for (const { m } of marks) { st.mods.splice(st.mods.indexOf(m), 1); removed.push(m); }
+        for (const { k, m } of marks) {
+          const side = k.blood ? 'suffix' : m.side;
+          const e = rollMod(ctx, st, [side], k.blood ? BLOODMARK_MIN_LVL : 0, rng);
+          if (e) { addRolled(ctx, st, e, { frac: true }, rng); added.push(st.mods[st.mods.length - 1]); }
+        }
         break;
       }
       case 'divine':
@@ -3401,7 +3459,7 @@
   }
 
   return {
-    ORB, OMEN, TIERS, boneFor, actionNames, makeContext, toState, validate, apply, rngFrom, sidePool, desPoolFor,
+    ORB, OMEN, TIERS, boneFor, markItemFor, actionNames, makeContext, toState, validate, apply, rngFrom, sidePool, desPoolFor,
     goalsFromTargets, goalMet, meets, nearMiss, reaches, rangeOf, makePolicy, simulate, simulateAsync, buildPlans, refinePlan, nextAction, stepChance, stepOutcome, stepPreview, evaluateStep, PROFILES,
     availableOps, IRREVERSIBLE_NAMES, resElement, catalystTag, FLUX, goalFeasible, goalClash, essencesForBase, liquidFor, CATALYST_DEFAULT, CATALYST_NAME, ALDUR_ELEMENT, aldurTwin, runeFor, runeSide, freeSockets, socketsOf,
     emulate, chanceOf, familyChances, runStrategy, runStrategyAsync, groupsMet, revealOptions, revealPool, desSides, DES_OPTIONS, lichOmenWorks,

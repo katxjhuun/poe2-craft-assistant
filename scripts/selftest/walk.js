@@ -21,6 +21,12 @@ function candidates(ctx, st, r) {
   }
   for (const side of SIDES) A.push({ op: 'alchemy', side }, { op: 'annul', side }, { op: 'annul', side, greater: true });
   A.push({ op: 'annul', light: true }, { op: 'fracture' }, { op: 'divine' });
+  // 1.0 Forgemarks and Bloodmarks (only with the 1.0 items in the knowledge base, or POE2_V1=1)
+  if (ctx.v1) {
+    for (const m of st.mods) A.push({ op: 'reforge', marks: [{ id: m.id }] }, { op: 'reforge', marks: [{ id: m.id, blood: true }] });
+    if (st.mods.length > 1) A.push({ op: 'reforge', marks: [{ id: st.mods[0].id }, { id: st.mods[1].id }] },
+      { op: 'reforge', marks: st.mods.filter((m) => m.side === 'suffix').slice(0, 2).map((m) => ({ id: m.id, blood: true })) });
+  }
   for (const to of ['fire', 'cold', 'lightning', 'chaos']) A.push({ op: 'flux', to });
   // Homogenising omens, catalysts, runes that change crafting, Runes of Aldur
   A.push({ op: 'exalt', tier: 'base', homog: true }, { op: 'regal', tier: 'base', homog: true });
@@ -99,6 +105,7 @@ function checkStep(ctx, before, a, r) {
   const dn = after.mods.length - before.mods.length;
   const limB = limOf(before);
   const fullBefore = cnt(before, 'prefix') >= limB.prefix && cnt(before, 'suffix') >= limB.suffix;
+  const markBefore = before.mods.find((m) => m.id && kb.mods[m.id].fam === 'AbyssTargetMod' && !m.frac) || null;
   const n = a.greater ? 2 : 1;
   const expect = {
     transmute: () => after.rarity === 'Magic' && after.mods.length <= 1,
@@ -113,9 +120,15 @@ function checkStep(ctx, before, a, r) {
     // game text: removes a random modifier and adds the guaranteed crafted modifier the game lists for this jewel
     liquid: () => r.removed.length === 1 && r.added.length <= 1 && r.added.every((m) => m.crafted
       && (kb.liquid_emotions[a.item].by_base[ctx.item.base] || []).includes(m.id)),
-    // game text: desecrating a full item also removes a random modifier
-    bone: () => r.added.length === 1 && r.added[0].des && r.removed.length === (fullBefore ? 1 : 0),
+    // game text: desecrating a full item also removes a random modifier; the Mark of the Abyssal Lord an Essence of the
+    // Abyss leaves is what the next desecration replaces (claim in recipes_0.5.5.json, codex), full or not
+    bone: () => r.added.length === 1 && r.added[0].des && (markBefore
+      ? r.removed.length === 1 && r.removed[0].id === markBefore.id
+      : r.removed.length === (fullBefore ? 1 : 0)),
     fracture: () => after.mods.filter((m) => m.frac).length === before.mods.filter((m) => m.frac).length + 1,
+    // 1.0: every marked modifier is replaced by a new fractured one (a Bloodmark's is a suffix); at most two fractured
+    reforge: () => dn === 0 && r.removed.length === a.marks.length && r.added.length === a.marks.length && r.added.every((m) => m.frac)
+      && a.marks.every((k, i) => !k.blood || r.added[i].side === 'suffix') && after.mods.filter((m) => m.frac).length <= 2,
     divine: () => dn === 0 && r.added.length === 0 && after.mods.every((m, i) => m.id === before.mods[i].id && (!m.frac || m.v === before.mods[i].v)),
     flux: () => dn === 0 && r.added.length === r.removed.length,
     aldur: () => dn === 0 && r.added.length === r.removed.length,
@@ -234,7 +247,7 @@ function walkBase(base, opts) {
     const white = E.parseItem(ix, renderItem({ base, cls, rarity: 'Normal', ilvl, mods: [] }, r, 'adv').text).item;
     // a Rare with catalyst quality sometimes, so the catalysing omen is exercised on rings, amulets and jewels
     if ((cls === 'Ring' || cls === 'Amulet' || cls === 'Jewel') && r() < 0.5) { white.quality = 20; white.qualityType = 'Life Modifiers'; }
-    const ctx = P.makeContext(ix, white, { weights: weightsFor(base), essences: essencesFor(cls), catalystMult: 3 });
+    const ctx = P.makeContext(ix, white, { weights: weightsFor(base), essences: essencesFor(cls), catalystMult: 3, v1: process.env.POE2_V1 === '1' });
     let st = P.toState(ctx, white);
     for (let s = 0; s < opts.steps; s++) {
       const A = candidates(ctx, st, r);

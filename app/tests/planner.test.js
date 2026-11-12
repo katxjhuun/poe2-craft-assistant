@@ -69,6 +69,60 @@ test('10.2 fractured mods are never removed', () => {
   }
 });
 
+test('1.0 Forgemark and Bloodmark: off before 1.0; marked modifiers are replaced by fractured ones', () => {
+  const item = parse('rare-sceptre-adv');                                     // Rattling Sceptre, item level 82
+  const off = ctxOf(item);
+  assert.match(P.validate(off, P.toState(off, item), { op: 'reforge', marks: [{ id: 'MinionLife5' }] }), /PoE2 1\.0/);
+
+  const ctx = P.makeContext(ix, item, { v1: true });
+  const st = P.toState(ctx, item);
+  // Forgemark materials: Maximum Item Level 64
+  assert.match(P.validate(ctx, st, { op: 'reforge', marks: [{ id: 'MinionLife5' }] }), /Crimson Iron only works on items of item level 64/);
+  // Bloodvials: a suffix only, two marks at most
+  assert.match(P.validate(ctx, st, { op: 'reforge', marks: [{ id: 'IncreasedMana11', blood: true }] }), /Bloodvial of Komaki marks a suffix/);
+  assert.match(P.validate(ctx, st, { op: 'reforge', marks: [{ id: 'MinionLife5', blood: true }, { id: 'MinionLife5', blood: true }] }), /once/);
+  assert.match(P.validate(ctx, st, { op: 'reforge', marks: [{ id: 'IncreasedMana11' }, { id: 'MinionLife5' }, { id: 'GlobalMinionSpellSkillGemLevelWeapon3' }] }), /at most 2 fractured/);
+  const blood = { op: 'reforge', marks: [{ id: 'MinionLife5', blood: true }, { id: 'GlobalMinionSpellSkillGemLevelWeapon3', blood: true }] };
+  assert.equal(P.validate(ctx, st, blood), null);
+  assert.deepEqual(P.actionNames(blood, ctx), ['Bloodvial of Komaki', 'Bloodvial of Komaki']);
+  const rng = P.rngFrom(7);
+  // Minimum Modifier Level 65, as with the other currency that has one: a family with no tier of level 65 or more on
+  // the base keeps its tiers
+  const top = new Map();
+  for (const e of P.sidePool(ctx, 'suffix', 0)) top.set(e.fam, Math.max(top.get(e.fam) || 0, e.lvl));
+  let high = 0;
+  for (let i = 0; i < 200; i++) {
+    const r = P.apply(ctx, st, blood, rng);
+    assert.deepEqual(r.removed.map((m) => m.id).sort(), ['GlobalMinionSpellSkillGemLevelWeapon3', 'MinionLife5']);
+    assert.equal(r.added.length, 2);
+    for (const m of r.added) {
+      assert.ok(m.frac && m.side === 'suffix', m.id);
+      assert.ok(m.lvl >= 65 || top.get(m.fam) < 65, `${m.id} level ${m.lvl} under the floor`);
+      if (m.lvl >= 65) high++;
+    }
+    assert.equal(r.state.mods.length, 4);
+    assert.match(P.validate(ctx, r.state, { op: 'reforge', marks: [{ id: 'IncreasedMana11' }] }), /Fractured items cannot be Forgemarked/);
+  }
+  assert.ok(high > 100, 'most Bloodmark modifiers are of level 65 or more');
+
+  // a Forgemark on an item of level 64 or lower: the new modifier is of the marked one's side
+  const low = Object.assign({}, item, { ilvl: 60 });
+  const lctx = P.makeContext(ix, low, { v1: true });
+  const lst = P.toState(lctx, low);
+  const forge = { op: 'reforge', marks: [{ id: 'IncreasedMana11' }] };
+  assert.equal(P.validate(lctx, lst, forge), null);
+  assert.deepEqual(P.actionNames(forge, lctx), ['Crimson Iron']);
+  assert.match(P.validate(lctx, lst, { op: 'reforge', marks: [{ id: 'MinionLife5', blood: true }] }), /below item level 65/);
+  for (let i = 0; i < 200; i++) {
+    const r = P.apply(lctx, lst, forge, rng);
+    assert.equal(r.added.length, 1);
+    assert.ok(r.added[0].frac && r.added[0].side === 'prefix' && r.added[0].lvl <= 60);
+  }
+  assert.equal(P.markItemFor('Belt', false), 'Scarlet Hide');
+  assert.equal(P.markItemFor('Ring', true), 'Bloodvial of Rithva');
+  assert.equal(P.markItemFor('Jewel', false), null);
+});
+
 test('10.2 lich omens only for weapon or jewellery desecration', () => {
   const helm = parse('rare-helmet-desecrated', (t) => t.replace(/\{ Desecrated Suffix Modifier \}\n.*\n/, ''));
   const hctx = ctxOf(helm);
