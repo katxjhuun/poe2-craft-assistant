@@ -3283,7 +3283,7 @@
    "id": "k59",
    "claim": "Essence of the Abyss leaves the crafted modifier \"Bears the Mark of the Abyssal Lord\", and the next desecration replaces that Mark instead of taking a free slot or removing another modifier; the essence cannot be used on an item that has a Desecrated modifier",
    "verdict": "plausible",
-   "reason": "The Mark is in the game data as the essence's two modifiers (a prefix and a suffix, stat essence_abyss_guaranteed_pick). That a bone then replaces it, also on a full item, and that the essence is refused beside a Desecrated modifier, rests on crafters' videos of 0.5.5 (five of the transcripts the player supplied on 8 Oct 2026 show the step). Not yet tested by the player. The planner and the craft network follow it: the essence, aimed with an Omen of Crystallisation at the unwanted modifier's side, then the bone."
+   "reason": "The Mark is in the game data as the essence's two modifiers (a prefix and a suffix, stat essence_abyss_guaranteed_pick). That a bone then replaces it, also on a full item, and that the essence is refused beside a Desecrated modifier, rests on crafters' videos of 0.5.5 (five of the transcripts the player supplied on 8 Oct 2026 show the step). Not yet tested by the player. The game's own help text (keyword on poe2db, read 12 Nov 2026) confirms the first part: desecrating an item with the Mark of the Abyssal Lord always removes that modifier; that the essence is refused beside a Desecrated modifier is still untested. The planner and the craft network follow it: the essence, aimed with an Omen of Crystallisation at the unwanted modifier's side, then the bone."
   },
   {
    "id": "k60",
