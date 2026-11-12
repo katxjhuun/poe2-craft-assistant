@@ -1,0 +1,13 @@
+{
+  "_": "Which league's prices the self-tests, sweeps and cloud runs use (craftLeague; POE2_LEAGUE overrides it), the league poe2db's economy pages show (poe2dbLeague; POE2_POE2DB_LEAGUE overrides it), and the leagues and items expected soon: listed in the price documents with no price until the exchange trades them (scripts/fetch_prices.py 'expected', scripts/selftest/lib.js unpriced). 1.0 day: craftLeague and poe2dbLeague become Conquerors of Wraeclast.",
+  "craftLeague": "Forbidden Rites",
+  "poe2dbLeague": "Runes of Aldur",
+  "expected": [
+    {
+      "league": "Conquerors of Wraeclast",
+      "from": "2026-12-11",
+      "source": "poe2db datamined items, reports/poe2-1.0-crafting-2026-11-09.md",
+      "items": ["Crimson Iron", "Scarlet Hide", "Vermilion Gold", "Bloodvial of Komaki", "Bloodvial of Eldra", "Bloodvial of Rithva"]
+    }
+  ]
+}

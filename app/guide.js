@@ -224,7 +224,8 @@
     return out;
   }
 
-  const RULE_LEAGUES = ['Forbidden Rites', 'Runes of Aldur', 'Standard'];
+  // (Conquerors of Wraeclast: the 1.0 challenge league from 11 Dec 2026; its HC and SSF copies follow it as the others do)
+  const RULE_LEAGUES = ['Forbidden Rites', 'Runes of Aldur', 'Conquerors of Wraeclast', 'Standard'];
   /**
    * The league whose rules and mechanics a league follows (8.1): the player's choice for that name (mine:
    * [{name, rules}]), else read from the name, since HC and SSF copies follow their parent league; the permanent
